@@ -1096,22 +1096,213 @@
     <div class="card">
       <div class="hooper-question" data-key="muscle_soreness">
         <h3 style="font-size:15px; margin-bottom:4px;">💪 Muscle soreness</h3>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">How sore are your muscles?</p>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Do you feel any muscle pain or soreness? Rate the overall intensity.</p>
         <div class="hooper-scale" data-key="muscle_soreness"></div>
+
+        <!-- Zone de localisation (apparaît si soreness > 1) -->
+        <div id="pain-localization" style="display:none; margin-top:20px; padding-top:20px; border-top:1px solid var(--border);">
+          <h4 style="font-size:14px; margin-bottom:4px;">🎯 Where do you feel the pain?</h4>
+          <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Click on the body parts where you feel pain. Click again to deselect.</p>
+          <div id="mannequin-container" style="background:var(--bg-elevated); border-radius:10px; padding:16px; overflow-x:auto;"><svg viewBox="0 0 600 700" xmlns="http://www.w3.org/2000/svg" style="max-width:100%; height:auto;">
+  <defs>
+    <style>
+      .muscle { fill: #1a3354; stroke: #4fc3ff; stroke-width: 1; cursor: pointer; transition: fill 0.2s; }
+      .muscle:hover { fill: #00a3ff; }
+      .muscle.selected { fill: #ef4444; stroke: #fca5a5; stroke-width: 2; }
+      .body-outline { fill: #122842; stroke: #4fc3ff; stroke-width: 2; }
+      .body-label { fill: #8ba3c1; font-size: 14px; font-weight: 600; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <!-- VUE AVANT -->
+  <g transform="translate(0,0)">
+    <text x="150" y="20" class="body-label">FRONT</text>
+
+    <!-- Tête / Cou -->
+    <ellipse cx="150" cy="60" rx="28" ry="32" class="body-outline"/>
+    <rect x="138" y="88" width="24" height="20" class="body-outline"/>
+
+    <!-- Torse outline -->
+    <path d="M100,110 L100,250 Q100,275 110,290 L190,290 Q200,275 200,250 L200,110 Z" class="body-outline"/>
+
+    <!-- Bras outline -->
+    <path d="M100,120 Q80,140 80,180 L75,260 L90,260 L95,180 Q95,135 100,120 Z" class="body-outline"/>
+    <path d="M200,120 Q220,140 220,180 L225,260 L210,260 L205,180 Q205,135 200,120 Z" class="body-outline"/>
+    <!-- Avant-bras + mains -->
+    <path d="M75,260 L70,360 L88,360 L90,260 Z" class="body-outline"/>
+    <path d="M225,260 L230,360 L212,360 L210,260 Z" class="body-outline"/>
+    <ellipse cx="79" cy="375" rx="12" ry="18" class="body-outline"/>
+    <ellipse cx="221" cy="375" rx="12" ry="18" class="body-outline"/>
+
+    <!-- Bassin -->
+    <path d="M105,290 L100,330 L200,330 L195,290 Z" class="body-outline"/>
+
+    <!-- Cuisses -->
+    <path d="M105,330 Q100,360 100,400 L95,490 L140,490 L145,400 L148,330 Z" class="body-outline"/>
+    <path d="M195,330 Q200,360 200,400 L205,490 L160,490 L155,400 L152,330 Z" class="body-outline"/>
+
+    <!-- Mollets -->
+    <path d="M95,490 L90,580 L138,580 L140,490 Z" class="body-outline"/>
+    <path d="M205,490 L210,580 L162,580 L160,490 Z" class="body-outline"/>
+
+    <!-- Pieds -->
+    <ellipse cx="114" cy="595" rx="20" ry="12" class="body-outline"/>
+    <ellipse cx="186" cy="595" rx="20" ry="12" class="body-outline"/>
+
+    <!-- ZONES MUSCULAIRES (clic) -->
+    <!-- Cou -->
+    <rect x="139" y="89" width="22" height="18" class="muscle" data-zone="neck_front" data-label="Neck (front)"/>
+
+    <!-- Pectoraux gauche/droite -->
+    <path d="M105,115 Q105,160 145,160 L145,115 Z" class="muscle" data-zone="pec_left" data-label="Chest L"/>
+    <path d="M195,115 Q195,160 155,160 L155,115 Z" class="muscle" data-zone="pec_right" data-label="Chest R"/>
+
+    <!-- Épaules (deltoïdes antérieurs) -->
+    <path d="M100,118 Q85,135 90,170 L105,170 L108,120 Z" class="muscle" data-zone="shoulder_left_front" data-label="Shoulder L (front)"/>
+    <path d="M200,118 Q215,135 210,170 L195,170 L192,120 Z" class="muscle" data-zone="shoulder_right_front" data-label="Shoulder R (front)"/>
+
+    <!-- Biceps -->
+    <path d="M82,170 Q80,200 85,250 L95,250 L98,180 Z" class="muscle" data-zone="biceps_left" data-label="Biceps L"/>
+    <path d="M218,170 Q220,200 215,250 L205,250 L202,180 Z" class="muscle" data-zone="biceps_right" data-label="Biceps R"/>
+
+    <!-- Avant-bras -->
+    <path d="M73,265 L70,355 L88,355 L90,265 Z" class="muscle" data-zone="forearm_left" data-label="Forearm L"/>
+    <path d="M227,265 L230,355 L212,355 L210,265 Z" class="muscle" data-zone="forearm_right" data-label="Forearm R"/>
+
+    <!-- Abdominaux -->
+    <rect x="135" y="165" width="30" height="60" class="muscle" data-zone="abs" data-label="Abs"/>
+
+    <!-- Obliques gauche/droite -->
+    <path d="M108,165 L135,165 L135,230 L115,260 Q108,250 108,200 Z" class="muscle" data-zone="oblique_left" data-label="Oblique L"/>
+    <path d="M192,165 L165,165 L165,230 L185,260 Q192,250 192,200 Z" class="muscle" data-zone="oblique_right" data-label="Oblique R"/>
+
+    <!-- Bas-ventre / aine -->
+    <path d="M115,260 L135,260 L135,285 L120,285 Z" class="muscle" data-zone="hip_flexor_left" data-label="Hip flexor L"/>
+    <path d="M185,260 L165,260 L165,285 L180,285 Z" class="muscle" data-zone="hip_flexor_right" data-label="Hip flexor R"/>
+
+    <!-- Quadriceps -->
+    <path d="M108,335 Q103,365 103,400 L118,485 L140,485 L143,400 L143,335 Z" class="muscle" data-zone="quadriceps_left" data-label="Quadriceps L"/>
+    <path d="M192,335 Q197,365 197,400 L182,485 L160,485 L157,400 L157,335 Z" class="muscle" data-zone="quadriceps_right" data-label="Quadriceps R"/>
+
+    <!-- Genoux -->
+    <ellipse cx="120" cy="490" rx="14" ry="8" class="muscle" data-zone="knee_left" data-label="Knee L"/>
+    <ellipse cx="180" cy="490" rx="14" ry="8" class="muscle" data-zone="knee_right" data-label="Knee R"/>
+
+    <!-- Tibias / Mollets vue avant -->
+    <path d="M97,500 L92,575 L118,575 L120,500 Z" class="muscle" data-zone="shin_left" data-label="Shin L"/>
+    <path d="M203,500 L208,575 L182,575 L180,500 Z" class="muscle" data-zone="shin_right" data-label="Shin R"/>
+
+    <!-- Chevilles -->
+    <ellipse cx="110" cy="585" rx="10" ry="6" class="muscle" data-zone="ankle_left" data-label="Ankle L"/>
+    <ellipse cx="190" cy="585" rx="10" ry="6" class="muscle" data-zone="ankle_right" data-label="Ankle R"/>
+  </g>
+
+  <!-- VUE ARRIÈRE -->
+  <g transform="translate(300,0)">
+    <text x="150" y="20" class="body-label">BACK</text>
+
+    <!-- Tête -->
+    <ellipse cx="150" cy="60" rx="28" ry="32" class="body-outline"/>
+    <rect x="138" y="88" width="24" height="20" class="body-outline"/>
+
+    <!-- Torse outline -->
+    <path d="M100,110 L100,250 Q100,275 110,290 L190,290 Q200,275 200,250 L200,110 Z" class="body-outline"/>
+
+    <!-- Bras outline -->
+    <path d="M100,120 Q80,140 80,180 L75,260 L90,260 L95,180 Q95,135 100,120 Z" class="body-outline"/>
+    <path d="M200,120 Q220,140 220,180 L225,260 L210,260 L205,180 Q205,135 200,120 Z" class="body-outline"/>
+    <path d="M75,260 L70,360 L88,360 L90,260 Z" class="body-outline"/>
+    <path d="M225,260 L230,360 L212,360 L210,260 Z" class="body-outline"/>
+    <ellipse cx="79" cy="375" rx="12" ry="18" class="body-outline"/>
+    <ellipse cx="221" cy="375" rx="12" ry="18" class="body-outline"/>
+
+    <!-- Bassin -->
+    <path d="M105,290 L100,330 L200,330 L195,290 Z" class="body-outline"/>
+
+    <!-- Cuisses arrière -->
+    <path d="M105,330 Q100,360 100,400 L95,490 L140,490 L145,400 L148,330 Z" class="body-outline"/>
+    <path d="M195,330 Q200,360 200,400 L205,490 L160,490 L155,400 L152,330 Z" class="body-outline"/>
+
+    <!-- Mollets -->
+    <path d="M95,490 L90,580 L138,580 L140,490 Z" class="body-outline"/>
+    <path d="M205,490 L210,580 L162,580 L160,490 Z" class="body-outline"/>
+
+    <!-- Pieds (vue arrière) -->
+    <ellipse cx="114" cy="595" rx="18" ry="10" class="body-outline"/>
+    <ellipse cx="186" cy="595" rx="18" ry="10" class="body-outline"/>
+
+    <!-- ZONES MUSCULAIRES (clic) -->
+    <!-- Nuque -->
+    <rect x="139" y="89" width="22" height="18" class="muscle" data-zone="neck_back" data-label="Neck (back)"/>
+
+    <!-- Trapèzes -->
+    <path d="M108,108 L150,120 L192,108 L185,140 L115,140 Z" class="muscle" data-zone="traps" data-label="Trapezius"/>
+
+    <!-- Deltoïdes postérieurs -->
+    <path d="M100,118 Q85,135 90,170 L105,170 L108,120 Z" class="muscle" data-zone="shoulder_left_back" data-label="Shoulder L (back)"/>
+    <path d="M200,118 Q215,135 210,170 L195,170 L192,120 Z" class="muscle" data-zone="shoulder_right_back" data-label="Shoulder R (back)"/>
+
+    <!-- Haut du dos / Rhomboïdes -->
+    <path d="M115,140 L150,140 L150,180 L115,180 Z" class="muscle" data-zone="upper_back_left" data-label="Upper back L"/>
+    <path d="M185,140 L150,140 L150,180 L185,180 Z" class="muscle" data-zone="upper_back_right" data-label="Upper back R"/>
+
+    <!-- Grand dorsal (lats) -->
+    <path d="M108,180 L135,180 L135,250 L115,250 Z" class="muscle" data-zone="lats_left" data-label="Lats L"/>
+    <path d="M192,180 L165,180 L165,250 L185,250 Z" class="muscle" data-zone="lats_right" data-label="Lats R"/>
+
+    <!-- Lombaires -->
+    <rect x="135" y="180" width="30" height="50" class="muscle" data-zone="lower_back" data-label="Lower back"/>
+
+    <!-- Bassin / Lombaires bas -->
+    <rect x="135" y="230" width="30" height="50" class="muscle" data-zone="lumbar" data-label="Lumbar"/>
+
+    <!-- Triceps -->
+    <path d="M82,170 Q80,200 85,250 L95,250 L98,180 Z" class="muscle" data-zone="triceps_left" data-label="Triceps L"/>
+    <path d="M218,170 Q220,200 215,250 L205,250 L202,180 Z" class="muscle" data-zone="triceps_right" data-label="Triceps R"/>
+
+    <!-- Avant-bras vue arrière -->
+    <path d="M73,265 L70,355 L88,355 L90,265 Z" class="muscle" data-zone="forearm_left_back" data-label="Forearm L (back)"/>
+    <path d="M227,265 L230,355 L212,355 L210,265 Z" class="muscle" data-zone="forearm_right_back" data-label="Forearm R (back)"/>
+
+    <!-- Fessiers -->
+    <path d="M108,290 L150,290 L150,335 L115,335 Z" class="muscle" data-zone="glute_left" data-label="Glute L"/>
+    <path d="M192,290 L150,290 L150,335 L185,335 Z" class="muscle" data-zone="glute_right" data-label="Glute R"/>
+
+    <!-- Ischio-jambiers -->
+    <path d="M108,335 Q103,365 103,400 L118,485 L140,485 L143,400 L143,335 Z" class="muscle" data-zone="hamstring_left" data-label="Hamstring L"/>
+    <path d="M192,335 Q197,365 197,400 L182,485 L160,485 L157,400 L157,335 Z" class="muscle" data-zone="hamstring_right" data-label="Hamstring R"/>
+
+    <!-- Mollets (vue arrière) -->
+    <path d="M97,500 L92,575 L118,575 L120,500 Z" class="muscle" data-zone="calf_left" data-label="Calf L"/>
+    <path d="M203,500 L208,575 L182,575 L180,500 Z" class="muscle" data-zone="calf_right" data-label="Calf R"/>
+
+    <!-- Tendons d'Achille -->
+    <rect x="106" y="575" width="14" height="12" class="muscle" data-zone="achilles_left" data-label="Achilles L"/>
+    <rect x="180" y="575" width="14" height="12" class="muscle" data-zone="achilles_right" data-label="Achilles R"/>
+  </g>
+</svg></div>
+          <div id="pain-summary" style="margin-top:12px;"></div>
+        </div>
       </div>
     </div>
 
-    <div class="card" id="hooper-summary" style="display:none; background:linear-gradient(135deg, var(--bg-elevated), var(--primary));">
-      <div style="text-align:center;">
-        <div style="color:var(--text-dim); font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Your Hooper index today</div>
-        <div id="hooper-index-value" style="font-size:42px; font-weight:700; margin-top:4px;">—</div>
-        <div id="hooper-interpretation" style="font-size:13px; margin-top:4px;"></div>
-      </div>
-    </div>
-
+    <!-- Notes facultatives -->
     <div class="card">
-      <h2>📈 Your recent check-ins</h2>
-      <div class="chart-container"><canvas id="hooper-mini-chart"></canvas></div>
+      <h3 style="font-size:15px; margin-bottom:4px;">📝 Anything else? <span style="font-size:11px; color:var(--text-dim); font-weight:normal;">(optional)</span></h3>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Share any information you think might be useful for the staff.</p>
+      <textarea id="hooper-notes" rows="3" placeholder="E.g. slight headache, didn't sleep well after a noisy night..."
+                style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+      <div style="text-align:right; margin-top:8px;">
+        <button class="btn" onclick="saveHooperNotes()" id="btn-save-notes">💾 Save notes</button>
+      </div>
+    </div>
+
+    <div class="card" id="hooper-completion" style="display:none; background:rgba(74,222,128,0.10); border:1px solid var(--green);">
+      <div style="text-align:center; padding:12px;">
+        <div style="font-size:24px; margin-bottom:4px;">✅</div>
+        <div style="color:var(--green); font-weight:600;">All your answers are submitted for today</div>
+        <div style="color:var(--text-dim); font-size:12px; margin-top:4px;">You can update any answer above if needed.</div>
+      </div>
     </div>
   </div>
 
@@ -1169,7 +1360,7 @@
       <h2>Toutes les réponses</h2>
       <div class="table-wrap" style="max-height:500px;">
         <table id="hooper-all-table">
-          <thead><tr><th>Date</th><th>Joueur</th><th>Sleep</th><th>Fatigue</th><th>Stress</th><th>Soreness</th><th>Total</th></tr></thead>
+          <thead><tr><th>Date</th><th>Joueur</th><th>Sleep</th><th>Fatigue</th><th>Stress</th><th>Soreness</th><th>Total</th><th>Douleurs</th><th>Notes</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -3496,7 +3687,6 @@ async function saveHooperToSupabase(date, joueur, fields) {
 // VUE JOUEUR : DAILY HOOPER CHECK-IN
 // ============================================================================
 async function renderPlayerHooper() {
-  // Charger les données si vide ou potentiellement obsolète
   if (hooperData.length === 0) await loadHooperFromSupabase();
 
   const dateInput = document.getElementById('hooper-date');
@@ -3520,11 +3710,109 @@ async function renderPlayerHooper() {
     renderHooperScale(key, existing ? existing[key] : null);
   });
 
-  // Mettre à jour le résumé
-  updateHooperSummary(existing);
+  // Mannequin : visible si soreness existe et est > 1
+  const soreness = existing ? existing.muscle_soreness : null;
+  const painLocations = (existing && Array.isArray(existing.pain_locations)) ? existing.pain_locations : [];
+  updatePainLocalization(soreness, painLocations);
 
-  // Mini chart historique
-  renderHooperMiniChart();
+  // Notes existantes
+  const notesEl = document.getElementById('hooper-notes');
+  if (notesEl) notesEl.value = (existing && existing.pain_notes) ? existing.pain_notes : '';
+
+  // Bandeau "complété"
+  const completionCard = document.getElementById('hooper-completion');
+  if (completionCard) {
+    completionCard.style.display = (existing && computeHooperIndex(existing) !== null) ? 'block' : 'none';
+  }
+
+  // Brancher les clics du mannequin (idempotent)
+  bindMannequinClicks();
+}
+
+function updatePainLocalization(soreness, currentLocations) {
+  const zone = document.getElementById('pain-localization');
+  if (!zone) return;
+  // Afficher si soreness > 1 (donc le joueur a au moins une légère douleur)
+  if (soreness !== null && soreness !== undefined && soreness > 1) {
+    zone.style.display = 'block';
+    // Marquer les zones sélectionnées dans le SVG
+    document.querySelectorAll('#mannequin-container .muscle').forEach(el => {
+      const z = el.getAttribute('data-zone');
+      if (currentLocations.includes(z)) el.classList.add('selected');
+      else el.classList.remove('selected');
+    });
+    // Résumé textuel
+    updatePainSummary(currentLocations);
+  } else {
+    zone.style.display = 'none';
+  }
+}
+
+function updatePainSummary(locations) {
+  const sum = document.getElementById('pain-summary');
+  if (!sum) return;
+  if (!locations || locations.length === 0) {
+    sum.innerHTML = '<div style="color:var(--text-dim); font-size:12px; text-align:center;">No body part selected yet</div>';
+    return;
+  }
+  // Récupérer les labels lisibles depuis le SVG
+  const labels = [];
+  locations.forEach(z => {
+    const el = document.querySelector('.muscle[data-zone="' + z + '"]');
+    if (el) labels.push(el.getAttribute('data-label'));
+    else labels.push(z);
+  });
+  sum.innerHTML = '<div style="font-size:13px;"><b style="color:var(--red);">' + locations.length + ' zone(s) selected:</b> ' +
+                  labels.map(l => '<span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 8px; border-radius:4px; margin:2px; display:inline-block;">' + l + '</span>').join(' ') + '</div>';
+}
+
+let mannequinBound = false;
+function bindMannequinClicks() {
+  if (mannequinBound) return;
+  const container = document.getElementById('mannequin-container');
+  if (!container) return;
+  container.addEventListener('click', async function(e) {
+    const target = e.target.closest('.muscle');
+    if (!target) return;
+    const zone = target.getAttribute('data-zone');
+    const date = document.getElementById('hooper-date').value;
+    if (!date) return;
+
+    // Récupérer l'état actuel
+    const existing = getHooper(date, currentJoueurNom);
+    let locations = (existing && Array.isArray(existing.pain_locations)) ? existing.pain_locations.slice() : [];
+
+    if (locations.includes(zone)) {
+      // Désélectionner
+      locations = locations.filter(z => z !== zone);
+      target.classList.remove('selected');
+    } else {
+      locations.push(zone);
+      target.classList.add('selected');
+    }
+
+    // Sauvegarder
+    const ok = await saveHooperToSupabase(date, currentJoueurNom, { pain_locations: locations });
+    if (ok) {
+      updatePainSummary(locations);
+    }
+  });
+  mannequinBound = true;
+}
+
+async function saveHooperNotes() {
+  const date = document.getElementById('hooper-date').value;
+  const notes = (document.getElementById('hooper-notes').value || '').trim();
+  if (!date) return;
+  const btn = document.getElementById('btn-save-notes');
+  btn.disabled = true;
+  btn.textContent = '⏳ Saving...';
+  const ok = await saveHooperToSupabase(date, currentJoueurNom, { pain_notes: notes || null });
+  btn.disabled = false;
+  btn.textContent = '💾 Save notes';
+  if (ok) {
+    toast(notes ? 'Notes saved' : 'Notes cleared', 'success');
+  }
 }
 
 function renderHooperScale(key, currentValue) {
@@ -3563,14 +3851,17 @@ async function setHooperValue(key, value) {
   if (!date) return;
   const update = {};
   update[key] = value;
-  // Si c'est la première réponse, on doit aussi inclure les autres champs (= null si non saisis)
   const existing = getHooper(date, currentJoueurNom);
   if (!existing) {
-    // Premier appui : on initialise les autres à null pour permettre l'insert
     update.sleep_quality = (key === 'sleep_quality') ? value : null;
     update.fatigue = (key === 'fatigue') ? value : null;
     update.stress = (key === 'stress') ? value : null;
     update.muscle_soreness = (key === 'muscle_soreness') ? value : null;
+    update.pain_locations = [];
+  }
+  // Si on baisse soreness à 0 ou 1, on vide les pain_locations
+  if (key === 'muscle_soreness' && value <= 1) {
+    update.pain_locations = [];
   }
   const ok = await saveHooperToSupabase(date, currentJoueurNom, update);
   if (ok) {
@@ -3876,6 +4167,13 @@ function renderStaffHooperAllTable() {
   tbody.innerHTML = sorted.map(h => {
     const idx = computeHooperIndex(h);
     const interp = interpretHooper(idx);
+    const painLocs = Array.isArray(h.pain_locations) ? h.pain_locations : [];
+    const painCell = painLocs.length > 0
+      ? '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="showPainDetail(\'' + h.date + '\', \'' + h.joueur.replace(/\'/g, "\\'") + '\')">' + painLocs.length + ' zone(s) 🔍</button>'
+      : '<span style="color:var(--text-dim); font-size:11px;">—</span>';
+    const notesCell = h.pain_notes
+      ? '<span style="color:var(--accent-light); cursor:help; font-size:14px;" title="' + escapeHtml(h.pain_notes) + '">💬</span>'
+      : '<span style="color:var(--text-dim); font-size:11px;">—</span>';
     return '<tr>' +
       '<td>' + formatDateFR(h.date) + '</td>' +
       '<td><b>' + escapeHtml(h.joueur) + '</b></td>' +
@@ -3884,8 +4182,68 @@ function renderStaffHooperAllTable() {
       '<td>' + cell(h.stress) + '</td>' +
       '<td>' + cell(h.muscle_soreness) + '</td>' +
       '<td><b style="color:' + interp.color + ';">' + (idx !== null ? idx : '—') + '</b></td>' +
+      '<td>' + painCell + '</td>' +
+      '<td>' + notesCell + '</td>' +
       '</tr>';
   }).join('');
+}
+
+// ============================================================
+// AFFICHAGE DU DÉTAIL DOULEURS (staff)
+// ============================================================
+function showPainDetail(date, joueur) {
+  const h = hooperData.find(x => x.date === date && x.joueur === joueur);
+  if (!h) return;
+  const locations = Array.isArray(h.pain_locations) ? h.pain_locations : [];
+
+  // Récupérer les labels lisibles
+  const labels = [];
+  // Cloner le mannequin original (depuis le DOM joueur si présent, sinon créer)
+  // Pour staff, on génère un mini-overlay modal
+  let modal = document.getElementById('pain-detail-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'pain-detail-modal';
+    modal.style.cssText = 'position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; padding:20px;';
+    document.body.appendChild(modal);
+  }
+
+  const intensity = h.muscle_soreness;
+  const intensityLabel = intensity ? (HOOPER_SCALE.find(i => i.value === intensity) || {}).labelOther : '—';
+
+  // Récupérer le SVG du mannequin (clone depuis la vue joueur si dispo)
+  const playerMannequin = document.getElementById('mannequin-container');
+  const svgHtml = playerMannequin ? playerMannequin.innerHTML : '<div style="color:var(--text-dim); padding:20px;">SVG mannequin not loaded</div>';
+
+  modal.innerHTML = '<div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:900px; width:100%; max-height:90vh; overflow-y:auto;">' +
+    '<div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:16px;">' +
+      '<div>' +
+        '<h2 style="color:var(--accent-light); font-size:18px;">🎯 Douleurs de ' + escapeHtml(joueur) + '</h2>' +
+        '<div style="color:var(--text-dim); font-size:13px; margin-top:4px;">' + formatDateFR(date) + ' · Intensité : <b style="color:var(--text);">' + (intensity || '—') + '/7</b> (' + intensityLabel + ')</div>' +
+      '</div>' +
+      '<button class="btn btn-secondary" onclick="document.getElementById(\'pain-detail-modal\').remove()">✕ Fermer</button>' +
+    '</div>' +
+    '<div id="pain-detail-svg-container" style="background:var(--bg-elevated); border-radius:10px; padding:16px; overflow-x:auto;">' + svgHtml + '</div>' +
+    (h.pain_notes ? '<div style="margin-top:16px; background:var(--bg-elevated); padding:12px 16px; border-left:3px solid var(--accent); border-radius:6px;"><div style="color:var(--text-dim); font-size:11px; text-transform:uppercase;">Notes du joueur</div><div style="margin-top:4px; font-size:14px;">' + escapeHtml(h.pain_notes) + '</div></div>' : '') +
+    '<div style="margin-top:16px; text-align:center; color:var(--text-dim); font-size:12px;">' + locations.length + ' zone(s) sélectionnée(s)</div>' +
+  '</div>';
+
+  // Marquer les zones sélectionnées dans le clone, et désactiver les clics
+  setTimeout(() => {
+    const cont = document.getElementById('pain-detail-svg-container');
+    if (!cont) return;
+    cont.querySelectorAll('.muscle').forEach(el => {
+      el.style.pointerEvents = 'none';
+      const z = el.getAttribute('data-zone');
+      if (locations.includes(z)) el.classList.add('selected');
+      else el.classList.remove('selected');
+    });
+  }, 0);
+
+  // Fermer au clic hors modal
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) modal.remove();
+  });
 }
 
 // Listener date Hooper
