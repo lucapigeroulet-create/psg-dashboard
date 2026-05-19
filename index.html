@@ -472,6 +472,8 @@
   <!-- Onglets joueur (visibles uniquement pour les lecteurs) -->
   <button class="nav-btn player-only" data-view="player-rpe" style="display:none;">⭐ Rate my sessions</button>
   <button class="nav-btn player-only" data-view="player-history" style="display:none;">📊 My ratings</button>
+  <button class="nav-btn player-only" data-view="player-hooper" style="display:none;">💚 Daily check-in</button>
+  <button class="nav-btn" data-view="staff-hooper">💚 État de forme</button>
 </nav>
 
 <main>
@@ -1049,6 +1051,131 @@
     </div>
   </div>
 
+
+  <!-- ========== VUE JOUEUR : DAILY HOOPER CHECK-IN ========== -->
+  <div class="view" id="view-player-hooper">
+    <div class="card" style="background:linear-gradient(135deg, var(--bg-card), #14532d); border:none;">
+      <h2 style="color:var(--green); font-size:18px;">💚 Daily check-in</h2>
+      <p style="color:var(--text); font-size:14px; margin-top:4px;">Tell us how you feel today. This takes 30 seconds and helps us monitor your wellness.</p>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label>Date</label>
+        <input type="date" id="hooper-date" />
+      </div>
+    </div>
+
+    <div id="hooper-status" style="margin-bottom:12px;"></div>
+
+    <!-- 4 questions Hooper -->
+    <div class="card">
+      <div class="hooper-question" data-key="sleep_quality">
+        <h3 style="font-size:15px; margin-bottom:4px;">😴 Sleep quality</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">How well did you sleep last night?</p>
+        <div class="hooper-scale" data-key="sleep_quality"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hooper-question" data-key="fatigue">
+        <h3 style="font-size:15px; margin-bottom:4px;">⚡ Fatigue level</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">How tired do you feel right now?</p>
+        <div class="hooper-scale" data-key="fatigue"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hooper-question" data-key="stress">
+        <h3 style="font-size:15px; margin-bottom:4px;">🧠 Stress level</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">How stressed do you feel today?</p>
+        <div class="hooper-scale" data-key="stress"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hooper-question" data-key="muscle_soreness">
+        <h3 style="font-size:15px; margin-bottom:4px;">💪 Muscle soreness</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">How sore are your muscles?</p>
+        <div class="hooper-scale" data-key="muscle_soreness"></div>
+      </div>
+    </div>
+
+    <div class="card" id="hooper-summary" style="display:none; background:linear-gradient(135deg, var(--bg-elevated), var(--primary));">
+      <div style="text-align:center;">
+        <div style="color:var(--text-dim); font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Your Hooper index today</div>
+        <div id="hooper-index-value" style="font-size:42px; font-weight:700; margin-top:4px;">—</div>
+        <div id="hooper-interpretation" style="font-size:13px; margin-top:4px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📈 Your recent check-ins</h2>
+      <div class="chart-container"><canvas id="hooper-mini-chart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ========== VUE STAFF : SUIVI HOOPER ========== -->
+  <div class="view" id="view-staff-hooper">
+    <div class="card">
+      <h2>💚 État de forme de l'effectif (Test Hooper)</h2>
+      <p style="color:var(--text-dim); font-size:12px;">
+        Vue d'ensemble du wellness quotidien des joueurs. Le Hooper Index est la somme des 4 indicateurs (Sleep, Fatigue, Stress, Soreness) : plus il est élevé, plus le joueur est en fatigue/stress.
+      </p>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat"><div class="stat-label">Réponses (7j)</div><div class="stat-value" id="hooper-stat-count">—</div></div>
+      <div class="stat"><div class="stat-label">Hooper moyen (équipe)</div><div class="stat-value" id="hooper-stat-avg">—</div></div>
+      <div class="stat"><div class="stat-label">Joueurs à surveiller</div><div class="stat-value" id="hooper-stat-alerts">—</div></div>
+      <div class="stat"><div class="stat-label">Taux de réponse aujourd'hui</div><div class="stat-value" id="hooper-stat-today">—</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Tendance équipe (Hooper moyen / jour)</h2>
+      <div class="chart-container tall"><canvas id="chart-staff-hooper-team"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>Joueurs à surveiller (Hooper élevé ces 3 derniers jours)</h2>
+      <div class="table-wrap">
+        <table id="hooper-alerts-table">
+          <thead><tr><th>Joueur</th><th>Groupe</th><th>Hooper moyen (3j)</th><th>Détail (Sleep / Fatigue / Stress / Soreness)</th><th>Dernière saisie</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Tableau de bord par joueur</h2>
+      <div class="filters">
+        <div class="filter-group">
+          <label>Joueur</label>
+          <select id="staff-hooper-player" onchange="renderStaffHooperPlayerChart()"><option value="">Tous (heatmap)</option></select>
+        </div>
+        <div class="filter-group">
+          <label>Période</label>
+          <select id="staff-hooper-period" onchange="renderStaffHooperPlayerChart()">
+            <option value="7">7 derniers jours</option>
+            <option value="14">14 derniers jours</option>
+            <option value="30">30 derniers jours</option>
+          </select>
+        </div>
+      </div>
+      <div class="chart-container tall"><canvas id="chart-staff-hooper-player"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>Toutes les réponses</h2>
+      <div class="table-wrap" style="max-height:500px;">
+        <table id="hooper-all-table">
+          <thead><tr><th>Date</th><th>Joueur</th><th>Sleep</th><th>Fatigue</th><th>Stress</th><th>Soreness</th><th>Total</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <div class="toast" id="toast"></div>
@@ -1274,6 +1401,9 @@ async function loadState() {
     const { data: gps } = await sb.from('gps_data').select('*').order('date');
     state.bdd_gps = (gps || []);
 
+    setLoad('Chargement des check-ins Hooper...');
+    await loadHooperFromSupabase();
+
     setStatus('☁️ ' + state.joueurs.length + ' joueurs, ' + state.bdd_ent2.length + ' séances', false);
   } catch(e) {
     console.error('Erreur loadState:', e);
@@ -1404,7 +1534,7 @@ let realtimeChannels = [];
 
 function setupRealtime() {
   if (realtimeChannels.length > 0) return; // déjà configuré
-  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data'];
+  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests'];
 
   tables.forEach(table => {
     const channel = sb.channel('realtime-' + table)
@@ -1466,6 +1596,14 @@ function handleRealtimeChange(table, payload) {
   } else if (table === 'types_seances') {
     if (eventType === 'DELETE') state.types_seances = state.types_seances.filter(t => t !== oldRow.nom);
     else if (!state.types_seances.includes(newRow.nom)) state.types_seances.push(newRow.nom);
+  } else if (table === 'hooper_tests') {
+    if (eventType === 'DELETE') {
+      hooperData = hooperData.filter(h => h.id !== oldRow.id);
+    } else {
+      const idx = hooperData.findIndex(h => h.id === newRow.id);
+      if (idx >= 0) hooperData[idx] = newRow;
+      else hooperData.push(newRow);
+    }
   } else if (table === 'gps_data') {
     if (eventType === 'DELETE') {
       state.bdd_gps = state.bdd_gps.filter(g => g.id !== oldRow.id);
@@ -1808,6 +1946,8 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'settings') renderSettings();
     else if (view === 'player-rpe') renderPlayerRPE();
     else if (view === 'player-history') renderPlayerHistory();
+    else if (view === 'player-hooper') renderPlayerHooper();
+    else if (view === 'staff-hooper') renderStaffHooper();
   });
 });
 
@@ -3274,6 +3414,484 @@ function refreshActiveView() {
   else if (id === 'view-rpe-entry') renderRPEEntry();
   else if (id === 'view-history') renderHistory();
 }
+
+// ============================================================================
+// HOOPER INDEX — Helpers et logique
+// ============================================================================
+
+// Échelle 1-7 avec smileys et couleurs
+// Pour SLEEP : 1=excellent, 7=très mauvais
+// Pour FATIGUE/STRESS/SORENESS : 1=aucun (très bien), 7=énorme (très mal)
+// Donc on standardise : 1 = meilleur état, 7 = pire état → Hooper élevé = mauvais
+const HOOPER_SCALE = [
+  { value: 1, smiley: '😄', color: '#10b981', labelSleep: 'Excellent', labelOther: 'None at all' },
+  { value: 2, smiley: '🙂', color: '#22c55e', labelSleep: 'Very good',  labelOther: 'Very low' },
+  { value: 3, smiley: '😊', color: '#84cc16', labelSleep: 'Good',       labelOther: 'Low' },
+  { value: 4, smiley: '😐', color: '#eab308', labelSleep: 'Average',    labelOther: 'Moderate' },
+  { value: 5, smiley: '😕', color: '#f59e0b', labelSleep: 'Poor',       labelOther: 'High' },
+  { value: 6, smiley: '😟', color: '#f97316', labelSleep: 'Very poor',  labelOther: 'Very high' },
+  { value: 7, smiley: '😣', color: '#ef4444', labelSleep: 'Terrible',   labelOther: 'Extreme' }
+];
+
+// Cache local des données Hooper (chargé depuis Supabase)
+let hooperData = [];
+
+async function loadHooperFromSupabase() {
+  if (!sb) return;
+  try {
+    const { data, error } = await sb.from('hooper_tests').select('*').order('date', { ascending: false });
+    if (error) {
+      console.error('Erreur chargement Hooper:', error);
+      return;
+    }
+    hooperData = data || [];
+  } catch(e) {
+    console.error('Exception chargement Hooper:', e);
+  }
+}
+
+// Récupère le Hooper du jour pour un joueur (ou null)
+function getHooper(date, joueur) {
+  return hooperData.find(h => h.date === date && h.joueur === joueur) || null;
+}
+
+// Calcule l'index Hooper local (somme des 4 valeurs)
+function computeHooperIndex(h) {
+  if (!h) return null;
+  const parts = [h.sleep_quality, h.fatigue, h.stress, h.muscle_soreness];
+  if (parts.some(p => p === null || p === undefined)) return null;
+  return parts.reduce((s, v) => s + v, 0);
+}
+
+// Interprétation visuelle de l'index (4 à 28)
+function interpretHooper(idx) {
+  if (idx === null) return { text: 'Réponse incomplète', color: 'var(--text-dim)' };
+  if (idx <= 8)  return { text: '😊 Excellent état de forme', color: 'var(--green)' };
+  if (idx <= 12) return { text: '🙂 État correct', color: '#84cc16' };
+  if (idx <= 16) return { text: '😐 État moyen — à surveiller', color: '#eab308' };
+  if (idx <= 20) return { text: '😟 Fatigue / stress élevé', color: '#f97316' };
+  return            { text: '🚨 Alerte — récupération nécessaire', color: 'var(--red)' };
+}
+
+// Sauvegarde sur Supabase
+async function saveHooperToSupabase(date, joueur, fields) {
+  if (!canWriteRPE(joueur)) {
+    const msg = (currentRole === 'lecteur') ? 'You can only fill your own check-in' : 'Tu ne peux saisir que ton propre Hooper';
+    toast(msg, 'error'); return false;
+  }
+  const row = { date, joueur, ...fields };
+  const { error } = await sb.from('hooper_tests').upsert(row, { onConflict: 'date,joueur' });
+  if (error) {
+    toast('Error: ' + error.message, 'error');
+    return false;
+  }
+  // Mise à jour locale
+  const idx = hooperData.findIndex(h => h.date === date && h.joueur === joueur);
+  if (idx >= 0) Object.assign(hooperData[idx], fields);
+  else hooperData.push({ date, joueur, ...fields });
+  return true;
+}
+
+// ============================================================================
+// VUE JOUEUR : DAILY HOOPER CHECK-IN
+// ============================================================================
+async function renderPlayerHooper() {
+  // Charger les données si vide ou potentiellement obsolète
+  if (hooperData.length === 0) await loadHooperFromSupabase();
+
+  const dateInput = document.getElementById('hooper-date');
+  if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+  const date = dateInput.value;
+
+  const existing = getHooper(date, currentJoueurNom);
+
+  // Status banner
+  const statusEl = document.getElementById('hooper-status');
+  if (existing && computeHooperIndex(existing) !== null) {
+    statusEl.innerHTML = '<div style="background:rgba(74,222,128,0.15); color:var(--green); padding:10px 14px; border-radius:6px; font-size:13px;">✅ Check-in submitted for this date. You can update your answers below.</div>';
+  } else if (existing) {
+    statusEl.innerHTML = '<div style="background:rgba(251,191,36,0.15); color:#fde047; padding:10px 14px; border-radius:6px; font-size:13px;">⏳ Partial check-in. Complete all 4 questions below.</div>';
+  } else {
+    statusEl.innerHTML = '<div style="background:rgba(0,163,255,0.15); color:var(--accent-light); padding:10px 14px; border-radius:6px; font-size:13px;">👋 Please answer the 4 questions below for today.</div>';
+  }
+
+  // Rendre les 4 échelles
+  ['sleep_quality', 'fatigue', 'stress', 'muscle_soreness'].forEach(key => {
+    renderHooperScale(key, existing ? existing[key] : null);
+  });
+
+  // Mettre à jour le résumé
+  updateHooperSummary(existing);
+
+  // Mini chart historique
+  renderHooperMiniChart();
+}
+
+function renderHooperScale(key, currentValue) {
+  const container = document.querySelector('.hooper-scale[data-key="' + key + '"]');
+  if (!container) return;
+  const isSleep = key === 'sleep_quality';
+  let html = '<div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:6px;">';
+  HOOPER_SCALE.forEach(item => {
+    const selected = currentValue === item.value;
+    const bg = selected ? item.color : 'var(--bg-elevated)';
+    const textColor = selected ? 'white' : 'var(--text)';
+    const border = selected ? '2px solid white' : '2px solid var(--border)';
+    const transform = selected ? 'scale(1.08)' : 'scale(1)';
+    html += '<button class="hooper-btn" onclick="setHooperValue(\'' + key + '\', ' + item.value + ')" ' +
+            'style="background:' + bg + '; color:' + textColor + '; border:' + border + '; border-radius:10px; padding:10px 4px; cursor:pointer; transition:all 0.15s; transform:' + transform + ';">' +
+            '<div style="font-size:22px;">' + item.smiley + '</div>' +
+            '<div style="font-size:11px; font-weight:700; margin-top:2px;">' + item.value + '</div>' +
+            '</button>';
+  });
+  html += '</div>';
+  // Label de la valeur sélectionnée
+  if (currentValue !== null && currentValue !== undefined) {
+    const item = HOOPER_SCALE.find(i => i.value === currentValue);
+    if (item) {
+      const lbl = isSleep ? item.labelSleep : item.labelOther;
+      html += '<div style="text-align:center; margin-top:8px; font-size:12px; color:var(--text-dim);">Selected: <b style="color:var(--text);">' + currentValue + '/7</b> — ' + lbl + '</div>';
+    }
+  } else {
+    html += '<div style="text-align:center; margin-top:8px; font-size:11px; color:var(--text-dim);">Tap a smiley to rate</div>';
+  }
+  container.innerHTML = html;
+}
+
+async function setHooperValue(key, value) {
+  const date = document.getElementById('hooper-date').value;
+  if (!date) return;
+  const update = {};
+  update[key] = value;
+  // Si c'est la première réponse, on doit aussi inclure les autres champs (= null si non saisis)
+  const existing = getHooper(date, currentJoueurNom);
+  if (!existing) {
+    // Premier appui : on initialise les autres à null pour permettre l'insert
+    update.sleep_quality = (key === 'sleep_quality') ? value : null;
+    update.fatigue = (key === 'fatigue') ? value : null;
+    update.stress = (key === 'stress') ? value : null;
+    update.muscle_soreness = (key === 'muscle_soreness') ? value : null;
+  }
+  const ok = await saveHooperToSupabase(date, currentJoueurNom, update);
+  if (ok) {
+    renderPlayerHooper();
+  }
+}
+
+function updateHooperSummary(h) {
+  const summaryCard = document.getElementById('hooper-summary');
+  if (!h) {
+    summaryCard.style.display = 'none';
+    return;
+  }
+  const idx = computeHooperIndex(h);
+  if (idx === null) {
+    summaryCard.style.display = 'none';
+    return;
+  }
+  summaryCard.style.display = 'block';
+  const interp = interpretHooper(idx);
+  document.getElementById('hooper-index-value').textContent = idx + ' / 28';
+  document.getElementById('hooper-index-value').style.color = interp.color;
+  document.getElementById('hooper-interpretation').textContent = interp.text;
+  document.getElementById('hooper-interpretation').style.color = interp.color;
+}
+
+function renderHooperMiniChart() {
+  const mine = hooperData.filter(h => h.joueur === currentJoueurNom).sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
+  destroyChart('hooper-mini-chart');
+  if (mine.length === 0) {
+    const ctx = document.getElementById('hooper-mini-chart').getContext('2d');
+    ctx.clearRect(0, 0, 1000, 1000);
+    return;
+  }
+  const labels = mine.map(h => formatDateFR(h.date));
+  const data = mine.map(h => computeHooperIndex(h));
+  const colors = data.map(v => v === null ? '#374151' : interpretHooper(v).color);
+  charts['hooper-mini-chart'] = new Chart(document.getElementById('hooper-mini-chart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Hooper index', data, backgroundColor: colors, borderRadius: 6 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+        y: { min: 4, max: 28, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
+      }
+    }
+  });
+}
+
+// ============================================================================
+// VUE STAFF : SUIVI HOOPER
+// ============================================================================
+async function renderStaffHooper() {
+  // Charger
+  await loadHooperFromSupabase();
+
+  // Filtres
+  const playerSel = document.getElementById('staff-hooper-player');
+  if (playerSel) {
+    const current = playerSel.value;
+    playerSel.innerHTML = '<option value="">Tous (heatmap)</option>' +
+      getAllPlayers().map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+    playerSel.value = current;
+  }
+
+  // Stats globales
+  const last7 = new Date(); last7.setDate(last7.getDate() - 7);
+  const last7Iso = last7.toISOString().slice(0, 10);
+  const recent = hooperData.filter(h => h.date >= last7Iso);
+  document.getElementById('hooper-stat-count').textContent = recent.length;
+
+  const validIndices = recent.map(computeHooperIndex).filter(v => v !== null);
+  const avg = validIndices.length > 0 ? (validIndices.reduce((a,b)=>a+b,0) / validIndices.length).toFixed(1) : '—';
+  document.getElementById('hooper-stat-avg').textContent = avg;
+
+  // Joueurs à surveiller : Hooper >= 17 sur leurs 3 dernières saisies
+  const playersToWatch = computePlayersToWatch();
+  document.getElementById('hooper-stat-alerts').textContent = playersToWatch.length;
+
+  // Taux de réponse aujourd'hui
+  const today = new Date().toISOString().slice(0, 10);
+  const todayCount = hooperData.filter(h => h.date === today && computeHooperIndex(h) !== null).length;
+  const totalPlayers = state.joueurs.length;
+  const todayPct = totalPlayers > 0 ? Math.round(todayCount * 100 / totalPlayers) : 0;
+  document.getElementById('hooper-stat-today').textContent = todayCount + '/' + totalPlayers + ' (' + todayPct + '%)';
+
+  // Chart tendance équipe
+  renderStaffHooperTeamChart();
+
+  // Table alertes
+  renderStaffHooperAlertsTable(playersToWatch);
+
+  // Vue par joueur
+  renderStaffHooperPlayerChart();
+
+  // Table de toutes les réponses
+  renderStaffHooperAllTable();
+}
+
+function computePlayersToWatch() {
+  // Pour chaque joueur, prendre ses 3 dernières saisies complètes et calculer la moyenne
+  const byPlayer = {};
+  hooperData.forEach(h => {
+    const idx = computeHooperIndex(h);
+    if (idx === null) return;
+    if (!byPlayer[h.joueur]) byPlayer[h.joueur] = [];
+    byPlayer[h.joueur].push({ date: h.date, idx, h });
+  });
+  const result = [];
+  Object.entries(byPlayer).forEach(([joueur, entries]) => {
+    entries.sort((a, b) => b.date.localeCompare(a.date));
+    const last3 = entries.slice(0, 3);
+    if (last3.length === 0) return;
+    const avg = last3.reduce((s, e) => s + e.idx, 0) / last3.length;
+    if (avg >= 17) {
+      const lastEntry = last3[0].h;
+      result.push({
+        joueur,
+        avg: avg.toFixed(1),
+        sleep: lastEntry.sleep_quality,
+        fatigue: lastEntry.fatigue,
+        stress: lastEntry.stress,
+        soreness: lastEntry.muscle_soreness,
+        lastDate: last3[0].date
+      });
+    }
+  });
+  return result.sort((a, b) => parseFloat(b.avg) - parseFloat(a.avg));
+}
+
+function renderStaffHooperTeamChart() {
+  // Moyenne équipe par jour
+  const byDate = {};
+  hooperData.forEach(h => {
+    const idx = computeHooperIndex(h);
+    if (idx === null) return;
+    if (!byDate[h.date]) byDate[h.date] = [];
+    byDate[h.date].push(idx);
+  });
+  const dates = Object.keys(byDate).sort();
+  const avgs = dates.map(d => +(byDate[d].reduce((a,b)=>a+b,0) / byDate[d].length).toFixed(1));
+  destroyChart('chart-staff-hooper-team');
+  if (dates.length === 0) return;
+  charts['chart-staff-hooper-team'] = new Chart(document.getElementById('chart-staff-hooper-team'), {
+    type: 'line',
+    data: {
+      labels: dates.map(formatDateFR),
+      datasets: [{
+        label: 'Hooper moyen équipe',
+        data: avgs,
+        borderColor: 'var(--accent)',
+        backgroundColor: 'rgba(0,163,255,0.15)',
+        fill: true, tension: 0.3, borderWidth: 2, pointRadius: 4,
+        pointBackgroundColor: avgs.map(v => interpretHooper(v).color)
+      }]
+    },
+    options: chartOpts({})
+  });
+}
+
+function renderStaffHooperAlertsTable(watch) {
+  const tbody = document.querySelector('#hooper-alerts-table tbody');
+  if (watch.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px;">Aucune alerte — toute l\'équipe est en bon état de forme 😊</td></tr>';
+    return;
+  }
+  tbody.innerHTML = watch.map(w => {
+    const info = getJoueurInfo(w.joueur);
+    const detailItem = (v) => {
+      if (v === null) return '<span style="color:var(--text-dim)">—</span>';
+      const color = HOOPER_SCALE.find(i => i.value === v).color;
+      return '<span style="display:inline-block; min-width:22px; padding:2px 6px; background:' + color + '; color:white; border-radius:4px; font-weight:600; font-size:11px;">' + v + '</span>';
+    };
+    return '<tr>' +
+      '<td><b>' + escapeHtml(w.joueur) + '</b></td>' +
+      '<td>' + escapeHtml(info.groupe || '') + '</td>' +
+      '<td><b style="color:' + interpretHooper(parseFloat(w.avg)).color + ';">' + w.avg + '</b></td>' +
+      '<td>' + detailItem(w.sleep) + ' ' + detailItem(w.fatigue) + ' ' + detailItem(w.stress) + ' ' + detailItem(w.soreness) + '</td>' +
+      '<td style="font-size:11px;">' + formatDateFR(w.lastDate) + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderStaffHooperPlayerChart() {
+  const playerSel = document.getElementById('staff-hooper-player');
+  const periodSel = document.getElementById('staff-hooper-period');
+  if (!playerSel || !periodSel) return;
+  const player = playerSel.value;
+  const periodDays = parseInt(periodSel.value);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - periodDays);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+
+  destroyChart('chart-staff-hooper-player');
+
+  if (player) {
+    // Vue détaillée 1 joueur : 4 lignes (Sleep / Fatigue / Stress / Soreness) + Total
+    const mine = hooperData.filter(h => h.joueur === player && h.date >= cutoffIso).sort((a, b) => a.date.localeCompare(b.date));
+    if (mine.length === 0) return;
+    const labels = mine.map(h => formatDateFR(h.date));
+    charts['chart-staff-hooper-player'] = new Chart(document.getElementById('chart-staff-hooper-player'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Sleep', data: mine.map(h => h.sleep_quality), borderColor: '#3b82f6', backgroundColor: 'transparent', tension: 0.3 },
+          { label: 'Fatigue', data: mine.map(h => h.fatigue), borderColor: '#f59e0b', backgroundColor: 'transparent', tension: 0.3 },
+          { label: 'Stress', data: mine.map(h => h.stress), borderColor: '#a855f7', backgroundColor: 'transparent', tension: 0.3 },
+          { label: 'Soreness', data: mine.map(h => h.muscle_soreness), borderColor: '#ef4444', backgroundColor: 'transparent', tension: 0.3 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#e8eef6' } } },
+        scales: {
+          x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+          y: { min: 1, max: 7, ticks: { color: '#8ba3c1', stepSize: 1 }, grid: { color: '#1f3a5f' } }
+        }
+      }
+    });
+  } else {
+    // Heatmap équipe : Hooper index par joueur et par jour
+    const players = getAllPlayers().filter(p => hooperData.some(h => h.joueur === p && h.date >= cutoffIso));
+    const datesSet = new Set();
+    hooperData.forEach(h => { if (h.date >= cutoffIso) datesSet.add(h.date); });
+    const dates = Array.from(datesSet).sort();
+    if (players.length === 0 || dates.length === 0) return;
+
+    // On utilise un scatter avec couleur = Hooper, pour faire pseudo-heatmap
+    const data = [];
+    players.forEach((p, pi) => {
+      dates.forEach((d, di) => {
+        const h = hooperData.find(x => x.joueur === p && x.date === d);
+        const idx = h ? computeHooperIndex(h) : null;
+        if (idx !== null) {
+          data.push({ x: di, y: pi, idx, joueur: p, date: d });
+        }
+      });
+    });
+    charts['chart-staff-hooper-player'] = new Chart(document.getElementById('chart-staff-hooper-player'), {
+      type: 'scatter',
+      data: {
+        datasets: [{
+          label: 'Hooper',
+          data: data.map(d => ({ x: d.x, y: d.y, idx: d.idx, joueur: d.joueur, date: d.date })),
+          backgroundColor: data.map(d => interpretHooper(d.idx).color),
+          pointRadius: 12,
+          pointHoverRadius: 14
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                const d = ctx.raw;
+                return d.joueur + ' — ' + formatDateFR(d.date) + ' : Hooper ' + d.idx + '/28';
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            min: -0.5, max: dates.length - 0.5,
+            ticks: {
+              color: '#8ba3c1',
+              callback: function(v) { return dates[v] ? formatDateFR(dates[v]) : ''; },
+              stepSize: 1
+            },
+            grid: { color: '#1f3a5f' }
+          },
+          y: {
+            min: -0.5, max: players.length - 0.5,
+            ticks: {
+              color: '#8ba3c1',
+              callback: function(v) { return players[v] || ''; },
+              stepSize: 1
+            },
+            grid: { color: '#1f3a5f' }
+          }
+        }
+      }
+    });
+  }
+}
+
+function renderStaffHooperAllTable() {
+  const tbody = document.querySelector('#hooper-all-table tbody');
+  const sorted = hooperData.slice().sort((a, b) => b.date.localeCompare(a.date) || a.joueur.localeCompare(b.joueur));
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:20px;">Aucune réponse Hooper enregistrée pour l\'instant.</td></tr>';
+    return;
+  }
+  const cell = (v) => {
+    if (v === null || v === undefined) return '<span style="color:var(--text-dim)">—</span>';
+    const item = HOOPER_SCALE.find(i => i.value === v);
+    return item ? '<span style="display:inline-block; min-width:24px; padding:2px 8px; background:' + item.color + '; color:white; border-radius:4px; font-weight:600; font-size:11px;">' + v + '</span>' : v;
+  };
+  tbody.innerHTML = sorted.map(h => {
+    const idx = computeHooperIndex(h);
+    const interp = interpretHooper(idx);
+    return '<tr>' +
+      '<td>' + formatDateFR(h.date) + '</td>' +
+      '<td><b>' + escapeHtml(h.joueur) + '</b></td>' +
+      '<td>' + cell(h.sleep_quality) + '</td>' +
+      '<td>' + cell(h.fatigue) + '</td>' +
+      '<td>' + cell(h.stress) + '</td>' +
+      '<td>' + cell(h.muscle_soreness) + '</td>' +
+      '<td><b style="color:' + interp.color + ';">' + (idx !== null ? idx : '—') + '</b></td>' +
+      '</tr>';
+  }).join('');
+}
+
+// Listener date Hooper
+document.addEventListener('change', function(e) {
+  if (e.target && e.target.id === 'hooper-date') renderPlayerHooper();
+});
 
 // ============================================================================
 // VUES JOUEUR (rôle lecteur)
