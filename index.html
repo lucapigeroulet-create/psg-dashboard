@@ -408,28 +408,28 @@
 <div id="login-overlay" style="position:fixed; inset:0; z-index:10000; background:linear-gradient(135deg, #0a1628, #002850); display:flex; align-items:center; justify-content:center; padding:24px;">
   <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:16px; padding:32px; max-width:420px; width:100%; box-shadow:0 8px 32px rgba(0,0,0,0.5);">
     <h1 style="font-size:24px; margin-bottom:8px; text-align:center;">PSG <span style="color:var(--accent-light)">Session Maker</span></h1>
-    <p style="color:var(--text-dim); font-size:13px; text-align:center; margin-bottom:24px;">Connecte-toi pour accéder au dashboard</p>
+    <p style="color:var(--text-dim); font-size:13px; text-align:center; margin-bottom:24px;">Connecte-toi / Log in</p>
 
     <div style="margin-bottom:16px;">
-      <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:6px; font-weight:500;">Identifiant</label>
+      <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:6px; font-weight:500;">Identifiant / Username</label>
       <input type="text" id="login-id" autocomplete="username" placeholder="ex: lucas, aissa..." 
              style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:15px;" />
     </div>
     <div style="margin-bottom:20px;">
-      <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:6px; font-weight:500;">Mot de passe</label>
+      <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:6px; font-weight:500;">Mot de passe / Password</label>
       <input type="password" id="login-pwd" autocomplete="current-password" placeholder="..." 
              style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:15px;" />
     </div>
 
     <button id="login-btn" 
             style="width:100%; background:var(--accent); color:white; border:none; padding:12px; border-radius:8px; cursor:pointer; font-size:15px; font-weight:600;">
-      Se connecter
+      Se connecter / Log in
     </button>
 
     <div id="login-error" style="display:none; background:rgba(248,113,113,0.15); color:#fca5a5; padding:10px; border-radius:6px; font-size:13px; margin-top:12px; text-align:center;"></div>
 
     <div id="login-loading" style="display:none; text-align:center; margin-top:12px; color:var(--text-dim); font-size:13px;">
-      ⏳ Connexion en cours...
+      ⏳ Connecting...
     </div>
   </div>
 </div>
@@ -455,7 +455,7 @@
     <span class="save-status" id="saveStatus">☁️ Connecté à Supabase</span>
     <span id="user-info" style="color:var(--text-dim); font-size:12px;"></span>
     <button class="btn btn-secondary" onclick="exportData()">Exporter JSON</button>
-    <button class="btn btn-secondary" onclick="logout()">↪ Déconnexion</button>
+    <button class="btn btn-secondary" onclick="logout()" id="logout-btn">↪ Déconnexion</button>
   </div>
 </header>
 
@@ -470,8 +470,8 @@
   <button class="nav-btn" data-view="history">📋 Historique séances</button>
   <button class="nav-btn" data-view="settings">⚙️ Paramètres</button>
   <!-- Onglets joueur (visibles uniquement pour les lecteurs) -->
-  <button class="nav-btn player-only" data-view="player-rpe" style="display:none;">⭐ Saisir mon RPE</button>
-  <button class="nav-btn player-only" data-view="player-history" style="display:none;">📊 Mes notes</button>
+  <button class="nav-btn player-only" data-view="player-rpe" style="display:none;">⭐ Rate my sessions</button>
+  <button class="nav-btn player-only" data-view="player-history" style="display:none;">📊 My ratings</button>
 </nav>
 
 <main>
@@ -972,13 +972,13 @@
   <!-- ========== VUE JOUEUR : SAISIR MON RPE ========== -->
   <div class="view" id="view-player-rpe">
     <div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">
-      <h2 style="color:var(--accent-light); font-size:18px;">⭐ Évalue tes séances</h2>
-      <p style="color:var(--text); font-size:14px; margin-top:4px;">Note la difficulté de chaque séance que tu as faite, sur une échelle de 0 (rien) à 10 (effort maximal).</p>
+      <h2 style="color:var(--accent-light); font-size:18px;">⭐ Rate your sessions</h2>
+      <p style="color:var(--text); font-size:14px; margin-top:4px;">Rate the difficulty of each session you completed, on a scale from 0 (rest) to 10 (maximal effort).</p>
     </div>
 
     <div class="form-row">
       <div>
-        <label>Date à évaluer</label>
+        <label>Date to rate</label>
         <input type="date" id="player-rpe-date" />
       </div>
     </div>
@@ -992,27 +992,27 @@
       <!-- Tableau Borg CR-10 sur le côté -->
       <div>
         <div class="card" style="position:sticky; top:20px;">
-          <h2>📋 Échelle de notation</h2>
+          <h2>📋 Rating scale</h2>
           <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">
-            Choisis la note qui correspond le mieux à ce que tu as ressenti pendant la séance.
+            Choose the rating that best matches how you felt during the session.
           </div>
           <table style="width:100%; font-size:12px;">
             <tbody>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#3b82f6; color:white; font-weight:700;">0</span></td><td style="padding:6px;">Repos total</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#3b82f6; color:white; font-weight:700;">1</span></td><td style="padding:6px;">Très très facile</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#10b981; color:white; font-weight:700;">2</span></td><td style="padding:6px;">Facile</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#10b981; color:white; font-weight:700;">3</span></td><td style="padding:6px;">Modéré</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#84cc16; color:white; font-weight:700;">4</span></td><td style="padding:6px;">Un peu dur</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#84cc16; color:white; font-weight:700;">5</span></td><td style="padding:6px;">Dur</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#eab308; color:white; font-weight:700;">6</span></td><td style="padding:6px;">Dur +</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#f59e0b; color:white; font-weight:700;">7</span></td><td style="padding:6px;">Très dur</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#f97316; color:white; font-weight:700;">8</span></td><td style="padding:6px;">Très dur +</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#ef4444; color:white; font-weight:700;">9</span></td><td style="padding:6px;">Très très dur</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#3b82f6; color:white; font-weight:700;">0</span></td><td style="padding:6px;">Complete rest</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#3b82f6; color:white; font-weight:700;">1</span></td><td style="padding:6px;">Very very easy</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#10b981; color:white; font-weight:700;">2</span></td><td style="padding:6px;">Easy</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#10b981; color:white; font-weight:700;">3</span></td><td style="padding:6px;">Moderate</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#84cc16; color:white; font-weight:700;">4</span></td><td style="padding:6px;">Somewhat hard</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#84cc16; color:white; font-weight:700;">5</span></td><td style="padding:6px;">Hard</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#eab308; color:white; font-weight:700;">6</span></td><td style="padding:6px;">Hard +</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#f59e0b; color:white; font-weight:700;">7</span></td><td style="padding:6px;">Very hard</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#f97316; color:white; font-weight:700;">8</span></td><td style="padding:6px;">Very hard +</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#ef4444; color:white; font-weight:700;">9</span></td><td style="padding:6px;">Very very hard</td></tr>
               <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#dc2626; color:white; font-weight:700;">10</span></td><td style="padding:6px;">Maximal</td></tr>
             </tbody>
           </table>
           <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); font-size:11px; color:var(--text-dim);">
-            💡 Astuce : reste honnête, ces notes nous aident à adapter ton entraînement.
+            💡 Tip: be honest, these ratings help us adapt your training.
           </div>
         </div>
       </div>
@@ -1022,27 +1022,27 @@
   <!-- ========== VUE JOUEUR : MES NOTES ========== -->
   <div class="view" id="view-player-history">
     <div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">
-      <h2 style="color:var(--accent-light); font-size:18px;">📊 Mes notes</h2>
-      <p style="color:var(--text); font-size:14px; margin-top:4px;">Retrouve ici toutes les notes que tu as déjà saisies.</p>
+      <h2 style="color:var(--accent-light); font-size:18px;">📊 My ratings</h2>
+      <p style="color:var(--text); font-size:14px; margin-top:4px;">Here you can find all the ratings you have already submitted.</p>
     </div>
 
     <div class="stats-grid">
-      <div class="stat"><div class="stat-label">Notes saisies</div><div class="stat-value" id="player-stat-count">—</div></div>
-      <div class="stat"><div class="stat-label">RPE moyen</div><div class="stat-value" id="player-stat-avg">—</div></div>
-      <div class="stat"><div class="stat-label">Séances notées</div><div class="stat-value" id="player-stat-sessions">—</div></div>
-      <div class="stat"><div class="stat-label">Jours d'activité</div><div class="stat-value" id="player-stat-days">—</div></div>
+      <div class="stat"><div class="stat-label">Ratings submitted</div><div class="stat-value" id="player-stat-count">—</div></div>
+      <div class="stat"><div class="stat-label">Average RPE</div><div class="stat-value" id="player-stat-avg">—</div></div>
+      <div class="stat"><div class="stat-label">Rated sessions</div><div class="stat-value" id="player-stat-sessions">—</div></div>
+      <div class="stat"><div class="stat-label">Active days</div><div class="stat-value" id="player-stat-days">—</div></div>
     </div>
 
     <div class="card">
-      <h2>Évolution de mes RPE</h2>
+      <h2>RPE evolution</h2>
       <div class="chart-container tall"><canvas id="player-chart-evolution"></canvas></div>
     </div>
 
     <div class="card">
-      <h2>Historique détaillé</h2>
+      <h2>Detailed history</h2>
       <div class="table-wrap" style="max-height:500px;">
         <table id="player-history-table">
-          <thead><tr><th>Date</th><th>Séance</th><th>Procédé</th><th>RPE</th><th>Ressenti</th></tr></thead>
+          <thead><tr><th>Date</th><th>Session</th><th>Drill</th><th>RPE</th><th>Feeling</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -1111,7 +1111,7 @@ async function handleLogin() {
   const id = (document.getElementById('login-id').value || '').trim().toLowerCase();
   const pwd = document.getElementById('login-pwd').value;
   if (!id || !pwd) {
-    errEl.textContent = 'Identifiant et mot de passe requis';
+    errEl.textContent = 'Identifiant et mot de passe requis / Username and password required';
     errEl.style.display = 'block';
     loadEl.style.display = 'none';
     btn.disabled = false;
@@ -1124,7 +1124,7 @@ async function handleLogin() {
   initSupabase();
   const { data, error } = await sb.auth.signInWithPassword({ email, password: pwd });
   if (error) {
-    errEl.textContent = 'Échec : ' + (error.message || 'identifiant ou mot de passe incorrect');
+    errEl.textContent = 'Échec / Failed: ' + (error.message || 'invalid username or password');
     errEl.style.display = 'block';
     loadEl.style.display = 'none';
     btn.disabled = false;
@@ -1138,7 +1138,7 @@ async function loadProfileAndStart() {
   // Charger le profil pour récupérer le rôle
   const { data: profile, error } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();
   if (error || !profile) {
-    document.getElementById('login-error').textContent = 'Profil introuvable — contacte l\'admin';
+    document.getElementById('login-error').textContent = 'Profil introuvable / Profile not found — contact admin';
     document.getElementById('login-error').style.display = 'block';
     document.getElementById('login-loading').style.display = 'none';
     document.getElementById('login-btn').disabled = false;
@@ -1169,13 +1169,19 @@ async function loadProfileAndStart() {
 }
 
 async function logout() {
-  if (!confirm('Se déconnecter ?')) return;
+  const msg = (currentRole === 'lecteur') ? 'Log out?' : 'Se déconnecter ?';
+  if (!confirm(msg)) return;
   if (sb) await sb.auth.signOut();
   // Recharger la page pour repartir à zéro
   location.reload();
 }
 
 function applyRoleRestrictions() {
+  // Adapter le bouton de déconnexion selon la langue
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.textContent = (currentRole === 'lecteur') ? '↪ Log out' : '↪ Déconnexion';
+  }
   if (currentRole === 'lecteur') {
     // Pour un joueur : interface ultra-simplifiée avec seulement 2 onglets dédiés
     // Masquer TOUS les onglets staff et n'afficher que les onglets joueur
@@ -1322,7 +1328,10 @@ async function savePlanningToSupabase(date, joueur, seances) {
 }
 
 async function saveRPEToSupabase(date, joueur, rpeArray) {
-  if (!canWriteRPE(joueur)) { toast('Tu ne peux saisir que tes propres RPE', 'error'); return false; }
+  if (!canWriteRPE(joueur)) {
+    const msg = (currentRole === 'lecteur') ? 'You can only rate your own sessions' : 'Tu ne peux saisir que tes propres RPE';
+    toast(msg, 'error'); return false;
+  }
   if (!rpeArray || rpeArray.length === 0) {
     const { error } = await sb.from('rpe_declarations').delete().match({ date, joueur });
     if (error) { toast('Erreur RPE : ' + error.message, 'error'); return false; }
@@ -2677,15 +2686,15 @@ function renderRPETable(date, groupFilter) {
 // Échelle RPE Borg CR-10 (étiquettes courantes)
 const RPE_LABELS = {
   0: 'Repos',
-  1: 'Très très facile',
-  2: 'Facile',
-  3: 'Modéré',
-  4: 'Un peu dur',
+  1: 'Very very easy',
+  2: 'Easy',
+  3: 'Moderate',
+  4: 'Somewhat hard',
   5: 'Dur',
   6: 'Dur',
   7: 'Très dur',
   8: 'Très dur',
-  9: 'Très très dur',
+  9: 'Very very hard',
   10: 'Maximal'
 };
 
@@ -3283,7 +3292,7 @@ function renderPlayerRPE() {
   // Récupérer les séances de ce joueur pour cette date
   const planning = state.bdd_ent.find(e => e.date === date && e.joueur === currentJoueurNom);
   if (!planning) {
-    container.innerHTML = '<div class="empty-state">Aucune séance prévue à cette date.</div>';
+    container.innerHTML = '<div class="empty-state">No session scheduled for this date.</div>';
     return;
   }
   const seances = planning.seances.filter(s => !STATUTS_NON_ENT.includes(s));
@@ -3294,12 +3303,12 @@ function renderPlayerRPE() {
   // Affichage des statuts s'il y en a (info seulement)
   if (statuts.length > 0) {
     html += '<div class="card" style="background:var(--bg-elevated);">';
-    html += '<div style="font-size:13px;">Statut du jour : ' + statuts.map(s => '<span class="badge ' + getSeanceBadgeClass(s) + '">' + s + '</span>').join(' ') + '</div>';
+    html += '<div style="font-size:13px;">Today\'s status: ' + statuts.map(s => '<span class="badge ' + getSeanceBadgeClass(s) + '">' + s + '</span>').join(' ') + '</div>';
     html += '</div>';
   }
 
   if (seances.length === 0) {
-    html += '<div class="empty-state">Aucune séance d\'entraînement à noter ce jour.</div>';
+    html += '<div class="empty-state">No training session to rate today.</div>';
     container.innerHTML = html;
     return;
   }
@@ -3325,10 +3334,10 @@ function renderPlayerRPE() {
   });
   const pct = totalNotes > 0 ? Math.round(doneNotes * 100 / totalNotes) : 0;
   html += '<div class="card" style="text-align:center; background:var(--bg-elevated);">';
-  html += '<div style="color:var(--text-dim); font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Progression du jour</div>';
+  html += '<div style="color:var(--text-dim); font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">Today\'s progress</div>';
   html += '<div style="font-size:32px; font-weight:700; color:' + (pct === 100 ? 'var(--green)' : 'var(--accent-light)') + '; margin-top:4px;">' + doneNotes + ' / ' + totalNotes + '</div>';
-  html += '<div style="color:var(--text-dim); font-size:13px;">notes saisies (' + pct + '%)</div>';
-  if (pct === 100) html += '<div style="margin-top:8px; color:var(--green); font-size:13px;">✅ Toutes tes notes sont saisies pour cette journée !</div>';
+  html += '<div style="color:var(--text-dim); font-size:13px;">ratings submitted (' + pct + '%)</div>';
+  if (pct === 100) html += '<div style="margin-top:8px; color:var(--green); font-size:13px;">✅ All your ratings are submitted for today!</div>';
   html += '</div>';
 
   container.innerHTML = html;
@@ -3355,12 +3364,12 @@ function renderPlayerSeanceNotation(date, joueur, seance) {
     html += renderRPEScale(date, joueurEsc, seanceEsc, null, rpeUnique);
     if (rpeUnique !== null) {
       const lbl = RPE_LABELS[Math.round(rpeUnique)] || '';
-      html += '<div class="rpe-scale-label">Ta note : <b style="color:var(--text);">' + rpeUnique + '</b> — ' + lbl + '</div>';
+      html += '<div class="rpe-scale-label">Your rating: <b style="color:var(--text);">' + rpeUnique + '</b> — ' + lbl + '</div>';
       html += '<div style="text-align:center;margin-top:8px;">';
-      html += '<button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="setRPECardValue(\'' + date + '\', \'' + joueurEsc + '\', \'' + seanceEsc + '\', null)">Effacer ma note</button>';
+      html += '<button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="setRPECardValue(\'' + date + '\', \'' + joueurEsc + '\', \'' + seanceEsc + '\', null)">Clear my rating</button>';
       html += '</div>';
     } else {
-      html += '<div class="rpe-scale-label">Clique sur une note pour évaluer ta séance</div>';
+      html += '<div class="rpe-scale-label">Click a number to rate your session</div>';
     }
   } else {
     // Notation par procédé — sans UA
@@ -3368,14 +3377,14 @@ function renderPlayerSeanceNotation(date, joueur, seance) {
     const values = (detail && detail.mode === 'procede') ? detail.values :
                    (detail && detail.mode === 'unique') ? [detail.value] : [];
 
-    html += '<div style="font-size:12px;color:var(--text-dim);margin:8px 0 4px;">Cette séance a ' + nbProc + ' procédés à noter</div>';
+    html += '<div style="font-size:12px;color:var(--text-dim);margin:8px 0 4px;">This session has ' + nbProc + ' drills to rate</div>';
 
     procedes.forEach((p, i) => {
       const procRpe = (i < values.length && values[i] !== null && !isNaN(values[i])) ? values[i] : null;
 
       html += '<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
       html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">';
-      html += '<div><b style="color:var(--accent-light);">Procédé ' + (i+1) + '</b>';
+      html += '<div><b style="color:var(--accent-light);">Drill ' + (i+1) + '</b>';
       if (p.type) html += ' · <span style="color:var(--text-dim);font-size:12px;">' + escapeHtml(p.type) + '</span>';
       html += '</div>';
       html += '</div>';
@@ -3384,8 +3393,8 @@ function renderPlayerSeanceNotation(date, joueur, seance) {
 
       if (procRpe !== null) {
         const lbl = RPE_LABELS[Math.round(procRpe)] || '';
-        html += '<div class="rpe-scale-label" style="margin-top:6px;">Ta note : <b style="color:var(--text);">' + procRpe + '</b> — ' + lbl;
-        html += ' <button class="btn btn-secondary" style="padding:2px 8px;font-size:10px;margin-left:8px;" onclick="setRPEProcedeValue(\'' + date + '\', \'' + joueurEsc + '\', \'' + seanceEsc + '\', ' + i + ', null)">Effacer</button>';
+        html += '<div class="rpe-scale-label" style="margin-top:6px;">Your rating: <b style="color:var(--text);">' + procRpe + '</b> — ' + lbl;
+        html += ' <button class="btn btn-secondary" style="padding:2px 8px;font-size:10px;margin-left:8px;" onclick="setRPEProcedeValue(\'' + date + '\', \'' + joueurEsc + '\', \'' + seanceEsc + '\', ' + i + ', null)">Clear</button>';
         html += '</div>';
       }
       html += '</div>';
@@ -3417,7 +3426,7 @@ function renderPlayerHistory() {
       if (Array.isArray(item.rpe)) {
         item.rpe.forEach((v, i) => {
           if (v === null || isNaN(v)) return;
-          const procDesc = procedes[i] ? (procedes[i].type || ('Procédé ' + (i+1))) : ('Procédé ' + (i+1));
+          const procDesc = procedes[i] ? (procedes[i].type || ('Drill ' + (i+1))) : ('Drill ' + (i+1));
           allNotes.push({
             date: r.date,
             seance: item.seance,
@@ -3469,14 +3478,14 @@ function renderPlayerHistory() {
     ctx.fillStyle = '#8ba3c1';
     ctx.font = '14px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('Aucune note pour l\'instant', 400, 180);
+    ctx.fillText('No ratings yet', 400, 180);
   } else {
     charts['player-chart-evolution'] = new Chart(document.getElementById('player-chart-evolution'), {
       type: 'bar',
       data: {
         labels: dates.map(formatDateFR),
         datasets: [{
-          label: 'RPE moyen du jour',
+          label: 'Daily average RPE',
           data: avgs.map(v => +v.toFixed(1)),
           backgroundColor: colors,
           borderRadius: 6
@@ -3508,7 +3517,7 @@ function renderPlayerHistory() {
   // Table historique
   const tbody = document.querySelector('#player-history-table tbody');
   if (allNotes.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px;">Aucune note pour l\'instant. Va dans "Saisir mon RPE" pour commencer.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px;">No ratings yet. Go to "Rate my sessions" to start.</td></tr>';
     return;
   }
   tbody.innerHTML = allNotes.map(n => {
