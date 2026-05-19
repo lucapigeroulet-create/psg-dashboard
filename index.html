@@ -1093,16 +1093,18 @@ async function logout() {
 
 function applyRoleRestrictions() {
   if (currentRole === 'lecteur') {
-    // Masquer les onglets de saisie et paramètres
+    // Pour un lecteur (joueur), masquer : disponibilité (concerne tout l'effectif),
+    // saisie séance (staff only), historique séances, paramètres.
+    // La saisie RPE reste disponible mais sera limitée à son propre joueur.
     document.querySelectorAll('.nav-btn').forEach(btn => {
       const view = btn.dataset.view;
-      if (['entry', 'rpe-entry', 'history', 'settings'].includes(view)) {
+      if (['entry', 'history', 'settings', 'injury'].includes(view)) {
         btn.style.display = 'none';
       }
     });
     // Si on est sur un onglet caché, basculer vers Vue d'ensemble
     const activeBtn = document.querySelector('.nav-btn.active');
-    if (activeBtn && ['entry','rpe-entry','history','settings'].includes(activeBtn.dataset.view)) {
+    if (activeBtn && ['entry','history','settings','injury'].includes(activeBtn.dataset.view)) {
       document.querySelector('.nav-btn[data-view="overview"]').click();
     }
   }
@@ -1110,6 +1112,13 @@ function applyRoleRestrictions() {
 
 function canWrite() {
   return currentRole === 'admin' || currentRole === 'staff';
+}
+
+// Les lecteurs peuvent saisir leurs propres RPE
+function canWriteRPE(joueur) {
+  if (currentRole === 'admin' || currentRole === 'staff') return true;
+  if (currentRole === 'lecteur' && joueur === currentJoueurNom) return true;
+  return false;
 }
 
 // ============================================================================
@@ -1222,7 +1231,7 @@ async function savePlanningToSupabase(date, joueur, seances) {
 }
 
 async function saveRPEToSupabase(date, joueur, rpeArray) {
-  if (!canWrite()) { toast('Lecture seule', 'error'); return false; }
+  if (!canWriteRPE(joueur)) { toast('Tu ne peux saisir que tes propres RPE', 'error'); return false; }
   if (!rpeArray || rpeArray.length === 0) {
     const { error } = await sb.from('rpe_declarations').delete().match({ date, joueur });
     if (error) { toast('Erreur RPE : ' + error.message, 'error'); return false; }
@@ -1441,6 +1450,7 @@ function cleanOrphanReferences() {
 }
 
 function exportData() {
+  if (currentRole === 'lecteur') { toast('Export non disponible pour ton rôle', 'error'); return; }
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2470,6 +2480,10 @@ function setRPEMode(mode) {
 // Récupère la liste des joueurs concernés pour la date et le filtre groupe
 function getRPEPlayersForDate(date, groupFilter) {
   let rows = state.bdd_ent.filter(e => e.date === date);
+  // Pour un lecteur, ne montrer que son propre planning
+  if (currentRole === 'lecteur' && currentJoueurNom) {
+    rows = rows.filter(e => e.joueur === currentJoueurNom);
+  }
   if (groupFilter) rows = rows.filter(e => getJoueurInfo(e.joueur).groupe === groupFilter);
   rows.sort((a,b) => a.joueur.localeCompare(b.joueur));
   return rows;
