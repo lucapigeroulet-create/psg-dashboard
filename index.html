@@ -1103,182 +1103,196 @@
         <div id="pain-localization" style="display:none; margin-top:20px; padding-top:20px; border-top:1px solid var(--border);">
           <h4 style="font-size:14px; margin-bottom:4px;">🎯 Where do you feel the pain?</h4>
           <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Click on the body parts where you feel pain. Click again to deselect.</p>
-          <div id="mannequin-container" style="background:var(--bg-elevated); border-radius:10px; padding:16px; overflow-x:auto;"><svg viewBox="0 0 600 700" xmlns="http://www.w3.org/2000/svg" style="max-width:100%; height:auto;">
+          <div id="mannequin-container" style="background:var(--bg-elevated); border-radius:10px; padding:16px; overflow-x:auto;"><svg viewBox="0 0 640 720" xmlns="http://www.w3.org/2000/svg" style="max-width:100%; height:auto;">
   <defs>
     <style>
-      .muscle { fill: #1a3354; stroke: #4fc3ff; stroke-width: 1; cursor: pointer; transition: fill 0.2s; }
-      .muscle:hover { fill: #00a3ff; }
-      .muscle.selected { fill: #ef4444; stroke: #fca5a5; stroke-width: 2; }
-      .body-outline { fill: #122842; stroke: #4fc3ff; stroke-width: 2; }
-      .body-label { fill: #8ba3c1; font-size: 14px; font-weight: 600; text-anchor: middle; }
+      .muscle { fill: rgba(0,163,255,0.10); stroke: rgba(79,195,255,0.4); stroke-width:1; cursor: pointer; transition: fill 0.15s, stroke 0.15s; }
+      .muscle:hover { fill: rgba(0,163,255,0.45); stroke: #00a3ff; stroke-width:1.5; }
+      .muscle.selected { fill: rgba(239,68,68,0.7); stroke: #fca5a5; stroke-width:2; }
+      .body-base { fill: #1a3354; stroke: #4fc3ff; stroke-width:1.5; }
+      .body-shade { fill: #15294a; stroke: none; }
+      .body-line { fill: none; stroke: #2a4a72; stroke-width:1; }
+      .body-label { fill: #8ba3c1; font-size: 13px; font-weight: 700; text-anchor: middle; letter-spacing:1px; }
     </style>
   </defs>
 
-  <!-- VUE AVANT -->
+  <!-- ============================== VUE AVANT ============================== -->
   <g transform="translate(0,0)">
-    <text x="150" y="20" class="body-label">FRONT</text>
+    <text x="160" y="22" class="body-label">FRONT</text>
 
-    <!-- Tête / Cou -->
-    <ellipse cx="150" cy="60" rx="28" ry="32" class="body-outline"/>
-    <rect x="138" y="88" width="24" height="20" class="body-outline"/>
-
-    <!-- Torse outline -->
-    <path d="M100,110 L100,250 Q100,275 110,290 L190,290 Q200,275 200,250 L200,110 Z" class="body-outline"/>
-
-    <!-- Bras outline -->
-    <path d="M100,120 Q80,140 80,180 L75,260 L90,260 L95,180 Q95,135 100,120 Z" class="body-outline"/>
-    <path d="M200,120 Q220,140 220,180 L225,260 L210,260 L205,180 Q205,135 200,120 Z" class="body-outline"/>
-    <!-- Avant-bras + mains -->
-    <path d="M75,260 L70,360 L88,360 L90,260 Z" class="body-outline"/>
-    <path d="M225,260 L230,360 L212,360 L210,260 Z" class="body-outline"/>
-    <ellipse cx="79" cy="375" rx="12" ry="18" class="body-outline"/>
-    <ellipse cx="221" cy="375" rx="12" ry="18" class="body-outline"/>
+    <!-- Silhouette de fond (anatomique stylisée) -->
+    <!-- Tête -->
+    <ellipse cx="160" cy="65" rx="32" ry="38" class="body-base"/>
+    <!-- Cou -->
+    <path d="M145,98 Q145,108 150,118 L170,118 Q175,108 175,98 Z" class="body-base"/>
+    <!-- Tronc principal (épaules large, taille étroite) -->
+    <path d="M148,118 Q90,125 85,165 Q83,200 95,235 L100,275 Q103,310 110,335 L210,335 Q217,310 220,275 L225,235 Q237,200 235,165 Q230,125 172,118 Z" class="body-base"/>
+    <!-- Bras gauche : épaule -> biceps -> avant-bras -> main -->
+    <path d="M88,140 Q72,160 70,200 L67,245 Q65,275 70,295 L78,300 Q85,275 85,245 L88,205 Q90,170 95,150 Z" class="body-base"/>
+    <!-- Avant-bras gauche -->
+    <path d="M70,295 Q65,330 63,365 L78,375 Q82,340 82,300 Z" class="body-base"/>
+    <!-- Main gauche -->
+    <ellipse cx="72" cy="392" rx="13" ry="18" class="body-base"/>
+    <!-- Bras droit -->
+    <path d="M232,140 Q248,160 250,200 L253,245 Q255,275 250,295 L242,300 Q235,275 235,245 L232,205 Q230,170 225,150 Z" class="body-base"/>
+    <path d="M250,295 Q255,330 257,365 L242,375 Q238,340 238,300 Z" class="body-base"/>
+    <ellipse cx="248" cy="392" rx="13" ry="18" class="body-base"/>
 
     <!-- Bassin -->
-    <path d="M105,290 L100,330 L200,330 L195,290 Z" class="body-outline"/>
+    <path d="M110,335 Q108,360 110,385 L210,385 Q212,360 210,335 Z" class="body-base"/>
 
-    <!-- Cuisses -->
-    <path d="M105,330 Q100,360 100,400 L95,490 L140,490 L145,400 L148,330 Z" class="body-outline"/>
-    <path d="M195,330 Q200,360 200,400 L205,490 L160,490 L155,400 L152,330 Z" class="body-outline"/>
+    <!-- Cuisse gauche -->
+    <path d="M110,375 Q105,410 105,460 L102,510 L145,510 Q148,460 150,415 L150,375 Z" class="body-base"/>
+    <!-- Cuisse droite -->
+    <path d="M210,375 Q215,410 215,460 L218,510 L175,510 Q172,460 170,415 L170,375 Z" class="body-base"/>
 
-    <!-- Mollets -->
-    <path d="M95,490 L90,580 L138,580 L140,490 Z" class="body-outline"/>
-    <path d="M205,490 L210,580 L162,580 L160,490 Z" class="body-outline"/>
+    <!-- Mollet/jambe inférieure gauche -->
+    <path d="M105,515 Q103,555 105,605 L138,610 Q142,565 142,515 Z" class="body-base"/>
+    <!-- Mollet droite -->
+    <path d="M215,515 Q217,555 215,605 L182,610 Q178,565 178,515 Z" class="body-base"/>
 
     <!-- Pieds -->
-    <ellipse cx="114" cy="595" rx="20" ry="12" class="body-outline"/>
-    <ellipse cx="186" cy="595" rx="20" ry="12" class="body-outline"/>
+    <ellipse cx="120" cy="625" rx="22" ry="13" class="body-base"/>
+    <ellipse cx="200" cy="625" rx="22" ry="13" class="body-base"/>
 
-    <!-- ZONES MUSCULAIRES (clic) -->
+    <!-- Lignes de définition musculaire (esthétique uniquement) -->
+    <path d="M160,155 L160,260" class="body-line"/>
+    <path d="M130,170 Q140,200 145,235" class="body-line"/>
+    <path d="M190,170 Q180,200 175,235" class="body-line"/>
+
+    <!-- ============================== ZONES CLIQUABLES ============================== -->
+    <!-- Tête / Visage -->
+    <ellipse cx="160" cy="65" rx="32" ry="38" class="muscle" data-zone="head" data-label="Head"/>
     <!-- Cou -->
-    <rect x="139" y="89" width="22" height="18" class="muscle" data-zone="neck_front" data-label="Neck (front)"/>
+    <path d="M145,98 Q145,108 150,118 L170,118 Q175,108 175,98 Z" class="muscle" data-zone="neck_front" data-label="Neck (front)"/>
 
-    <!-- Pectoraux gauche/droite -->
-    <path d="M105,115 Q105,160 145,160 L145,115 Z" class="muscle" data-zone="pec_left" data-label="Chest L"/>
-    <path d="M195,115 Q195,160 155,160 L155,115 Z" class="muscle" data-zone="pec_right" data-label="Chest R"/>
+    <!-- Pectoraux -->
+    <path d="M115,135 Q120,165 130,185 L158,185 L158,138 Z" class="muscle" data-zone="pec_left" data-label="Chest L"/>
+    <path d="M205,135 Q200,165 190,185 L162,185 L162,138 Z" class="muscle" data-zone="pec_right" data-label="Chest R"/>
 
-    <!-- Épaules (deltoïdes antérieurs) -->
-    <path d="M100,118 Q85,135 90,170 L105,170 L108,120 Z" class="muscle" data-zone="shoulder_left_front" data-label="Shoulder L (front)"/>
-    <path d="M200,118 Q215,135 210,170 L195,170 L192,120 Z" class="muscle" data-zone="shoulder_right_front" data-label="Shoulder R (front)"/>
+    <!-- Deltoïdes antérieurs (épaules vue avant) -->
+    <path d="M88,140 Q80,160 88,185 L113,185 Q115,160 118,140 Z" class="muscle" data-zone="shoulder_left_front" data-label="Shoulder L (front)"/>
+    <path d="M232,140 Q240,160 232,185 L207,185 Q205,160 202,140 Z" class="muscle" data-zone="shoulder_right_front" data-label="Shoulder R (front)"/>
 
     <!-- Biceps -->
-    <path d="M82,170 Q80,200 85,250 L95,250 L98,180 Z" class="muscle" data-zone="biceps_left" data-label="Biceps L"/>
-    <path d="M218,170 Q220,200 215,250 L205,250 L202,180 Z" class="muscle" data-zone="biceps_right" data-label="Biceps R"/>
+    <path d="M75,190 Q70,225 72,265 L88,265 Q92,225 90,190 Z" class="muscle" data-zone="biceps_left" data-label="Biceps L"/>
+    <path d="M245,190 Q250,225 248,265 L232,265 Q228,225 230,190 Z" class="muscle" data-zone="biceps_right" data-label="Biceps R"/>
 
     <!-- Avant-bras -->
-    <path d="M73,265 L70,355 L88,355 L90,265 Z" class="muscle" data-zone="forearm_left" data-label="Forearm L"/>
-    <path d="M227,265 L230,355 L212,355 L210,265 Z" class="muscle" data-zone="forearm_right" data-label="Forearm R"/>
+    <path d="M68,275 Q63,325 65,365 L82,365 Q85,325 85,275 Z" class="muscle" data-zone="forearm_left" data-label="Forearm L"/>
+    <path d="M252,275 Q257,325 255,365 L238,365 Q235,325 235,275 Z" class="muscle" data-zone="forearm_right" data-label="Forearm R"/>
 
-    <!-- Abdominaux -->
-    <rect x="135" y="165" width="30" height="60" class="muscle" data-zone="abs" data-label="Abs"/>
+    <!-- Abdominaux supérieurs -->
+    <rect x="138" y="190" width="44" height="55" rx="6" class="muscle" data-zone="abs_upper" data-label="Upper abs"/>
+    <!-- Abdominaux inférieurs -->
+    <rect x="138" y="248" width="44" height="50" rx="6" class="muscle" data-zone="abs_lower" data-label="Lower abs"/>
 
-    <!-- Obliques gauche/droite -->
-    <path d="M108,165 L135,165 L135,230 L115,260 Q108,250 108,200 Z" class="muscle" data-zone="oblique_left" data-label="Oblique L"/>
-    <path d="M192,165 L165,165 L165,230 L185,260 Q192,250 192,200 Z" class="muscle" data-zone="oblique_right" data-label="Oblique R"/>
+    <!-- Obliques -->
+    <path d="M115,195 L137,195 L137,295 L120,290 Q113,275 113,250 Z" class="muscle" data-zone="oblique_left" data-label="Oblique L"/>
+    <path d="M205,195 L183,195 L183,295 L200,290 Q207,275 207,250 Z" class="muscle" data-zone="oblique_right" data-label="Oblique R"/>
 
-    <!-- Bas-ventre / aine -->
-    <path d="M115,260 L135,260 L135,285 L120,285 Z" class="muscle" data-zone="hip_flexor_left" data-label="Hip flexor L"/>
-    <path d="M185,260 L165,260 L165,285 L180,285 Z" class="muscle" data-zone="hip_flexor_right" data-label="Hip flexor R"/>
+    <!-- Hip flexors / Aine -->
+    <path d="M120,300 L140,300 L140,330 L125,332 Q118,318 118,310 Z" class="muscle" data-zone="hip_flexor_left" data-label="Hip flexor L"/>
+    <path d="M200,300 L180,300 L180,330 L195,332 Q202,318 202,310 Z" class="muscle" data-zone="hip_flexor_right" data-label="Hip flexor R"/>
 
     <!-- Quadriceps -->
-    <path d="M108,335 Q103,365 103,400 L118,485 L140,485 L143,400 L143,335 Z" class="muscle" data-zone="quadriceps_left" data-label="Quadriceps L"/>
-    <path d="M192,335 Q197,365 197,400 L182,485 L160,485 L157,400 L157,335 Z" class="muscle" data-zone="quadriceps_right" data-label="Quadriceps R"/>
+    <path d="M115,380 Q108,420 110,475 L144,505 Q150,460 150,420 L150,380 Z" class="muscle" data-zone="quadriceps_left" data-label="Quadriceps L"/>
+    <path d="M205,380 Q212,420 210,475 L176,505 Q170,460 170,420 L170,380 Z" class="muscle" data-zone="quadriceps_right" data-label="Quadriceps R"/>
+
+    <!-- Adducteurs (intérieur cuisse) -->
+    <path d="M150,380 L160,380 L160,470 L150,470 Z" class="muscle" data-zone="adductor_left" data-label="Adductor L"/>
+    <path d="M170,380 L160,380 L160,470 L170,470 Z" class="muscle" data-zone="adductor_right" data-label="Adductor R"/>
 
     <!-- Genoux -->
-    <ellipse cx="120" cy="490" rx="14" ry="8" class="muscle" data-zone="knee_left" data-label="Knee L"/>
-    <ellipse cx="180" cy="490" rx="14" ry="8" class="muscle" data-zone="knee_right" data-label="Knee R"/>
+    <ellipse cx="127" cy="513" rx="18" ry="10" class="muscle" data-zone="knee_left" data-label="Knee L"/>
+    <ellipse cx="193" cy="513" rx="18" ry="10" class="muscle" data-zone="knee_right" data-label="Knee R"/>
 
-    <!-- Tibias / Mollets vue avant -->
-    <path d="M97,500 L92,575 L118,575 L120,500 Z" class="muscle" data-zone="shin_left" data-label="Shin L"/>
-    <path d="M203,500 L208,575 L182,575 L180,500 Z" class="muscle" data-zone="shin_right" data-label="Shin R"/>
+    <!-- Tibias / devant jambe -->
+    <path d="M108,525 Q105,560 108,600 L142,605 Q144,560 142,525 Z" class="muscle" data-zone="shin_left" data-label="Shin L"/>
+    <path d="M212,525 Q215,560 212,600 L178,605 Q176,560 178,525 Z" class="muscle" data-zone="shin_right" data-label="Shin R"/>
 
     <!-- Chevilles -->
-    <ellipse cx="110" cy="585" rx="10" ry="6" class="muscle" data-zone="ankle_left" data-label="Ankle L"/>
-    <ellipse cx="190" cy="585" rx="10" ry="6" class="muscle" data-zone="ankle_right" data-label="Ankle R"/>
+    <ellipse cx="123" cy="613" rx="14" ry="7" class="muscle" data-zone="ankle_left_front" data-label="Ankle L"/>
+    <ellipse cx="197" cy="613" rx="14" ry="7" class="muscle" data-zone="ankle_right_front" data-label="Ankle R"/>
   </g>
 
-  <!-- VUE ARRIÈRE -->
-  <g transform="translate(300,0)">
-    <text x="150" y="20" class="body-label">BACK</text>
+  <!-- ============================== VUE ARRIÈRE ============================== -->
+  <g transform="translate(320,0)">
+    <text x="160" y="22" class="body-label">BACK</text>
 
-    <!-- Tête -->
-    <ellipse cx="150" cy="60" rx="28" ry="32" class="body-outline"/>
-    <rect x="138" y="88" width="24" height="20" class="body-outline"/>
+    <!-- Silhouette miroir (mêmes courbes) -->
+    <ellipse cx="160" cy="65" rx="32" ry="38" class="body-base"/>
+    <path d="M145,98 Q145,108 150,118 L170,118 Q175,108 175,98 Z" class="body-base"/>
+    <path d="M148,118 Q90,125 85,165 Q83,200 95,235 L100,275 Q103,310 110,335 L210,335 Q217,310 220,275 L225,235 Q237,200 235,165 Q230,125 172,118 Z" class="body-base"/>
+    <path d="M88,140 Q72,160 70,200 L67,245 Q65,275 70,295 L78,300 Q85,275 85,245 L88,205 Q90,170 95,150 Z" class="body-base"/>
+    <path d="M70,295 Q65,330 63,365 L78,375 Q82,340 82,300 Z" class="body-base"/>
+    <ellipse cx="72" cy="392" rx="13" ry="18" class="body-base"/>
+    <path d="M232,140 Q248,160 250,200 L253,245 Q255,275 250,295 L242,300 Q235,275 235,245 L232,205 Q230,170 225,150 Z" class="body-base"/>
+    <path d="M250,295 Q255,330 257,365 L242,375 Q238,340 238,300 Z" class="body-base"/>
+    <ellipse cx="248" cy="392" rx="13" ry="18" class="body-base"/>
+    <path d="M110,335 Q108,360 110,385 L210,385 Q212,360 210,335 Z" class="body-base"/>
+    <path d="M110,375 Q105,410 105,460 L102,510 L145,510 Q148,460 150,415 L150,375 Z" class="body-base"/>
+    <path d="M210,375 Q215,410 215,460 L218,510 L175,510 Q172,460 170,415 L170,375 Z" class="body-base"/>
+    <path d="M105,515 Q103,555 105,605 L138,610 Q142,565 142,515 Z" class="body-base"/>
+    <path d="M215,515 Q217,555 215,605 L182,610 Q178,565 178,515 Z" class="body-base"/>
+    <ellipse cx="120" cy="625" rx="22" ry="13" class="body-base"/>
+    <ellipse cx="200" cy="625" rx="22" ry="13" class="body-base"/>
 
-    <!-- Torse outline -->
-    <path d="M100,110 L100,250 Q100,275 110,290 L190,290 Q200,275 200,250 L200,110 Z" class="body-outline"/>
-
-    <!-- Bras outline -->
-    <path d="M100,120 Q80,140 80,180 L75,260 L90,260 L95,180 Q95,135 100,120 Z" class="body-outline"/>
-    <path d="M200,120 Q220,140 220,180 L225,260 L210,260 L205,180 Q205,135 200,120 Z" class="body-outline"/>
-    <path d="M75,260 L70,360 L88,360 L90,260 Z" class="body-outline"/>
-    <path d="M225,260 L230,360 L212,360 L210,260 Z" class="body-outline"/>
-    <ellipse cx="79" cy="375" rx="12" ry="18" class="body-outline"/>
-    <ellipse cx="221" cy="375" rx="12" ry="18" class="body-outline"/>
-
-    <!-- Bassin -->
-    <path d="M105,290 L100,330 L200,330 L195,290 Z" class="body-outline"/>
-
-    <!-- Cuisses arrière -->
-    <path d="M105,330 Q100,360 100,400 L95,490 L140,490 L145,400 L148,330 Z" class="body-outline"/>
-    <path d="M195,330 Q200,360 200,400 L205,490 L160,490 L155,400 L152,330 Z" class="body-outline"/>
-
-    <!-- Mollets -->
-    <path d="M95,490 L90,580 L138,580 L140,490 Z" class="body-outline"/>
-    <path d="M205,490 L210,580 L162,580 L160,490 Z" class="body-outline"/>
-
-    <!-- Pieds (vue arrière) -->
-    <ellipse cx="114" cy="595" rx="18" ry="10" class="body-outline"/>
-    <ellipse cx="186" cy="595" rx="18" ry="10" class="body-outline"/>
-
-    <!-- ZONES MUSCULAIRES (clic) -->
+    <!-- ZONES CLIQUABLES VUE ARRIÈRE -->
+    <!-- Arrière de la tête -->
+    <ellipse cx="160" cy="65" rx="32" ry="38" class="muscle" data-zone="head_back" data-label="Head (back)"/>
     <!-- Nuque -->
-    <rect x="139" y="89" width="22" height="18" class="muscle" data-zone="neck_back" data-label="Neck (back)"/>
+    <path d="M145,98 Q145,108 150,118 L170,118 Q175,108 175,98 Z" class="muscle" data-zone="neck_back" data-label="Neck (back)"/>
 
     <!-- Trapèzes -->
-    <path d="M108,108 L150,120 L192,108 L185,140 L115,140 Z" class="muscle" data-zone="traps" data-label="Trapezius"/>
+    <path d="M113,128 Q125,150 145,160 L175,160 Q195,150 207,128 Q190,122 160,122 Q130,122 113,128 Z" class="muscle" data-zone="traps" data-label="Trapezius"/>
 
     <!-- Deltoïdes postérieurs -->
-    <path d="M100,118 Q85,135 90,170 L105,170 L108,120 Z" class="muscle" data-zone="shoulder_left_back" data-label="Shoulder L (back)"/>
-    <path d="M200,118 Q215,135 210,170 L195,170 L192,120 Z" class="muscle" data-zone="shoulder_right_back" data-label="Shoulder R (back)"/>
+    <path d="M88,140 Q80,160 88,185 L113,185 Q115,160 118,140 Z" class="muscle" data-zone="shoulder_left_back" data-label="Shoulder L (back)"/>
+    <path d="M232,140 Q240,160 232,185 L207,185 Q205,160 202,140 Z" class="muscle" data-zone="shoulder_right_back" data-label="Shoulder R (back)"/>
 
     <!-- Haut du dos / Rhomboïdes -->
-    <path d="M115,140 L150,140 L150,180 L115,180 Z" class="muscle" data-zone="upper_back_left" data-label="Upper back L"/>
-    <path d="M185,140 L150,140 L150,180 L185,180 Z" class="muscle" data-zone="upper_back_right" data-label="Upper back R"/>
+    <path d="M118,165 L158,165 L158,200 L122,200 Z" class="muscle" data-zone="upper_back_left" data-label="Upper back L"/>
+    <path d="M202,165 L162,165 L162,200 L198,200 Z" class="muscle" data-zone="upper_back_right" data-label="Upper back R"/>
 
     <!-- Grand dorsal (lats) -->
-    <path d="M108,180 L135,180 L135,250 L115,250 Z" class="muscle" data-zone="lats_left" data-label="Lats L"/>
-    <path d="M192,180 L165,180 L165,250 L185,250 Z" class="muscle" data-zone="lats_right" data-label="Lats R"/>
+    <path d="M120,205 L155,205 L155,265 L130,265 Q118,250 118,225 Z" class="muscle" data-zone="lats_left" data-label="Lats L"/>
+    <path d="M200,205 L165,205 L165,265 L190,265 Q202,250 202,225 Z" class="muscle" data-zone="lats_right" data-label="Lats R"/>
 
-    <!-- Lombaires -->
-    <rect x="135" y="180" width="30" height="50" class="muscle" data-zone="lower_back" data-label="Lower back"/>
-
-    <!-- Bassin / Lombaires bas -->
-    <rect x="135" y="230" width="30" height="50" class="muscle" data-zone="lumbar" data-label="Lumbar"/>
+    <!-- Lombaires hauts -->
+    <rect x="138" y="205" width="44" height="40" rx="4" class="muscle" data-zone="mid_back" data-label="Mid back"/>
+    <!-- Lombaires bas -->
+    <rect x="135" y="248" width="50" height="40" rx="4" class="muscle" data-zone="lower_back" data-label="Lower back"/>
+    <!-- Sacrum / Lumbo-sacré -->
+    <rect x="138" y="293" width="44" height="35" rx="4" class="muscle" data-zone="sacrum" data-label="Sacrum / lumbar"/>
 
     <!-- Triceps -->
-    <path d="M82,170 Q80,200 85,250 L95,250 L98,180 Z" class="muscle" data-zone="triceps_left" data-label="Triceps L"/>
-    <path d="M218,170 Q220,200 215,250 L205,250 L202,180 Z" class="muscle" data-zone="triceps_right" data-label="Triceps R"/>
+    <path d="M75,190 Q70,225 72,265 L88,265 Q92,225 90,190 Z" class="muscle" data-zone="triceps_left" data-label="Triceps L"/>
+    <path d="M245,190 Q250,225 248,265 L232,265 Q228,225 230,190 Z" class="muscle" data-zone="triceps_right" data-label="Triceps R"/>
 
-    <!-- Avant-bras vue arrière -->
-    <path d="M73,265 L70,355 L88,355 L90,265 Z" class="muscle" data-zone="forearm_left_back" data-label="Forearm L (back)"/>
-    <path d="M227,265 L230,355 L212,355 L210,265 Z" class="muscle" data-zone="forearm_right_back" data-label="Forearm R (back)"/>
+    <!-- Avant-bras (arrière) -->
+    <path d="M68,275 Q63,325 65,365 L82,365 Q85,325 85,275 Z" class="muscle" data-zone="forearm_left_back" data-label="Forearm L (back)"/>
+    <path d="M252,275 Q257,325 255,365 L238,365 Q235,325 235,275 Z" class="muscle" data-zone="forearm_right_back" data-label="Forearm R (back)"/>
 
     <!-- Fessiers -->
-    <path d="M108,290 L150,290 L150,335 L115,335 Z" class="muscle" data-zone="glute_left" data-label="Glute L"/>
-    <path d="M192,290 L150,290 L150,335 L185,335 Z" class="muscle" data-zone="glute_right" data-label="Glute R"/>
+    <path d="M115,335 Q110,365 115,385 L158,385 L158,335 Z" class="muscle" data-zone="glute_left" data-label="Glute L"/>
+    <path d="M205,335 Q210,365 205,385 L162,385 L162,335 Z" class="muscle" data-zone="glute_right" data-label="Glute R"/>
 
     <!-- Ischio-jambiers -->
-    <path d="M108,335 Q103,365 103,400 L118,485 L140,485 L143,400 L143,335 Z" class="muscle" data-zone="hamstring_left" data-label="Hamstring L"/>
-    <path d="M192,335 Q197,365 197,400 L182,485 L160,485 L157,400 L157,335 Z" class="muscle" data-zone="hamstring_right" data-label="Hamstring R"/>
+    <path d="M115,395 Q108,430 110,475 L144,505 Q150,460 150,425 L150,395 Z" class="muscle" data-zone="hamstring_left" data-label="Hamstring L"/>
+    <path d="M205,395 Q212,430 210,475 L176,505 Q170,460 170,425 L170,395 Z" class="muscle" data-zone="hamstring_right" data-label="Hamstring R"/>
 
-    <!-- Mollets (vue arrière) -->
-    <path d="M97,500 L92,575 L118,575 L120,500 Z" class="muscle" data-zone="calf_left" data-label="Calf L"/>
-    <path d="M203,500 L208,575 L182,575 L180,500 Z" class="muscle" data-zone="calf_right" data-label="Calf R"/>
+    <!-- Creux poplité (arrière du genou) -->
+    <ellipse cx="127" cy="513" rx="18" ry="10" class="muscle" data-zone="knee_back_left" data-label="Knee back L"/>
+    <ellipse cx="193" cy="513" rx="18" ry="10" class="muscle" data-zone="knee_back_right" data-label="Knee back R"/>
 
-    <!-- Tendons d'Achille -->
-    <rect x="106" y="575" width="14" height="12" class="muscle" data-zone="achilles_left" data-label="Achilles L"/>
-    <rect x="180" y="575" width="14" height="12" class="muscle" data-zone="achilles_right" data-label="Achilles R"/>
+    <!-- Mollets -->
+    <path d="M108,525 Q105,560 108,600 L142,605 Q144,560 142,525 Z" class="muscle" data-zone="calf_left" data-label="Calf L"/>
+    <path d="M212,525 Q215,560 212,600 L178,605 Q176,560 178,525 Z" class="muscle" data-zone="calf_right" data-label="Calf R"/>
+
+    <!-- Tendon d'Achille -->
+    <rect x="116" y="600" width="14" height="15" rx="3" class="muscle" data-zone="achilles_left" data-label="Achilles L"/>
+    <rect x="190" y="600" width="14" height="15" rx="3" class="muscle" data-zone="achilles_right" data-label="Achilles R"/>
   </g>
 </svg></div>
           <div id="pain-summary" style="margin-top:12px;"></div>
@@ -3016,15 +3030,15 @@ function renderRPETable(date, groupFilter) {
 
 // Échelle RPE Borg CR-10 (étiquettes courantes)
 const RPE_LABELS = {
-  0: 'Repos',
+  0: 'Rest',
   1: 'Very very easy',
   2: 'Easy',
   3: 'Moderate',
   4: 'Somewhat hard',
-  5: 'Dur',
-  6: 'Dur',
-  7: 'Très dur',
-  8: 'Très dur',
+  5: 'Hard',
+  6: 'Hard +',
+  7: 'Very hard',
+  8: 'Very hard +',
   9: 'Very very hard',
   10: 'Maximal'
 };
@@ -3824,24 +3838,33 @@ function renderHooperScale(key, currentValue) {
     const selected = currentValue === item.value;
     const bg = selected ? item.color : 'var(--bg-elevated)';
     const textColor = selected ? 'white' : 'var(--text)';
-    const border = selected ? '2px solid white' : '2px solid var(--border)';
-    const transform = selected ? 'scale(1.08)' : 'scale(1)';
-    html += '<button class="hooper-btn" onclick="setHooperValue(\'' + key + '\', ' + item.value + ')" ' +
-            'style="background:' + bg + '; color:' + textColor + '; border:' + border + '; border-radius:10px; padding:10px 4px; cursor:pointer; transition:all 0.15s; transform:' + transform + ';">' +
-            '<div style="font-size:22px;">' + item.smiley + '</div>' +
-            '<div style="font-size:11px; font-weight:700; margin-top:2px;">' + item.value + '</div>' +
+    // Toujours la même border ; on utilise box-shadow pour l'effet de sélection (anneau extérieur)
+    const baseStyle = 'background:' + bg + ';' +
+                      'color:' + textColor + ';' +
+                      'border:1px solid var(--border);' +
+                      'border-radius:10px;' +
+                      'padding:10px 4px;' +
+                      'cursor:pointer;' +
+                      'outline:none;' +
+                      'margin:0;' +
+                      'font-family:inherit;' +
+                      'transition:transform 0.15s, box-shadow 0.15s;' +
+                      'transform:' + (selected ? 'scale(1.06)' : 'scale(1)') + ';' +
+                      'box-shadow:' + (selected ? '0 0 0 3px rgba(255,255,255,0.85)' : 'none') + ';';
+    html += '<button class="hooper-btn" onclick="setHooperValue(\'' + key + '\', ' + item.value + ')" style="' + baseStyle + '">' +
+            '<div style="font-size:22px; line-height:1;">' + item.smiley + '</div>' +
+            '<div style="font-size:11px; font-weight:700; margin-top:4px;">' + item.value + '</div>' +
             '</button>';
   });
   html += '</div>';
-  // Label de la valeur sélectionnée
   if (currentValue !== null && currentValue !== undefined) {
     const item = HOOPER_SCALE.find(i => i.value === currentValue);
     if (item) {
       const lbl = isSleep ? item.labelSleep : item.labelOther;
-      html += '<div style="text-align:center; margin-top:8px; font-size:12px; color:var(--text-dim);">Selected: <b style="color:var(--text);">' + currentValue + '/7</b> — ' + lbl + '</div>';
+      html += '<div style="text-align:center; margin-top:12px; font-size:12px; color:var(--text-dim);">Selected: <b style="color:var(--text);">' + currentValue + '/7</b> — ' + lbl + '</div>';
     }
   } else {
-    html += '<div style="text-align:center; margin-top:8px; font-size:11px; color:var(--text-dim);">Tap a smiley to rate</div>';
+    html += '<div style="text-align:center; margin-top:12px; font-size:11px; color:var(--text-dim);">Tap a smiley to rate</div>';
   }
   container.innerHTML = html;
 }
