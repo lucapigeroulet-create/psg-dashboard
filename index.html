@@ -1567,29 +1567,98 @@ function canWriteRPE(joueur) {
   return false;
 }
 
-// Verrou 2h : retourne true si le RPE de cette date/joueur a été enregistré il y a > 2h
-// Le staff et l'admin ne sont jamais verrouillés.
-const RPE_LOCK_HOURS = 2;
-function isRPELocked(date, joueur) {
-  if (currentRole !== 'lecteur') return false;
-  const r = state.bdd_rpe.find(x => x.date === date && x.joueur === joueur);
-  if (!r || !r.updated_at) return false;
-  const updatedMs = new Date(r.updated_at).getTime();
-  if (isNaN(updatedMs)) return false;
-  const ageHours = (Date.now() - updatedMs) / (1000 * 60 * 60);
-  return ageHours >= RPE_LOCK_HOURS;
+// ============================================================================
+// VERROUS DE SAISIE RPE (lecteurs uniquement, staff/admin jamais verrouillés)
+// Verrou A : 48h après la PUBLICATION de la séance (created_at de la séance)
+// Verrou B : 2h après la PREMIÈRE saisie de la note (created_at du RPE, figé)
+// Le plus restrictif s'applique.
+// ============================================================================
+const RPE_EDIT_HOURS = 2;       // fenêtre de modification après 1ère saisie
+const SESSION_WINDOW_HOURS = 48; // fenêtre de saisie après publication de la séance
+
+// Timestamp (ms) de publication de la séance, ou null si inconnu
+function getSeancePublishedMs(date, seanceNom) {
+  const s = state.bdd_ent2.find(x => x.date === date && x.nom === seanceNom);
+  if (!s || !s.created_at) return null;
+  const ms = new Date(s.created_at).getTime();
+  return isNaN(ms) ? null : ms;
 }
 
-// Temps restant avant verrouillage (en minutes), ou null si déjà verrouillé
-function rpeLockTimeRemaining(date, joueur) {
-  if (currentRole !== 'lecteur') return null;
+// Timestamp (ms) de la première saisie du RPE (figé), ou null si pas encore saisi
+function getRPECreatedMs(date, joueur) {
   const r = state.bdd_rpe.find(x => x.date === date && x.joueur === joueur);
-  if (!r || !r.updated_at) return null;
-  const updatedMs = new Date(r.updated_at).getTime();
-  if (isNaN(updatedMs)) return null;
-  const ageMs = Date.now() - updatedMs;
-  const remainMs = RPE_LOCK_HOURS * 3600 * 1000 - ageMs;
-  return remainMs > 0 ? Math.ceil(remainMs / 60000) : null;
+  if (!r || !r.created_at) return null;
+  const ms = new Date(r.created_at).getTime();
+  return isNaN(ms) ? null : ms;
+}
+
+// Le joueur a-t-il déjà saisi une note pour cette date ?
+function hasRPEEntry(date, joueur) {
+  const r = state.bdd_rpe.find(x => x.date === date && x.joueur === joueur);
+  return !!(r && r.rpe && r.rpe.length > 0);
+}
+
+// Verrou A : la fenêtre de 48h depuis publication est-elle dépassée ?
+// Si la séance n'a pas de created_at connu, on ne verrouille pas via ce critère.
+function isSessionWindowClosed(date, seanceNom) {
+  if (currentRole !== 'lecteur') return false;
+  const pubMs = getSeancePublishedMs(date, seanceNom);
+  if (pubMs === null) return false;
+  const ageHours = (Date.now() - pubMs) / 3600000;
+  return ageHours >= SESSION_WINDOW_HOURS;
+}
+
+// Verrou B : la fenêtre de modification de 2h depuis 1ère saisie est-elle dépassée ?
+function isEditWindowClosed(date, joueur) {
+  if (currentRole !== 'lecteur') return false;
+  const createdMs = getRPECreatedMs(date, joueur);
+  if (createdMs === null) return false; // pas encore saisi → pas de verrou de modif
+  const ageHours = (Date.now() - createdMs) / 3600000;
+  return ageHours >= RPE_EDIT_HOURS;
+}
+
+// Verrou global pour une séance précise : combinaison A + B
+// 'date' = jour, 'joueur' = nom, 'seanceNom' = nom de la séance concernée
+function isRPELockedForSession(date, joueur, seanceNom) {
+  if (currentRole !== 'lecteur') return false;
+  // A : fenêtre de séance fermée (48h) → verrou total
+  if (isSessionWindowClosed(date, seanceNom)) return true;
+  // B : si déjà saisi et fenêtre de modif fermée (2h) → verrou
+  if (hasRPEEntry(date, joueur) && isEditWindowClosed(date, joueur)) return true;
+  return false;
+}
+
+// Calcule le temps restant avant le prochain verrouillage pertinent (en minutes)
+// Retourne { type: 'edit'|'session', minutes } ou null si déjà verrouillé / pas de contrainte
+function rpeLockInfo(date, joueur, seanceNom) {
+  if (currentRole !== 'lecteur') return null;
+
+  // Si déjà verrouillé, rien à afficher comme compte à rebours
+  if (isRPELockedForSession(date, joueur, seanceNom)) return null;
+
+  const now = Date.now();
+  const candidates = [];
+
+  // Fenêtre de séance (48h) si on connaît la date de publication
+  const pubMs = getSeancePublishedMs(date, seanceNom);
+  if (pubMs !== null) {
+    const remainMin = Math.ceil((pubMs + SESSION_WINDOW_HOURS * 3600000 - now) / 60000);
+    if (remainMin > 0) candidates.push({ type: 'session', minutes: remainMin });
+  }
+
+  // Fenêtre de modification (2h) si déjà saisi
+  if (hasRPEEntry(date, joueur)) {
+    const createdMs = getRPECreatedMs(date, joueur);
+    if (createdMs !== null) {
+      const remainMin = Math.ceil((createdMs + RPE_EDIT_HOURS * 3600000 - now) / 60000);
+      if (remainMin > 0) candidates.push({ type: 'edit', minutes: remainMin });
+    }
+  }
+
+  if (candidates.length === 0) return null;
+  // Le plus restrictif = le plus petit temps restant
+  candidates.sort((a, b) => a.minutes - b.minutes);
+  return candidates[0];
 }
 
 // ============================================================================
@@ -1629,7 +1698,8 @@ async function loadState() {
     state.bdd_ent2 = (seances || []).map(s => ({
       date: s.date, nom: s.nom, seance: s.type_seance,
       duree_totale: parseFloat(s.duree_totale) || 0,
-      procedes: s.procedes || []
+      procedes: s.procedes || [],
+      created_at: s.created_at || null
     }));
 
     setLoad('Chargement des plannings...');
@@ -1642,6 +1712,7 @@ async function loadState() {
     const { data: rpes } = await sb.from('rpe_declarations').select('*').order('date');
     state.bdd_rpe = (rpes || []).map(r => ({
       date: r.date, joueur: r.joueur, rpe: r.rpe || [],
+      created_at: r.created_at || null,
       updated_at: r.updated_at || r.created_at || null
     }));
 
@@ -1710,9 +1781,10 @@ async function saveRPEToSupabase(date, joueur, rpeArray) {
     const msg = (currentRole === 'lecteur') ? 'You can only rate your own sessions' : 'Tu ne peux saisir que tes propres RPE';
     toast(msg, 'error'); return false;
   }
-  // Verrou 2h pour les joueurs : on bloque toute écriture après expiration
-  if (isRPELocked(date, joueur)) {
-    toast('Your rating is locked and can no longer be edited (locked 2h after submission)', 'error');
+  // Verrou de modification (2h après 1ère saisie) — vérifié ici pour toute écriture lecteur.
+  // Le verrou 48h (par séance) est vérifié en amont dans setRPECardValue/setRPEProcedeValue.
+  if (currentRole === 'lecteur' && hasRPEEntry(date, joueur) && isEditWindowClosed(date, joueur)) {
+    toast('Your rating is locked and can no longer be edited (locked 2h after your first submission)', 'error');
     return false;
   }
   if (!rpeArray || rpeArray.length === 0) {
@@ -1811,7 +1883,8 @@ function handleRealtimeChange(table, payload) {
       const obj = {
         date: newRow.date, nom: newRow.nom, seance: newRow.type_seance,
         duree_totale: parseFloat(newRow.duree_totale) || 0,
-        procedes: newRow.procedes || []
+        procedes: newRow.procedes || [],
+        created_at: newRow.created_at || null
       };
       if (idx >= 0) state.bdd_ent2[idx] = obj;
       else state.bdd_ent2.push(obj);
@@ -1832,6 +1905,7 @@ function handleRealtimeChange(table, payload) {
       const idx = state.bdd_rpe.findIndex(r => r.date === newRow.date && r.joueur === newRow.joueur);
       const obj = {
         date: newRow.date, joueur: newRow.joueur, rpe: newRow.rpe || [],
+        created_at: newRow.created_at || null,
         updated_at: newRow.updated_at || newRow.created_at || null
       };
       if (idx >= 0) state.bdd_rpe[idx] = obj;
@@ -3308,17 +3382,29 @@ function renderRPEScale(date, joueurEsc, seanceEsc, procIndex, currentValue) {
 
 // Handler pour la notation par procédé
 async function setRPEProcedeValue(date, joueur, seance, procIndex, value) {
+  if (currentRole === 'lecteur' && isSessionWindowClosed(date, seance)) {
+    toast('The 48h window to rate this session has closed. Please contact your coach.', 'error');
+    return;
+  }
   setRPEProcedeJoueurSeance(date, joueur, seance, procIndex, value);
   const r = state.bdd_rpe.find(x => x.date === date && x.joueur === joueur);
-  await saveRPEToSupabase(date, joueur, r ? r.rpe : []);
-  renderRPEEntry();
+  const ok = await saveRPEToSupabase(date, joueur, r ? r.rpe : []);
+  if (currentRole === 'lecteur') renderPlayerRPE();
+  else renderRPEEntry();
 }
 
 async function setRPECardValue(date, joueur, seance, value) {
+  // Verrou 48h : si la fenêtre de séance est fermée, on bloque (lecteur uniquement)
+  if (currentRole === 'lecteur' && isSessionWindowClosed(date, seance)) {
+    toast('The 48h window to rate this session has closed. Please contact your coach.', 'error');
+    return;
+  }
   setRPEJoueurSeance(date, joueur, seance, value);
   const r = state.bdd_rpe.find(x => x.date === date && x.joueur === joueur);
-  await saveRPEToSupabase(date, joueur, r ? r.rpe : []);
-  renderRPEEntry();
+  const ok = await saveRPEToSupabase(date, joueur, r ? r.rpe : []);
+  // Si on est en vue joueur, re-render pour refléter l'état (et démarrer le chrono 2h)
+  if (currentRole === 'lecteur') renderPlayerRPE();
+  else renderRPEEntry();
 }
 
 function rpeCardNav(direction) {
@@ -4403,8 +4489,10 @@ function renderPlayerSeanceNotation(date, joueur, seance) {
   const joueurEsc = joueur.replace(/'/g, "\\'");
   const seanceEsc = seance.replace(/'/g, "\\'");
 
-  const locked = isRPELocked(date, joueur);
-  const remain = rpeLockTimeRemaining(date, joueur);
+  const locked = isRPELockedForSession(date, joueur, seance);
+  const lockInfo = rpeLockInfo(date, joueur, seance);
+  const sessionClosed = isSessionWindowClosed(date, seance);
+  const hasEntry = hasRPEEntry(date, joueur);
 
   let html = '<div class="rpe-session-card' + (locked ? ' rpe-locked' : '') + '">';
   html += '<div class="rpe-session-name">' + escapeHtml(seance) + '</div>';
@@ -4414,12 +4502,25 @@ function renderPlayerSeanceNotation(date, joueur, seance) {
 
   // Bandeau de statut verrou / éditable
   if (locked) {
-    html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(251,146,60,0.12);border-left:3px solid #fb923c;border-radius:4px;font-size:12px;color:#fed7aa;">🔒 This rating is locked. You can\'t edit it anymore (locked 2 hours after submission).</div>';
-  } else if (remain !== null) {
-    const hrs = Math.floor(remain / 60);
-    const mins = remain % 60;
+    if (sessionClosed && !hasEntry) {
+      // 48h dépassées sans aucune saisie → fenêtre fermée, contacter le coach
+      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:#fca5a5;">🔒 The 48h window to rate this session has closed. Please ask your coach to enter your rating.</div>';
+    } else if (sessionClosed) {
+      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:#fca5a5;">🔒 The 48h window has closed. Your rating can no longer be edited.</div>';
+    } else {
+      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(251,146,60,0.12);border-left:3px solid #fb923c;border-radius:4px;font-size:12px;color:#fed7aa;">🔒 This rating is locked. You can\'t edit it anymore (locked 2 hours after your first submission).</div>';
+    }
+  } else if (lockInfo !== null) {
+    const hrs = Math.floor(lockInfo.minutes / 60);
+    const mins = lockInfo.minutes % 60;
     const timeStr = hrs > 0 ? (hrs + 'h ' + mins + 'min') : (mins + ' min');
-    html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ Editable for ' + timeStr + ' more</div>';
+    if (lockInfo.type === 'session' && !hasEntry) {
+      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ You have ' + timeStr + ' left to rate this session</div>';
+    } else if (lockInfo.type === 'edit') {
+      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ Editable for ' + timeStr + ' more</div>';
+    } else {
+      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ ' + timeStr + ' left</div>';
+    }
   }
 
   if (nbProc <= 1) {
