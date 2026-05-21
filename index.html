@@ -505,20 +505,69 @@
       <div class="stat"><div class="stat-label">RPE déclarés</div><div class="stat-value" id="stat-rpe">—</div></div>
     </div>
 
+    <!-- Activité quotidienne cumulée par état (aire empilée) -->
+    <div class="card">
+      <h2>Activité quotidienne par état</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Nombre de joueurs par jour, cumulé selon leur état (entraînement par équipe, repos, blessure...).</p>
+      <div class="chart-container tall"><canvas id="chart-activity-stacked"></canvas></div>
+    </div>
+
+    <!-- Charges quotidiennes avec filtre équipe/joueur -->
+    <div class="card">
+      <h2>Charges quotidiennes (sRPE)</h2>
+      <div class="filters" style="margin-bottom:12px;">
+        <div class="filter-group">
+          <label>Filtrer par</label>
+          <select id="overview-charge-scope" onchange="onOverviewScopeChange()">
+            <option value="all">Tout l'effectif (moyenne)</option>
+            <option value="group">Une équipe</option>
+            <option value="player">Un joueur</option>
+          </select>
+        </div>
+        <div class="filter-group" id="overview-charge-group-wrap" style="display:none;">
+          <label>Équipe</label>
+          <select id="overview-charge-group" onchange="renderOverviewCharges()"></select>
+        </div>
+        <div class="filter-group" id="overview-charge-player-wrap" style="display:none;">
+          <label>Joueur</label>
+          <select id="overview-charge-player" onchange="renderOverviewCharges()"></select>
+        </div>
+      </div>
+      <div class="chart-container tall"><canvas id="chart-overview-charges"></canvas></div>
+    </div>
+
+    <!-- État de l'effectif par jour (plus compact) -->
+    <div class="card">
+      <h2>État de l'effectif par jour</h2>
+      <div class="chart-container" style="height:180px;"><canvas id="chart-status-stacked"></canvas></div>
+    </div>
+
+    <!-- Hooper à surveiller + listes de relances -->
     <div class="grid-2">
       <div class="card">
-        <h2>Répartition des séances</h2>
-        <div class="chart-container"><canvas id="chart-seances-type"></canvas></div>
+        <h2>💚 Hooper à surveiller</h2>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs avec un Hooper moyen élevé (≥ 17) sur leurs 3 dernières saisies.</p>
+        <div id="overview-hooper-watch"></div>
       </div>
       <div class="card">
-        <h2>Activité quotidienne</h2>
-        <div class="chart-container"><canvas id="chart-activity"></canvas></div>
+        <h2>⏱ Charge du jour</h2>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Synthèse rapide de la charge d'aujourd'hui.</p>
+        <div id="overview-today-summary"></div>
       </div>
     </div>
 
-    <div class="card">
-      <h2>État de l'effectif par jour</h2>
-      <div class="chart-container tall"><canvas id="chart-status-stacked"></canvas></div>
+    <!-- Relances : RPE et Hooper manquants -->
+    <div class="grid-2">
+      <div class="card">
+        <h2>📋 RPE non remplis</h2>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs ayant une séance aujourd'hui sans note RPE saisie.</p>
+        <div id="overview-missing-rpe"></div>
+      </div>
+      <div class="card">
+        <h2>💚 Check-in Hooper non remplis</h2>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs n'ayant pas complété leur test Hooper aujourd'hui.</p>
+        <div id="overview-missing-hooper"></div>
+      </div>
     </div>
   </div>
 
@@ -2327,61 +2376,97 @@ function renderOverview() {
   document.getElementById('stat-gps').textContent = state.bdd_gps.length;
   document.getElementById('stat-rpe').textContent = state.bdd_rpe.reduce((acc, r) => acc + (r.rpe ? r.rpe.length : 0), 0);
 
-  // Chart répartition séances
-  const counts = {};
-  state.bdd_ent.forEach(e => e.seances.forEach(s => counts[s] = (counts[s] || 0) + 1));
-  const entries = Object.entries(counts).sort((a,b) => b[1] - a[1]).slice(0, 12);
+  const dates = getAllDates();
 
-  destroyChart('chart-seances-type');
-  charts['chart-seances-type'] = new Chart(document.getElementById('chart-seances-type'), {
-    type: 'bar',
-    data: {
-      labels: entries.map(e => e[0]),
-      datasets: [{
-        label: 'Occurrences',
-        data: entries.map(e => e[1]),
-        backgroundColor: entries.map(e => {
-          if (STATUTS_INDISPO.includes(e[0])) return '#f87171';
-          if (e[0] === 'REST') return '#6b7280';
-          if (TYPES_GYM.includes(e[0])) return '#a78bfa';
-          if (TYPES_GAME.includes(e[0]) || e[0].startsWith('TEGG')) return '#60a5fa';
-          return '#00a3ff';
-        }),
-        borderRadius: 4
-      }]
-    },
-    options: chartOpts({ legend: false, indexAxis: 'y' })
+  // ===== Activité quotidienne cumulée par état (aire empilée) =====
+  // Catégories dynamiques : un par type d'entraînement réel + REST + INJURY + SICK + ABSENT
+  // On regroupe les types d'entraînement par leur "type" (PSG U18, PSG U15, etc.)
+  const trainingTypes = uniqueSorted(
+    state.bdd_ent2.map(s => s.seance).filter(t => t && !STATUTS_NON_ENT.includes(t))
+  );
+
+  // Pour chaque jour, compter les joueurs dans chaque catégorie
+  // Catégorie d'un joueur = le type de sa séance d'entraînement principale, sinon son statut
+  const statusCats = ['REST', 'INJURY', 'SICK', 'ABSENT', 'SUSPENDED'];
+  const allCats = [...trainingTypes, ...statusCats];
+
+  const dayData = {};
+  dates.forEach(d => { dayData[d] = {}; allCats.forEach(c => dayData[d][c] = 0); });
+
+  state.bdd_ent.forEach(e => {
+    const seances = e.seances;
+    const trainingSeances = seances.filter(x => !STATUTS_NON_ENT.includes(x));
+    if (trainingSeances.length > 0) {
+      // Compter une fois par type d'entraînement distinct ce jour-là
+      const typesThisDay = new Set();
+      trainingSeances.forEach(s => {
+        const t = getTypeForNom(e.date, s) || s;
+        typesThisDay.add(t);
+      });
+      // Si le type n'est pas dans la liste (séance sans type), on l'ajoute au plus proche
+      typesThisDay.forEach(t => {
+        if (dayData[e.date][t] === undefined) dayData[e.date][t] = 0;
+        dayData[e.date][t]++;
+      });
+    } else {
+      // Statut uniquement
+      for (const st of statusCats) {
+        if (seances.includes(st)) { dayData[e.date][st]++; break; }
+      }
+    }
   });
 
-  // Chart activité quotidienne
-  const dates = getAllDates();
-  const counts2 = dates.map(d => state.bdd_ent.filter(e => e.date === d).length);
-  destroyChart('chart-activity');
-  charts['chart-activity'] = new Chart(document.getElementById('chart-activity'), {
+  // Recalculer allCats au cas où des types ont été ajoutés dynamiquement
+  const finalCats = Array.from(new Set([...allCats, ...dates.flatMap(d => Object.keys(dayData[d]))]));
+
+  // Couleurs par catégorie
+  const catColor = (cat) => {
+    if (cat === 'REST') return '#6b7280';
+    if (cat === 'INJURY') return '#f87171';
+    if (cat === 'SICK') return '#fb923c';
+    if (cat === 'ABSENT') return '#fbbf24';
+    if (cat === 'SUSPENDED') return '#a16207';
+    if (TYPES_GYM.includes(cat) || cat.includes('GYM')) return '#a78bfa';
+    if (TYPES_GAME.includes(cat) || cat.includes('GAME') || cat.startsWith('TEGG')) return '#60a5fa';
+    if (cat.includes('U18')) return '#00a3ff';
+    if (cat.includes('U15')) return '#22d3ee';
+    if (cat.includes('GOALKEEPER') || cat.includes('GK')) return '#4ade80';
+    // Couleur dérivée du hash du nom pour les autres
+    let h = 0; for (let i = 0; i < cat.length; i++) h = cat.charCodeAt(i) + ((h << 5) - h);
+    return 'hsl(' + (Math.abs(h) % 360) + ', 60%, 55%)';
+  };
+
+  destroyChart('chart-activity-stacked');
+  charts['chart-activity-stacked'] = new Chart(document.getElementById('chart-activity-stacked'), {
     type: 'line',
     data: {
       labels: dates.map(formatDateFR),
-      datasets: [{
-        label: 'Joueurs avec données',
-        data: counts2,
-        borderColor: '#00a3ff',
-        backgroundColor: 'rgba(0,163,255,0.15)',
+      datasets: finalCats.map(cat => ({
+        label: cat,
+        data: dates.map(d => dayData[d][cat] || 0),
+        borderColor: catColor(cat),
+        backgroundColor: catColor(cat) + '55',
         fill: true,
         tension: 0.3,
-        borderWidth: 2,
-        pointRadius: 4
-      }]
+        borderWidth: 1.5,
+        pointRadius: 2
+      }))
     },
-    options: chartOpts({})
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#e8eef6', boxWidth: 12, font: { size: 10 } } } },
+      scales: {
+        x: { stacked: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+        y: { stacked: true, beginAtZero: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'Joueurs', color: '#8ba3c1' } }
+      }
+    }
   });
 
-  // Stacked status par jour
+  // ===== État de l'effectif par jour (compact) =====
   const statusByDay = {};
-  dates.forEach(d => statusByDay[d] = { Entraîné: 0, REST: 0, INJURY: 0, SICK: 0, ABSENT: 0 });
+  dates.forEach(d => statusByDay[d] = { 'Entraîné': 0, REST: 0, INJURY: 0, SICK: 0, ABSENT: 0 });
   state.bdd_ent.forEach(e => {
     const s = e.seances;
-    // Si le joueur a au moins une séance "vraie" (non-statut), il est compté comme "Entraîné"
-    // — y compris s'il a aussi un statut INJURY/SICK (= entraînement adapté)
     const hasTraining = s.some(x => !STATUTS_NON_ENT.includes(x));
     let cat;
     if (hasTraining) cat = 'Entraîné';
@@ -2389,26 +2474,236 @@ function renderOverview() {
     else if (s.includes('SICK')) cat = 'SICK';
     else if (s.includes('ABSENT')) cat = 'ABSENT';
     else if (s.includes('REST')) cat = 'REST';
-    else cat = 'Entraîné'; // cas par défaut (devrait pas arriver)
+    else cat = 'Entraîné';
     statusByDay[e.date][cat]++;
   });
   const cats = ['Entraîné', 'REST', 'INJURY', 'SICK', 'ABSENT'];
   const colors = ['#4ade80', '#6b7280', '#f87171', '#fb923c', '#fbbf24'];
-
   destroyChart('chart-status-stacked');
   charts['chart-status-stacked'] = new Chart(document.getElementById('chart-status-stacked'), {
     type: 'bar',
     data: {
       labels: dates.map(formatDateFR),
       datasets: cats.map((c, i) => ({
-        label: c,
-        data: dates.map(d => statusByDay[d][c]),
-        backgroundColor: colors[i],
-        borderRadius: 2
+        label: c, data: dates.map(d => statusByDay[d][c]),
+        backgroundColor: colors[i], borderRadius: 2
       }))
     },
     options: chartOpts({ stacked: true })
   });
+
+  // ===== Initialiser les filtres de charge =====
+  const groupSel = document.getElementById('overview-charge-group');
+  if (groupSel && groupSel.options.length === 0) {
+    ensureGroupsList();
+    groupSel.innerHTML = state.groupes.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+  }
+  const playerSel = document.getElementById('overview-charge-player');
+  if (playerSel && playerSel.options.length === 0) {
+    playerSel.innerHTML = getAllPlayers().map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+  }
+  renderOverviewCharges();
+
+  // ===== Hooper à surveiller =====
+  renderOverviewHooperWatch();
+
+  // ===== Charge du jour (synthèse) =====
+  renderOverviewTodaySummary();
+
+  // ===== Listes de relances RPE / Hooper =====
+  renderOverviewMissing();
+}
+
+// Gestion du changement de scope (all / group / player)
+function onOverviewScopeChange() {
+  const scope = document.getElementById('overview-charge-scope').value;
+  document.getElementById('overview-charge-group-wrap').style.display = (scope === 'group') ? '' : 'none';
+  document.getElementById('overview-charge-player-wrap').style.display = (scope === 'player') ? '' : 'none';
+  renderOverviewCharges();
+}
+
+// Graphique des charges quotidiennes selon le filtre
+function renderOverviewCharges() {
+  const scope = document.getElementById('overview-charge-scope').value;
+  const dates = getAllDates();
+  const srpeData = computeSRPE();
+
+  let label, dailyValues;
+
+  if (scope === 'player') {
+    const player = document.getElementById('overview-charge-player').value;
+    label = 'Charge de ' + player;
+    dailyValues = dates.map(d => srpeData.filter(x => x.joueur === player && x.date === d).reduce((s, x) => s + x.sRPE, 0));
+  } else if (scope === 'group') {
+    const group = document.getElementById('overview-charge-group').value;
+    const players = getAllPlayers().filter(p => getJoueurInfo(p).groupe === group);
+    label = 'Charge moyenne — ' + group;
+    dailyValues = dates.map(d => {
+      const dayLoads = players.map(p => srpeData.filter(x => x.joueur === p && x.date === d).reduce((s, x) => s + x.sRPE, 0)).filter(v => v > 0);
+      return dayLoads.length > 0 ? Math.round(dayLoads.reduce((a, b) => a + b, 0) / dayLoads.length) : 0;
+    });
+  } else {
+    label = 'Charge moyenne — tout l\'effectif';
+    dailyValues = dates.map(d => {
+      const dayLoads = getAllPlayers().map(p => srpeData.filter(x => x.joueur === p && x.date === d).reduce((s, x) => s + x.sRPE, 0)).filter(v => v > 0);
+      return dayLoads.length > 0 ? Math.round(dayLoads.reduce((a, b) => a + b, 0) / dayLoads.length) : 0;
+    });
+  }
+
+  destroyChart('chart-overview-charges');
+  charts['chart-overview-charges'] = new Chart(document.getElementById('chart-overview-charges'), {
+    type: 'bar',
+    data: {
+      labels: dates.map(formatDateFR),
+      datasets: [{
+        label: label,
+        data: dailyValues,
+        backgroundColor: dailyValues.map(v => srpeLoadColor(v)),
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#e8eef6' } } },
+      scales: {
+        x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+        y: { beginAtZero: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'sRPE (UA)', color: '#8ba3c1' } }
+      }
+    }
+  });
+}
+
+// Hooper à surveiller (réutilise computePlayersToWatch de la vue staff)
+function renderOverviewHooperWatch() {
+  const container = document.getElementById('overview-hooper-watch');
+  if (typeof computePlayersToWatch !== 'function') { container.innerHTML = '<div style="color:var(--text-dim);font-size:13px;">—</div>'; return; }
+  const watch = computePlayersToWatch();
+  if (watch.length === 0) {
+    container.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px;">😊 Aucun joueur en alerte. Tout l\'effectif est en bon état de forme.</div>';
+    return;
+  }
+  container.innerHTML = watch.slice(0, 8).map(w => {
+    const interp = interpretHooper(parseFloat(w.avg));
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);">' +
+      '<div><b>' + escapeHtml(w.joueur) + '</b> <span style="font-size:11px;color:var(--text-dim);">' + escapeHtml(getJoueurInfo(w.joueur).groupe || '') + '</span></div>' +
+      '<div style="font-weight:700;color:' + interp.color + ';">' + w.avg + ' / 28</div>' +
+      '</div>';
+  }).join('');
+}
+
+// Synthèse charge du jour
+function renderOverviewTodaySummary() {
+  const container = document.getElementById('overview-today-summary');
+  const today = toLocalISO(new Date());
+  const srpeData = computeSRPE().filter(x => x.date === today);
+  const dates = getAllDates();
+  // Si pas de données aujourd'hui, prendre le dernier jour avec données
+  let refDate = today;
+  if (srpeData.length === 0 && dates.length > 0) {
+    refDate = dates[dates.length - 1];
+  }
+  const dayData = computeSRPE().filter(x => x.date === refDate);
+  if (dayData.length === 0) {
+    container.innerHTML = '<div style="color:var(--text-dim);font-size:13px;">Aucune charge enregistrée.</div>';
+    return;
+  }
+  const totalLoad = dayData.reduce((s, x) => s + x.sRPE, 0);
+  const players = new Set(dayData.map(x => x.joueur));
+  const avgLoad = Math.round(totalLoad / players.size);
+  const maxItem = dayData.reduce((max, x) => x.sRPE > max.sRPE ? x : max, dayData[0]);
+
+  container.innerHTML =
+    '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">' + (refDate === today ? 'Aujourd\'hui' : 'Dernier jour : ' + formatDateFR(refDate)) + '</div>' +
+    '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);"><span>Charge totale</span><b style="color:var(--accent-light);">' + Math.round(totalLoad) + ' UA</b></div>' +
+    '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);"><span>Joueurs actifs</span><b>' + players.size + '</b></div>' +
+    '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);"><span>Charge moyenne / joueur</span><b>' + avgLoad + ' UA</b></div>' +
+    '<div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Charge max</span><b style="color:' + srpeLoadColor(maxItem.sRPE) + ';">' + escapeHtml(maxItem.joueur) + ' (' + Math.round(maxItem.sRPE) + ')</b></div>';
+}
+
+// Listes de relances : RPE et Hooper non remplis aujourd'hui
+function renderOverviewMissing() {
+  const today = toLocalISO(new Date());
+  const dates = getAllDates();
+  // Jour de référence = aujourd'hui si planning existe, sinon dernier jour avec planning
+  let refDate = today;
+  const hasToday = state.bdd_ent.some(e => e.date === today);
+  if (!hasToday && dates.length > 0) refDate = dates[dates.length - 1];
+
+  // ===== RPE manquants =====
+  // Joueurs ayant une séance d'entraînement (non statut) ce jour-là, sans RPE complet
+  const rpeContainer = document.getElementById('overview-missing-rpe');
+  const playersWithSession = state.bdd_ent.filter(e => {
+    if (e.date !== refDate) return false;
+    return e.seances.some(s => !STATUTS_NON_ENT.includes(s));
+  }).map(e => e.joueur);
+
+  const missingRPE = playersWithSession.filter(joueur => {
+    const trainingSeances = (state.bdd_ent.find(e => e.date === refDate && e.joueur === joueur) || {}).seances.filter(s => !STATUTS_NON_ENT.includes(s));
+    // Vérifier que chaque séance a une note
+    return trainingSeances.some(s => {
+      const detail = getRPEDetailJoueurSeance(refDate, joueur, s);
+      if (!detail) return true; // pas de note du tout
+      if (detail.mode === 'unique') return detail.value === null;
+      return detail.values.every(v => v === null || isNaN(v));
+    });
+  });
+
+  const dateLabel = (refDate === today) ? 'aujourd\'hui' : formatDateFR(refDate);
+  if (missingRPE.length === 0) {
+    rpeContainer.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px;">✅ Tous les RPE sont remplis pour ' + dateLabel + '.</div>';
+  } else {
+    rpeContainer.innerHTML =
+      '<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">' + missingRPE.length + ' joueur(s) — ' + dateLabel + '</div>' +
+      missingRPE.map(j => {
+        const info = getJoueurInfo(j);
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);">' +
+          '<div><b>' + escapeHtml(j) + '</b> <span style="font-size:11px;color:var(--text-dim);">' + escapeHtml(info.groupe || '') + '</span></div>' +
+          '<button class="btn" style="padding:3px 10px;font-size:11px;" onclick="goToRPEEntry(\'' + refDate + '\', \'' + j.replace(/'/g, "\\'") + '\')">Saisir</button>' +
+          '</div>';
+      }).join('');
+  }
+
+  // ===== Hooper manquants =====
+  const hooperContainer = document.getElementById('overview-missing-hooper');
+  // Tous les joueurs ayant une activité (séance ou statut) ce jour
+  const activePlayersToday = state.bdd_ent.filter(e => e.date === refDate).map(e => e.joueur);
+  const missingHooper = activePlayersToday.filter(joueur => {
+    const h = (typeof getHooper === 'function') ? getHooper(refDate, joueur) : null;
+    return !h || computeHooperIndex(h) === null;
+  });
+
+  if (missingHooper.length === 0) {
+    hooperContainer.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px;">✅ Tous les check-ins Hooper sont remplis pour ' + dateLabel + '.</div>';
+  } else {
+    hooperContainer.innerHTML =
+      '<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">' + missingHooper.length + ' joueur(s) — ' + dateLabel + '</div>' +
+      missingHooper.map(j => {
+        const info = getJoueurInfo(j);
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);">' +
+          '<div><b>' + escapeHtml(j) + '</b> <span style="font-size:11px;color:var(--text-dim);">' + escapeHtml(info.groupe || '') + '</span></div>' +
+          '<button class="btn" style="padding:3px 10px;font-size:11px;background:var(--green);" onclick="goToHooperEntry(\'' + refDate + '\', \'' + j.replace(/'/g, "\\'") + '\')">Remplir</button>' +
+          '</div>';
+      }).join('');
+  }
+}
+
+// Navigation rapide vers la saisie RPE staff pour un joueur/date
+function goToRPEEntry(date, joueur) {
+  const btn = document.querySelector('.nav-btn[data-view="rpe-entry"]');
+  if (btn) {
+    btn.click();
+    // Pré-remplir la date si le champ existe
+    setTimeout(() => {
+      const dateInput = document.getElementById('rpe-entry-date');
+      if (dateInput) { dateInput.value = date; if (typeof renderRPEEntry === 'function') renderRPEEntry(); }
+    }, 100);
+  }
+}
+
+// Navigation vers le Hooper staff (pour consulter/relancer)
+function goToHooperEntry(date, joueur) {
+  const btn = document.querySelector('.nav-btn[data-view="staff-hooper"]');
+  if (btn) btn.click();
 }
 
 function chartOpts(opts) {
