@@ -2532,6 +2532,14 @@ function computeSRPE() {
 // BILAN RPE — Vue hebdomadaire type Excel + indicateurs
 // ============================================================================
 
+// Formate un objet Date en 'YYYY-MM-DD' selon le fuseau LOCAL (évite le décalage UTC)
+function toLocalISO(dt) {
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const d = String(dt.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + d;
+}
+
 // Découpe une date ISO en numéro de semaine ISO + année
 function getISOWeek(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -2558,7 +2566,7 @@ function weekDates(monday) {
   for (let i = 0; i < 7; i++) {
     const dt = new Date(monday);
     dt.setDate(monday.getDate() + i);
-    out.push(dt.toISOString().slice(0, 10));
+    out.push(toLocalISO(dt));
   }
   return out;
 }
@@ -2568,7 +2576,7 @@ function getAvailableWeeks() {
   const mondays = {};
   getAllDates().forEach(dateStr => {
     const monday = getMondayOf(dateStr);
-    const key = monday.toISOString().slice(0, 10);
+    const key = toLocalISO(monday);
     if (!mondays[key]) {
       const iso = getISOWeek(dateStr);
       mondays[key] = { mondayIso: key, monday, week: iso.week, year: iso.year };
@@ -4248,7 +4256,7 @@ async function renderPlayerHooper() {
   if (hooperData.length === 0) await loadHooperFromSupabase();
 
   const dateInput = document.getElementById('hooper-date');
-  if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+  if (!dateInput.value) dateInput.value = toLocalISO(new Date());
   const date = dateInput.value;
 
   const existing = getHooper(date, currentJoueurNom);
@@ -4498,7 +4506,7 @@ async function renderStaffHooper() {
 
   // Stats globales
   const last7 = new Date(); last7.setDate(last7.getDate() - 7);
-  const last7Iso = last7.toISOString().slice(0, 10);
+  const last7Iso = toLocalISO(last7);
   const recent = hooperData.filter(h => h.date >= last7Iso);
   document.getElementById('hooper-stat-count').textContent = recent.length;
 
@@ -4511,7 +4519,7 @@ async function renderStaffHooper() {
   document.getElementById('hooper-stat-alerts').textContent = playersToWatch.length;
 
   // Taux de réponse aujourd'hui
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toLocalISO(new Date());
   const todayCount = hooperData.filter(h => h.date === today && computeHooperIndex(h) !== null).length;
   const totalPlayers = state.joueurs.length;
   const todayPct = totalPlayers > 0 ? Math.round(todayCount * 100 / totalPlayers) : 0;
@@ -4622,7 +4630,7 @@ function renderStaffHooperPlayerChart() {
   const periodDays = parseInt(periodSel.value);
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - periodDays);
-  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const cutoffIso = toLocalISO(cutoff);
 
   destroyChart('chart-staff-hooper-player');
 
@@ -4827,7 +4835,7 @@ function renderPlayerRPE() {
   if (!dateInput.value) {
     // Default = dernière date avec une séance pour ce joueur, sinon aujourd'hui
     const playerDates = state.bdd_ent.filter(e => e.joueur === currentJoueurNom).map(e => e.date).sort();
-    dateInput.value = playerDates.length > 0 ? playerDates[playerDates.length - 1] : new Date().toISOString().slice(0, 10);
+    dateInput.value = playerDates.length > 0 ? playerDates[playerDates.length - 1] : toLocalISO(new Date());
   }
   const date = dateInput.value;
   const container = document.getElementById('player-rpe-content');
