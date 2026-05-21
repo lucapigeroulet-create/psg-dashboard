@@ -505,14 +505,7 @@
       <div class="stat"><div class="stat-label">RPE déclarés</div><div class="stat-value" id="stat-rpe">—</div></div>
     </div>
 
-    <!-- Activité quotidienne cumulée par état (aire empilée) -->
-    <div class="card">
-      <h2>Activité quotidienne par état</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Nombre de joueurs par jour, cumulé selon leur état (entraînement par équipe, repos, blessure...).</p>
-      <div class="chart-container tall"><canvas id="chart-activity-stacked"></canvas></div>
-    </div>
-
-    <!-- Charges quotidiennes avec filtre équipe/joueur -->
+    <!-- 1) Charges quotidiennes avec filtre équipe/joueur + intervalle de dates -->
     <div class="card">
       <h2>Charges quotidiennes (sRPE)</h2>
       <div class="filters" style="margin-bottom:12px;">
@@ -532,44 +525,70 @@
           <label>Joueur</label>
           <select id="overview-charge-player" onchange="renderOverviewCharges()"></select>
         </div>
+        <div class="filter-group">
+          <label>Du</label>
+          <input type="date" id="overview-charge-from" onchange="renderOverviewCharges()" />
+        </div>
+        <div class="filter-group">
+          <label>Au</label>
+          <input type="date" id="overview-charge-to" onchange="renderOverviewCharges()" />
+        </div>
+        <div class="filter-group" style="justify-content:flex-end;">
+          <label>&nbsp;</label>
+          <button class="btn btn-secondary" onclick="resetOverviewChargeDates()" style="padding:8px 12px;">↺ Toutes les dates</button>
+        </div>
       </div>
       <div class="chart-container tall"><canvas id="chart-overview-charges"></canvas></div>
     </div>
 
-    <!-- État de l'effectif par jour (plus compact) -->
+    <!-- 2) Activité quotidienne par état (aire empilée) -->
     <div class="card">
-      <h2>État de l'effectif par jour</h2>
-      <div class="chart-container" style="height:180px;"><canvas id="chart-status-stacked"></canvas></div>
+      <h2>Activité quotidienne par état</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Nombre de joueurs par jour, cumulé selon leur état (entraînement par équipe, repos, blessure...).</p>
+      <div class="chart-container tall"><canvas id="chart-activity-stacked"></canvas></div>
     </div>
 
-    <!-- Hooper à surveiller + listes de relances -->
+    <!-- 3) État de l'effectif (compact, demi-page) + Hooper à surveiller côte à côte -->
     <div class="grid-2">
+      <div class="card">
+        <h2>État de l'effectif par jour</h2>
+        <div class="chart-container" style="height:280px;"><canvas id="chart-status-stacked"></canvas></div>
+      </div>
       <div class="card">
         <h2>💚 Hooper à surveiller</h2>
         <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs avec un Hooper moyen élevé (≥ 17) sur leurs 3 dernières saisies.</p>
         <div id="overview-hooper-watch"></div>
       </div>
-      <div class="card">
-        <h2>⏱ Charge du jour</h2>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Synthèse rapide de la charge d'aujourd'hui.</p>
-        <div id="overview-today-summary"></div>
-      </div>
     </div>
 
-    <!-- Relances : RPE et Hooper manquants -->
+    <!-- 4) Relances RPE : sélecteur de date + liste joueurs manquants + liste jours incomplets -->
     <div class="grid-2">
       <div class="card">
         <h2>📋 RPE non remplis</h2>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs ayant une séance aujourd'hui sans note RPE saisie.</p>
+        <div class="filters" style="margin-bottom:10px;">
+          <div class="filter-group">
+            <label>Date</label>
+            <input type="date" id="overview-rpe-date" onchange="renderOverviewMissing()" />
+          </div>
+        </div>
         <div id="overview-missing-rpe"></div>
       </div>
       <div class="card">
-        <h2>💚 Check-in Hooper non remplis</h2>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs n'ayant pas complété leur test Hooper aujourd'hui.</p>
-        <div id="overview-missing-hooper"></div>
+        <h2>📅 Jours avec RPE manquants</h2>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Jours où au moins un joueur n'a pas saisi son RPE. Clique pour voir le détail.</p>
+        <div id="overview-incomplete-days"></div>
       </div>
     </div>
+
+    <!-- 5) Check-in Hooper non remplis -->
+    <div class="card">
+      <h2>💚 Check-in Hooper non remplis</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs n'ayant pas complété leur test Hooper (jour de référence).</p>
+      <div id="overview-missing-hooper"></div>
+    </div>
   </div>
+
+  
 
   <!-- ========== CALENDRIER ========== -->
   <div class="view" id="view-calendar">
@@ -2502,13 +2521,26 @@ function renderOverview() {
   if (playerSel && playerSel.options.length === 0) {
     playerSel.innerHTML = getAllPlayers().map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
   }
+  // Bornes par défaut de l'intervalle de dates (toute la plage disponible)
+  const allDates = getAllDates();
+  const fromInput = document.getElementById('overview-charge-from');
+  const toInput = document.getElementById('overview-charge-to');
+  if (allDates.length > 0) {
+    if (fromInput && !fromInput.value) { fromInput.min = allDates[0]; fromInput.max = allDates[allDates.length-1]; }
+    if (toInput && !toInput.value) { toInput.min = allDates[0]; toInput.max = allDates[allDates.length-1]; }
+  }
   renderOverviewCharges();
+
+  // Initialiser le sélecteur de date RPE (par défaut : jour de référence)
+  const rpeDateInput = document.getElementById('overview-rpe-date');
+  if (rpeDateInput && !rpeDateInput.value) {
+    const today = toLocalISO(new Date());
+    const hasToday = state.bdd_ent.some(e => e.date === today);
+    rpeDateInput.value = (hasToday || allDates.length === 0) ? today : allDates[allDates.length - 1];
+  }
 
   // ===== Hooper à surveiller =====
   renderOverviewHooperWatch();
-
-  // ===== Charge du jour (synthèse) =====
-  renderOverviewTodaySummary();
 
   // ===== Listes de relances RPE / Hooper =====
   renderOverviewMissing();
@@ -2522,10 +2554,24 @@ function onOverviewScopeChange() {
   renderOverviewCharges();
 }
 
-// Graphique des charges quotidiennes selon le filtre
+// Réinitialise l'intervalle de dates des charges (toutes les dates)
+function resetOverviewChargeDates() {
+  document.getElementById('overview-charge-from').value = '';
+  document.getElementById('overview-charge-to').value = '';
+  renderOverviewCharges();
+}
+
+// Graphique des charges quotidiennes selon le filtre + intervalle de dates
 function renderOverviewCharges() {
   const scope = document.getElementById('overview-charge-scope').value;
-  const dates = getAllDates();
+  let dates = getAllDates();
+
+  // Filtre intervalle de dates
+  const fromVal = document.getElementById('overview-charge-from').value;
+  const toVal = document.getElementById('overview-charge-to').value;
+  if (fromVal) dates = dates.filter(d => d >= fromVal);
+  if (toVal) dates = dates.filter(d => d <= toVal);
+
   const srpeData = computeSRPE();
 
   let label, dailyValues;
@@ -2594,6 +2640,7 @@ function renderOverviewHooperWatch() {
 // Synthèse charge du jour
 function renderOverviewTodaySummary() {
   const container = document.getElementById('overview-today-summary');
+  if (!container) return;
   const today = toLocalISO(new Date());
   const srpeData = computeSRPE().filter(x => x.date === today);
   const dates = getAllDates();
@@ -2620,37 +2667,29 @@ function renderOverviewTodaySummary() {
     '<div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Charge max</span><b style="color:' + srpeLoadColor(maxItem.sRPE) + ';">' + escapeHtml(maxItem.joueur) + ' (' + Math.round(maxItem.sRPE) + ')</b></div>';
 }
 
-// Listes de relances : RPE et Hooper non remplis aujourd'hui
+// Listes de relances : RPE (date sélectionnée) + Hooper + jours incomplets
 function renderOverviewMissing() {
   const today = toLocalISO(new Date());
   const dates = getAllDates();
-  // Jour de référence = aujourd'hui si planning existe, sinon dernier jour avec planning
-  let refDate = today;
-  const hasToday = state.bdd_ent.some(e => e.date === today);
-  if (!hasToday && dates.length > 0) refDate = dates[dates.length - 1];
 
-  // ===== RPE manquants =====
-  // Joueurs ayant une séance d'entraînement (non statut) ce jour-là, sans RPE complet
+  // Date de référence pour les RPE = celle du sélecteur, sinon aujourd'hui/dernier jour
+  const rpeDateInput = document.getElementById('overview-rpe-date');
+  let refDate = rpeDateInput && rpeDateInput.value ? rpeDateInput.value : today;
+  if (!rpeDateInput || !rpeDateInput.value) {
+    const hasToday = state.bdd_ent.some(e => e.date === today);
+    if (!hasToday && dates.length > 0) refDate = dates[dates.length - 1];
+  }
+
+  // ===== RPE manquants pour la date sélectionnée =====
   const rpeContainer = document.getElementById('overview-missing-rpe');
-  const playersWithSession = state.bdd_ent.filter(e => {
-    if (e.date !== refDate) return false;
-    return e.seances.some(s => !STATUTS_NON_ENT.includes(s));
-  }).map(e => e.joueur);
+  const missingRPE = getPlayersMissingRPE(refDate);
+  const dateLabel = (refDate === today) ? "aujourd'hui" : formatDateFR(refDate);
 
-  const missingRPE = playersWithSession.filter(joueur => {
-    const trainingSeances = (state.bdd_ent.find(e => e.date === refDate && e.joueur === joueur) || {}).seances.filter(s => !STATUTS_NON_ENT.includes(s));
-    // Vérifier que chaque séance a une note
-    return trainingSeances.some(s => {
-      const detail = getRPEDetailJoueurSeance(refDate, joueur, s);
-      if (!detail) return true; // pas de note du tout
-      if (detail.mode === 'unique') return detail.value === null;
-      return detail.values.every(v => v === null || isNaN(v));
-    });
-  });
-
-  const dateLabel = (refDate === today) ? 'aujourd\'hui' : formatDateFR(refDate);
   if (missingRPE.length === 0) {
-    rpeContainer.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px;">✅ Tous les RPE sont remplis pour ' + dateLabel + '.</div>';
+    const hasSession = state.bdd_ent.some(e => e.date === refDate && e.seances.some(s => !STATUTS_NON_ENT.includes(s)));
+    rpeContainer.innerHTML = hasSession
+      ? '<div style="color:var(--green);font-size:13px;padding:8px;">✅ Tous les RPE sont remplis pour ' + dateLabel + '.</div>'
+      : '<div style="color:var(--text-dim);font-size:13px;padding:8px;">Aucune séance d\'entraînement ce jour.</div>';
   } else {
     rpeContainer.innerHTML =
       '<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">' + missingRPE.length + ' joueur(s) — ' + dateLabel + '</div>' +
@@ -2663,28 +2702,77 @@ function renderOverviewMissing() {
       }).join('');
   }
 
-  // ===== Hooper manquants =====
+  // ===== Liste des jours avec RPE manquants =====
+  const incompleteContainer = document.getElementById('overview-incomplete-days');
+  const incompleteDays = [];
+  dates.forEach(d => {
+    const missing = getPlayersMissingRPE(d);
+    if (missing.length > 0) incompleteDays.push({ date: d, count: missing.length });
+  });
+  incompleteDays.sort((a, b) => b.date.localeCompare(a.date)); // récents d'abord
+
+  if (incompleteDays.length === 0) {
+    incompleteContainer.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px;">✅ Aucun jour avec RPE manquants. Tout est à jour !</div>';
+  } else {
+    incompleteContainer.innerHTML = incompleteDays.map(item => {
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border);">' +
+        '<div><b>' + formatDateFR(item.date) + '</b> <span style="font-size:11px;color:var(--text-dim);">' + item.date + '</span></div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+        '<span style="background:rgba(251,146,60,0.2);color:#fed7aa;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">' + item.count + ' manquant' + (item.count > 1 ? 's' : '') + '</span>' +
+        '<button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="selectOverviewRPEDate(\'' + item.date + '\')">Voir</button>' +
+        '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  // ===== Hooper manquants (jour de référence = aujourd'hui ou dernier jour) =====
   const hooperContainer = document.getElementById('overview-missing-hooper');
-  // Tous les joueurs ayant une activité (séance ou statut) ce jour
-  const activePlayersToday = state.bdd_ent.filter(e => e.date === refDate).map(e => e.joueur);
+  let hooperRefDate = today;
+  const hasTodayPlanning = state.bdd_ent.some(e => e.date === today);
+  if (!hasTodayPlanning && dates.length > 0) hooperRefDate = dates[dates.length - 1];
+
+  const activePlayersToday = state.bdd_ent.filter(e => e.date === hooperRefDate).map(e => e.joueur);
   const missingHooper = activePlayersToday.filter(joueur => {
-    const h = (typeof getHooper === 'function') ? getHooper(refDate, joueur) : null;
+    const h = (typeof getHooper === 'function') ? getHooper(hooperRefDate, joueur) : null;
     return !h || computeHooperIndex(h) === null;
   });
+  const hooperDateLabel = (hooperRefDate === today) ? "aujourd'hui" : formatDateFR(hooperRefDate);
 
   if (missingHooper.length === 0) {
-    hooperContainer.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px;">✅ Tous les check-ins Hooper sont remplis pour ' + dateLabel + '.</div>';
+    hooperContainer.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px;">✅ Tous les check-ins Hooper sont remplis pour ' + hooperDateLabel + '.</div>';
   } else {
     hooperContainer.innerHTML =
-      '<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">' + missingHooper.length + ' joueur(s) — ' + dateLabel + '</div>' +
-      missingHooper.map(j => {
-        const info = getJoueurInfo(j);
-        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);">' +
-          '<div><b>' + escapeHtml(j) + '</b> <span style="font-size:11px;color:var(--text-dim);">' + escapeHtml(info.groupe || '') + '</span></div>' +
-          '<button class="btn" style="padding:3px 10px;font-size:11px;background:var(--green);" onclick="goToHooperEntry(\'' + refDate + '\', \'' + j.replace(/'/g, "\\'") + '\')">Remplir</button>' +
-          '</div>';
-      }).join('');
+      '<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">' + missingHooper.length + ' joueur(s) — ' + hooperDateLabel + '</div>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:6px;">' +
+      missingHooper.map(j => '<span style="background:var(--bg-elevated);padding:4px 10px;border-radius:6px;font-size:12px;border:1px solid var(--border);">' + escapeHtml(j) + '</span>').join('') +
+      '</div>';
   }
+}
+
+// Retourne les joueurs ayant une séance d'entraînement ce jour SANS RPE complet
+function getPlayersMissingRPE(date) {
+  const playersWithSession = state.bdd_ent.filter(e => {
+    if (e.date !== date) return false;
+    return e.seances.some(s => !STATUTS_NON_ENT.includes(s));
+  }).map(e => e.joueur);
+
+  return playersWithSession.filter(joueur => {
+    const e = state.bdd_ent.find(x => x.date === date && x.joueur === joueur);
+    if (!e) return false;
+    const trainingSeances = e.seances.filter(s => !STATUTS_NON_ENT.includes(s));
+    return trainingSeances.some(s => {
+      const detail = getRPEDetailJoueurSeance(date, joueur, s);
+      if (!detail) return true;
+      if (detail.mode === 'unique') return detail.value === null;
+      return detail.values.every(v => v === null || isNaN(v));
+    });
+  });
+}
+
+// Sélectionne une date dans le filtre RPE et rafraîchit
+function selectOverviewRPEDate(date) {
+  const input = document.getElementById('overview-rpe-date');
+  if (input) { input.value = date; renderOverviewMissing(); input.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 }
 
 // Navigation rapide vers la saisie RPE staff pour un joueur/date
