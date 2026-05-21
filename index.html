@@ -547,40 +547,74 @@
 
   <!-- ========== RPE ========== -->
   <div class="view" id="view-rpe">
+    <!-- Filtres globaux -->
     <div class="card">
-      <h2>Charge RPE (sRPE = durée × RPE)</h2>
+      <h2>📊 Bilan RPE hebdomadaire</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
+        Charge d'entraînement (sRPE = durée × RPE) par joueur et par jour, avec indicateurs de monotonie, contrainte, fitness et ratio aigu/chronique.
+      </p>
       <div class="filters">
         <div class="filter-group">
-          <label>Joueur</label>
-          <select id="rpe-filter-player" onchange="renderRPE()">
-            <option value="">Tous (équipe)</option>
-          </select>
+          <label>Semaine</label>
+          <select id="rpe-week-select" onchange="renderRPE()"></select>
         </div>
         <div class="filter-group">
-          <label>Groupe</label>
-          <select id="rpe-filter-group" onchange="renderRPE()">
-            <option value="">Tous</option>
-          </select>
+          <label>Groupe / Équipe</label>
+          <select id="rpe-filter-group" onchange="renderRPE()"><option value="">Toutes</option></select>
+        </div>
+        <div class="filter-group">
+          <label>Type d'entraînement</label>
+          <select id="rpe-filter-type" onchange="renderRPE()"><option value="">Tous types</option></select>
         </div>
       </div>
-      <div class="chart-container tall"><canvas id="chart-rpe"></canvas></div>
     </div>
 
+    <!-- Tableau hebdomadaire type "BILAN RPE" -->
     <div class="card">
-      <h2>Charge cumulée par joueur</h2>
-      <div class="chart-container tall"><canvas id="chart-rpe-total"></canvas></div>
-    </div>
-
-    <div class="card">
-      <h2>Détail des charges sRPE</h2>
+      <h2 id="rpe-week-title">Tableau de charge — Semaine</h2>
       <div class="table-wrap">
-        <table id="rpe-table">
-          <thead><tr><th>Date</th><th>Joueur</th><th>Séance</th><th>Durée (min)</th><th>RPE</th><th>sRPE</th></tr></thead>
+        <table id="rpe-weekly-table" style="font-size:12px;">
+          <thead></thead>
           <tbody></tbody>
         </table>
       </div>
+      <div style="margin-top:10px; font-size:11px; color:var(--text-dim); display:flex; flex-wrap:wrap; gap:16px;">
+        <span><b>Charge Hebdo</b> : somme des sRPE de la semaine</span>
+        <span><b>Monotonie</b> : moyenne / écart-type (objectif &lt; 2)</span>
+        <span><b>Contrainte</b> : monotonie × charge</span>
+        <span><b>Fitness</b> : contrainte − charge</span>
+        <span><b>Ratio A/C</b> : charge semaine / moyenne 4 sem. (zone optimale 0.8–1.3)</span>
+      </div>
     </div>
+
+    <!-- Graphique : charge quotidienne par joueur sur la semaine -->
+    <div class="card">
+      <h2>Charge quotidienne par jour (semaine sélectionnée)</h2>
+      <div class="chart-container tall"><canvas id="chart-rpe-weekly"></canvas></div>
+    </div>
+
+    <!-- Graphique : charge hebdo cumulée comparée -->
+    <div class="card">
+      <h2>Charge hebdomadaire totale par joueur</h2>
+      <div class="chart-container tall"><canvas id="chart-rpe-total"></canvas></div>
+    </div>
+
+    <!-- ===================== BILAN INDIVIDUEL ===================== -->
+    <div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">
+      <h2 style="color:var(--accent-light);">👤 Bilan individuel</h2>
+      <p style="color:var(--text); font-size:13px; margin-top:4px;">Analyse détaillée d'un joueur, comparée à la moyenne de son équipe.</p>
+      <div class="filters" style="margin-top:12px;">
+        <div class="filter-group">
+          <label>Joueur</label>
+          <select id="rpe-indiv-player" onchange="renderBilanIndividuel()"><option value="">Sélectionner...</option></select>
+        </div>
+      </div>
+    </div>
+
+    <div id="bilan-individuel-content"></div>
   </div>
+
+  
 
   <!-- ========== GPS ========== -->
   <div class="view" id="view-gps">
@@ -2494,71 +2528,444 @@ function computeSRPE() {
   return out;
 }
 
+// ============================================================================
+// BILAN RPE — Vue hebdomadaire type Excel + indicateurs
+// ============================================================================
+
+// Découpe une date ISO en numéro de semaine ISO + année
+function getISOWeek(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const day = dt.getUTCDay() || 7;
+  dt.setUTCDate(dt.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((dt - yearStart) / 86400000) + 1) / 7);
+  return { week: weekNo, year: dt.getUTCFullYear() };
+}
+
+// Retourne le lundi (ISO) de la semaine contenant la date
+function getMondayOf(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const day = dt.getDay() || 7;
+  dt.setDate(dt.getDate() - (day - 1));
+  return dt;
+}
+
+// Construit la liste des 7 dates ISO (Lun→Dim) d'une semaine à partir d'un lundi (Date)
+function weekDates(monday) {
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const dt = new Date(monday);
+    dt.setDate(monday.getDate() + i);
+    out.push(dt.toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+// Liste des semaines disponibles (basées sur les dates de plannings), triées récentes d'abord
+function getAvailableWeeks() {
+  const mondays = {};
+  getAllDates().forEach(dateStr => {
+    const monday = getMondayOf(dateStr);
+    const key = monday.toISOString().slice(0, 10);
+    if (!mondays[key]) {
+      const iso = getISOWeek(dateStr);
+      mondays[key] = { mondayIso: key, monday, week: iso.week, year: iso.year };
+    }
+  });
+  return Object.values(mondays).sort((a, b) => b.mondayIso.localeCompare(a.mondayIso));
+}
+
+// sRPE filtré par type d'entraînement (optionnel)
+function computeSRPEFiltered(typeFilter) {
+  let data = computeSRPE();
+  if (typeFilter) {
+    data = data.filter(x => {
+      const t = getTypeForNom(x.date, x.seance);
+      return t === typeFilter;
+    });
+  }
+  return data;
+}
+
+// Indicateurs hebdo pour un joueur à partir de ses 7 valeurs quotidiennes
+function computeWeekIndicators(dailyValues) {
+  const charge = dailyValues.reduce((a, b) => a + b, 0);
+  const nonZero = dailyValues.filter(v => v > 0);
+  // Monotonie = moyenne / écart-type (sur les 7 jours, en incluant les 0 comme dans Excel STDEV)
+  const mean = dailyValues.reduce((a, b) => a + b, 0) / dailyValues.length;
+  const variance = dailyValues.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / (dailyValues.length - 1);
+  const std = Math.sqrt(variance);
+  const monotonie = (std > 0) ? (mean / std) : null;
+  const contrainte = (monotonie !== null) ? monotonie * charge : null;
+  const fitness = (contrainte !== null) ? contrainte - charge : null;
+  return { charge, monotonie, contrainte, fitness };
+}
+
+// Ratio Aigu/Chronique : charge semaine courante / moyenne des charges des 4 semaines
+function computeACWR(joueur, mondayDate, typeFilter) {
+  // Charge de chaque semaine sur les 4 dernières (incluant la courante)
+  const weeklyCharges = [];
+  for (let w = 0; w < 4; w++) {
+    const mon = new Date(mondayDate);
+    mon.setDate(mondayDate.getDate() - 7 * w);
+    const dates = weekDates(mon);
+    const srpe = computeSRPEFiltered(typeFilter).filter(x => x.joueur === joueur && dates.includes(x.date));
+    const charge = srpe.reduce((s, x) => s + x.sRPE, 0);
+    weeklyCharges.push(charge);
+  }
+  const acute = weeklyCharges[0];
+  const chronic = weeklyCharges.reduce((a, b) => a + b, 0) / weeklyCharges.length;
+  return (chronic > 0) ? (acute / chronic) : null;
+}
+
 function renderRPE() {
-  const srpeData = computeSRPE();
-  const playerFilter = document.getElementById('rpe-filter-player').value;
-  const groupFilter = document.getElementById('rpe-filter-group').value;
+  // Remplir le sélecteur de semaines
+  const weekSel = document.getElementById('rpe-week-select');
+  const weeks = getAvailableWeeks();
+  if (weekSel.options.length === 0 || weekSel.dataset.count !== String(weeks.length)) {
+    weekSel.innerHTML = weeks.map(w =>
+      '<option value="' + w.mondayIso + '">Semaine ' + w.week + ' (' + w.year + ') — ' + formatDateRange(w.monday) + '</option>'
+    ).join('');
+    weekSel.dataset.count = String(weeks.length);
+  }
+  if (!weekSel.value && weeks.length > 0) weekSel.value = weeks[0].mondayIso;
 
-  let filtered = srpeData;
-  if (playerFilter) filtered = filtered.filter(x => x.joueur === playerFilter);
-  if (groupFilter) filtered = filtered.filter(x => getJoueurInfo(x.joueur).groupe === groupFilter);
+  // Remplir le filtre type
+  const typeSel = document.getElementById('rpe-filter-type');
+  if (typeSel.options.length <= 1) {
+    const types = uniqueSorted(state.bdd_ent2.map(s => s.seance).filter(t => t && !STATUTS_NON_ENT.includes(t)));
+    typeSel.innerHTML = '<option value="">Tous types</option>' + types.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
+  }
 
-  // Chart : sRPE par jour
-  const dates = uniqueSorted(filtered.map(x => x.date));
-  const byDate = {};
-  dates.forEach(d => byDate[d] = 0);
-  filtered.forEach(x => byDate[x.date] += x.sRPE);
+  // Remplir filtre groupe
+  const groupSel = document.getElementById('rpe-filter-group');
+  if (groupSel.options.length <= 1) {
+    ensureGroupsList();
+    groupSel.innerHTML = '<option value="">Toutes</option>' + state.groupes.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+  }
 
-  destroyChart('chart-rpe');
-  if (dates.length === 0) {
-    document.getElementById('chart-rpe').getContext('2d').clearRect(0,0,1000,1000);
+  // Remplir le sélecteur joueur du bilan individuel
+  const indivSel = document.getElementById('rpe-indiv-player');
+  if (indivSel.options.length <= 1) {
+    indivSel.innerHTML = '<option value="">Sélectionner...</option>' + getAllPlayers().map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+  }
+
+  if (weeks.length === 0) {
+    document.getElementById('rpe-week-title').textContent = 'Aucune donnée disponible';
+    document.querySelector('#rpe-weekly-table thead').innerHTML = '';
+    document.querySelector('#rpe-weekly-table tbody').innerHTML = '<tr><td style="padding:20px;text-align:center;color:var(--text-dim);">Aucune séance enregistrée</td></tr>';
+    return;
+  }
+
+  const mondayIso = weekSel.value || weeks[0].mondayIso;
+  const monday = getMondayOf(mondayIso);
+  const dates = weekDates(monday);
+  const groupFilter = groupSel.value;
+  const typeFilter = typeSel.value;
+  const isoInfo = getISOWeek(mondayIso);
+
+  document.getElementById('rpe-week-title').textContent =
+    'Tableau de charge — Semaine ' + isoInfo.week + ' (' + formatDateRange(monday) + ')';
+
+  // Joueurs concernés (filtrés par groupe)
+  let players = getAllPlayers();
+  if (groupFilter) players = players.filter(p => getJoueurInfo(p).groupe === groupFilter);
+
+  const srpeData = computeSRPEFiltered(typeFilter);
+
+  // Construire les lignes : par joueur, sRPE quotidien + indicateurs
+  const rows = [];
+  players.forEach(joueur => {
+    const daily = dates.map(d => {
+      const dayItems = srpeData.filter(x => x.joueur === joueur && x.date === d);
+      return dayItems.reduce((s, x) => s + x.sRPE, 0);
+    });
+    const totalWeek = daily.reduce((a, b) => a + b, 0);
+    // Ne montrer que les joueurs avec au moins une charge cette semaine
+    if (totalWeek === 0) return;
+    const ind = computeWeekIndicators(daily);
+    const acwr = computeACWR(joueur, monday, typeFilter);
+    rows.push({ joueur, daily, ...ind, acwr });
+  });
+
+  // Trier par charge décroissante
+  rows.sort((a, b) => b.charge - a.charge);
+
+  // ===== Tableau hebdomadaire =====
+  const jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  const thead = document.querySelector('#rpe-weekly-table thead');
+  thead.innerHTML = '<tr>' +
+    '<th style="text-align:left;">Joueur</th>' +
+    dates.map((d, i) => '<th>' + jours[i] + '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + d.slice(8) + '/' + d.slice(5,7) + '</span></th>').join('') +
+    '<th>Charge<br>Hebdo</th><th>Mono-<br>tonie</th><th>Con-<br>trainte</th><th>Fitness</th><th>Ratio<br>A/C</th>' +
+    '</tr>';
+
+  const tbody = document.querySelector('#rpe-weekly-table tbody');
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="13" style="padding:20px;text-align:center;color:var(--text-dim);">Aucune charge enregistrée pour cette semaine avec ces filtres</td></tr>';
   } else {
-    charts['chart-rpe'] = new Chart(document.getElementById('chart-rpe'), {
-      type: 'bar',
-      data: {
-        labels: dates.map(formatDateFR),
-        datasets: [{
-          label: 'sRPE (UA)',
-          data: dates.map(d => Math.round(byDate[d])),
-          backgroundColor: '#00a3ff',
-          borderRadius: 4
-        }]
-      },
-      options: chartOpts({})
+    tbody.innerHTML = rows.map(r => {
+      const dayCell = (v) => {
+        if (v === 0) return '<td style="text-align:center;color:var(--text-dim);">·</td>';
+        const col = srpeLoadColor(v);
+        return '<td style="text-align:center;background:' + col + ';color:white;font-weight:600;">' + Math.round(v) + '</td>';
+      };
+      const monoColor = (r.monotonie !== null && r.monotonie > 2) ? 'color:var(--red);font-weight:700;' : '';
+      const acwrColor = acwrColorStyle(r.acwr);
+      return '<tr>' +
+        '<td style="text-align:left;font-weight:600;">' + escapeHtml(r.joueur) + '</td>' +
+        r.daily.map(dayCell).join('') +
+        '<td style="text-align:center;font-weight:700;color:var(--accent-light);">' + Math.round(r.charge) + '</td>' +
+        '<td style="text-align:center;' + monoColor + '">' + (r.monotonie !== null ? r.monotonie.toFixed(2) : '—') + '</td>' +
+        '<td style="text-align:center;">' + (r.contrainte !== null ? Math.round(r.contrainte) : '—') + '</td>' +
+        '<td style="text-align:center;">' + (r.fitness !== null ? Math.round(r.fitness) : '—') + '</td>' +
+        '<td style="text-align:center;' + acwrColor + '">' + (r.acwr !== null ? r.acwr.toFixed(2) : '—') + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  // ===== Graphique : charge quotidienne par joueur (lignes par joueur) =====
+  destroyChart('chart-rpe-weekly');
+  if (rows.length > 0) {
+    const palette = ['#00a3ff','#4fc3ff','#10b981','#eab308','#f97316','#ef4444','#a855f7','#ec4899','#14b8a6','#84cc16'];
+    const datasets = rows.slice(0, 10).map((r, i) => ({
+      label: r.joueur,
+      data: r.daily,
+      borderColor: palette[i % palette.length],
+      backgroundColor: 'transparent',
+      tension: 0.3,
+      borderWidth: 2,
+      pointRadius: 3
+    }));
+    charts['chart-rpe-weekly'] = new Chart(document.getElementById('chart-rpe-weekly'), {
+      type: 'line',
+      data: { labels: jours, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#e8eef6', boxWidth: 12, font: { size: 10 } } } },
+        scales: {
+          x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+          y: { beginAtZero: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'sRPE (UA)', color: '#8ba3c1' } }
+        }
+      }
     });
   }
 
-  // Chart : cumul par joueur
-  const playerTotals = {};
-  filtered.forEach(x => playerTotals[x.joueur] = (playerTotals[x.joueur] || 0) + x.sRPE);
-  const sorted = Object.entries(playerTotals).sort((a,b) => b[1] - a[1]);
-
+  // ===== Graphique : charge hebdo totale par joueur (barres) =====
   destroyChart('chart-rpe-total');
-  if (sorted.length === 0) {
-    document.getElementById('chart-rpe-total').getContext('2d').clearRect(0,0,1000,1000);
-  } else {
+  if (rows.length > 0) {
     charts['chart-rpe-total'] = new Chart(document.getElementById('chart-rpe-total'), {
       type: 'bar',
       data: {
-        labels: sorted.map(s => s[0]),
+        labels: rows.map(r => r.joueur),
         datasets: [{
-          label: 'sRPE cumulé',
-          data: sorted.map(s => Math.round(s[1])),
-          backgroundColor: '#4fc3ff',
+          label: 'Charge hebdomadaire (UA)',
+          data: rows.map(r => Math.round(r.charge)),
+          backgroundColor: rows.map(r => srpeLoadColor(r.charge / 7)),
           borderRadius: 4
         }]
       },
-      options: chartOpts({ legend: false, indexAxis: 'y' })
+      options: {
+        responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+          y: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } }
+        }
+      }
     });
   }
 
-  // Table
-  const tbody = document.querySelector('#rpe-table tbody');
-  tbody.innerHTML = filtered.length === 0
-    ? '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px;">Aucune charge calculable — il faut une durée (BDD ENT2) et un RPE (BDD RPE JOUEUR).</td></tr>'
-    : filtered.sort((a,b) => a.date.localeCompare(b.date) || a.joueur.localeCompare(b.joueur))
-              .map(x => '<tr><td>' + formatDateFR(x.date) + '</td><td>' + x.joueur + '</td><td><span class="badge ' + getSeanceBadgeClass(x.seance) + '">' + x.seance + '</span></td><td>' + x.duree + '</td><td>' + x.rpe.toFixed(1) + '</td><td><b>' + Math.round(x.sRPE) + '</b></td></tr>')
-              .join('');
+  // Rafraîchir le bilan individuel si un joueur est déjà sélectionné
+  renderBilanIndividuel();
+}
+
+function formatDateRange(monday) {
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const f = (dt) => dt.getDate() + '/' + (dt.getMonth() + 1);
+  return f(monday) + ' au ' + f(sunday);
+}
+
+// Couleur de charge sRPE quotidienne (UA) — échelle de chaleur
+function srpeLoadColor(v) {
+  if (v <= 0) return 'transparent';
+  if (v < 150) return '#3b82f6';
+  if (v < 300) return '#10b981';
+  if (v < 500) return '#84cc16';
+  if (v < 700) return '#eab308';
+  if (v < 1000) return '#f97316';
+  return '#ef4444';
+}
+
+// Style couleur pour le ratio A/C (zone optimale 0.8-1.3)
+function acwrColorStyle(acwr) {
+  if (acwr === null) return '';
+  if (acwr < 0.8) return 'color:#fde047;font-weight:700;';   // sous-charge (jaune)
+  if (acwr <= 1.3) return 'color:var(--green);font-weight:700;'; // optimal (vert)
+  if (acwr <= 1.5) return 'color:#f97316;font-weight:700;';  // attention (orange)
+  return 'color:var(--red);font-weight:700;';                // risque (rouge)
+}
+
+// ============================================================================
+// BILAN INDIVIDUEL
+// ============================================================================
+function renderBilanIndividuel() {
+  const player = document.getElementById('rpe-indiv-player').value;
+  const container = document.getElementById('bilan-individuel-content');
+  if (!player) {
+    container.innerHTML = '';
+    return;
+  }
+
+  const weekSel = document.getElementById('rpe-week-select');
+  const mondayIso = weekSel.value;
+  if (!mondayIso) { container.innerHTML = ''; return; }
+  const monday = getMondayOf(mondayIso);
+  const dates = weekDates(monday);
+  const typeFilter = document.getElementById('rpe-filter-type').value;
+  const isoInfo = getISOWeek(mondayIso);
+  const info = getJoueurInfo(player);
+
+  const srpeData = computeSRPEFiltered(typeFilter);
+
+  // Indicateurs du joueur
+  const dailyPlayer = dates.map(d => srpeData.filter(x => x.joueur === player && x.date === d).reduce((s, x) => s + x.sRPE, 0));
+  const indPlayer = computeWeekIndicators(dailyPlayer);
+  const acwrPlayer = computeACWR(player, monday, typeFilter);
+
+  // Moyenne équipe (même groupe que le joueur)
+  let teamPlayers = getAllPlayers();
+  if (info.groupe && info.groupe !== '?') teamPlayers = teamPlayers.filter(p => getJoueurInfo(p).groupe === info.groupe);
+  const teamIndList = teamPlayers.map(p => {
+    const daily = dates.map(d => srpeData.filter(x => x.joueur === p && x.date === d).reduce((s, x) => s + x.sRPE, 0));
+    return computeWeekIndicators(daily);
+  }).filter(ind => ind.charge > 0);
+  const avg = (arr, key) => {
+    const vals = arr.map(x => x[key]).filter(v => v !== null && !isNaN(v));
+    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  };
+  const teamCharge = avg(teamIndList, 'charge');
+  const teamMono = avg(teamIndList, 'monotonie');
+  const teamContrainte = avg(teamIndList, 'contrainte');
+  const teamFitness = avg(teamIndList, 'fitness');
+
+  // Nombre de séances et temps total du joueur cette semaine
+  const playerSessions = srpeData.filter(x => x.joueur === player && dates.includes(x.date));
+  const nbSeances = new Set(playerSessions.map(x => x.date + '||' + x.seance)).size;
+  const tempsTotalMin = playerSessions.reduce((s, x) => s + (x.duree || 0), 0);
+  const tempsStr = Math.floor(tempsTotalMin / 60) + 'h' + String(Math.round(tempsTotalMin % 60)).padStart(2, '0');
+
+  const indicatorRow = (label, playerVal, teamVal, fmt, alertFn) => {
+    const pv = (playerVal !== null && !isNaN(playerVal)) ? fmt(playerVal) : '—';
+    const tv = (teamVal !== null && !isNaN(teamVal)) ? fmt(teamVal) : '—';
+    const alertStyle = alertFn ? alertFn(playerVal) : '';
+    return '<tr>' +
+      '<td style="text-align:left;font-weight:600;">' + label + '</td>' +
+      '<td style="text-align:center;' + alertStyle + '">' + pv + '</td>' +
+      '<td style="text-align:center;color:var(--text-dim);">' + tv + '</td>' +
+      '</tr>';
+  };
+
+  // Alerte charge : > 2× la moyenne équipe = vigilance (règle de l'Excel)
+  const chargeAlert = (v) => (teamCharge && v > 2 * teamCharge) ? 'color:var(--red);font-weight:700;' : 'font-weight:700;color:var(--accent-light);';
+  const monoAlert = (v) => (v !== null && v > 2) ? 'color:var(--red);font-weight:700;' : '';
+
+  let html = '<div class="card">';
+  html += '<h2>👤 ' + escapeHtml(player) + ' <span style="font-size:13px;color:var(--text-dim);font-weight:normal;">— ' + escapeHtml(info.groupe || 'Sans groupe') + (info.poste ? ' · ' + escapeHtml(info.poste) : '') + '</span></h2>';
+  html += '<div style="color:var(--text-dim);font-size:12px;margin-bottom:16px;">Semaine ' + isoInfo.week + ' (' + formatDateRange(monday) + ')</div>';
+
+  // Tuiles synthèse
+  html += '<div class="stats-grid" style="margin-bottom:16px;">';
+  html += '<div class="stat"><div class="stat-label">Nombre de séances</div><div class="stat-value">' + nbSeances + '</div></div>';
+  html += '<div class="stat"><div class="stat-label">Temps total</div><div class="stat-value" style="font-size:20px;">' + tempsStr + '</div></div>';
+  html += '<div class="stat"><div class="stat-label">Charge hebdo</div><div class="stat-value">' + Math.round(indPlayer.charge) + '</div></div>';
+  html += '<div class="stat"><div class="stat-label">Ratio A/C</div><div class="stat-value" style="' + acwrColorStyle(acwrPlayer) + '">' + (acwrPlayer !== null ? acwrPlayer.toFixed(2) : '—') + '</div></div>';
+  html += '</div>';
+
+  // Tableau comparatif joueur vs équipe
+  html += '<div class="table-wrap"><table style="font-size:13px;">';
+  html += '<thead><tr><th style="text-align:left;">Indicateur</th><th>' + escapeHtml(player) + '</th><th>Moyenne équipe</th></tr></thead><tbody>';
+  html += indicatorRow('Charge Hebdo (UA)', indPlayer.charge, teamCharge, v => Math.round(v), chargeAlert);
+  html += indicatorRow('Monotonie', indPlayer.monotonie, teamMono, v => v.toFixed(2), monoAlert);
+  html += indicatorRow('Contrainte', indPlayer.contrainte, teamContrainte, v => Math.round(v));
+  html += indicatorRow('Fitness', indPlayer.fitness, teamFitness, v => Math.round(v));
+  html += '</tbody></table></div>';
+
+  // Alerte vigilance
+  if (teamCharge && indPlayer.charge > 2 * teamCharge) {
+    html += '<div style="margin-top:12px;padding:10px 14px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:6px;font-size:13px;color:#fca5a5;">⚠️ Vigilance : la charge hebdomadaire de ce joueur est plus de 2× la moyenne de son équipe.</div>';
+  }
+  if (indPlayer.monotonie !== null && indPlayer.monotonie > 2) {
+    html += '<div style="margin-top:8px;padding:10px 14px;background:rgba(251,146,60,0.12);border-left:3px solid #fb923c;border-radius:6px;font-size:13px;color:#fed7aa;">⚠️ Monotonie élevée (&gt; 2) : manque de variabilité dans la charge, risque de surmenage.</div>';
+  }
+  html += '</div>';
+
+  // Graphique : charge quotidienne du joueur sur la semaine
+  html += '<div class="card"><h2>Charge quotidienne — ' + escapeHtml(player) + '</h2><div class="chart-container"><canvas id="chart-indiv-daily"></canvas></div></div>';
+
+  // Graphique : évolution de la charge hebdo du joueur sur les dernières semaines
+  html += '<div class="card"><h2>Évolution de la charge hebdomadaire</h2><div class="chart-container"><canvas id="chart-indiv-weekly-evol"></canvas></div></div>';
+
+  container.innerHTML = html;
+
+  // Rendu graphique charge quotidienne
+  const jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  destroyChart('chart-indiv-daily');
+  charts['chart-indiv-daily'] = new Chart(document.getElementById('chart-indiv-daily'), {
+    type: 'bar',
+    data: {
+      labels: jours,
+      datasets: [{
+        label: 'sRPE (UA)',
+        data: dailyPlayer.map(v => Math.round(v)),
+        backgroundColor: dailyPlayer.map(v => srpeLoadColor(v)),
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+        y: { beginAtZero: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
+      }
+    }
+  });
+
+  // Évolution charge hebdo sur les 8 dernières semaines
+  const evolWeeks = [];
+  for (let w = 7; w >= 0; w--) {
+    const mon = new Date(monday);
+    mon.setDate(monday.getDate() - 7 * w);
+    const wd = weekDates(mon);
+    const charge = srpeData.filter(x => x.joueur === player && wd.includes(x.date)).reduce((s, x) => s + x.sRPE, 0);
+    evolWeeks.push({ label: 'S' + getISOWeek(wd[0]).week, charge: Math.round(charge) });
+  }
+  destroyChart('chart-indiv-weekly-evol');
+  charts['chart-indiv-weekly-evol'] = new Chart(document.getElementById('chart-indiv-weekly-evol'), {
+    type: 'line',
+    data: {
+      labels: evolWeeks.map(w => w.label),
+      datasets: [{
+        label: 'Charge hebdo (UA)',
+        data: evolWeeks.map(w => w.charge),
+        borderColor: 'var(--accent)',
+        backgroundColor: 'rgba(0,163,255,0.15)',
+        fill: true, tension: 0.3, borderWidth: 2, pointRadius: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+        y: { beginAtZero: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
+      }
+    }
+  });
 }
 
 // ============================================================================
@@ -5257,11 +5664,13 @@ function initSelectors() {
   const calGroupSel = document.getElementById('cal-filter-group');
   calGroupSel.innerHTML = '<option value="">Tous</option>' + getAllGroups().map(g => '<option value="' + g + '">' + g + '</option>').join('');
 
-  // Filtres RPE
-  const rpeP = document.getElementById('rpe-filter-player');
-  rpeP.innerHTML = '<option value="">Tous (équipe)</option>' + getAllPlayers().map(p => '<option value="' + p + '">' + p + '</option>').join('');
+  // Filtres RPE (le bilan RPE gère ses propres sélecteurs via renderRPE)
   const rpeG = document.getElementById('rpe-filter-group');
-  rpeG.innerHTML = '<option value="">Tous</option>' + getAllGroups().map(g => '<option value="' + g + '">' + g + '</option>').join('');
+  if (rpeG) {
+    const curG = rpeG.value;
+    rpeG.innerHTML = '<option value="">Toutes</option>' + getAllGroups().map(g => '<option value="' + g + '">' + g + '</option>').join('');
+    rpeG.value = curG;
+  }
 
   // Filtres GPS
   const gpsP = document.getElementById('gps-filter-player');
