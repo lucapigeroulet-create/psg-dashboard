@@ -545,6 +545,20 @@
     <div class="card">
       <h2>Activité quotidienne par état</h2>
       <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Nombre de joueurs par jour, cumulé selon leur état (entraînement par équipe, repos, blessure...).</p>
+      <div class="filters" style="margin-bottom:12px;">
+        <div class="filter-group">
+          <label>Du</label>
+          <input type="date" id="overview-activity-from" onchange="renderOverviewActivity()" />
+        </div>
+        <div class="filter-group">
+          <label>Au</label>
+          <input type="date" id="overview-activity-to" onchange="renderOverviewActivity()" />
+        </div>
+        <div class="filter-group" style="justify-content:flex-end;">
+          <label>&nbsp;</label>
+          <button class="btn btn-secondary" onclick="resetOverviewActivityDates()" style="padding:8px 12px;">↺ Toutes les dates</button>
+        </div>
+      </div>
       <div class="chart-container tall"><canvas id="chart-activity-stacked"></canvas></div>
     </div>
 
@@ -561,29 +575,31 @@
       </div>
     </div>
 
-    <!-- 4) Relances RPE : sélecteur de date + liste joueurs manquants + liste jours incomplets -->
-    <div class="grid-2">
-      <div class="card">
-        <h2>📋 RPE non remplis</h2>
-        <div class="filters" style="margin-bottom:10px;">
-          <div class="filter-group">
-            <label>Date</label>
-            <input type="date" id="overview-rpe-date" onchange="renderOverviewMissing()" />
-          </div>
+    <!-- 4) Relances RPE : encart unique combinant jours incomplets + détail par date -->
+    <div class="card">
+      <h2>📋 RPE non remplis</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Sélectionne une date ou clique sur un jour incomplet pour voir les joueurs concernés.</p>
+      <div class="grid-2" style="align-items:start;">
+        <div>
+          <div style="font-size:13px; font-weight:600; color:var(--accent-light); margin-bottom:8px;">📅 Jours avec RPE manquants</div>
+          <div id="overview-incomplete-days"></div>
         </div>
-        <div id="overview-missing-rpe"></div>
-      </div>
-      <div class="card">
-        <h2>📅 Jours avec RPE manquants</h2>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Jours où au moins un joueur n'a pas saisi son RPE. Clique pour voir le détail.</p>
-        <div id="overview-incomplete-days"></div>
+        <div>
+          <div class="filters" style="margin-bottom:10px;">
+            <div class="filter-group">
+              <label>Date sélectionnée</label>
+              <input type="date" id="overview-rpe-date" onchange="renderOverviewMissing()" />
+            </div>
+          </div>
+          <div id="overview-missing-rpe"></div>
+        </div>
       </div>
     </div>
 
     <!-- 5) Check-in Hooper non remplis -->
     <div class="card">
       <h2>💚 Check-in Hooper non remplis</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs n'ayant pas complété leur test Hooper (jour de référence).</p>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Clique sur un joueur pour ouvrir son check-in Hooper.</p>
       <div id="overview-missing-hooper"></div>
     </div>
   </div>
@@ -2397,89 +2413,8 @@ function renderOverview() {
 
   const dates = getAllDates();
 
-  // ===== Activité quotidienne cumulée par état (aire empilée) =====
-  // Catégories dynamiques : un par type d'entraînement réel + REST + INJURY + SICK + ABSENT
-  // On regroupe les types d'entraînement par leur "type" (PSG U18, PSG U15, etc.)
-  const trainingTypes = uniqueSorted(
-    state.bdd_ent2.map(s => s.seance).filter(t => t && !STATUTS_NON_ENT.includes(t))
-  );
-
-  // Pour chaque jour, compter les joueurs dans chaque catégorie
-  // Catégorie d'un joueur = le type de sa séance d'entraînement principale, sinon son statut
-  const statusCats = ['REST', 'INJURY', 'SICK', 'ABSENT', 'SUSPENDED'];
-  const allCats = [...trainingTypes, ...statusCats];
-
-  const dayData = {};
-  dates.forEach(d => { dayData[d] = {}; allCats.forEach(c => dayData[d][c] = 0); });
-
-  state.bdd_ent.forEach(e => {
-    const seances = e.seances;
-    const trainingSeances = seances.filter(x => !STATUTS_NON_ENT.includes(x));
-    if (trainingSeances.length > 0) {
-      // Compter une fois par type d'entraînement distinct ce jour-là
-      const typesThisDay = new Set();
-      trainingSeances.forEach(s => {
-        const t = getTypeForNom(e.date, s) || s;
-        typesThisDay.add(t);
-      });
-      // Si le type n'est pas dans la liste (séance sans type), on l'ajoute au plus proche
-      typesThisDay.forEach(t => {
-        if (dayData[e.date][t] === undefined) dayData[e.date][t] = 0;
-        dayData[e.date][t]++;
-      });
-    } else {
-      // Statut uniquement
-      for (const st of statusCats) {
-        if (seances.includes(st)) { dayData[e.date][st]++; break; }
-      }
-    }
-  });
-
-  // Recalculer allCats au cas où des types ont été ajoutés dynamiquement
-  const finalCats = Array.from(new Set([...allCats, ...dates.flatMap(d => Object.keys(dayData[d]))]));
-
-  // Couleurs par catégorie
-  const catColor = (cat) => {
-    if (cat === 'REST') return '#6b7280';
-    if (cat === 'INJURY') return '#f87171';
-    if (cat === 'SICK') return '#fb923c';
-    if (cat === 'ABSENT') return '#fbbf24';
-    if (cat === 'SUSPENDED') return '#a16207';
-    if (TYPES_GYM.includes(cat) || cat.includes('GYM')) return '#a78bfa';
-    if (TYPES_GAME.includes(cat) || cat.includes('GAME') || cat.startsWith('TEGG')) return '#60a5fa';
-    if (cat.includes('U18')) return '#00a3ff';
-    if (cat.includes('U15')) return '#22d3ee';
-    if (cat.includes('GOALKEEPER') || cat.includes('GK')) return '#4ade80';
-    // Couleur dérivée du hash du nom pour les autres
-    let h = 0; for (let i = 0; i < cat.length; i++) h = cat.charCodeAt(i) + ((h << 5) - h);
-    return 'hsl(' + (Math.abs(h) % 360) + ', 60%, 55%)';
-  };
-
-  destroyChart('chart-activity-stacked');
-  charts['chart-activity-stacked'] = new Chart(document.getElementById('chart-activity-stacked'), {
-    type: 'line',
-    data: {
-      labels: dates.map(formatDateFR),
-      datasets: finalCats.map(cat => ({
-        label: cat,
-        data: dates.map(d => dayData[d][cat] || 0),
-        borderColor: catColor(cat),
-        backgroundColor: catColor(cat) + '55',
-        fill: true,
-        tension: 0.3,
-        borderWidth: 1.5,
-        pointRadius: 2
-      }))
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: '#e8eef6', boxWidth: 12, font: { size: 10 } } } },
-      scales: {
-        x: { stacked: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
-        y: { stacked: true, beginAtZero: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'Joueurs', color: '#8ba3c1' } }
-      }
-    }
-  });
+  // ===== Activité quotidienne (extraite en fonction pour le filtre dates) =====
+  renderOverviewActivity();
 
   // ===== État de l'effectif par jour (compact) =====
   const statusByDay = {};
@@ -2521,14 +2456,12 @@ function renderOverview() {
   if (playerSel && playerSel.options.length === 0) {
     playerSel.innerHTML = getAllPlayers().map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
   }
-  // Bornes par défaut de l'intervalle de dates (toute la plage disponible)
+  // Bornes par défaut des intervalles de dates (charges + activité)
   const allDates = getAllDates();
-  const fromInput = document.getElementById('overview-charge-from');
-  const toInput = document.getElementById('overview-charge-to');
-  if (allDates.length > 0) {
-    if (fromInput && !fromInput.value) { fromInput.min = allDates[0]; fromInput.max = allDates[allDates.length-1]; }
-    if (toInput && !toInput.value) { toInput.min = allDates[0]; toInput.max = allDates[allDates.length-1]; }
-  }
+  ['overview-charge-from', 'overview-charge-to', 'overview-activity-from', 'overview-activity-to'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && allDates.length > 0 && !el.value) { el.min = allDates[0]; el.max = allDates[allDates.length-1]; }
+  });
   renderOverviewCharges();
 
   // Initialiser le sélecteur de date RPE (par défaut : jour de référence)
@@ -2559,6 +2492,88 @@ function resetOverviewChargeDates() {
   document.getElementById('overview-charge-from').value = '';
   document.getElementById('overview-charge-to').value = '';
   renderOverviewCharges();
+}
+
+// Graphique d'activité quotidienne par état (avec filtre intervalle de dates)
+function renderOverviewActivity() {
+  let dates = getAllDates();
+  const fromVal = document.getElementById('overview-activity-from') ? document.getElementById('overview-activity-from').value : '';
+  const toVal = document.getElementById('overview-activity-to') ? document.getElementById('overview-activity-to').value : '';
+  if (fromVal) dates = dates.filter(d => d >= fromVal);
+  if (toVal) dates = dates.filter(d => d <= toVal);
+
+  const trainingTypes = uniqueSorted(
+    state.bdd_ent2.map(s => s.seance).filter(t => t && !STATUTS_NON_ENT.includes(t))
+  );
+  const statusCats = ['REST', 'INJURY', 'SICK', 'ABSENT', 'SUSPENDED'];
+  const allCats = [...trainingTypes, ...statusCats];
+
+  const dayData = {};
+  dates.forEach(d => { dayData[d] = {}; allCats.forEach(c => dayData[d][c] = 0); });
+
+  state.bdd_ent.forEach(e => {
+    if (!dayData[e.date]) return; // hors intervalle
+    const seances = e.seances;
+    const trainingSeances = seances.filter(x => !STATUTS_NON_ENT.includes(x));
+    if (trainingSeances.length > 0) {
+      const typesThisDay = new Set();
+      trainingSeances.forEach(s => { typesThisDay.add(getTypeForNom(e.date, s) || s); });
+      typesThisDay.forEach(t => {
+        if (dayData[e.date][t] === undefined) dayData[e.date][t] = 0;
+        dayData[e.date][t]++;
+      });
+    } else {
+      for (const st of statusCats) {
+        if (seances.includes(st)) { dayData[e.date][st]++; break; }
+      }
+    }
+  });
+
+  const finalCats = Array.from(new Set([...allCats, ...dates.flatMap(d => Object.keys(dayData[d] || {}))]));
+
+  const catColor = (cat) => {
+    if (cat === 'REST') return '#6b7280';
+    if (cat === 'INJURY') return '#f87171';
+    if (cat === 'SICK') return '#fb923c';
+    if (cat === 'ABSENT') return '#fbbf24';
+    if (cat === 'SUSPENDED') return '#a16207';
+    if (TYPES_GYM.includes(cat) || cat.includes('GYM')) return '#a78bfa';
+    if (TYPES_GAME.includes(cat) || cat.includes('GAME') || cat.startsWith('TEGG')) return '#60a5fa';
+    if (cat.includes('U18')) return '#00a3ff';
+    if (cat.includes('U15')) return '#22d3ee';
+    if (cat.includes('GOALKEEPER') || cat.includes('GK')) return '#4ade80';
+    let h = 0; for (let i = 0; i < cat.length; i++) h = cat.charCodeAt(i) + ((h << 5) - h);
+    return 'hsl(' + (Math.abs(h) % 360) + ', 60%, 55%)';
+  };
+
+  destroyChart('chart-activity-stacked');
+  charts['chart-activity-stacked'] = new Chart(document.getElementById('chart-activity-stacked'), {
+    type: 'line',
+    data: {
+      labels: dates.map(formatDateFR),
+      datasets: finalCats.map(cat => ({
+        label: cat,
+        data: dates.map(d => (dayData[d] && dayData[d][cat]) || 0),
+        borderColor: catColor(cat),
+        backgroundColor: catColor(cat) + '55',
+        fill: true, tension: 0.3, borderWidth: 1.5, pointRadius: 2
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#e8eef6', boxWidth: 12, font: { size: 10 } } } },
+      scales: {
+        x: { stacked: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+        y: { stacked: true, beginAtZero: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'Joueurs', color: '#8ba3c1' } }
+      }
+    }
+  });
+}
+
+function resetOverviewActivityDates() {
+  document.getElementById('overview-activity-from').value = '';
+  document.getElementById('overview-activity-to').value = '';
+  renderOverviewActivity();
 }
 
 // Graphique des charges quotidiennes selon le filtre + intervalle de dates
@@ -2744,7 +2759,7 @@ function renderOverviewMissing() {
     hooperContainer.innerHTML =
       '<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">' + missingHooper.length + ' joueur(s) — ' + hooperDateLabel + '</div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:6px;">' +
-      missingHooper.map(j => '<span style="background:var(--bg-elevated);padding:4px 10px;border-radius:6px;font-size:12px;border:1px solid var(--border);">' + escapeHtml(j) + '</span>').join('') +
+      missingHooper.map(j => '<button onclick="goToHooperForPlayer(\'' + hooperRefDate + '\', \'' + j.replace(/'/g, "\\'") + '\')" style="background:var(--bg-elevated);color:var(--text);padding:5px 12px;border-radius:6px;font-size:12px;border:1px solid var(--border);cursor:pointer;transition:all 0.15s;" onmouseover="this.style.background=\'var(--green)\';this.style.color=\'white\';" onmouseout="this.style.background=\'var(--bg-elevated)\';this.style.color=\'var(--text)\';">' + escapeHtml(j) + ' →</button>').join('') +
       '</div>';
   }
 }
@@ -2792,6 +2807,22 @@ function goToRPEEntry(date, joueur) {
 function goToHooperEntry(date, joueur) {
   const btn = document.querySelector('.nav-btn[data-view="staff-hooper"]');
   if (btn) btn.click();
+}
+
+// Navigation vers le suivi Hooper staff, pré-filtré sur un joueur précis
+function goToHooperForPlayer(date, joueur) {
+  const btn = document.querySelector('.nav-btn[data-view="staff-hooper"]');
+  if (btn) {
+    btn.click();
+    setTimeout(() => {
+      const sel = document.getElementById('staff-hooper-player');
+      if (sel) {
+        sel.value = joueur;
+        if (typeof renderStaffHooperPlayerChart === 'function') renderStaffHooperPlayerChart();
+        sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 150);
+  }
 }
 
 function chartOpts(opts) {
