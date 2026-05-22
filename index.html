@@ -713,25 +713,6 @@
         <button class="btn" onclick="toggleGPSImport()" id="gps-import-toggle" style="white-space:nowrap;">📥 Importer un CSV</button>
       </div>
 
-      <!-- Zone d'import repliable -->
-      <div id="gps-import-zone" style="display:none; margin-top:16px; padding:16px; background:var(--bg-elevated); border-radius:10px; border:1px solid var(--border);">
-        <h3 style="font-size:14px; color:var(--accent-light); margin-bottom:8px;">Import de données GPS Catapult</h3>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
-          Glisse ton export CSV Catapult. Les colonnes sont détectées automatiquement (Date, Player Name, Distance, HSR, Sprint, zones de vitesse...).
-        </p>
-        <input type="file" id="gps-csv-file" accept=".csv,text/csv" style="color:var(--text); font-size:13px; margin-bottom:10px;" />
-        <div style="margin-bottom:10px;">
-          <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:4px;">Rattacher à une séance (optionnel)</label>
-          <input type="text" id="gps-seance-link" placeholder="Laisser vide = utiliser le titre Catapult"
-                 style="width:100%; max-width:400px; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:13px;" />
-        </div>
-        <div id="gps-import-summary"></div>
-        <div style="margin-top:12px;">
-          <button class="btn" id="gps-import-btn" onclick="doGPSImport()" disabled>▶ Lancer l'import</button>
-          <button class="btn btn-secondary" onclick="toggleGPSImport()">Annuler</button>
-        </div>
-        <div id="gps-import-log" style="margin-top:12px; font-size:12px;"></div>
-      </div>
       <div class="filters" style="margin-top:12px;">
         <div class="filter-group">
           <label>Type de rapport</label>
