@@ -724,7 +724,11 @@
         </div>
         <div class="filter-group" id="gps-date-wrap">
           <label>Séance / Date</label>
-          <select id="gps-session-select" onchange="renderGPS()"></select>
+          <select id="gps-session-select" onchange="onGPSSessionChange()"></select>
+        </div>
+        <div class="filter-group" id="gps-split-wrap">
+          <label>Affichage</label>
+          <select id="gps-split-select" onchange="renderGPS()"></select>
         </div>
         <div class="filter-group" id="gps-week-wrap" style="display:none;">
           <label>Semaine</label>
@@ -3511,6 +3515,7 @@ function handleGPSCSV(e) {
       const cols = {
         date: gpsFindCol(headers, ['date']),
         session: gpsFindCol(headers, ['session title', 'session']),
+        split: gpsFindCol(headers, ['split name', 'split', 'period']),
         player: gpsFindCol(headers, ['player name', 'player', 'nom', 'name']),
         duration: gpsFindCol(headers, ['duration', 'durée', 'duree']),
         distance: gpsFindCol(headers, ['distance (km)', 'total distance', 'distance']),
@@ -3543,6 +3548,7 @@ function handleGPSCSV(e) {
           date: gpsNormalizeDate(r[cols.date]),
           joueur: cols.player ? gpsCapitalize(r[cols.player]) : null,
           session_title: cols.session ? r[cols.session] : null,
+          split_name: cols.split ? (r[cols.split] || 'all').trim() : 'all',
           duree_min: durMin,
           distance_km: gpsNum(r[cols.distance]),
           sprint_dist_m: gpsNum(r[cols.sprint]),
@@ -3666,9 +3672,46 @@ const GPS_ZONES = [
 function onGPSReportChange() {
   const type = document.getElementById('gps-report-type').value;
   document.getElementById('gps-date-wrap').style.display = (type === 'session') ? '' : 'none';
+  document.getElementById('gps-split-wrap').style.display = (type === 'session') ? '' : 'none';
   document.getElementById('gps-week-wrap').style.display = (type !== 'session') ? '' : 'none';
   document.getElementById('gps-group-wrap').style.display = (type === 'week-team') ? '' : 'none';
   document.getElementById('gps-player-wrap').style.display = (type === 'week-indiv') ? '' : 'none';
+  if (type === 'session') populateGPSSplitSelect();
+  renderGPS();
+}
+
+// Remplit le sélecteur de split selon la séance/date sélectionnée
+function populateGPSSplitSelect() {
+  const sessionVal = document.getElementById('gps-session-select').value;
+  const splitSel = document.getElementById('gps-split-select');
+  if (!sessionVal || !splitSel) return;
+  const sepIdx = sessionVal.indexOf('||');
+  const date = sepIdx >= 0 ? sessionVal.slice(0, sepIdx) : sessionVal;
+  const seanceTitle = sepIdx >= 0 ? sessionVal.slice(sepIdx + 2) : '';
+  const rows = state.bdd_gps.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
+  // Splits disponibles pour cette séance
+  const splits = uniqueSorted(rows.map(x => (x.split_name || 'all')));
+  // Trier : "all" en premier, puis Split 1, 2, 3...
+  splits.sort((a, b) => {
+    if (a.toLowerCase() === 'all') return -1;
+    if (b.toLowerCase() === 'all') return 1;
+    const na = parseInt((a.match(/\d+/) || [999])[0]);
+    const nb = parseInt((b.match(/\d+/) || [999])[0]);
+    return na - nb;
+  });
+  const cur = splitSel.value;
+  splitSel.innerHTML = splits.map(s => {
+    const label = (s.toLowerCase() === 'all') ? '🟦 Séance entière' : '▸ ' + s;
+    return '<option value="' + escapeHtml(s) + '">' + label + '</option>';
+  }).join('');
+  // Conserver la sélection si elle existe encore, sinon défaut "all"
+  if (splits.indexOf(cur) >= 0) splitSel.value = cur;
+  else { const allOpt = splits.find(s => s.toLowerCase() === 'all'); splitSel.value = allOpt || splits[0]; }
+}
+
+// Quand on change de séance, on recharge la liste des splits puis on rend
+function onGPSSessionChange() {
+  populateGPSSplitSelect();
   renderGPS();
 }
 
@@ -3680,14 +3723,24 @@ function renderGPS() {
 
   // Remplir les sélecteurs (une fois)
   const sessionSel = document.getElementById('gps-session-select');
-  const gpsDates = uniqueSorted(state.bdd_gps.map(x => x.date)).reverse();
-  if (sessionSel && sessionSel.dataset.count !== String(gpsDates.length)) {
-    sessionSel.innerHTML = gpsDates.map(d => {
-      const titles = uniqueSorted(state.bdd_gps.filter(x => x.date === d).map(x => x.seance || x.session_title || '')).filter(Boolean);
-      const lbl = formatDateFR(d) + (titles.length > 0 ? ' — ' + titles[0] : '');
-      return '<option value="' + d + '">' + escapeHtml(lbl) + '</option>';
+  // Une entrée par séance distincte = date + titre (gère plusieurs séances le même jour)
+  const sessionKeys = {};
+  state.bdd_gps.forEach(x => {
+    const title = x.seance || x.session_title || '';
+    const key = x.date + '||' + title;
+    if (!sessionKeys[key]) sessionKeys[key] = { date: x.date, title: title };
+  });
+  const sessionList = Object.values(sessionKeys).sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title));
+  if (sessionSel && sessionSel.dataset.count !== String(sessionList.length)) {
+    sessionSel.innerHTML = sessionList.map(s => {
+      const lbl = formatDateFR(s.date) + (s.title ? ' — ' + s.title : '');
+      return '<option value="' + s.date + '||' + escapeHtml(s.title) + '">' + escapeHtml(lbl) + '</option>';
     }).join('');
-    sessionSel.dataset.count = String(gpsDates.length);
+    sessionSel.dataset.count = String(sessionList.length);
+  }
+  // Peupler le sélecteur de splits pour la séance courante
+  if (document.getElementById('gps-report-type').value === 'session') {
+    populateGPSSplitSelect();
   }
 
   const weekSel = document.getElementById('gps-week-select');
@@ -3741,10 +3794,23 @@ function pctOfMax(val, max) {
 
 // ===== RAPPORT DE SÉANCE (équipe, 1 date) =====
 function renderGPSSession() {
-  const date = document.getElementById('gps-session-select').value;
-  if (!date) { document.getElementById('gps-content').innerHTML = ''; return; }
-  const rows = state.bdd_gps.filter(x => x.date === date);
+  const sessionVal = document.getElementById('gps-session-select').value;
+  if (!sessionVal) { document.getElementById('gps-content').innerHTML = ''; return; }
+  // Décoder "date||titre"
+  const sepIdx = sessionVal.indexOf('||');
+  const date = sepIdx >= 0 ? sessionVal.slice(0, sepIdx) : sessionVal;
+  const seanceTitle = sepIdx >= 0 ? sessionVal.slice(sepIdx + 2) : '';
+
+  const splitSel = document.getElementById('gps-split-select');
+  const selectedSplit = splitSel ? splitSel.value : 'all';
+
+  let rows = state.bdd_gps.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
+  // Filtrer par split sélectionné (séance entière "all" ou un procédé précis)
+  if (selectedSplit) {
+    rows = rows.filter(x => (x.split_name || 'all') === selectedSplit);
+  }
   const titles = uniqueSorted(rows.map(x => x.seance || x.session_title || '')).filter(Boolean);
+  const splitLabel = (selectedSplit && selectedSplit.toLowerCase() !== 'all') ? ' · ' + selectedSplit : ' · Séance entière';
 
   // Totaux / moyennes équipe
   const teamDist = rows.reduce((s, r) => s + gpsVal(r, 'distance_km'), 0);
@@ -3753,7 +3819,7 @@ function renderGPSSession() {
   const avgVmax = rows.length ? rows.reduce((s, r) => s + gpsVal(r, 'top_speed'), 0) / rows.length : 0;
 
   let html = '<div class="card">';
-  html += '<h2>Rapport de séance — ' + formatDateFR(date) + (titles.length ? ' · ' + escapeHtml(titles[0]) : '') + '</h2>';
+  html += '<h2>Rapport de séance — ' + formatDateFR(date) + (titles.length ? ' · ' + escapeHtml(titles[0]) : '') + escapeHtml(splitLabel) + '</h2>';
 
   // Tuiles équipe
   html += '<div class="stats-grid" style="margin-bottom:16px;">';
