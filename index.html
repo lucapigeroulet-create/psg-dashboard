@@ -710,7 +710,10 @@
             Analyse des données GPS importées. Choisis le type de rapport ci-dessous.
           </p>
         </div>
-        <button class="btn" onclick="toggleGPSImport()" id="gps-import-toggle" style="white-space:nowrap;">📥 Importer un CSV</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn" onclick="toggleGPSImport()" id="gps-import-toggle" style="white-space:nowrap;">📥 Importer un CSV</button>
+          <button class="btn btn-secondary" onclick="toggleGPSHistory()" id="gps-history-toggle" style="white-space:nowrap;">🕓 Historique</button>
+        </div>
       </div>
 
       <div class="filters" style="margin-top:12px;">
@@ -767,6 +770,15 @@
         <button class="btn" id="gps-import-btn" onclick="doGPSImport()" disabled>▶ Importer dans le dashboard</button>
       </div>
       <div id="gps-import-log" style="margin-top:12px;"></div>
+    </div>
+
+    <!-- Panneau historique des imports GPS -->
+    <div class="card" id="gps-history-panel" style="display:none; border:1px solid var(--border);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h2 style="margin:0;">🕓 Historique des séances GPS importées</h2>
+        <button class="btn btn-secondary" onclick="toggleGPSHistory()" style="padding:4px 12px;">✕ Fermer</button>
+      </div>
+      <div id="gps-history-content"></div>
     </div>
 
     <div id="gps-content"></div>
@@ -3544,6 +3556,16 @@ function handleGPSCSV(e) {
       gpsImportRows = parsed.rows.map(r => {
         const durRaw = gpsNum(r[cols.duration]);
         const durMin = durRaw !== null ? (durRaw > 600 ? Math.round(durRaw / 60) : durRaw) : null;
+        // Zones de vitesse (en km dans l'export Catapult)
+        const z3v = gpsNum(r[cols.z3]);
+        const z4v = gpsNum(r[cols.z4]);
+        const z5v = gpsNum(r[cols.z5]);
+        // HSR : utilise la colonne si présente, sinon = zones (3+4+5) converties km -> m
+        let hsrVal = gpsNum(r[cols.hsr]);
+        if (hsrVal === null) {
+          const sumZones = (z3v || 0) + (z4v || 0) + (z5v || 0);
+          hsrVal = sumZones > 0 ? Math.round(sumZones * 1000) : 0;
+        }
         return {
           date: gpsNormalizeDate(r[cols.date]),
           joueur: cols.player ? gpsCapitalize(r[cols.player]) : null,
@@ -3552,8 +3574,8 @@ function handleGPSCSV(e) {
           duree_min: durMin,
           distance_km: gpsNum(r[cols.distance]),
           sprint_dist_m: gpsNum(r[cols.sprint]),
-          hsr: gpsNum(r[cols.hsr]),
-          hsr_m: gpsNum(r[cols.hsr]),
+          hsr: hsrVal,
+          hsr_m: hsrVal,
           player_load: gpsNum(r[cols.playerload]),
           top_speed: gpsNum(r[cols.topspeed]),
           energy_kcal: gpsNum(r[cols.energy]),
@@ -3566,9 +3588,9 @@ function handleGPSCSV(e) {
           hr_max: cols.hrmax ? Math.round(gpsNum(r[cols.hrmax]) || 0) : null,
           dist_zone1: gpsNum(r[cols.z1]),
           dist_zone2: gpsNum(r[cols.z2]),
-          dist_zone3: gpsNum(r[cols.z3]),
-          dist_zone4: gpsNum(r[cols.z4]),
-          dist_zone5: gpsNum(r[cols.z5])
+          dist_zone3: z3v,
+          dist_zone4: z4v,
+          dist_zone5: z5v
         };
       }).filter(r => r.date && r.joueur);
 
@@ -3611,29 +3633,90 @@ async function doGPSImport() {
   btn.textContent = '⏳ Import en cours...';
 
   const seanceLink = document.getElementById('gps-import-seance').value.trim();
-  const rows = gpsImportRows.map(r => {
+  let rows = gpsImportRows.map(r => {
     const copy = Object.assign({}, r);
     copy.seance = seanceLink || r.session_title || null;
     return copy;
   });
 
+  // ===== Détection de doublons : même date + joueur + séance + split déjà en base =====
+  const existingKeys = new Set(state.bdd_gps.map(g =>
+    g.date + '|' + g.joueur + '|' + (g.seance || g.session_title || '') + '|' + (g.split_name || 'all')
+  ));
+  const rowKey = (r) => r.date + '|' + r.joueur + '|' + (r.seance || r.session_title || '') + '|' + (r.split_name || 'all');
+  const dupes = rows.filter(r => existingKeys.has(rowKey(r)));
+  if (dupes.length > 0) {
+    const proceed = confirm('⚠️ ' + dupes.length + ' ligne(s) sur ' + rows.length + ' semblent déjà importées (même date/joueur/séance/split).\n\nOK = importer uniquement les nouvelles lignes\nAnnuler = tout importer quand même (risque de doublons)');
+    if (proceed) {
+      rows = rows.filter(r => !existingKeys.has(rowKey(r)));
+      if (rows.length === 0) {
+        gpsImportLog('Toutes les lignes sont déjà en base. Rien à importer.', 'warn');
+        btn.disabled = false; btn.textContent = '▶ Importer dans le dashboard';
+        return;
+      }
+      gpsImportLog(dupes.length + ' doublon(s) ignoré(s), ' + rows.length + ' nouvelle(s) ligne(s) à importer', 'info');
+    }
+  }
+
+  // Fonction d'insertion avec retrait automatique des colonnes manquantes
+  async function insertWithFallback(chunk, dropCols) {
+    let payload = chunk;
+    if (dropCols.length > 0) {
+      payload = chunk.map(row => {
+        const c = Object.assign({}, row);
+        dropCols.forEach(col => delete c[col]);
+        return c;
+      });
+    }
+    return await sb.from('gps_data').insert(payload);
+  }
+
+  // Colonnes optionnelles qui peuvent manquer dans le schéma Supabase
+  let dropCols = [];
   let inserted = 0, errors = 0, lastErr = '';
+
   for (let i = 0; i < rows.length; i += 100) {
     const chunk = rows.slice(i, i + 100);
     gpsImportLog('⏳ Insertion ' + (i+1) + '–' + Math.min(i+100, rows.length) + ' / ' + rows.length + '...', 'info');
-    try {
-      const r = await sb.from('gps_data').insert(chunk);
-      if (r.error) { errors += chunk.length; lastErr = r.error.message; }
-      else inserted += chunk.length;
-    } catch(e) { errors += chunk.length; lastErr = e.message; }
+    let attempt = 0;
+    let done = false;
+    while (!done && attempt < 6) {
+      attempt++;
+      try {
+        const r = await insertWithFallback(chunk, dropCols);
+        if (r.error) {
+          // Détecter une colonne manquante : "Could not find the 'X' column"
+          const m = r.error.message.match(/find the '([^']+)' column/);
+          if (m && dropCols.indexOf(m[1]) === -1) {
+            dropCols.push(m[1]);
+            gpsImportLog('⚠️ Colonne "' + m[1] + '" absente du schéma Supabase — import sans cette colonne (exécute le SQL pour l\'activer plus tard)', 'warn');
+            continue; // réessayer sans cette colonne
+          }
+          errors += chunk.length; lastErr = r.error.message; done = true;
+        } else { inserted += chunk.length; done = true; }
+      } catch(e) { errors += chunk.length; lastErr = e.message; done = true; }
+    }
   }
 
   btn.disabled = false;
   btn.textContent = '▶ Importer dans le dashboard';
 
   if (inserted > 0) {
-    gpsImportLog('✅ ' + inserted + ' ligne(s) importée(s)' + (errors > 0 ? ' · ' + errors + ' erreur(s) : ' + lastErr : ''), errors > 0 ? 'warn' : 'ok');
-    // Recharger les données GPS et rafraîchir la vue
+    let msg = '✅ ' + inserted + ' ligne(s) importée(s)';
+    if (dropCols.length > 0) msg += ' (sans : ' + dropCols.join(', ') + ')';
+    if (errors > 0) msg += ' · ' + errors + ' erreur(s) : ' + lastErr;
+    gpsImportLog(msg, errors > 0 ? 'warn' : 'ok');
+
+    // Enregistrer l'historique d'import (local)
+    addGPSImportHistory({
+      ts: new Date().toISOString(),
+      rows: inserted,
+      seance: seanceLink || (gpsImportRows[0] && gpsImportRows[0].session_title) || '—',
+      dates: uniqueSorted(gpsImportRows.map(r => r.date)).join(', '),
+      players: uniqueSorted(gpsImportRows.map(r => r.joueur)).length
+    });
+
+    // Recharger les données GPS
     const { data: gps } = await sb.from('gps_data').select('*').order('date');
     state.bdd_gps = gps || [];
     gpsImportRows = null;
@@ -3641,9 +3724,99 @@ async function doGPSImport() {
     document.getElementById('gps-import-summary').innerHTML = '';
     document.getElementById('gps-import-preview').innerHTML = '';
     document.getElementById('gps-import-btn').disabled = true;
-    setTimeout(() => { toggleGPSImport(); renderGPS(); toast('Données GPS importées', 'success'); }, 1200);
+    setTimeout(() => { toggleGPSImport(); renderGPS(); toast('Données GPS importées', 'success'); }, 1500);
   } else {
     gpsImportLog('❌ Échec de l\'import : ' + lastErr, 'err');
+  }
+}
+
+// ===== Historique des imports GPS (stocké dans Supabase si possible, sinon mémoire) =====
+let gpsImportHistory = [];
+
+function addGPSImportHistory(entry) {
+  gpsImportHistory.unshift(entry);
+  // Persister dans une table dédiée si elle existe (sinon reste en mémoire pour la session)
+  if (sb) {
+    sb.from('gps_imports').insert([{
+      imported_at: entry.ts, nb_rows: entry.rows, seance: entry.seance, dates: entry.dates, nb_players: entry.players
+    }]).then(r => { /* silencieux si la table n'existe pas */ });
+  }
+}
+
+async function loadGPSImportHistory() {
+  if (!sb) return;
+  try {
+    const { data, error } = await sb.from('gps_imports').select('*').order('imported_at', { ascending: false }).limit(50);
+    if (!error && data) {
+      gpsImportHistory = data.map(d => ({ ts: d.imported_at, rows: d.nb_rows, seance: d.seance, dates: d.dates, players: d.nb_players }));
+    }
+  } catch(e) { /* table absente, on garde l'historique mémoire */ }
+}
+
+function toggleGPSHistory() {
+  const panel = document.getElementById('gps-history-panel');
+  if (!panel) return;
+  if (panel.style.display === 'none') {
+    loadGPSImportHistory().then(() => { renderGPSHistory(); });
+    panel.style.display = 'block';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+function renderGPSHistory() {
+  const el = document.getElementById('gps-history-content');
+  if (!el) return;
+  // Construire l'historique à partir des données réellement en base (par séance/date)
+  const sessions = {};
+  state.bdd_gps.forEach(g => {
+    const key = g.date + '||' + (g.seance || g.session_title || '');
+    if (!sessions[key]) sessions[key] = { date: g.date, seance: g.seance || g.session_title || '—', players: new Set(), splits: new Set(), rows: 0 };
+    sessions[key].players.add(g.joueur);
+    sessions[key].splits.add(g.split_name || 'all');
+    sessions[key].rows++;
+  });
+  const list = Object.values(sessions).sort((a, b) => b.date.localeCompare(a.date));
+
+  if (list.length === 0) {
+    el.innerHTML = '<div class="empty-state">Aucune séance GPS en base.</div>';
+    return;
+  }
+
+  let html = '<p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Séances GPS actuellement en base. Supprime une séance entière si tu l\'as importée en double.</p>';
+  html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Date</th><th style="text-align:left;">Séance</th><th>Joueurs</th><th>Splits</th><th>Lignes</th><th></th></tr></thead><tbody>';
+  list.forEach(s => {
+    const splitsArr = Array.from(s.splits);
+    const splitLabel = splitsArr.length === 1 && splitsArr[0] === 'all' ? 'séance entière' : splitsArr.length + ' (dont procédés)';
+    html += '<tr>' +
+      '<td style="text-align:left;">' + formatDateFR(s.date) + '</td>' +
+      '<td style="text-align:left;">' + escapeHtml(s.seance) + '</td>' +
+      '<td style="text-align:center;">' + s.players.size + '</td>' +
+      '<td style="text-align:center;">' + splitLabel + '</td>' +
+      '<td style="text-align:center;">' + s.rows + '</td>' +
+      '<td style="text-align:center;"><button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;color:var(--red);" onclick="deleteGPSSession(\'' + s.date + '\', \'' + s.seance.replace(/'/g, "\\'") + '\')">🗑 Supprimer</button></td>' +
+      '</tr>';
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+async function deleteGPSSession(date, seance) {
+  if (!confirm('Supprimer toutes les données GPS de la séance "' + seance + '" du ' + formatDateFR(date) + ' ?\n\nCette action est irréversible.')) return;
+  if (!sb || !canWrite()) { toast('Action non autorisée', 'error'); return; }
+  try {
+    // Supprimer par date + seance (et session_title en secours)
+    let q = sb.from('gps_data').delete().eq('date', date);
+    const r = await q.or('seance.eq.' + seance + ',session_title.eq.' + seance);
+    // Recharger
+    const { data: gps } = await sb.from('gps_data').select('*').order('date');
+    state.bdd_gps = gps || [];
+    renderGPSHistory();
+    renderGPS();
+    toast('Séance GPS supprimée', 'success');
+  } catch(e) {
+    toast('Erreur suppression : ' + e.message, 'error');
   }
 }
 
@@ -3707,6 +3880,9 @@ function populateGPSSplitSelect() {
   // Conserver la sélection si elle existe encore, sinon défaut "all"
   if (splits.indexOf(cur) >= 0) splitSel.value = cur;
   else { const allOpt = splits.find(s => s.toLowerCase() === 'all'); splitSel.value = allOpt || splits[0]; }
+  // Si la séance n'a qu'un seul niveau (pas de procédés découpés), masquer le filtre d'affichage
+  const splitWrap = document.getElementById('gps-split-wrap');
+  if (splitWrap) splitWrap.style.display = (splits.length <= 1) ? 'none' : '';
 }
 
 // Quand on change de séance, on recharge la liste des splits puis on rend
@@ -3782,6 +3958,18 @@ function getGPSWeeks() {
 }
 
 function gpsVal(row, key) {
+  // HSR : si absent ou nul, le calculer depuis les zones 3+4+5 (km -> m)
+  if (key === 'hsr' || key === 'hsr_m') {
+    const direct = row[key];
+    if (direct !== null && direct !== undefined && !isNaN(direct) && parseFloat(direct) > 0) {
+      return parseFloat(direct);
+    }
+    const z3 = parseFloat(row.dist_zone3) || 0;
+    const z4 = parseFloat(row.dist_zone4) || 0;
+    const z5 = parseFloat(row.dist_zone5) || 0;
+    const sum = z3 + z4 + z5;
+    return sum > 0 ? Math.round(sum * 1000) : 0;
+  }
   const v = row[key];
   return (v === null || v === undefined || isNaN(v)) ? 0 : parseFloat(v);
 }
