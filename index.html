@@ -3539,6 +3539,7 @@ function handleGPSCSV(e) {
         distmin: gpsFindCol(headers, ['distance per min', 'm/min']),
         maxdecel: gpsFindCol(headers, ['max deceleration', 'deceleration', 'décél']),
         maxaccel: gpsFindCol(headers, ['max acceleration', 'acceleration', 'accél']),
+        decelCountHigh: gpsFindCol(headers, ['deceleration zone count: > 4', 'deceleration zone count: >4']),
         powerplays: gpsFindCol(headers, ['power plays', 'power play']),
         impacts: gpsFindCol(headers, ['impacts', 'impact']),
         workratio: gpsFindCol(headers, ['work ratio']),
@@ -3583,6 +3584,7 @@ function handleGPSCSV(e) {
           dist_per_min: gpsNum(r[cols.distmin]),
           max_decel: gpsNum(r[cols.maxdecel]),
           max_accel: gpsNum(r[cols.maxaccel]),
+          decel_count_high: cols.decelCountHigh ? Math.round(gpsNum(r[cols.decelCountHigh]) || 0) : null,
           power_plays: cols.powerplays ? Math.round(gpsNum(r[cols.powerplays]) || 0) : null,
           impacts: cols.impacts ? Math.round(gpsNum(r[cols.impacts]) || 0) : null,
           work_ratio: gpsNum(r[cols.workratio]),
@@ -3825,14 +3827,21 @@ async function deleteGPSSession(date, seance) {
 // GPS — 3 rapports : séance équipe, hebdo équipe, hebdo individuel
 // ============================================================================
 
+// État du filtre joueurs et métrique du graphique (rapport de séance)
+let gpsSelectedPlayers = [];
+let gpsSessionFilterKey = '';
+let gpsSessionChartMetric = 'distance_km';
+
 // Indicateurs GPS clés affichés
 const GPS_METRICS = [
   { key: 'duree_min', label: 'Minutes', unit: 'min', dec: 0, mult: 1 },
   { key: 'distance_km', label: 'Distance', unit: 'm', dec: 0, mult: 1000 },
+  { key: 'dist_per_min', label: 'm/min', unit: 'm/min', dec: 1, mult: 1 },
   { key: 'hsr', label: 'HSR', unit: 'm', dec: 0, mult: 1 },
   { key: 'sprint_dist_m', label: 'Sprint', unit: 'm', dec: 0, mult: 1 },
   { key: 'top_speed', label: 'Vmax', unit: 'km/h', dec: 1, mult: 1 },
-  { key: 'max_decel', label: 'Décél max', unit: 'm/s²', dec: 1, mult: 1 },
+  { key: 'decel_count_high', label: 'Décél >4', unit: 'nb', dec: 0, mult: 1 },
+  { key: 'power_plays', label: 'Power Plays', unit: 'nb', dec: 0, mult: 1 },
   { key: 'player_load', label: 'Player Load', unit: '', dec: 0, mult: 1 }
 ];
 // Zones de vitesse : stockées en km, affichées en mètres (mult 1000)
@@ -3848,6 +3857,29 @@ const GPS_ZONES = [
 function gpsDisplayVal(row, metric) {
   const v = gpsVal(row, metric.key);
   return v * (metric.mult || 1);
+}
+
+// Gestion du filtre joueurs (rapport de séance)
+function gpsTogglePlayer(player) {
+  const i = gpsSelectedPlayers.indexOf(player);
+  if (i >= 0) gpsSelectedPlayers.splice(i, 1);
+  else gpsSelectedPlayers.push(player);
+  renderGPSSession();
+}
+function gpsSelectAllPlayers(all) {
+  if (all) {
+    // Re-sélectionner tous les joueurs de la séance courante
+    gpsSessionFilterKey = ''; // force le recalcul de la liste complète
+  } else {
+    gpsSelectedPlayers = [];
+  }
+  renderGPSSession();
+}
+// Changement de métrique du graphique principal
+function gpsChangeChartMetric() {
+  const sel = document.getElementById('gps-chart-metric');
+  if (sel) gpsSessionChartMetric = sel.value;
+  renderGPSSession();
 }
 
 function onGPSReportChange() {
@@ -4000,17 +4032,28 @@ function renderGPSSession() {
   const splitSel = document.getElementById('gps-split-select');
   const selectedSplit = splitSel ? splitSel.value : 'all';
 
-  let rows = state.bdd_gps.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
+  let allRows = state.bdd_gps.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
   // Filtrer par split sélectionné (séance entière "all" ou un procédé précis)
   if (selectedSplit) {
-    rows = rows.filter(x => (x.split_name || 'all') === selectedSplit);
+    allRows = allRows.filter(x => (x.split_name || 'all') === selectedSplit);
   }
-  const titles = uniqueSorted(rows.map(x => x.seance || x.session_title || '')).filter(Boolean);
+  const titles = uniqueSorted(allRows.map(x => x.seance || x.session_title || '')).filter(Boolean);
   const splitLabel = (selectedSplit && selectedSplit.toLowerCase() !== 'all') ? ' · ' + selectedSplit : ' · Séance entière';
 
-  // Moyennes équipe (en mètres) — l'en-tête affiche la MOYENNE par joueur
+  // Liste des joueurs de cette séance
+  const allSessionPlayers = uniqueSorted(allRows.map(r => r.joueur));
+  // Réinitialiser la sélection si on a changé de séance/split
+  const sessionKey = date + '||' + seanceTitle + '||' + selectedSplit;
+  if (gpsSessionFilterKey !== sessionKey) {
+    gpsSessionFilterKey = sessionKey;
+    gpsSelectedPlayers = allSessionPlayers.slice(); // tous sélectionnés par défaut
+  }
+  // Appliquer le filtre joueurs
+  const rows = allRows.filter(r => gpsSelectedPlayers.indexOf(r.joueur) >= 0);
+
+  // Moyennes (recalculées sur les joueurs filtrés)
   const n = rows.length || 1;
-  const avgDist = rows.reduce((s, r) => s + gpsDisplayVal(r, GPS_METRICS[1]), 0) / n;  // distance en m
+  const avgDist = rows.reduce((s, r) => s + gpsVal(r, 'distance_km') * 1000, 0) / n;
   const avgHSR = rows.reduce((s, r) => s + gpsVal(r, 'hsr'), 0) / n;
   const avgSprint = rows.reduce((s, r) => s + gpsVal(r, 'sprint_dist_m'), 0) / n;
   const avgVmax = rows.reduce((s, r) => s + gpsVal(r, 'top_speed'), 0) / n;
@@ -4018,7 +4061,29 @@ function renderGPSSession() {
   let html = '<div class="card">';
   html += '<h2>Rapport de séance — ' + formatDateFR(date) + (titles.length ? ' · ' + escapeHtml(titles[0]) : '') + escapeHtml(splitLabel) + '</h2>';
 
-  // Tuiles équipe (moyennes par joueur)
+  // Filtre joueurs (cases à cocher)
+  html += '<div style="margin-bottom:14px;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+  html += '<span style="font-size:12px;color:var(--text-dim);font-weight:600;">Filtrer les joueurs (' + rows.length + '/' + allSessionPlayers.length + ')</span>';
+  html += '<div><button class="btn btn-secondary" style="padding:2px 10px;font-size:11px;" onclick="gpsSelectAllPlayers(true)">Tout</button> ';
+  html += '<button class="btn btn-secondary" style="padding:2px 10px;font-size:11px;" onclick="gpsSelectAllPlayers(false)">Aucun</button></div>';
+  html += '</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+  allSessionPlayers.forEach(p => {
+    const checked = gpsSelectedPlayers.indexOf(p) >= 0;
+    html += '<button onclick="gpsTogglePlayer(\'' + p.replace(/'/g, "\\'") + '\')" style="padding:4px 12px;border-radius:14px;font-size:12px;cursor:pointer;border:1px solid ' +
+      (checked ? 'var(--accent)' : 'var(--border)') + ';background:' + (checked ? 'var(--accent)' : 'var(--bg-elevated)') + ';color:' + (checked ? 'white' : 'var(--text-dim)') + ';">' +
+      (checked ? '✓ ' : '') + escapeHtml(p) + '</button>';
+  });
+  html += '</div></div>';
+
+  if (rows.length === 0) {
+    html += '<div class="empty-state">Aucun joueur sélectionné.</div></div>';
+    document.getElementById('gps-content').innerHTML = html;
+    return;
+  }
+
+  // Tuiles (moyennes par joueur, sur la sélection)
   html += '<div class="stats-grid" style="margin-bottom:16px;">';
   html += '<div class="stat"><div class="stat-label">Joueurs</div><div class="stat-value">' + rows.length + '</div></div>';
   html += '<div class="stat"><div class="stat-label">Distance moyenne</div><div class="stat-value" style="font-size:20px;">' + Math.round(avgDist) + ' m</div></div>';
@@ -4051,30 +4116,50 @@ function renderGPSSession() {
   html += '</tbody></table></div>';
   html += '</div>';
 
-  // Graphique : distance par joueur
-  html += '<div class="card"><h2>Distance par joueur</h2><div class="chart-container tall"><canvas id="gps-session-dist"></canvas></div></div>';
-  // Graphique : zones de vitesse empilées par joueur
-  html += '<div class="card"><h2>Distance par zone de vitesse</h2><div class="chart-container tall"><canvas id="gps-session-zones"></canvas></div></div>';
+  // Graphique : métrique au choix par joueur
+  const chartMetric = GPS_METRICS.find(m => m.key === gpsSessionChartMetric) || GPS_METRICS[1];
+  html += '<div class="card">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+  html += '<h2 style="margin:0;">Comparaison par joueur</h2>';
+  html += '<select id="gps-chart-metric" onchange="gpsChangeChartMetric()" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;">';
+  GPS_METRICS.forEach(m => {
+    html += '<option value="' + m.key + '"' + (m.key === gpsSessionChartMetric ? ' selected' : '') + '>' + m.label + (m.unit ? ' (' + m.unit + ')' : '') + '</option>';
+  });
+  html += '</select>';
+  html += '</div>';
+  html += '<div class="chart-container tall"><canvas id="gps-session-metric"></canvas></div></div>';
+
+  // Graphique : zones de vitesse empilées par joueur (avec % individuel au survol)
+  html += '<div class="card"><h2>Distance par zone de vitesse</h2>';
+  html += '<p style="color:var(--text-dim);font-size:12px;margin-bottom:8px;">Survole une barre pour voir le % de chaque zone dans la distance totale du joueur.</p>';
+  html += '<div class="chart-container tall"><canvas id="gps-session-zones"></canvas></div></div>';
 
   document.getElementById('gps-content').innerHTML = html;
 
-  // Distance par joueur (en mètres)
-  destroyChart('gps-session-dist');
-  charts['gps-session-dist'] = new Chart(document.getElementById('gps-session-dist'), {
+  // Graphique métrique au choix
+  const sortedRows = rows.slice().sort((a, b) => gpsDisplayVal(b, chartMetric) - gpsDisplayVal(a, chartMetric));
+  destroyChart('gps-session-metric');
+  charts['gps-session-metric'] = new Chart(document.getElementById('gps-session-metric'), {
     type: 'bar',
     data: {
-      labels: rows.map(r => r.joueur),
-      datasets: [{ label: 'Distance (m)', data: rows.map(r => Math.round(gpsVal(r, 'distance_km') * 1000)), backgroundColor: '#00a3ff', borderRadius: 4 }]
+      labels: sortedRows.map(r => r.joueur),
+      datasets: [{
+        label: chartMetric.label + (chartMetric.unit ? ' (' + chartMetric.unit + ')' : ''),
+        data: sortedRows.map(r => { const v = gpsDisplayVal(r, chartMetric); return chartMetric.dec === 0 ? Math.round(v) : +v.toFixed(chartMetric.dec); }),
+        backgroundColor: '#00a3ff', borderRadius: 4
+      }]
     },
     options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
       plugins: { legend: { display: false } },
       scales: { x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }, y: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } } } }
   });
 
-  // Zones de vitesse empilées (en mètres)
+  // Zones de vitesse empilées (mètres) + % individuel dans le tooltip
   const hasZones = rows.some(r => GPS_ZONES.some(z => gpsVal(r, z.key) > 0));
   destroyChart('gps-session-zones');
   if (hasZones) {
+    // Pré-calculer le total des zones par joueur (pour les %)
+    const zoneTotalsByPlayer = rows.map(r => GPS_ZONES.reduce((s, z) => s + gpsVal(r, z.key) * 1000, 0));
     charts['gps-session-zones'] = new Chart(document.getElementById('gps-session-zones'), {
       type: 'bar',
       data: {
@@ -4082,7 +4167,19 @@ function renderGPSSession() {
         datasets: GPS_ZONES.map(z => ({ label: z.label, data: rows.map(r => Math.round(gpsVal(r, z.key) * 1000)), backgroundColor: z.color }))
       },
       options: { responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#e8eef6' } } },
+        plugins: {
+          legend: { labels: { color: '#e8eef6' } },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                const playerTotal = zoneTotalsByPlayer[ctx.dataIndex] || 0;
+                const val = ctx.parsed.x !== undefined ? ctx.parsed.x : ctx.parsed.y;
+                const pct = playerTotal > 0 ? Math.round((val / playerTotal) * 100) : 0;
+                return ctx.dataset.label + ': ' + val + ' m (' + pct + '%)';
+              }
+            }
+          }
+        },
         scales: { x: { stacked: true, ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } }, y: { stacked: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'Distance (m)', color: '#8ba3c1' } } } }
     });
   } else {
@@ -4127,7 +4224,7 @@ function renderGPSWeekTeam() {
 
   // Tableau cumulé par joueur (Vmax = max et non somme)
   html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Séances</th>';
-  GPS_METRICS.forEach(m => { if (m.key !== 'top_speed' && m.key !== 'max_decel') html += '<th>' + m.label + '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + m.unit + ' (cumul)</span></th>'; });
+  GPS_METRICS.forEach(m => { if (m.key !== 'top_speed' && m.key !== 'dist_per_min') html += '<th>' + m.label + '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + (m.key === 'decel_count_high' || m.key === 'power_plays' ? m.unit + ' (cumul)' : m.unit + ' (cumul)') + '</span></th>'; });
   html += '<th>Vmax<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">km/h (max)</span></th>';
   html += '</tr></thead><tbody>';
   players.forEach(p => {
@@ -4135,7 +4232,7 @@ function renderGPSWeekTeam() {
     const vmax = Math.max.apply(null, rows.filter(r => r.joueur === p.joueur).map(r => gpsVal(r, 'top_speed')).concat([0]));
     html += '<tr><td style="text-align:left;font-weight:600;">' + escapeHtml(p.joueur) + '</td><td style="text-align:center;">' + p.sessions + '</td>';
     GPS_METRICS.forEach(m => {
-      if (m.key === 'top_speed' || m.key === 'max_decel') return;
+      if (m.key === 'top_speed' || m.key === 'dist_per_min') return;
       const v = (p[m.key] || 0) * (m.mult || 1);
       html += '<td style="text-align:center;">' + (m.dec === 0 ? Math.round(v) : v.toFixed(m.dec)) + '</td>';
     });
