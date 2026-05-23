@@ -483,6 +483,7 @@
   <button class="nav-btn" data-view="gps">📡 Données GPS</button>
   <button class="nav-btn" data-view="injury">🏥 Disponibilité</button>
   <button class="nav-btn" data-view="entry">✏️ Saisie séance</button>
+  <button class="nav-btn" data-view="match-entry">⚽ Saisie match</button>
   <button class="nav-btn" data-view="rpe-entry">⭐ Saisie RPE</button>
   <button class="nav-btn" data-view="history">📋 Historique séances</button>
   <button class="nav-btn" data-view="settings">⚙️ Paramètres</button>
@@ -884,6 +885,100 @@
   </div>
 
   <!-- ========== SAISIE RPE ========== -->
+  <div class="view" id="view-match-entry">
+    <div class="card">
+      <h2>⚽ Saisie d'un match</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
+        Enregistre un match : adversaire, score, composition et temps de jeu par période. Le RPE se saisit ensuite sur une note unique (le temps de jeu total du joueur).
+      </p>
+
+      <div class="form-row">
+        <div>
+          <label>Date <span style="color:var(--red);">*</span></label>
+          <input type="date" id="match-date" />
+        </div>
+        <div>
+          <label>Heure</label>
+          <input type="time" id="match-heure" />
+        </div>
+        <div>
+          <label>Équipe PSG</label>
+          <select id="match-groupe"></select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div>
+          <label>Adversaire <span style="color:var(--red);">*</span></label>
+          <input type="text" id="match-adversaire" maxlength="100" placeholder="Ex: Olympique Lyonnais" />
+        </div>
+        <div>
+          <label>Niveau de l'adversaire</label>
+          <input type="text" id="match-niveau" maxlength="60" placeholder="Ex: U18 National" />
+        </div>
+        <div>
+          <label>Lieu</label>
+          <select id="match-domicile">
+            <option value="true">Domicile</option>
+            <option value="false">Extérieur</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div>
+          <label>Score PSG</label>
+          <input type="number" id="match-score-psg" min="0" placeholder="0" />
+        </div>
+        <div>
+          <label>Score adversaire</label>
+          <input type="number" id="match-score-adv" min="0" placeholder="0" />
+        </div>
+        <div>
+          <label>Match existant à charger</label>
+          <select id="match-existing" onchange="loadExistingMatch()">
+            <option value="">— Nouveau match —</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Configuration des périodes -->
+      <h3 style="margin-top:16px;">Périodes</h3>
+      <div class="form-row">
+        <div>
+          <label>Nombre de périodes</label>
+          <input type="number" id="match-nb-periodes" min="1" max="10" value="2" onchange="renderMatchPeriodes()" />
+        </div>
+        <div>
+          <label>Durée par période (min)</label>
+          <input type="number" id="match-duree-periode" min="1" value="45" onchange="renderMatchPeriodes()" />
+        </div>
+        <div style="display:flex; align-items:flex-end;">
+          <span style="font-size:12px; color:var(--text-dim);" id="match-duree-totale">Durée totale : 90 min</span>
+        </div>
+      </div>
+
+      <!-- Composition + temps de jeu -->
+      <h3 style="margin-top:16px;">Composition & temps de jeu</h3>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">
+        Coche les joueurs et indique leur temps de jeu par période (en minutes). Le total est calculé automatiquement.
+      </p>
+      <div id="match-composition-container"></div>
+
+      <div style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn" onclick="saveMatch()">💾 Enregistrer le match</button>
+        <button class="btn btn-secondary" onclick="resetMatchForm()">↺ Réinitialiser</button>
+        <button class="btn btn-secondary" id="match-delete-btn" onclick="deleteMatch()" style="display:none; background:var(--red);">🗑 Supprimer ce match</button>
+      </div>
+    </div>
+
+    <!-- Liste des matchs enregistrés -->
+    <div class="card">
+      <h2>Matchs enregistrés</h2>
+      <div id="match-list"></div>
+    </div>
+  </div>
+
   <div class="view" id="view-rpe-entry">
     <div class="card">
       <h2>Saisie des RPE déclarés par les joueurs</h2>
@@ -913,6 +1008,9 @@
         <button class="btn" onclick="saveAllRPE()">💾 Enregistrer tous les RPE</button>
         <span id="rpe-progress" style="color:var(--text-dim); font-size:12px;"></span>
       </div>
+
+      <!-- Section matchs à noter (RPE match) -->
+      <div id="rpe-match-section"></div>
 
       <!-- Vue tableau (existante) -->
       <div id="rpe-view-table">
@@ -1829,6 +1927,7 @@ async function loadState() {
     bdd_ent2: [],
     bdd_rpe: [],
     bdd_gps: [],
+    bdd_matchs: [],
     types_seances: [],
     groupes: []
   };
@@ -1877,6 +1976,12 @@ async function loadState() {
     setLoad('Chargement des données GPS...');
     const { data: gps } = await sb.from('gps_data').select('*').order('date');
     state.bdd_gps = (gps || []);
+
+    setLoad('Chargement des matchs...');
+    try {
+      const { data: matchs } = await sb.from('matchs').select('*').order('date', { ascending: false });
+      state.bdd_matchs = matchs || [];
+    } catch(e) { state.bdd_matchs = []; }
 
     setLoad('Chargement des check-ins Hooper...');
     await loadHooperFromSupabase();
@@ -2429,6 +2534,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'gps') renderGPS();
     else if (view === 'injury') renderInjury();
     else if (view === 'entry') renderEntry();
+    else if (view === 'match-entry') renderMatchEntry();
     else if (view === 'rpe-entry') renderRPEEntry();
     else if (view === 'history') renderHistory();
     else if (view === 'settings') renderSettings();
@@ -2979,7 +3085,42 @@ function computeSRPE() {
       });
     });
   });
+
+  // ===== Matchs : chaque match génère une charge par joueur =====
+  // sRPE match = temps de jeu du joueur × RPE (note unique saisie dans rpe_declarations)
+  (state.bdd_matchs || []).forEach(m => {
+    const seanceNom = matchSeanceNom(m);
+    (m.composition || []).forEach(c => {
+      if (!c.joueur || (c.total_min || 0) <= 0) return;
+      const detail = getRPEDetailJoueurSeance(m.date, c.joueur, seanceNom);
+      if (!detail) return;
+      const rpeVal = (detail.mode === 'unique') ? detail.value : (detail.values && detail.values[0]);
+      if (rpeVal === null || rpeVal === undefined || isNaN(rpeVal)) return;
+      const duree = c.total_min || 0;
+      out.push({
+        date: m.date,
+        joueur: c.joueur,
+        seance: seanceNom,
+        duree: duree,
+        rpe: rpeVal,
+        sRPE: duree * rpeVal,
+        mode: 'match'
+      });
+    });
+  });
+
   return out;
+}
+
+// Nom de séance virtuel pour un match (sert de clé dans rpe_declarations)
+function matchSeanceNom(m) {
+  return '⚽ MATCH: ' + m.adversaire;
+}
+
+// Récupère le temps de jeu d'un joueur dans un match
+function getMatchTempsJeu(m, joueur) {
+  const c = (m.composition || []).find(x => x.joueur === joueur);
+  return c ? (c.total_min || 0) : 0;
 }
 
 // ============================================================================
@@ -4408,6 +4549,266 @@ function renderInjury() {
 // ============================================================================
 // SAISIE SÉANCE
 // ============================================================================
+
+// ============================================================================
+// SAISIE MATCH
+// ============================================================================
+let currentMatchId = null; // id du match en cours d'édition (null = nouveau)
+
+function renderMatchEntry() {
+  // Remplir le sélecteur d'équipe
+  const groupeSel = document.getElementById('match-groupe');
+  if (groupeSel && groupeSel.options.length === 0) {
+    ensureGroupsList();
+    groupeSel.innerHTML = '<option value="">— Équipe —</option>' + state.groupes.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+  }
+  // Date par défaut = aujourd'hui
+  const dateInput = document.getElementById('match-date');
+  if (dateInput && !dateInput.value) dateInput.value = toLocalISO(new Date());
+
+  // Liste des matchs existants à charger
+  const existSel = document.getElementById('match-existing');
+  if (existSel) {
+    const cur = existSel.value;
+    existSel.innerHTML = '<option value="">— Nouveau match —</option>' +
+      (state.bdd_matchs || []).map(m => '<option value="' + m.id + '">' + formatDateFR(m.date) + ' · ' + escapeHtml(m.adversaire) + (m.groupe ? ' (' + escapeHtml(m.groupe) + ')' : '') + '</option>').join('');
+    existSel.value = cur;
+  }
+
+  renderMatchPeriodes();
+  renderMatchComposition();
+  renderMatchList();
+}
+
+// Met à jour l'affichage de la durée totale selon périodes
+function renderMatchPeriodes() {
+  const nbP = parseInt(document.getElementById('match-nb-periodes').value) || 2;
+  const dureeP = parseInt(document.getElementById('match-duree-periode').value) || 45;
+  const totalEl = document.getElementById('match-duree-totale');
+  if (totalEl) totalEl.textContent = 'Durée totale : ' + (nbP * dureeP) + ' min (' + nbP + ' × ' + dureeP + ')';
+  // Re-render la composition pour ajuster le nombre de colonnes de périodes
+  renderMatchComposition();
+}
+
+// Rend le tableau de composition (joueurs + temps par période)
+let matchCompositionState = {}; // { joueur: { statut, temps: [p1, p2...] } }
+
+function renderMatchComposition() {
+  const container = document.getElementById('match-composition-container');
+  if (!container) return;
+  const nbP = parseInt(document.getElementById('match-nb-periodes').value) || 2;
+  const groupe = document.getElementById('match-groupe').value;
+
+  // Joueurs concernés (filtrés par équipe si sélectionnée)
+  let players = getAllPlayers();
+  if (groupe) players = players.filter(p => getJoueurInfo(p).groupe === groupe);
+
+  if (players.length === 0) {
+    container.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:10px;">Aucun joueur. Sélectionne une équipe ou ajoute des joueurs.</div>';
+    return;
+  }
+
+  let html = '<div class="table-wrap"><table style="font-size:12px;"><thead><tr>';
+  html += '<th style="text-align:left;">Joueur</th><th>Statut</th>';
+  for (let p = 1; p <= nbP; p++) html += '<th>P' + p + '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">min</span></th>';
+  html += '<th>Total<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">min</span></th></tr></thead><tbody>';
+
+  players.forEach(j => {
+    const jEsc = j.replace(/'/g, "\\'");
+    const st = matchCompositionState[j] || { statut: 'absent', temps: [] };
+    const statut = st.statut || 'absent';
+    const rowBg = statut === 'titulaire' ? 'background:rgba(74,222,128,0.08);' : (statut === 'remplacant' ? 'background:rgba(251,191,36,0.08);' : '');
+    html += '<tr style="' + rowBg + '">';
+    html += '<td style="text-align:left;font-weight:600;">' + escapeHtml(j) + '</td>';
+    // Sélecteur de statut
+    html += '<td><select onchange="setMatchStatut(\'' + jEsc + '\', this.value)" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:11px;">';
+    ['absent', 'titulaire', 'remplacant'].forEach(s => {
+      const lbl = s === 'absent' ? 'Absent' : (s === 'titulaire' ? 'Titulaire' : 'Remplaçant');
+      html += '<option value="' + s + '"' + (statut === s ? ' selected' : '') + '>' + lbl + '</option>';
+    });
+    html += '</select></td>';
+    // Temps par période
+    let total = 0;
+    for (let p = 0; p < nbP; p++) {
+      const val = (st.temps && st.temps[p] !== undefined && st.temps[p] !== null) ? st.temps[p] : '';
+      if (val !== '') total += parseInt(val) || 0;
+      const disabled = statut === 'absent' ? 'disabled' : '';
+      html += '<td><input type="number" min="0" value="' + val + '" ' + disabled + ' onchange="setMatchTemps(\'' + jEsc + '\', ' + p + ', this.value)" style="width:50px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px;font-size:11px;text-align:center;" /></td>';
+    }
+    html += '<td style="text-align:center;font-weight:700;color:var(--accent-light);">' + total + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  // Compteurs
+  const nbTit = players.filter(j => (matchCompositionState[j] || {}).statut === 'titulaire').length;
+  const nbRemp = players.filter(j => (matchCompositionState[j] || {}).statut === 'remplacant').length;
+  html += '<div style="margin-top:8px;font-size:12px;color:var(--text-dim);">Titulaires : <b style="color:var(--green);">' + nbTit + '</b> · Remplaçants : <b style="color:#fbbf24;">' + nbRemp + '</b></div>';
+
+  container.innerHTML = html;
+}
+
+function setMatchStatut(joueur, statut) {
+  if (!matchCompositionState[joueur]) matchCompositionState[joueur] = { statut: 'absent', temps: [] };
+  matchCompositionState[joueur].statut = statut;
+  // Si passe à absent, vider les temps
+  if (statut === 'absent') matchCompositionState[joueur].temps = [];
+  renderMatchComposition();
+}
+
+function setMatchTemps(joueur, periodeIdx, value) {
+  if (!matchCompositionState[joueur]) matchCompositionState[joueur] = { statut: 'titulaire', temps: [] };
+  matchCompositionState[joueur].temps[periodeIdx] = value === '' ? null : (parseInt(value) || 0);
+  renderMatchComposition();
+}
+
+async function saveMatch() {
+  if (!canWrite()) { toast('Réservé au staff/admin', 'error'); return; }
+  const date = document.getElementById('match-date').value;
+  const adversaire = document.getElementById('match-adversaire').value.trim();
+  if (!date || !adversaire) { toast('Date et adversaire obligatoires', 'error'); return; }
+
+  const nbP = parseInt(document.getElementById('match-nb-periodes').value) || 2;
+  const dureeP = parseInt(document.getElementById('match-duree-periode').value) || 45;
+  const groupe = document.getElementById('match-groupe').value;
+
+  // Construire la composition (uniquement titulaires + remplaçants)
+  const composition = [];
+  Object.keys(matchCompositionState).forEach(j => {
+    const st = matchCompositionState[j];
+    if (st.statut === 'absent') return;
+    const temps = [];
+    for (let p = 0; p < nbP; p++) temps.push(st.temps && st.temps[p] != null ? (parseInt(st.temps[p]) || 0) : 0);
+    const total = temps.reduce((a, b) => a + b, 0);
+    composition.push({ joueur: j, statut: st.statut, temps_jeu: temps, total_min: total });
+  });
+
+  const matchObj = {
+    date: date,
+    heure: document.getElementById('match-heure').value || null,
+    adversaire: adversaire,
+    niveau: document.getElementById('match-niveau').value.trim() || null,
+    groupe: groupe || null,
+    score_psg: document.getElementById('match-score-psg').value !== '' ? parseInt(document.getElementById('match-score-psg').value) : null,
+    score_adversaire: document.getElementById('match-score-adv').value !== '' ? parseInt(document.getElementById('match-score-adv').value) : null,
+    domicile: document.getElementById('match-domicile').value === 'true',
+    nb_periodes: nbP,
+    duree_periode: dureeP,
+    composition: composition
+  };
+
+  try {
+    let result;
+    if (currentMatchId) {
+      result = await sb.from('matchs').update(matchObj).eq('id', currentMatchId);
+    } else {
+      result = await sb.from('matchs').insert(matchObj);
+    }
+    if (result.error) { toast('Erreur : ' + result.error.message, 'error'); return; }
+    toast(currentMatchId ? 'Match mis à jour' : 'Match enregistré', 'success');
+    // Recharger les matchs
+    const { data: matchs } = await sb.from('matchs').select('*').order('date', { ascending: false });
+    state.bdd_matchs = matchs || [];
+    resetMatchForm();
+    renderMatchEntry();
+  } catch(e) {
+    toast('Erreur : ' + e.message, 'error');
+  }
+}
+
+function loadExistingMatch() {
+  const id = document.getElementById('match-existing').value;
+  if (!id) { resetMatchForm(); return; }
+  const m = (state.bdd_matchs || []).find(x => x.id === id);
+  if (!m) return;
+  currentMatchId = m.id;
+  document.getElementById('match-date').value = m.date || '';
+  document.getElementById('match-heure').value = m.heure || '';
+  document.getElementById('match-groupe').value = m.groupe || '';
+  document.getElementById('match-adversaire').value = m.adversaire || '';
+  document.getElementById('match-niveau').value = m.niveau || '';
+  document.getElementById('match-domicile').value = m.domicile === false ? 'false' : 'true';
+  document.getElementById('match-score-psg').value = m.score_psg != null ? m.score_psg : '';
+  document.getElementById('match-score-adv').value = m.score_adversaire != null ? m.score_adversaire : '';
+  document.getElementById('match-nb-periodes').value = m.nb_periodes || 2;
+  document.getElementById('match-duree-periode').value = m.duree_periode || 45;
+  // Reconstruire la composition
+  matchCompositionState = {};
+  (m.composition || []).forEach(c => {
+    matchCompositionState[c.joueur] = { statut: c.statut, temps: (c.temps_jeu || []).slice() };
+  });
+  document.getElementById('match-delete-btn').style.display = '';
+  renderMatchPeriodes();
+  renderMatchComposition();
+  toast('Match chargé', 'success');
+}
+
+function resetMatchForm() {
+  currentMatchId = null;
+  matchCompositionState = {};
+  ['match-heure', 'match-adversaire', 'match-niveau', 'match-score-psg', 'match-score-adv'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('match-nb-periodes').value = 2;
+  document.getElementById('match-duree-periode').value = 45;
+  const existSel = document.getElementById('match-existing'); if (existSel) existSel.value = '';
+  document.getElementById('match-delete-btn').style.display = 'none';
+  renderMatchPeriodes();
+  renderMatchComposition();
+}
+
+async function deleteMatch() {
+  if (!currentMatchId) return;
+  if (!canWrite()) { toast('Réservé au staff/admin', 'error'); return; }
+  if (!confirm('Supprimer définitivement ce match ?')) return;
+  try {
+    const result = await sb.from('matchs').delete().eq('id', currentMatchId);
+    if (result.error) { toast('Erreur : ' + result.error.message, 'error'); return; }
+    toast('Match supprimé', 'success');
+    const { data: matchs } = await sb.from('matchs').select('*').order('date', { ascending: false });
+    state.bdd_matchs = matchs || [];
+    resetMatchForm();
+    renderMatchEntry();
+  } catch(e) { toast('Erreur : ' + e.message, 'error'); }
+}
+
+function renderMatchList() {
+  const container = document.getElementById('match-list');
+  if (!container) return;
+  const matchs = state.bdd_matchs || [];
+  if (matchs.length === 0) {
+    container.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:10px;">Aucun match enregistré.</div>';
+    return;
+  }
+  let html = '<div class="table-wrap"><table style="font-size:13px;"><thead><tr><th style="text-align:left;">Date</th><th style="text-align:left;">Match</th><th>Score</th><th>Joueurs</th><th></th></tr></thead><tbody>';
+  matchs.forEach(m => {
+    const compo = m.composition || [];
+    const nbJoueurs = compo.length;
+    const scoreStr = (m.score_psg != null && m.score_adversaire != null)
+      ? (m.domicile === false ? (m.score_adversaire + ' - ' + m.score_psg) : (m.score_psg + ' - ' + m.score_adversaire))
+      : '—';
+    const matchLabel = m.domicile === false
+      ? escapeHtml(m.adversaire) + ' vs PSG'
+      : 'PSG vs ' + escapeHtml(m.adversaire);
+    html += '<tr>';
+    html += '<td style="text-align:left;">' + formatDateFR(m.date) + (m.heure ? ' ' + m.heure : '') + '</td>';
+    html += '<td style="text-align:left;">' + matchLabel + (m.groupe ? ' <span style="font-size:11px;color:var(--text-dim);">(' + escapeHtml(m.groupe) + ')</span>' : '') + '</td>';
+    html += '<td style="text-align:center;font-weight:700;">' + scoreStr + '</td>';
+    html += '<td style="text-align:center;">' + nbJoueurs + '</td>';
+    html += '<td style="text-align:center;"><button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editMatchFromList(\'' + m.id + '\')">Éditer</button></td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+function editMatchFromList(id) {
+  document.getElementById('match-existing').value = id;
+  loadExistingMatch();
+  document.getElementById('view-match-entry').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+
 function renderEntry() {
   // Pré-remplir la date avec aujourd'hui si vide
   const dateInput = document.getElementById('entry-date');
@@ -4768,6 +5169,9 @@ function renderRPEEntry() {
   // Mettre à jour l'indicateur de progression (commun aux deux modes)
   updateRPEProgress(date, groupFilter);
 
+  // Section matchs à noter (au-dessus des séances)
+  renderMatchRPESection(date, groupFilter);
+
   if (rpeMode === 'table') {
     renderRPETable(date, groupFilter);
   } else {
@@ -4795,6 +5199,50 @@ function updateRPEProgress(date, groupFilter) {
   const pct = total > 0 ? Math.round(done * 100 / total) : 0;
   document.getElementById('rpe-progress').textContent =
     total > 0 ? '✅ ' + done + ' / ' + total + ' note(s) saisie(s) (' + pct + '%)' : '';
+}
+
+// Section de saisie RPE des matchs (staff) — pour chaque match du jour, noter chaque joueur ayant joué
+function renderMatchRPESection(date, groupFilter) {
+  const container = document.getElementById('rpe-match-section');
+  if (!container) return;
+
+  const matchs = (state.bdd_matchs || []).filter(m => m.date === date);
+  if (matchs.length === 0) { container.innerHTML = ''; return; }
+
+  let html = '';
+  matchs.forEach(m => {
+    const seanceNom = matchSeanceNom(m);
+    // Joueurs ayant joué (temps > 0), filtrés par groupe si besoin
+    let joueurs = (m.composition || []).filter(c => (c.total_min || 0) > 0).map(c => c.joueur);
+    if (groupFilter) joueurs = joueurs.filter(j => getJoueurInfo(j).groupe === groupFilter);
+    if (currentRole === 'lecteur' && currentJoueurNom) joueurs = joueurs.filter(j => j === currentJoueurNom);
+    if (joueurs.length === 0) return;
+    joueurs.sort((a, b) => a.localeCompare(b));
+
+    html += '<div class="card" style="border-left:3px solid #fbbf24;">';
+    html += '<h2 style="font-size:16px;">⚽ Match vs ' + escapeHtml(m.adversaire) + ' <span style="font-size:12px;color:var(--text-dim);font-weight:normal;">— ' + formatDateFR(m.date) + (m.groupe ? ' · ' + escapeHtml(m.groupe) : '') + '</span></h2>';
+    html += '<p style="color:var(--text-dim);font-size:12px;margin-bottom:10px;">Note unique par joueur (RPE × temps de jeu = charge du match).</p>';
+    html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Temps</th><th>RPE (0-10)</th><th>sRPE</th></tr></thead><tbody>';
+
+    joueurs.forEach(j => {
+      const temps = getMatchTempsJeu(m, j);
+      const rpe = getRPEJoueurSeance(date, j, seanceNom);
+      const seanceEsc = escapeHtml(seanceNom);
+      const joueurEsc = escapeHtml(j);
+      const sRPE = (rpe !== null) ? Math.round(temps * rpe) : null;
+      html += '<tr>';
+      html += '<td style="text-align:left;font-weight:600;">' + escapeHtml(j) + '</td>';
+      html += '<td style="text-align:center;">' + temps + ' min</td>';
+      html += '<td style="text-align:center;"><input type="number" min="0" max="10" step="0.5" style="width:70px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px;text-align:center;" ' +
+              'data-rpe-date="' + date + '" data-rpe-player="' + joueurEsc + '" data-rpe-seance="' + seanceEsc + '" ' +
+              'value="' + (rpe ?? '') + '" onchange="setRPEFromInput(this)" /></td>';
+      html += '<td style="text-align:center;color:var(--accent-light);font-weight:600;">' + (sRPE !== null ? sRPE + ' UA' : '—') + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+  });
+
+  container.innerHTML = html;
 }
 
 function renderRPETable(date, groupFilter) {
@@ -5118,6 +5566,22 @@ function rpeCardJump(idx) {
   rpeCardIndex = idx;
   renderRPEEntry();
   document.getElementById('rpe-card-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async // Met à jour l'état RPE local quand un input du tableau change (séance ou match)
+function setRPEFromInput(inp) {
+  const d = inp.dataset.rpeDate;
+  const p = inp.dataset.rpePlayer;
+  const s = inp.dataset.rpeSeance;
+  const raw = (inp.value || '').trim();
+  const v = raw === '' ? null : parseFloat(raw);
+  setRPEJoueurSeance(d, p, s, (v === null || isNaN(v)) ? null : v);
+  // Rafraîchir l'affichage de la section match (pour recalculer le sRPE affiché)
+  if (s && s.indexOf('⚽ MATCH') === 0) {
+    const dateInput = document.getElementById('rpe-entry-date');
+    const groupFilter = document.getElementById('rpe-entry-group');
+    if (dateInput) renderMatchRPESection(dateInput.value, groupFilter ? groupFilter.value : '');
+  }
 }
 
 async function saveAllRPE() {
@@ -6123,12 +6587,18 @@ function renderPlayerRPE() {
 
   // Récupérer les séances de ce joueur pour cette date
   const planning = state.bdd_ent.find(e => e.date === date && e.joueur === currentJoueurNom);
-  if (!planning) {
+  const seances = planning ? planning.seances.filter(s => !STATUTS_NON_ENT.includes(s)) : [];
+  const statuts = planning ? planning.seances.filter(s => STATUTS_NON_ENT.includes(s)) : [];
+
+  // Matchs de ce jour où le joueur a du temps de jeu
+  const matchsDuJour = (state.bdd_matchs || []).filter(m =>
+    m.date === date && (m.composition || []).some(c => c.joueur === currentJoueurNom && (c.total_min || 0) > 0)
+  );
+
+  if (!planning && matchsDuJour.length === 0) {
     container.innerHTML = '<div class="empty-state">No session scheduled for this date.</div>';
     return;
   }
-  const seances = planning.seances.filter(s => !STATUTS_NON_ENT.includes(s));
-  const statuts = planning.seances.filter(s => STATUTS_NON_ENT.includes(s));
 
   let html = '';
 
@@ -6139,11 +6609,16 @@ function renderPlayerRPE() {
     html += '</div>';
   }
 
-  if (seances.length === 0) {
+  if (seances.length === 0 && matchsDuJour.length === 0) {
     html += '<div class="empty-state">No training session to rate today.</div>';
     container.innerHTML = html;
     return;
   }
+
+  // Une carte par match (note unique = temps de jeu × RPE)
+  matchsDuJour.forEach(m => {
+    html += renderPlayerMatchNotation(date, currentJoueurNom, m);
+  });
 
   // Une carte par séance (sans UA visible)
   seances.forEach(s => {
@@ -6173,6 +6648,61 @@ function renderPlayerRPE() {
   html += '</div>';
 
   container.innerHTML = html;
+}
+
+// Rend une carte de notation MATCH pour le joueur (note unique = temps de jeu × RPE)
+function renderPlayerMatchNotation(date, joueur, m) {
+  const seanceNom = matchSeanceNom(m);
+  const tempsJeu = getMatchTempsJeu(m, joueur);
+  const joueurEsc = joueur.replace(/'/g, "\\'");
+  const seanceEsc = seanceNom.replace(/'/g, "\\'");
+
+  const locked = isRPELockedForSession(date, joueur, seanceNom);
+  const lockInfo = rpeLockInfo(date, joueur, seanceNom);
+
+  let html = '<div class="rpe-session-card' + (locked ? ' rpe-locked' : '') + '" style="border-left:3px solid #fbbf24;">';
+  html += '<div class="rpe-session-name">⚽ Match vs ' + escapeHtml(m.adversaire) + '</div>';
+  html += '<div class="rpe-session-type" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">';
+  html += '<span class="badge" style="background:#fbbf24;color:#1a1a1a;">MATCH</span>';
+  html += '<span style="font-size:12px;color:var(--text-dim);">Your playing time: <b style="color:var(--text);">' + tempsJeu + ' min</b></span>';
+  html += '</div>';
+
+  if (locked) {
+    html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(251,146,60,0.12);border-left:3px solid #fb923c;border-radius:4px;font-size:12px;color:#fed7aa;">🔒 This rating is locked.</div>';
+  } else if (lockInfo !== null) {
+    const hrs = Math.floor(lockInfo.minutes / 60), mins = lockInfo.minutes % 60;
+    const timeStr = hrs > 0 ? (hrs + 'h ' + mins + 'min') : (mins + ' min');
+    html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ ' + (lockInfo.type === 'edit' ? 'Editable for ' + timeStr + ' more' : 'You have ' + timeStr + ' left to rate') + '</div>';
+  }
+
+  const rpeUnique = getRPEJoueurSeance(date, joueur, seanceNom);
+
+  if (locked) {
+    if (rpeUnique !== null) {
+      const lbl = RPE_LABELS[Math.round(rpeUnique)] || '';
+      const color = getRPEColor(rpeUnique);
+      html += '<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0;">';
+      html += '<div style="width:60px;height:60px;border-radius:12px;background:' + color + ';color:white;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;">' + rpeUnique + '</div>';
+      html += '<div><div style="font-size:11px;color:var(--text-dim);">Your final rating</div><div style="font-size:16px;font-weight:600;">' + lbl + '</div></div>';
+      html += '</div>';
+    } else {
+      html += '<div class="rpe-scale-label" style="color:var(--text-dim);">No rating submitted</div>';
+    }
+  } else {
+    html += renderRPEScale(date, joueurEsc, seanceEsc, null, rpeUnique);
+    if (rpeUnique !== null) {
+      const lbl = RPE_LABELS[Math.round(rpeUnique)] || '';
+      html += '<div class="rpe-scale-label">Your rating: <b style="color:var(--text);">' + rpeUnique + '</b> — ' + lbl + '</div>';
+      html += '<div style="text-align:center;margin-top:8px;">';
+      html += '<button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="setRPECardValue(\'' + date + '\', \'' + joueurEsc + '\', \'' + seanceEsc + '\', null)">Clear my rating</button>';
+      html += '</div>';
+    } else {
+      html += '<div class="rpe-scale-label">Rate your overall match intensity</div>';
+    }
+  }
+
+  html += '</div>';
+  return html;
 }
 
 // Rend une séance pour notation joueur — version SANS affichage des UA/sRPE
