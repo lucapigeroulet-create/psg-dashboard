@@ -5568,7 +5568,7 @@ function rpeCardJump(idx) {
   document.getElementById('rpe-card-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-async // Met à jour l'état RPE local quand un input du tableau change (séance ou match)
+// Met à jour l'état RPE local quand un input du tableau change (séance ou match)
 function setRPEFromInput(inp) {
   const d = inp.dataset.rpeDate;
   const p = inp.dataset.rpePlayer;
