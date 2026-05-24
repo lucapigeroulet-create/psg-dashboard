@@ -2586,8 +2586,19 @@ function renderOverview() {
 
   // ===== État de l'effectif par jour (compact) =====
   const statusByDay = {};
-  dates.forEach(d => statusByDay[d] = { 'Entraîné': 0, REST: 0, INJURY: 0, SICK: 0, ABSENT: 0 });
+  dates.forEach(d => statusByDay[d] = { 'MATCH': 0, 'Entraîné': 0, REST: 0, INJURY: 0, SICK: 0, ABSENT: 0 });
+  // Joueurs ayant joué un match ce jour (comptés en MATCH, prioritaire sur entraînement)
+  const matchPlayersByDay = {};
+  (state.bdd_matchs || []).forEach(m => {
+    if (!statusByDay[m.date]) return;
+    if (!matchPlayersByDay[m.date]) matchPlayersByDay[m.date] = new Set();
+    (m.composition || []).filter(c => c.joueur && (c.total_min||0) > 0).forEach(c => matchPlayersByDay[m.date].add(c.joueur));
+  });
+  Object.keys(matchPlayersByDay).forEach(d => { statusByDay[d]['MATCH'] = matchPlayersByDay[d].size; });
+
   state.bdd_ent.forEach(e => {
+    // Si le joueur a joué un match ce jour, il est déjà compté en MATCH
+    if (matchPlayersByDay[e.date] && matchPlayersByDay[e.date].has(e.joueur)) return;
     const s = e.seances;
     const hasTraining = s.some(x => !STATUTS_NON_ENT.includes(x));
     let cat;
@@ -2599,8 +2610,8 @@ function renderOverview() {
     else cat = 'Entraîné';
     statusByDay[e.date][cat]++;
   });
-  const cats = ['Entraîné', 'REST', 'INJURY', 'SICK', 'ABSENT'];
-  const colors = ['#4ade80', '#6b7280', '#f87171', '#fb923c', '#fbbf24'];
+  const cats = ['MATCH', 'Entraîné', 'REST', 'INJURY', 'SICK', 'ABSENT'];
+  const colors = ['#fbbf24', '#4ade80', '#6b7280', '#f87171', '#fb923c', '#facc15'];
   destroyChart('chart-status-stacked');
   charts['chart-status-stacked'] = new Chart(document.getElementById('chart-status-stacked'), {
     type: 'bar',
@@ -2674,7 +2685,7 @@ function renderOverviewActivity() {
     state.bdd_ent2.map(s => s.seance).filter(t => t && !STATUTS_NON_ENT.includes(t))
   );
   const statusCats = ['REST', 'INJURY', 'SICK', 'ABSENT', 'SUSPENDED'];
-  const allCats = [...trainingTypes, ...statusCats];
+  const allCats = ['MATCH', ...trainingTypes, ...statusCats];
 
   const dayData = {};
   dates.forEach(d => { dayData[d] = {}; allCats.forEach(c => dayData[d][c] = 0); });
@@ -2697,9 +2708,17 @@ function renderOverviewActivity() {
     }
   });
 
+  // Compter les joueurs ayant joué un match (temps > 0) par jour
+  (state.bdd_matchs || []).forEach(m => {
+    if (!dayData[m.date]) return;
+    const joueursMatch = new Set((m.composition || []).filter(c => c.joueur && (c.total_min||0) > 0).map(c => c.joueur));
+    dayData[m.date]['MATCH'] += joueursMatch.size;
+  });
+
   const finalCats = Array.from(new Set([...allCats, ...dates.flatMap(d => Object.keys(dayData[d] || {}))]));
 
   const catColor = (cat) => {
+    if (cat === 'MATCH') return '#fbbf24';
     if (cat === 'REST') return '#6b7280';
     if (cat === 'INJURY') return '#f87171';
     if (cat === 'SICK') return '#fb923c';
@@ -2914,15 +2933,29 @@ function renderOverviewMissing() {
   const hasTodayPlanning = state.bdd_ent.some(e => e.date === today);
   if (!hasTodayPlanning && dates.length > 0) hooperRefDate = dates[dates.length - 1];
 
-  const activePlayersToday = state.bdd_ent.filter(e => e.date === hooperRefDate).map(e => e.joueur);
+  // Joueurs attendus pour le Hooper : ceux ayant une séance/match ce jour (planning),
+  // sinon TOUT l'effectif (le check-in Hooper est quotidien pour tous).
+  let activePlayersToday = state.bdd_ent.filter(e => e.date === hooperRefDate).map(e => e.joueur);
+  (state.bdd_matchs || []).filter(m => m.date === hooperRefDate).forEach(m => {
+    (m.composition || []).filter(c => c.joueur && (c.total_min||0) > 0).forEach(c => {
+      if (!activePlayersToday.includes(c.joueur)) activePlayersToday.push(c.joueur);
+    });
+  });
+  // Si aucun planning/match ce jour, considérer tout l'effectif
+  if (activePlayersToday.length === 0) {
+    activePlayersToday = (state.joueurs || []).map(j => j.nom);
+  }
+
   const missingHooper = activePlayersToday.filter(joueur => {
     const h = (typeof getHooper === 'function') ? getHooper(hooperRefDate, joueur) : null;
     return !h || computeHooperIndex(h) === null;
   });
   const hooperDateLabel = (hooperRefDate === today) ? "aujourd'hui" : formatDateFR(hooperRefDate);
 
-  if (missingHooper.length === 0) {
-    hooperContainer.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px;">✅ Tous les check-ins Hooper sont remplis pour ' + hooperDateLabel + '.</div>';
+  if (activePlayersToday.length === 0) {
+    hooperContainer.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:8px;">Aucun joueur dans l\'effectif.</div>';
+  } else if (missingHooper.length === 0) {
+    hooperContainer.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px;">✅ Tous les check-ins Hooper sont remplis pour ' + hooperDateLabel + ' (' + activePlayersToday.length + ' joueurs).</div>';
   } else {
     hooperContainer.innerHTML =
       '<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">' + missingHooper.length + ' joueur(s) — ' + hooperDateLabel + '</div>' +
@@ -5242,8 +5275,15 @@ function renderRPEEntry() {
   // Mettre à jour l'indicateur de progression (commun aux deux modes)
   updateRPEProgress(date, groupFilter);
 
-  // Section matchs à noter (au-dessus des séances)
-  renderMatchRPESection(date, groupFilter);
+  // Section matchs à noter (tableau) : UNIQUEMENT en mode tableau.
+  // En mode carte, la note match apparaît dans la carte du joueur.
+  const matchSection = document.getElementById('rpe-match-section');
+  if (rpeMode === 'table') {
+    renderMatchRPESection(date, groupFilter);
+    if (matchSection) matchSection.style.display = 'block';
+  } else {
+    if (matchSection) { matchSection.style.display = 'none'; matchSection.innerHTML = ''; }
+  }
 
   // Filet de sécurité : garantir qu'une seule vue est visible selon le mode
   const vTable = document.getElementById('rpe-view-table');
@@ -5525,6 +5565,11 @@ function renderRPECard(date, groupFilter) {
         }
       }
     });
+    // Compter les matchs du joueur
+    (state.bdd_matchs || []).filter(m => m.date === date && (m.composition||[]).some(c => c.joueur === e.joueur && (c.total_min||0) > 0)).forEach(m => {
+      totalNotes += 1;
+      if (getRPEJoueurSeance(date, e.joueur, matchSeanceNom(m)) !== null) doneNotes += 1;
+    });
   });
   html += doneNotes + ' / ' + totalNotes + ' notes saisies';
   html += '</div>';
@@ -5535,7 +5580,9 @@ function renderRPECard(date, groupFilter) {
   html += '<div class="rpe-jump-pills">';
   rows.forEach((e, idx) => {
     const ss = e.seances.filter(s => !STATUTS_NON_ENT.includes(s));
-    const allDone = ss.length > 0 && ss.every(s => {
+    const matchsJ = (state.bdd_matchs || []).filter(m => m.date === date && (m.composition||[]).some(c => c.joueur === e.joueur && (c.total_min||0) > 0));
+    // Séances toutes notées ?
+    const seancesDone = ss.every(s => {
       const nbProc = getNbProcedesSeance(date, s);
       const detail = getRPEDetailJoueurSeance(date, e.joueur, s);
       if (!detail) return false;
@@ -5546,6 +5593,11 @@ function renderRPECard(date, groupFilter) {
       return detail.mode === 'procede' && detail.values.length >= nbProc &&
              detail.values.slice(0, nbProc).every(v => v !== null && !isNaN(v));
     });
+    // Matchs tous notés ?
+    const matchsDone = matchsJ.every(m => getRPEJoueurSeance(date, e.joueur, matchSeanceNom(m)) !== null);
+    // Le joueur a-t-il au moins quelque chose à noter ?
+    const hasSomething = ss.length > 0 || matchsJ.length > 0;
+    const allDone = hasSomething && seancesDone && matchsDone;
     let cls = 'rpe-jump-pill';
     if (idx === rpeCardIndex) cls += ' current';
     else if (allDone) cls += ' done';
