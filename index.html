@@ -5245,6 +5245,14 @@ function renderRPEEntry() {
   // Section matchs à noter (au-dessus des séances)
   renderMatchRPESection(date, groupFilter);
 
+  // Filet de sécurité : garantir qu'une seule vue est visible selon le mode
+  const vTable = document.getElementById('rpe-view-table');
+  const vCard = document.getElementById('rpe-view-card');
+  if (vTable && vCard) {
+    vTable.style.display = (rpeMode === 'table') ? 'block' : 'none';
+    vCard.style.display = (rpeMode === 'table') ? 'none' : 'block';
+  }
+
   if (rpeMode === 'table') {
     renderRPETable(date, groupFilter);
   } else {
@@ -5355,21 +5363,32 @@ function renderRPETable(date, groupFilter) {
 
       if (nbProc <= 1) {
         const current = getRPEJoueurSeance(date, e.joueur, s);
-        block += '<input type="number" min="0" max="10" step="0.5" style="width:70px;" ' +
+        const filled = (current !== null && current !== undefined && !isNaN(current));
+        const inputStyle = 'width:70px;' + (filled
+          ? 'border:2px solid var(--green);background:rgba(16,185,129,0.12);color:var(--text);font-weight:700;'
+          : 'border:1px solid var(--border);background:var(--bg-card);color:var(--text);');
+        block += '<div style="display:flex;align-items:center;gap:6px;">';
+        block += '<input type="number" min="0" max="10" step="0.5" style="' + inputStyle + '" ' +
                  'data-rpe-date="' + date + '" data-rpe-player="' + joueurEsc + '" data-rpe-seance="' + seanceEsc + '" ' +
-                 'value="' + (current ?? '') + '" placeholder="0-10">';
+                 'value="' + (current ?? '') + '" placeholder="0-10" onchange="setRPEFromInput(this)">';
+        if (filled) block += '<span style="color:var(--green);font-size:14px;">✓</span>';
+        block += '</div>';
       } else {
         const detail = getRPEDetailJoueurSeance(date, e.joueur, s);
         const vals = (detail && detail.mode === 'procede') ? detail.values :
                      (detail && detail.mode === 'unique') ? [detail.value] : [];
         block += '<div style="display:flex;gap:4px;flex-wrap:wrap;">';
         for (let i = 0; i < nbProc; i++) {
-          const v = (i < vals.length && vals[i] !== null && !isNaN(vals[i])) ? vals[i] : '';
+          const filledP = (i < vals.length && vals[i] !== null && !isNaN(vals[i]));
+          const v = filledP ? vals[i] : '';
+          const procStyle = 'width:50px;' + (filledP
+            ? 'border:2px solid var(--green);background:rgba(16,185,129,0.12);color:var(--text);font-weight:700;'
+            : 'border:1px solid var(--border);background:var(--bg-card);color:var(--text);');
           block += '<div style="display:flex;flex-direction:column;align-items:center;">';
-          block += '<span style="font-size:9px;color:var(--text-dim);">P' + (i+1) + '</span>';
-          block += '<input type="number" min="0" max="10" step="0.5" style="width:50px;" ' +
+          block += '<span style="font-size:9px;color:' + (filledP ? 'var(--green)' : 'var(--text-dim)') + ';">P' + (i+1) + (filledP ? ' ✓' : '') + '</span>';
+          block += '<input type="number" min="0" max="10" step="0.5" style="' + procStyle + '" ' +
                    'data-rpe-proc-date="' + date + '" data-rpe-proc-player="' + joueurEsc + '" data-rpe-proc-seance="' + seanceEsc + '" data-rpe-proc-index="' + i + '" ' +
-                   'value="' + v + '" placeholder="0-10">';
+                   'value="' + v + '" placeholder="0-10" onchange="setRPEProcFromInput(this)">';
           block += '</div>';
         }
         block += '</div>';
@@ -5688,19 +5707,38 @@ function rpeCardJump(idx) {
 }
 
 // Met à jour l'état RPE local quand un input du tableau change (séance ou match)
-function setRPEFromInput(inp) {
+async function setRPEFromInput(inp) {
   const d = inp.dataset.rpeDate;
   const p = inp.dataset.rpePlayer;
   const s = inp.dataset.rpeSeance;
   const raw = (inp.value || '').trim();
   const v = raw === '' ? null : parseFloat(raw);
   setRPEJoueurSeance(d, p, s, (v === null || isNaN(v)) ? null : v);
-  // Rafraîchir l'affichage de la section match (pour recalculer le sRPE affiché)
+  // Sauvegarde immédiate vers Supabase (comme côté joueur)
+  const r = state.bdd_rpe.find(x => x.date === d && x.joueur === p);
+  await saveRPEToSupabase(d, p, r ? r.rpe : []);
+  // Rafraîchir l'affichage pour montrer la validation (vert + ✓) et la progression
+  updateRPEProgress(document.getElementById('rpe-entry-date').value, document.getElementById('rpe-entry-group').value);
   if (s && s.indexOf('⚽ MATCH') === 0) {
-    const dateInput = document.getElementById('rpe-entry-date');
-    const groupFilter = document.getElementById('rpe-entry-group');
-    if (dateInput) renderMatchRPESection(dateInput.value, groupFilter ? groupFilter.value : '');
+    renderMatchRPESection(d, document.getElementById('rpe-entry-group').value);
+  } else if (rpeMode === 'table') {
+    renderRPETable(d, document.getElementById('rpe-entry-group').value);
   }
+}
+
+// Saisie d'un procédé dans le tableau (sauvegarde immédiate + validation visuelle)
+async function setRPEProcFromInput(inp) {
+  const d = inp.dataset.rpeProcDate;
+  const p = inp.dataset.rpeProcPlayer;
+  const s = inp.dataset.rpeProcSeance;
+  const i = parseInt(inp.dataset.rpeProcIndex);
+  const raw = (inp.value || '').trim();
+  const v = raw === '' ? null : parseFloat(raw);
+  setRPEProcedeJoueurSeance(d, p, s, i, (v === null || isNaN(v)) ? null : v);
+  const r = state.bdd_rpe.find(x => x.date === d && x.joueur === p);
+  await saveRPEToSupabase(d, p, r ? r.rpe : []);
+  updateRPEProgress(document.getElementById('rpe-entry-date').value, document.getElementById('rpe-entry-group').value);
+  if (rpeMode === 'table') renderRPETable(d, document.getElementById('rpe-entry-group').value);
 }
 
 async function saveAllRPE() {
