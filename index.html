@@ -2474,7 +2474,13 @@ function escapeHtml(s) {
 }
 
 function getAllDates() {
-  return uniqueSorted(state.bdd_ent.map(x => x.date));
+  // Inclure toutes les dates où il y a un planning, une séance, un RPE ou un match
+  const all = [];
+  (state.bdd_ent || []).forEach(x => all.push(x.date));
+  (state.bdd_ent2 || []).forEach(x => all.push(x.date));
+  (state.bdd_rpe || []).forEach(x => all.push(x.date));
+  (state.bdd_matchs || []).forEach(x => all.push(x.date));
+  return uniqueSorted(all);
 }
 
 function getAllPlayers() {
@@ -2930,7 +2936,7 @@ function renderOverviewMissing() {
 function getPlayersMissingRPE(date) {
   const missing = new Set();
 
-  // 1) Séances d'entraînement
+  // 1) Séances via plannings individuels (bdd_ent)
   state.bdd_ent.filter(e => e.date === date).forEach(e => {
     const trainingSeances = e.seances.filter(s => !STATUTS_NON_ENT.includes(s));
     if (trainingSeances.length === 0) return;
@@ -2943,7 +2949,36 @@ function getPlayersMissingRPE(date) {
     if (incomplete) missing.add(e.joueur);
   });
 
-  // 2) Matchs : joueurs ayant joué (temps > 0) sans note RPE match
+  // 2) Filet de sécurité : si pas (ou peu) de plannings mais des séances existent ce jour,
+  //    dériver les joueurs attendus depuis les séances du jour croisées avec tous les joueurs
+  //    ayant une activité (planning OU déclaration RPE) ce jour.
+  const seancesDuJour = (state.bdd_ent2 || []).filter(s => s.date === date && !STATUTS_NON_ENT.includes(s.seance));
+  if (seancesDuJour.length > 0) {
+    // Joueurs concernés = ceux qui ont un planning ce jour, OU une déclaration RPE ce jour
+    const joueursConcernes = new Set();
+    state.bdd_ent.filter(e => e.date === date).forEach(e => {
+      if (e.seances.some(s => !STATUTS_NON_ENT.includes(s))) joueursConcernes.add(e.joueur);
+    });
+    state.bdd_rpe.filter(r => r.date === date).forEach(r => joueursConcernes.add(r.joueur));
+
+    joueursConcernes.forEach(joueur => {
+      // Le joueur a-t-il noté chacune des séances du jour qui le concernent ?
+      // On regarde son planning ; s'il n'a pas de planning, on prend toutes les séances du jour
+      const planning = state.bdd_ent.find(e => e.date === date && e.joueur === joueur);
+      const sesSeances = planning
+        ? planning.seances.filter(s => !STATUTS_NON_ENT.includes(s))
+        : seancesDuJour.map(s => s.nom);
+      const incomplete = sesSeances.some(s => {
+        const detail = getRPEDetailJoueurSeance(date, joueur, s);
+        if (!detail) return true;
+        if (detail.mode === 'unique') return detail.value === null;
+        return detail.values.every(v => v === null || isNaN(v));
+      });
+      if (incomplete) missing.add(joueur);
+    });
+  }
+
+  // 3) Matchs : joueurs ayant joué (temps > 0) sans note RPE match
   (state.bdd_matchs || []).filter(m => m.date === date).forEach(m => {
     const seanceNom = matchSeanceNom(m);
     (m.composition || []).forEach(c => {
