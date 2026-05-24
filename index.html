@@ -1834,6 +1834,13 @@ const SESSION_WINDOW_HOURS = 48; // fenêtre de saisie après publication de la 
 
 // Timestamp (ms) de publication de la séance, ou null si inconnu
 function getSeancePublishedMs(date, seanceNom) {
+  // Cas match : la "séance virtuelle" commence par '⚽ MATCH'
+  if (seanceNom && seanceNom.indexOf('⚽ MATCH') === 0) {
+    const m = (state.bdd_matchs || []).find(x => x.date === date && matchSeanceNom(x) === seanceNom);
+    if (!m || !m.created_at) return null;
+    const ms = new Date(m.created_at).getTime();
+    return isNaN(ms) ? null : ms;
+  }
   const s = state.bdd_ent2.find(x => x.date === date && x.nom === seanceNom);
   if (!s || !s.created_at) return null;
   const ms = new Date(s.created_at).getTime();
@@ -2912,22 +2919,32 @@ function renderOverviewMissing() {
 
 // Retourne les joueurs ayant une séance d'entraînement ce jour SANS RPE complet
 function getPlayersMissingRPE(date) {
-  const playersWithSession = state.bdd_ent.filter(e => {
-    if (e.date !== date) return false;
-    return e.seances.some(s => !STATUTS_NON_ENT.includes(s));
-  }).map(e => e.joueur);
+  const missing = new Set();
 
-  return playersWithSession.filter(joueur => {
-    const e = state.bdd_ent.find(x => x.date === date && x.joueur === joueur);
-    if (!e) return false;
+  // 1) Séances d'entraînement
+  state.bdd_ent.filter(e => e.date === date).forEach(e => {
     const trainingSeances = e.seances.filter(s => !STATUTS_NON_ENT.includes(s));
-    return trainingSeances.some(s => {
-      const detail = getRPEDetailJoueurSeance(date, joueur, s);
+    if (trainingSeances.length === 0) return;
+    const incomplete = trainingSeances.some(s => {
+      const detail = getRPEDetailJoueurSeance(date, e.joueur, s);
       if (!detail) return true;
       if (detail.mode === 'unique') return detail.value === null;
       return detail.values.every(v => v === null || isNaN(v));
     });
+    if (incomplete) missing.add(e.joueur);
   });
+
+  // 2) Matchs : joueurs ayant joué (temps > 0) sans note RPE match
+  (state.bdd_matchs || []).filter(m => m.date === date).forEach(m => {
+    const seanceNom = matchSeanceNom(m);
+    (m.composition || []).forEach(c => {
+      if (!c.joueur || (c.total_min || 0) <= 0) return;
+      const rpe = getRPEJoueurSeance(date, c.joueur, seanceNom);
+      if (rpe === null) missing.add(c.joueur);
+    });
+  });
+
+  return Array.from(missing).sort((a, b) => a.localeCompare(b));
 }
 
 // Sélectionne une date dans le filtre RPE et rafraîchit
@@ -5149,6 +5166,18 @@ function setRPEMode(mode) {
 // Récupère la liste des joueurs concernés pour la date et le filtre groupe
 function getRPEPlayersForDate(date, groupFilter) {
   let rows = state.bdd_ent.filter(e => e.date === date);
+
+  // Inclure les joueurs ayant joué un match ce jour mais sans planning bdd_ent
+  const planningJoueurs = new Set(rows.map(e => e.joueur));
+  (state.bdd_matchs || []).filter(m => m.date === date).forEach(m => {
+    (m.composition || []).forEach(c => {
+      if (c.joueur && (c.total_min || 0) > 0 && !planningJoueurs.has(c.joueur)) {
+        planningJoueurs.add(c.joueur);
+        rows.push({ date: date, joueur: c.joueur, seances: [] });
+      }
+    });
+  });
+
   // Pour un lecteur, ne montrer que son propre planning
   if (currentRole === 'lecteur' && currentJoueurNom) {
     rows = rows.filter(e => e.joueur === currentJoueurNom);
@@ -5194,6 +5223,17 @@ function updateRPEProgress(date, groupFilter) {
           done += detail.values.filter(v => v !== null && !isNaN(v)).length;
         }
       }
+    });
+  });
+  // Compter les notes de match (1 par joueur ayant joué)
+  (state.bdd_matchs || []).filter(m => m.date === date).forEach(m => {
+    const seanceNom = matchSeanceNom(m);
+    (m.composition || []).forEach(c => {
+      if (!c.joueur || (c.total_min || 0) <= 0) return;
+      if (groupFilter && getJoueurInfo(c.joueur).groupe !== groupFilter) return;
+      if (currentRole === 'lecteur' && c.joueur !== currentJoueurNom) return;
+      total += 1;
+      if (getRPEJoueurSeance(date, c.joueur, seanceNom) !== null) done += 1;
     });
   });
   const pct = total > 0 ? Math.round(done * 100 / total) : 0;
@@ -5324,6 +5364,33 @@ function getRPEColor(v) {
   return '#dc2626';                // rouge intense
 }
 
+// Carte de notation match pour le staff (note unique, sRPE visible)
+function renderStaffMatchNotation(date, joueur, m) {
+  const seanceNom = matchSeanceNom(m);
+  const temps = getMatchTempsJeu(m, joueur);
+  const joueurEsc = joueur.replace(/'/g, "\\'");
+  const seanceEsc = seanceNom.replace(/'/g, "\\'");
+  const rpe = getRPEJoueurSeance(date, joueur, seanceNom);
+
+  let html = '<div class="rpe-session-card" style="border-left:3px solid #fbbf24;">';
+  html += '<div class="rpe-session-name">⚽ Match vs ' + escapeHtml(m.adversaire) + '</div>';
+  html += '<div class="rpe-session-type" style="display:flex;justify-content:space-between;align-items:center;">';
+  html += '<span class="badge" style="background:#fbbf24;color:#1a1a1a;">MATCH</span>';
+  html += '<span style="color:var(--text-dim);font-size:12px;">Temps de jeu : <b style="color:var(--text);">' + temps + ' min</b></span>';
+  html += '</div>';
+  html += renderRPEScale(date, joueurEsc, seanceEsc, null, rpe);
+  if (rpe !== null) {
+    const lbl = RPE_LABELS[Math.round(rpe)] || '';
+    const sRPE = Math.round(temps * rpe);
+    html += '<div class="rpe-scale-label">Note : <b style="color:var(--text);">' + rpe + '</b> — ' + lbl + ' · sRPE : <b style="color:var(--accent-light);">' + sRPE + ' UA</b></div>';
+    html += '<div style="text-align:center;margin-top:8px;">';
+    html += '<button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="setRPECardValue(\'' + date + '\', \'' + joueurEsc + '\', \'' + seanceEsc + '\', null)">Effacer</button>';
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
 function renderRPECard(date, groupFilter) {
   const rows = getRPEPlayersForDate(date, groupFilter);
   const container = document.getElementById('rpe-card-container');
@@ -5358,13 +5425,21 @@ function renderRPECard(date, groupFilter) {
     html += '</div>';
   }
 
-  if (seances.length === 0) {
+  // Matchs du jour où ce joueur a joué
+  const matchsJoueur = (state.bdd_matchs || []).filter(m =>
+    m.date === date && (m.composition || []).some(c => c.joueur === current.joueur && (c.total_min || 0) > 0)
+  );
+
+  if (seances.length === 0 && matchsJoueur.length === 0) {
     if (statuts.length === 0) {
-      html += '<div class="empty-state">Aucune séance d\'entraînement à noter.</div>';
+      html += '<div class="empty-state">Aucune séance ni match à noter.</div>';
     }
   } else {
     seances.forEach((s, idx) => {
       html += renderSeanceNotation(date, current.joueur, s);
+    });
+    matchsJoueur.forEach(m => {
+      html += renderStaffMatchNotation(date, current.joueur, m);
     });
   }
 
