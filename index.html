@@ -1352,9 +1352,15 @@
     <div class="form-row">
       <div>
         <label>Date</label>
-        <input type="date" id="hooper-date" />
+        <input type="date" id="hooper-date" onchange="renderPlayerHooper()" />
+      </div>
+      <div id="hooper-player-wrap" style="display:none;">
+        <label>Joueur (saisie staff)</label>
+        <select id="hooper-player-select" onchange="onHooperPlayerChange()"></select>
       </div>
     </div>
+    <div id="hooper-staff-banner" style="display:none; margin-bottom:12px; background:rgba(0,163,255,0.12); border:1px solid var(--accent); border-radius:8px; padding:10px 14px; font-size:13px; color:var(--accent-light);">
+      ✍️ Mode staff : vous remplissez le check-in à la place du joueur sélectionné.</div>
 
     <div id="hooper-status" style="margin-bottom:12px;"></div>
 
@@ -1720,6 +1726,7 @@ let sb = null; // client Supabase
 let currentUser = null;
 let currentRole = null;
 let currentJoueurNom = null; // pour les lecteurs : nom du joueur associé
+let hooperTargetJoueur = null; // joueur ciblé pour la saisie Hooper (staff peut saisir pour un autre)
 
 // Initialise le client Supabase
 function initSupabase() {
@@ -3116,18 +3123,33 @@ function goToHooperEntry(date, joueur) {
 
 // Navigation vers le suivi Hooper staff, pré-filtré sur un joueur précis
 function goToHooperForPlayer(date, joueur) {
-  const btn = document.querySelector('.nav-btn[data-view="staff-hooper"]');
-  if (btn) {
-    btn.click();
+  // Pour un joueur (lecteur) : ouvrir simplement son propre check-in
+  if (currentRole === 'lecteur') {
+    const btn = document.querySelector('.nav-btn[data-view="player-hooper"]');
+    if (btn) btn.click();
     setTimeout(() => {
-      const sel = document.getElementById('staff-hooper-player');
-      if (sel) {
-        sel.value = joueur;
-        if (typeof renderStaffHooperPlayerChart === 'function') renderStaffHooperPlayerChart();
-        sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      const di = document.getElementById('hooper-date');
+      if (di && date) di.value = date;
+      renderPlayerHooper();
     }, 150);
+    return;
   }
+
+  // Staff/admin : ouvrir la vue de saisie Hooper, pré-remplie sur ce joueur et cette date
+  hooperTargetJoueur = joueur;
+  // Activer la vue player-hooper manuellement (le staff n'a pas ce bouton dans la nav)
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const view = document.getElementById('view-player-hooper');
+  if (view) view.classList.add('active');
+  setTimeout(() => {
+    const di = document.getElementById('hooper-date');
+    if (di && date) di.value = date;
+    const sel = document.getElementById('hooper-player-select');
+    if (sel) sel.value = joueur;
+    renderPlayerHooper();
+    if (view) view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
 }
 
 function chartOpts(opts) {
@@ -6336,6 +6358,13 @@ async function saveHooperToSupabase(date, joueur, fields) {
 // ============================================================================
 // VUE JOUEUR : DAILY HOOPER CHECK-IN
 // ============================================================================
+// Le staff change de joueur cible pour la saisie Hooper
+function onHooperPlayerChange() {
+  const sel = document.getElementById('hooper-player-select');
+  if (sel) hooperTargetJoueur = sel.value;
+  renderPlayerHooper();
+}
+
 async function renderPlayerHooper() {
   if (hooperData.length === 0) await loadHooperFromSupabase();
 
@@ -6343,7 +6372,37 @@ async function renderPlayerHooper() {
   if (!dateInput.value) dateInput.value = toLocalISO(new Date());
   const date = dateInput.value;
 
-  const existing = getHooper(date, currentJoueurNom);
+  // Déterminer le joueur ciblé : le staff peut saisir pour un autre joueur via le sélecteur
+  const playerWrap = document.getElementById('hooper-player-wrap');
+  const playerSel = document.getElementById('hooper-player-select');
+  const staffBanner = document.getElementById('hooper-staff-banner');
+  if (currentRole === 'lecteur') {
+    // Joueur : saisie pour lui-même, pas de sélecteur
+    hooperTargetJoueur = currentJoueurNom;
+    if (playerWrap) playerWrap.style.display = 'none';
+    if (staffBanner) staffBanner.style.display = 'none';
+  } else {
+    if (staffBanner) staffBanner.style.display = 'block';
+    // Staff/admin : sélecteur de joueur visible
+    if (playerWrap) playerWrap.style.display = '';
+    if (playerSel) {
+      const allPlayers = getAllPlayers();
+      // Remplir le sélecteur si nécessaire
+      if (playerSel.options.length !== allPlayers.length) {
+        playerSel.innerHTML = allPlayers.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+      }
+      // Cible : valeur du sélecteur, ou hooperTargetJoueur déjà défini, ou premier joueur
+      if (hooperTargetJoueur && allPlayers.includes(hooperTargetJoueur)) {
+        playerSel.value = hooperTargetJoueur;
+      } else {
+        hooperTargetJoueur = playerSel.value || allPlayers[0];
+        if (playerSel.value !== hooperTargetJoueur) playerSel.value = hooperTargetJoueur;
+      }
+    }
+  }
+  if (!hooperTargetJoueur) hooperTargetJoueur = currentJoueurNom;
+
+  const existing = getHooper(date, hooperTargetJoueur);
 
   // Status banner
   const statusEl = document.getElementById('hooper-status');
@@ -6429,7 +6488,7 @@ function bindMannequinClicks() {
     if (!date) return;
 
     // Récupérer l'état actuel
-    const existing = getHooper(date, currentJoueurNom);
+    const existing = getHooper(date, hooperTargetJoueur);
     let locations = (existing && Array.isArray(existing.pain_locations)) ? existing.pain_locations.slice() : [];
 
     if (locations.includes(zone)) {
@@ -6442,7 +6501,7 @@ function bindMannequinClicks() {
     }
 
     // Sauvegarder
-    const ok = await saveHooperToSupabase(date, currentJoueurNom, { pain_locations: locations });
+    const ok = await saveHooperToSupabase(date, hooperTargetJoueur, { pain_locations: locations });
     if (ok) {
       updatePainSummary(locations);
     }
@@ -6457,7 +6516,7 @@ async function saveHooperNotes() {
   const btn = document.getElementById('btn-save-notes');
   btn.disabled = true;
   btn.textContent = '⏳ Saving...';
-  const ok = await saveHooperToSupabase(date, currentJoueurNom, { pain_notes: notes || null });
+  const ok = await saveHooperToSupabase(date, hooperTargetJoueur, { pain_notes: notes || null });
   btn.disabled = false;
   btn.textContent = '💾 Save notes';
   if (ok) {
@@ -6510,7 +6569,7 @@ async function setHooperValue(key, value) {
   if (!date) return;
   const update = {};
   update[key] = value;
-  const existing = getHooper(date, currentJoueurNom);
+  const existing = getHooper(date, hooperTargetJoueur);
   if (!existing) {
     update.sleep_quality = (key === 'sleep_quality') ? value : null;
     update.fatigue = (key === 'fatigue') ? value : null;
@@ -6522,7 +6581,7 @@ async function setHooperValue(key, value) {
   if (key === 'muscle_soreness' && value <= 1) {
     update.pain_locations = [];
   }
-  const ok = await saveHooperToSupabase(date, currentJoueurNom, update);
+  const ok = await saveHooperToSupabase(date, hooperTargetJoueur, update);
   if (ok) {
     renderPlayerHooper();
   }
@@ -6548,7 +6607,7 @@ function updateHooperSummary(h) {
 }
 
 function renderHooperMiniChart() {
-  const mine = hooperData.filter(h => h.joueur === currentJoueurNom).sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
+  const mine = hooperData.filter(h => h.joueur === hooperTargetJoueur).sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
   destroyChart('hooper-mini-chart');
   if (mine.length === 0) {
     const ctx = document.getElementById('hooper-mini-chart').getContext('2d');
