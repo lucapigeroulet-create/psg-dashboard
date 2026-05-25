@@ -912,7 +912,7 @@
         </div>
         <div>
           <label>Équipe PSG</label>
-          <select id="match-groupe"></select>
+          <select id="match-groupe" onchange="onMatchGroupeChange()"></select>
         </div>
       </div>
 
@@ -4686,6 +4686,13 @@ function renderMatchPeriodes() {
 
 // Rend le tableau de composition (joueurs + temps par période)
 let matchCompositionState = {}; // { joueur: { statut, temps: [p1, p2...] } }
+
+// Quand on change d'équipe PSG : recharger la composition avec les joueurs du groupe
+function onMatchGroupeChange() {
+  // Réinitialiser la composition pour repartir sur les joueurs du nouveau groupe
+  // (on conserve les saisies existantes par joueur, mais on régénère la liste affichée)
+  renderMatchComposition();
+}
 
 function renderMatchComposition() {
   const container = document.getElementById('match-composition-container');
