@@ -5219,6 +5219,7 @@ async function removeAffectation() {
 // SAISIE RPE
 // ============================================================================
 // État du mode RPE (table ou card)
+let rpeSuppressRefresh = false; // empêche le re-render realtime pendant la saisie
 let rpeMode = 'table';
 let rpeCardIndex = 0;
 
@@ -5767,6 +5768,10 @@ async function setRPEFromInput(inp) {
   const raw = (inp.value || '').trim();
   const v = raw === '' ? null : parseFloat(raw);
   setRPEJoueurSeance(d, p, s, (v === null || isNaN(v)) ? null : v);
+  // Empêcher le re-render realtime (écho Supabase) qui ferait remonter le tableau
+  rpeSuppressRefresh = true;
+  clearTimeout(window._rpeRefreshTimer);
+  window._rpeRefreshTimer = setTimeout(() => { rpeSuppressRefresh = false; }, 4000);
   // Sauvegarde immédiate vers Supabase (comme côté joueur)
   const r = state.bdd_rpe.find(x => x.date === d && x.joueur === p);
   await saveRPEToSupabase(d, p, r ? r.rpe : []);
@@ -5804,6 +5809,9 @@ async function setRPEProcFromInput(inp) {
   const raw = (inp.value || '').trim();
   const v = raw === '' ? null : parseFloat(raw);
   setRPEProcedeJoueurSeance(d, p, s, i, (v === null || isNaN(v)) ? null : v);
+  rpeSuppressRefresh = true;
+  clearTimeout(window._rpeRefreshTimer);
+  window._rpeRefreshTimer = setTimeout(() => { rpeSuppressRefresh = false; }, 4000);
   const r = state.bdd_rpe.find(x => x.date === d && x.joueur === p);
   await saveRPEToSupabase(d, p, r ? r.rpe : []);
 
@@ -6156,7 +6164,7 @@ function refreshActiveView() {
   else if (id === 'view-gps') renderGPS();
   else if (id === 'view-injury') renderInjury();
   else if (id === 'view-entry') renderEntry();
-  else if (id === 'view-rpe-entry') renderRPEEntry();
+  else if (id === 'view-rpe-entry') { if (!rpeSuppressRefresh) renderRPEEntry(); }
   else if (id === 'view-history') renderHistory();
 }
 
