@@ -1359,8 +1359,10 @@
         <select id="hooper-player-select" onchange="onHooperPlayerChange()"></select>
       </div>
     </div>
-    <div id="hooper-staff-banner" style="display:none; margin-bottom:12px; background:rgba(0,163,255,0.12); border:1px solid var(--accent); border-radius:8px; padding:10px 14px; font-size:13px; color:var(--accent-light);">
-      ✍️ Mode staff : vous remplissez le check-in à la place du joueur sélectionné.</div>
+    <div id="hooper-staff-banner" style="display:none; margin-bottom:12px; background:rgba(0,163,255,0.12); border:1px solid var(--accent); border-radius:8px; padding:10px 14px; font-size:13px; color:var(--accent-light); justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <span>✍️ Mode staff : vous remplissez le check-in à la place du joueur sélectionné.</span>
+      <button class="btn btn-secondary" style="padding:4px 12px; font-size:12px;" onclick="backToStaffHooper()">← Retour à l'état de forme</button>
+    </div>
 
     <div id="hooper-status" style="margin-bottom:12px;"></div>
 
@@ -1619,10 +1621,15 @@
   <!-- ========== VUE STAFF : SUIVI HOOPER ========== -->
   <div class="view" id="view-staff-hooper">
     <div class="card">
-      <h2>💚 État de forme de l'effectif (Test Hooper)</h2>
-      <p style="color:var(--text-dim); font-size:12px;">
-        Vue d'ensemble du wellness quotidien des joueurs. Le Hooper Index est la somme des 4 indicateurs (Sleep, Fatigue, Stress, Soreness) : plus il est élevé, plus le joueur est en fatigue/stress.
-      </p>
+      <div style="display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h2>💚 État de forme de l'effectif (Test Hooper)</h2>
+          <p style="color:var(--text-dim); font-size:12px; margin-top:4px;">
+            Vue d'ensemble du wellness quotidien des joueurs. Le Hooper Index est la somme des 4 indicateurs (Sleep, Fatigue, Stress, Soreness) : plus il est élevé, plus le joueur est en fatigue/stress.
+          </p>
+        </div>
+        <button class="btn" style="white-space:nowrap;" onclick="openHooperEntryStaff()">✍️ Remplir un état de forme</button>
+      </div>
     </div>
 
     <div class="stats-grid">
@@ -6358,6 +6365,19 @@ async function saveHooperToSupabase(date, joueur, fields) {
 // ============================================================================
 // VUE JOUEUR : DAILY HOOPER CHECK-IN
 // ============================================================================
+// Revenir à l'onglet État de forme depuis la saisie staff
+function backToStaffHooper() {
+  const btn = document.querySelector('.nav-btn[data-view="staff-hooper"]');
+  if (btn) btn.click();
+}
+
+// Ouvre la page de saisie Hooper en mode staff (depuis l'onglet État de forme)
+function openHooperEntryStaff() {
+  const players = getAllPlayers();
+  const firstPlayer = players[0] || null;
+  goToHooperForPlayer(toLocalISO(new Date()), firstPlayer);
+}
+
 // Le staff change de joueur cible pour la saisie Hooper
 function onHooperPlayerChange() {
   const sel = document.getElementById('hooper-player-select');
@@ -6382,7 +6402,7 @@ async function renderPlayerHooper() {
     if (playerWrap) playerWrap.style.display = 'none';
     if (staffBanner) staffBanner.style.display = 'none';
   } else {
-    if (staffBanner) staffBanner.style.display = 'block';
+    if (staffBanner) staffBanner.style.display = 'flex';
     // Staff/admin : sélecteur de joueur visible
     if (playerWrap) playerWrap.style.display = '';
     if (playerSel) {
