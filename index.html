@@ -5365,10 +5365,11 @@ function renderMatchRPESection(date, groupFilter) {
       html += '<tr>';
       html += '<td style="text-align:left;font-weight:600;">' + escapeHtml(j) + '</td>';
       html += '<td style="text-align:center;">' + temps + ' min</td>';
+      const srpeCellId = 'srpe-' + date + '-' + j.replace(/[^a-zA-Z0-9]/g, '_');
       html += '<td style="text-align:center;"><input type="number" min="0" max="10" step="0.5" style="width:70px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px;text-align:center;" ' +
-              'data-rpe-date="' + date + '" data-rpe-player="' + joueurEsc + '" data-rpe-seance="' + seanceEsc + '" ' +
+              'data-rpe-date="' + date + '" data-rpe-player="' + joueurEsc + '" data-rpe-seance="' + seanceEsc + '" data-rpe-temps="' + temps + '" data-rpe-srpe-cell="' + srpeCellId + '" ' +
               'value="' + (rpe ?? '') + '" onchange="setRPEFromInput(this)" /></td>';
-      html += '<td style="text-align:center;color:var(--accent-light);font-weight:600;">' + (sRPE !== null ? sRPE + ' UA' : '—') + '</td>';
+      html += '<td id="' + srpeCellId + '" style="text-align:center;color:var(--accent-light);font-weight:600;">' + (sRPE !== null ? sRPE + ' UA' : '—') + '</td>';
       html += '</tr>';
     });
     html += '</tbody></table></div></div>';
@@ -5769,13 +5770,29 @@ async function setRPEFromInput(inp) {
   // Sauvegarde immédiate vers Supabase (comme côté joueur)
   const r = state.bdd_rpe.find(x => x.date === d && x.joueur === p);
   await saveRPEToSupabase(d, p, r ? r.rpe : []);
-  // Rafraîchir l'affichage pour montrer la validation (vert + ✓) et la progression
-  updateRPEProgress(document.getElementById('rpe-entry-date').value, document.getElementById('rpe-entry-group').value);
-  if (s && s.indexOf('⚽ MATCH') === 0) {
-    renderMatchRPESection(d, document.getElementById('rpe-entry-group').value);
-  } else if (rpeMode === 'table') {
-    renderRPETable(d, document.getElementById('rpe-entry-group').value);
+
+  // Mise à jour CIBLÉE (sans re-render → le scroll reste en place, navigation fluide)
+  const filled = (v !== null && !isNaN(v));
+  // Style validé sur l'input
+  if (filled) {
+    inp.style.border = '2px solid var(--green)';
+    inp.style.background = 'rgba(16,185,129,0.12)';
+    inp.style.fontWeight = '700';
+  } else {
+    inp.style.border = '1px solid var(--border)';
+    inp.style.background = 'var(--bg-elevated)';
+    inp.style.fontWeight = 'normal';
   }
+  // Mettre à jour la cellule sRPE du match si applicable
+  if (inp.dataset.rpeSrpeCell && inp.dataset.rpeTemps !== undefined) {
+    const cell = document.getElementById(inp.dataset.rpeSrpeCell);
+    if (cell) {
+      const temps = parseFloat(inp.dataset.rpeTemps) || 0;
+      cell.textContent = filled ? (Math.round(temps * v) + ' UA') : '—';
+    }
+  }
+  // Mettre à jour seulement le compteur de progression (léger, ne touche pas au tableau)
+  updateRPEProgress(document.getElementById('rpe-entry-date').value, document.getElementById('rpe-entry-group').value);
 }
 
 // Saisie d'un procédé dans le tableau (sauvegarde immédiate + validation visuelle)
@@ -5789,8 +5806,25 @@ async function setRPEProcFromInput(inp) {
   setRPEProcedeJoueurSeance(d, p, s, i, (v === null || isNaN(v)) ? null : v);
   const r = state.bdd_rpe.find(x => x.date === d && x.joueur === p);
   await saveRPEToSupabase(d, p, r ? r.rpe : []);
+
+  // Mise à jour CIBLÉE sans re-render (scroll préservé)
+  const filled = (v !== null && !isNaN(v));
+  if (filled) {
+    inp.style.border = '2px solid var(--green)';
+    inp.style.background = 'rgba(16,185,129,0.12)';
+    inp.style.fontWeight = '700';
+  } else {
+    inp.style.border = '1px solid var(--border)';
+    inp.style.background = 'var(--bg-card)';
+    inp.style.fontWeight = 'normal';
+  }
+  // Mettre à jour le label "P{i+1} ✓" juste au-dessus de l'input
+  const label = inp.parentElement ? inp.parentElement.querySelector('span') : null;
+  if (label) {
+    label.textContent = 'P' + (i+1) + (filled ? ' ✓' : '');
+    label.style.color = filled ? 'var(--green)' : 'var(--text-dim)';
+  }
   updateRPEProgress(document.getElementById('rpe-entry-date').value, document.getElementById('rpe-entry-group').value);
-  if (rpeMode === 'table') renderRPETable(d, document.getElementById('rpe-entry-group').value);
 }
 
 async function saveAllRPE() {
