@@ -4644,12 +4644,23 @@ function renderInjury() {
     // Un joueur est "indisponible total" s'il a un statut d'indispo ET aucune séance d'entraînement.
     // S'il fait au moins une séance (ex: REHAB FIELD malgré INJURY), il est "partiellement dispo".
     let dispo = 0, partiel = 0, indispo = 0;
+    const comptes = new Set();
     rows.forEach(e => {
+      comptes.add(e.joueur);
       const hasIndispo = e.seances.some(s => STATUTS_INDISPO.includes(s));
       const hasTraining = e.seances.some(s => !STATUTS_NON_ENT.includes(s));
       if (hasIndispo && !hasTraining) indispo++;
       else if (hasIndispo && hasTraining) partiel++;
       else dispo++;
+    });
+    // Les joueurs ayant joué un match (temps > 0) sont disponibles, s'ils ne sont pas déjà comptés
+    (state.bdd_matchs || []).filter(m => m.date === d).forEach(m => {
+      (m.composition || []).forEach(c => {
+        if (c.joueur && (c.total_min || 0) > 0 && !comptes.has(c.joueur)) {
+          comptes.add(c.joueur);
+          dispo++;
+        }
+      });
     });
     return { d, dispo, partiel, indispo };
   });
