@@ -161,6 +161,7 @@
     margin: 2px;
   }
   .badge-train { background: #1a4d2e; color: #86efac; }
+  .badge-match { background: #713f12; color: #fde68a; font-weight: 700; }
   .badge-rest { background: #374151; color: #d1d5db; }
   .badge-injury { background: #7f1d1d; color: #fca5a5; }
   .badge-sick { background: #78350f; color: #fdba74; }
@@ -196,6 +197,7 @@
     padding-left: 10px;
   }
   .cal-cell.train { background: #14322088; }
+  .cal-cell.match { background: #78540988; border-left: 2px solid #eab308; }
   .cal-cell.rest { background: #37415188; }
   .cal-cell.injury { background: #7f1d1d88; }
   .cal-cell.sick { background: #78350f88; }
@@ -2056,6 +2058,8 @@ async function deleteSeanceFromSupabase(date, nom) {
 
 async function savePlanningToSupabase(date, joueur, seances) {
   if (!canWrite()) { toast('Lecture seule', 'error'); return false; }
+  // Filtrer les badges de match (préfixe ⚽) — ils ne sont pas stockés dans plannings
+  seances = (seances || []).filter(s => !(typeof s === 'string' && s.indexOf('⚽') === 0));
   if (!seances || seances.length === 0) {
     const { error } = await sb.from('plannings').delete().match({ date, joueur });
     if (error) { toast('Erreur planning : ' + error.message, 'error'); return false; }
@@ -2349,16 +2353,25 @@ function getJoueurInfo(nom) {
 
 function getSeancesJoueur(date, joueur) {
   const e = state.bdd_ent.find(x => x.date === date && x.joueur === joueur);
-  return e ? e.seances : [];
+  const seances = e ? e.seances.slice() : [];
+  // Ajouter les matchs où le joueur a joué (temps > 0) ce jour-là
+  (state.bdd_matchs || []).filter(m => m.date === date).forEach(m => {
+    const joue = (m.composition || []).some(c => c.joueur === joueur && (c.total_min || 0) > 0);
+    if (joue) seances.push('⚽ ' + m.adversaire);
+  });
+  return seances;
 }
 
 function setSeancesJoueur(date, joueur, seances) {
+  // Ne jamais persister les badges de match (préfixe ⚽) dans le planning :
+  // ils proviennent de la table matchs, pas du planning d'entraînement.
+  const clean = (seances || []).filter(s => !(typeof s === 'string' && s.indexOf('⚽') === 0));
   const idx = state.bdd_ent.findIndex(x => x.date === date && x.joueur === joueur);
   if (idx >= 0) {
-    if (seances.length === 0) state.bdd_ent.splice(idx, 1);
-    else state.bdd_ent[idx].seances = seances;
-  } else if (seances.length > 0) {
-    state.bdd_ent.push({ date, joueur, seances });
+    if (clean.length === 0) state.bdd_ent.splice(idx, 1);
+    else state.bdd_ent[idx].seances = clean;
+  } else if (clean.length > 0) {
+    state.bdd_ent.push({ date, joueur, seances: clean });
   }
 }
 
@@ -2520,6 +2533,7 @@ function getSeanceCategory(seance) {
 }
 
 function getSeanceBadgeClass(seance) {
+  if (seance && seance.indexOf('⚽') === 0) return 'badge-match';
   if (seance === 'INJURY') return 'badge-injury';
   if (seance === 'SICK') return 'badge-sick';
   if (seance === 'ABSENT') return 'badge-absent';
@@ -2531,6 +2545,9 @@ function getSeanceBadgeClass(seance) {
 
 function getCellStatusClass(seances) {
   if (!seances || seances.length === 0) return '';
+  // Un match (préfixe ⚽) est prioritaire sur l'affichage
+  const hasMatch = seances.some(s => typeof s === 'string' && s.indexOf('⚽') === 0);
+  if (hasMatch) return 'match';
   // Priorité d'affichage : si le joueur s'entraîne (au moins une séance non-statut),
   // on l'affiche en "train" (vert) même s'il a aussi un statut comme INJURY.
   // Cela reflète le cas "blessé mais participe à REHAB FIELD" : il fait quelque chose.
@@ -5192,6 +5209,10 @@ function renderAffectation() {
     const badges = seances.map(s => {
       const sEsc = escapeHtml(s);
       const pEsc = escapeHtml(p.nom);
+      // Un match (préfixe ⚽) vient de la saisie match : badge informatif, non supprimable ici
+      if (s && s.indexOf('⚽') === 0) {
+        return '<span class="badge ' + getSeanceBadgeClass(s) + '" title="Match (modifiable dans Saisie match)">' + sEsc + '</span>';
+      }
       return '<span class="badge ' + getSeanceBadgeClass(s) + '" style="cursor:pointer;" ' +
              'onclick="removeOneSeance(\'' + p.nom.replace(/'/g, "\\'") + '\', \'' + s.replace(/'/g, "\\'") + '\')" ' +
              'title="Cliquer pour retirer">' + sEsc + ' ✕</span>';
