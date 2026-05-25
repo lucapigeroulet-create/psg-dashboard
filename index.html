@@ -610,8 +610,14 @@
 
     <!-- 5) Check-in Hooper non remplis -->
     <div class="card">
-      <h2>💚 Check-in Hooper non remplis</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Clique sur un joueur pour ouvrir son check-in Hooper.</p>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <h2 style="margin:0;">💚 Check-in Hooper non remplis</h2>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="date" id="overview-hooper-date" onchange="renderOverviewMissing()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;" />
+          <button class="btn btn-secondary" style="padding:6px 10px; font-size:11px;" onclick="resetOverviewHooperDate()">Aujourd'hui</button>
+        </div>
+      </div>
+      <p style="color:var(--text-dim); font-size:12px; margin:8px 0;">Clique sur un joueur pour ouvrir son check-in Hooper.</p>
       <div id="overview-missing-hooper"></div>
     </div>
   </div>
@@ -2900,6 +2906,12 @@ function renderOverviewTodaySummary() {
 }
 
 // Listes de relances : RPE (date sélectionnée) + Hooper + jours incomplets
+function resetOverviewHooperDate() {
+  const el = document.getElementById('overview-hooper-date');
+  if (el) el.value = toLocalISO(new Date());
+  renderOverviewMissing();
+}
+
 function toggleOverviewRPEShowAll() {
   overviewRPEShowAll = !overviewRPEShowAll;
   renderOverviewMissing();
@@ -2979,11 +2991,11 @@ function renderOverviewMissing() {
     }).join('');
   }
 
-  // ===== Hooper manquants (jour de référence = aujourd'hui ou dernier jour) =====
+  // ===== Hooper manquants (date choisie via le sélecteur, défaut = aujourd'hui) =====
   const hooperContainer = document.getElementById('overview-missing-hooper');
-  let hooperRefDate = today;
-  const hasTodayPlanning = state.bdd_ent.some(e => e.date === today);
-  if (!hasTodayPlanning && dates.length > 0) hooperRefDate = dates[dates.length - 1];
+  const hooperDateInput = document.getElementById('overview-hooper-date');
+  if (hooperDateInput && !hooperDateInput.value) hooperDateInput.value = today;
+  let hooperRefDate = (hooperDateInput && hooperDateInput.value) ? hooperDateInput.value : today;
 
   // Joueurs attendus pour le Hooper : ceux ayant une séance/match ce jour (planning),
   // sinon TOUT l'effectif (le check-in Hooper est quotidien pour tous).
