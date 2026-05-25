@@ -1653,6 +1653,17 @@
     </div>
 
     <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+        <h2 style="margin:0;">📋 Évaluations Hooper manquantes</h2>
+        <div class="filter-group" style="margin:0;">
+          <label style="font-size:11px;">Date</label>
+          <input type="date" id="hooper-missing-date" onchange="renderHooperMissing()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;" />
+        </div>
+      </div>
+      <div id="hooper-missing-content"></div>
+    </div>
+
+    <div class="card">
       <h2>Toutes les réponses</h2>
       <div class="table-wrap" style="max-height:500px;">
         <table id="hooper-all-table">
@@ -2611,7 +2622,7 @@ function renderOverview() {
     statusByDay[e.date][cat]++;
   });
   const cats = ['MATCH', 'Entraîné', 'REST', 'INJURY', 'SICK', 'ABSENT'];
-  const colors = ['#fbbf24', '#4ade80', '#6b7280', '#f87171', '#fb923c', '#facc15'];
+  const colors = ['#eab308', '#22c55e', '#64748b', '#ef4444', '#a855f7', '#f97316'];
   destroyChart('chart-status-stacked');
   charts['chart-status-stacked'] = new Chart(document.getElementById('chart-status-stacked'), {
     type: 'bar',
@@ -2718,17 +2729,19 @@ function renderOverviewActivity() {
   const finalCats = Array.from(new Set([...allCats, ...dates.flatMap(d => Object.keys(dayData[d] || {}))]));
 
   const catColor = (cat) => {
-    if (cat === 'MATCH') return '#fbbf24';
-    if (cat === 'REST') return '#6b7280';
-    if (cat === 'INJURY') return '#f87171';
-    if (cat === 'SICK') return '#fb923c';
-    if (cat === 'ABSENT') return '#fbbf24';
-    if (cat === 'SUSPENDED') return '#a16207';
-    if (TYPES_GYM.includes(cat) || cat.includes('GYM')) return '#a78bfa';
-    if (TYPES_GAME.includes(cat) || cat.includes('GAME') || cat.startsWith('TEGG')) return '#60a5fa';
-    if (cat.includes('U18')) return '#00a3ff';
-    if (cat.includes('U15')) return '#22d3ee';
-    if (cat.includes('GOALKEEPER') || cat.includes('GK')) return '#4ade80';
+    // Statuts : couleurs nettement distinctes
+    if (cat === 'MATCH') return '#eab308';      // jaune doré
+    if (cat === 'REST') return '#64748b';       // gris-bleu
+    if (cat === 'INJURY') return '#ef4444';     // rouge vif
+    if (cat === 'SICK') return '#a855f7';       // violet
+    if (cat === 'ABSENT') return '#f97316';     // orange
+    if (cat === 'SUSPENDED') return '#78350f';  // marron foncé
+    // Types d'entraînement : famille de bleus/cyans/verts
+    if (TYPES_GYM.includes(cat) || cat.includes('GYM')) return '#8b5cf6';     // indigo
+    if (TYPES_GAME.includes(cat) || cat.includes('GAME') || cat.startsWith('TEGG')) return '#0ea5e9'; // bleu ciel
+    if (cat.includes('U18')) return '#2563eb';   // bleu franc
+    if (cat.includes('U15')) return '#06b6d4';   // cyan
+    if (cat.includes('GOALKEEPER') || cat.includes('GK')) return '#10b981'; // émeraude
     let h = 0; for (let i = 0; i < cat.length; i++) h = cat.charCodeAt(i) + ((h << 5) - h);
     return 'hsl(' + (Math.abs(h) % 360) + ', 60%, 55%)';
   };
@@ -2870,6 +2883,11 @@ function renderOverviewTodaySummary() {
 }
 
 // Listes de relances : RPE (date sélectionnée) + Hooper + jours incomplets
+function toggleOverviewRPEShowAll() {
+  overviewRPEShowAll = !overviewRPEShowAll;
+  renderOverviewMissing();
+}
+
 function renderOverviewMissing() {
   const today = toLocalISO(new Date());
   const dates = getAllDates();
@@ -2893,15 +2911,32 @@ function renderOverviewMissing() {
       ? '<div style="color:var(--green);font-size:13px;padding:8px;">✅ Tous les RPE sont remplis pour ' + dateLabel + '.</div>'
       : '<div style="color:var(--text-dim);font-size:13px;padding:8px;">Aucune séance d\'entraînement ce jour.</div>';
   } else {
-    rpeContainer.innerHTML =
-      '<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">' + missingRPE.length + ' joueur(s) — ' + dateLabel + '</div>' +
-      missingRPE.map(j => {
-        const info = getJoueurInfo(j);
-        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);">' +
-          '<div><b>' + escapeHtml(j) + '</b> <span style="font-size:11px;color:var(--text-dim);">' + escapeHtml(info.groupe || '') + '</span></div>' +
-          '<button class="btn" style="padding:3px 10px;font-size:11px;" onclick="goToRPEEntry(\'' + refDate + '\', \'' + j.replace(/'/g, "\\'") + '\')">Saisir</button>' +
-          '</div>';
-      }).join('');
+    // Par défaut : afficher seulement les 3 premiers, le reste derrière un bouton "Voir tout"
+    const LIMIT = 3;
+    const showAll = overviewRPEShowAll;
+    const visible = showAll ? missingRPE : missingRPE.slice(0, LIMIT);
+    const remaining = missingRPE.length - visible.length;
+
+    const rowHtml = (j) => {
+      const info = getJoueurInfo(j);
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid var(--border);">' +
+        '<div><b>' + escapeHtml(j) + '</b> <span style="font-size:11px;color:var(--text-dim);">' + escapeHtml(info.groupe || '') + '</span></div>' +
+        '<button class="btn" style="padding:3px 10px;font-size:11px;" onclick="goToRPEEntry(\'' + refDate + '\', \'' + j.replace(/'/g, "\\'") + '\')">Saisir</button>' +
+        '</div>';
+    };
+
+    let html = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">' + missingRPE.length + ' joueur(s) — ' + dateLabel + '</div>';
+    html += visible.map(rowHtml).join('');
+    if (remaining > 0) {
+      html += '<div style="text-align:center;margin-top:8px;">' +
+        '<button class="btn btn-secondary" style="padding:4px 14px;font-size:12px;" onclick="toggleOverviewRPEShowAll()">Voir tout (' + remaining + ' de plus)</button>' +
+        '</div>';
+    } else if (showAll && missingRPE.length > LIMIT) {
+      html += '<div style="text-align:center;margin-top:8px;">' +
+        '<button class="btn btn-secondary" style="padding:4px 14px;font-size:12px;" onclick="toggleOverviewRPEShowAll()">Réduire</button>' +
+        '</div>';
+    }
+    rpeContainer.innerHTML = html;
   }
 
   // ===== Liste des jours avec RPE manquants =====
@@ -3026,6 +3061,7 @@ function getPlayersMissingRPE(date) {
 
 // Sélectionne une date dans le filtre RPE et rafraîchit
 function selectOverviewRPEDate(date) {
+  overviewRPEShowAll = false;
   const input = document.getElementById('overview-rpe-date');
   if (input) { input.value = date; renderOverviewMissing(); input.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 }
@@ -5226,7 +5262,8 @@ async function removeAffectation() {
 // SAISIE RPE
 // ============================================================================
 // État du mode RPE (table ou card)
-let rpeSuppressRefresh = false; // empêche le re-render realtime pendant la saisie
+let rpeSuppressRefresh = false;
+let overviewRPEShowAll = false; // déplier la liste des RPE non remplis // empêche le re-render realtime pendant la saisie
 let rpeMode = 'table';
 let rpeCardIndex = 0;
 
@@ -6538,6 +6575,10 @@ async function renderStaffHooper() {
   renderStaffHooperPlayerChart();
 
   // Table de toutes les réponses
+  // Évaluations manquantes (date par défaut = aujourd'hui)
+  const hmDate = document.getElementById('hooper-missing-date');
+  if (hmDate && !hmDate.value) hmDate.value = toLocalISO(new Date());
+  renderHooperMissing();
   renderStaffHooperAllTable();
 }
 
@@ -6728,6 +6769,51 @@ function renderStaffHooperPlayerChart() {
       }
     });
   }
+}
+
+// Évaluations Hooper manquantes pour une date (défaut = aujourd'hui)
+function renderHooperMissing() {
+  const container = document.getElementById('hooper-missing-content');
+  const dateInput = document.getElementById('hooper-missing-date');
+  if (!container || !dateInput) return;
+  if (!dateInput.value) dateInput.value = toLocalISO(new Date());
+  const date = dateInput.value;
+  const today = toLocalISO(new Date());
+  const dateLabel = (date === today) ? "aujourd'hui" : formatDateFR(date);
+
+  // Joueurs attendus : ceux ayant séance/match ce jour, sinon tout l'effectif
+  let expected = state.bdd_ent.filter(e => e.date === date).map(e => e.joueur);
+  (state.bdd_matchs || []).filter(m => m.date === date).forEach(m => {
+    (m.composition || []).filter(c => c.joueur && (c.total_min||0) > 0).forEach(c => {
+      if (!expected.includes(c.joueur)) expected.push(c.joueur);
+    });
+  });
+  if (expected.length === 0) expected = (state.joueurs || []).map(j => j.nom);
+  expected = uniqueSorted(expected);
+
+  const missing = expected.filter(joueur => {
+    const h = getHooper(date, joueur);
+    return !h || computeHooperIndex(h) === null;
+  });
+
+  const done = expected.length - missing.length;
+  let html = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">' +
+    done + ' / ' + expected.length + ' évaluations remplies — ' + dateLabel + '</div>';
+
+  if (expected.length === 0) {
+    html += '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Aucun joueur dans l\'effectif.</div>';
+  } else if (missing.length === 0) {
+    html += '<div style="color:var(--green); font-size:13px; padding:8px;">✅ Toutes les évaluations Hooper sont remplies pour ' + dateLabel + '.</div>';
+  } else {
+    html += '<div style="display:flex; flex-wrap:wrap; gap:6px;">' +
+      missing.map(j => {
+        const info = getJoueurInfo(j);
+        return '<span style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:14px; padding:5px 12px; font-size:12px;">' +
+          '<b>' + escapeHtml(j) + '</b> <span style="color:var(--text-dim); font-size:10px;">' + escapeHtml(info.groupe || '') + '</span></span>';
+      }).join('') +
+      '</div>';
+  }
+  container.innerHTML = html;
 }
 
 function renderStaffHooperAllTable() {
