@@ -1794,6 +1794,8 @@ async function loadProfileAndStart() {
   }
   currentRole = profile.role;
   currentJoueurNom = profile.joueur_nom;
+  // Normaliser le nom (supprimer espaces superflus) pour fiabiliser le lien compte ↔ joueur
+  if (currentJoueurNom) currentJoueurNom = String(currentJoueurNom).trim();
 
   // Cacher le login, afficher le chargement des données
   document.getElementById('login-overlay').style.display = 'none';
@@ -1807,6 +1809,22 @@ async function loadProfileAndStart() {
 
   await loadState();
   document.getElementById('data-loading-overlay').style.display = 'none';
+
+  // Vérifier la cohérence du lien compte ↔ joueur pour les lecteurs
+  if (currentRole === 'lecteur') {
+    const noms = (state.joueurs || []).map(j => j.nom);
+    if (!currentJoueurNom || !noms.includes(currentJoueurNom)) {
+      // Tentative de correspondance insensible à la casse / espaces
+      const cible = (currentJoueurNom || '').trim().toLowerCase();
+      const match = noms.find(n => n.trim().toLowerCase() === cible);
+      if (match) {
+        currentJoueurNom = match; // corriger automatiquement la casse
+      } else {
+        // Aucun joueur correspondant : avertir clairement plutôt que des vues vides
+        toast("⚠️ Votre compte n'est pas relié à une fiche joueur. Contactez le staff.", 'error');
+      }
+    }
+  }
 
   // Appliquer le mode lecture seule si lecteur
   applyRoleRestrictions();
