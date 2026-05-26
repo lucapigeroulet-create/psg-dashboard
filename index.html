@@ -2413,6 +2413,12 @@ function getSeancesPourDate(date) {
 
 // Récupérer le TYPE d'une séance à partir de son nom
 function getTypeForNom(date, nom) {
+  // Cas match : type dérivé du groupe du match → "Match U18", "Match U15", etc.
+  if (nom && nom.indexOf('⚽ MATCH') === 0) {
+    const m = (state.bdd_matchs || []).find(x => x.date === date && matchSeanceNom(x) === nom);
+    if (m) return m.groupe ? ('Match ' + m.groupe) : 'Match';
+    return 'Match';
+  }
   const s = getSeanceInfo(date, nom);
   return s ? s.seance : null;
 }
@@ -3427,7 +3433,10 @@ function renderRPE() {
   const typeSel = document.getElementById('rpe-filter-type');
   if (typeSel.options.length <= 1) {
     const types = uniqueSorted(state.bdd_ent2.map(s => s.seance).filter(t => t && !STATUTS_NON_ENT.includes(t)));
-    typeSel.innerHTML = '<option value="">Tous types</option>' + types.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
+    // Ajouter les types de match (Match U18, Match U15...) dérivés des matchs enregistrés
+    const matchTypes = uniqueSorted((state.bdd_matchs || []).map(m => m.groupe ? ('Match ' + m.groupe) : 'Match'));
+    const allTypes = uniqueSorted([...types, ...matchTypes]);
+    typeSel.innerHTML = '<option value="">Tous types</option>' + allTypes.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
   }
 
   // Remplir filtre groupe
