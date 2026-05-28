@@ -515,7 +515,7 @@
   <div class="header-actions">
     <span class="save-status" id="saveStatus">☁️ Connecté à Supabase</span>
     <span id="user-info" style="color:var(--text-dim); font-size:12px;"></span>
-    <button class="btn btn-secondary" onclick="exportData()">Exporter JSON</button>
+    <button class="btn btn-secondary" onclick="exportData()" id="btn-export-json">Exporter JSON</button>
     <button class="btn btn-secondary" onclick="logout()" id="logout-btn">↪ Déconnexion</button>
   </div>
 </header>
@@ -1399,7 +1399,7 @@
             </tbody>
           </table>
           <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); font-size:11px; color:var(--text-dim);">
-            <span>💡 Tip: be honest, these ratings help us adapt your training.</span>
+            <span data-en="💡 Tip: be honest, these ratings help us adapt your training." data-fr="💡 Conseil : sois honnête, ces notes nous aident à adapter ton entraînement.">💡 Tip: be honest, these ratings help us adapt your training.</span>
           </div>
         </div>
       </div>
@@ -1695,12 +1695,12 @@
 
     <!-- Notes facultatives -->
     <div class="card">
-      <h3 style="font-size:15px; margin-bottom:4px;">📝 Anything else? <span style="font-size:11px; color:var(--text-dim); font-weight:normal;"><span>(optional)</span></span></h3>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;"><span>Share any information you think might be useful for the staff.</span></p>
-      <textarea id="hooper-notes" rows="3" placeholder="E.g. slight headache, didn't sleep well after a noisy night..."
+      <h3 style="font-size:15px; margin-bottom:4px;"><span data-en="📝 Anything else?" data-fr="📝 Autre chose à signaler ?">📝 Anything else?</span> <span style="font-size:11px; color:var(--text-dim); font-weight:normal;">(<span data-en="optional" data-fr="facultatif">optional</span>)</span></h3>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;"><span data-en="Share any information you think might be useful for the staff." data-fr="Partage toute information qui pourrait être utile au staff.">Share any information you think might be useful for the staff.</span></p>
+      <textarea id="hooper-notes" rows="3" placeholder="E.g. slight headache, didn't sleep well after a noisy night..." data-ph-en="E.g. slight headache, didn't sleep well after a noisy night..." data-ph-fr="Ex : léger mal de tête, mauvaise nuit à cause du bruit..."
                 style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
       <div style="text-align:right; margin-top:8px;">
-        <button class="btn" onclick="saveHooperNotes()" id="btn-save-notes">💾 Save notes</button>
+        <button class="btn" onclick="saveHooperNotes()" id="btn-save-notes" data-en="💾 Save notes" data-fr="💾 Enregistrer les notes">💾 Save notes</button>
       </div>
     </div>
 
@@ -2456,6 +2456,13 @@ function renderSeancePlanModal(spId, joueur) {
     html += '</div>';
   }
 
+  // Bouton "OK" pour le joueur, visible toujours, permet de fermer rapidement
+  if (estJoueurConcerne) {
+    html += '<div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border); text-align:center;">';
+    html += '<button class="btn" style="padding:10px 28px; font-size:14px;" onclick="closeSeancePlanDetail()">' + tr('OK', 'OK') + '</button>';
+    html += '</div>';
+  }
+
   if (contentEl) contentEl.innerHTML = html;
 }
 
@@ -2547,6 +2554,11 @@ function applyPlayerLanguage() {
   document.querySelectorAll('[data-en]').forEach(el => {
     const txt = (lang === 'fr') ? (el.getAttribute('data-fr') || el.getAttribute('data-en')) : el.getAttribute('data-en');
     if (txt !== null) el.textContent = txt;
+  });
+  // Placeholders bilingues (data-ph-en / data-ph-fr)
+  document.querySelectorAll('[data-ph-en]').forEach(el => {
+    const ph = (lang === 'fr') ? (el.getAttribute('data-ph-fr') || el.getAttribute('data-ph-en')) : el.getAttribute('data-ph-en');
+    if (ph !== null) el.setAttribute('placeholder', ph);
   });
   // Bouton de déconnexion (texte selon langue lecteur)
   const logoutBtn = document.getElementById('logout-btn');
@@ -2830,6 +2842,8 @@ function applyRoleRestrictions() {
       }
     });
     if (gestionDropdown) gestionDropdown.style.display = 'none'; // Cacher le menu Gestion
+    const btnExport = document.getElementById('btn-export-json');
+    if (btnExport) btnExport.style.display = 'none'; // Cacher l'export JSON aux joueurs
     // Forcer l'affichage sur "Saisir mon RPE" au démarrage
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -2842,6 +2856,8 @@ function applyRoleRestrictions() {
     // Staff/admin : cacher les onglets joueur, réafficher le menu Gestion
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
     if (gestionDropdown) gestionDropdown.style.display = '';
+    const btnExport = document.getElementById('btn-export-json');
+    if (btnExport) btnExport.style.display = '';
   }
 }
 
@@ -7665,7 +7681,7 @@ async function renderPlayerHooper() {
   if (existing && computeHooperIndex(existing) !== null) {
     statusEl.innerHTML = '<div style="background:rgba(74,222,128,0.15); color:var(--green); padding:10px 14px; border-radius:6px; font-size:13px;">✅ Check-in submitted for this date. You can update your answers below.</div>';
   } else if (existing) {
-    statusEl.innerHTML = '<div style="background:rgba(251,191,36,0.15); color:#fde047; padding:10px 14px; border-radius:6px; font-size:13px;">⏳ Partial check-in. Complete all 4 questions below.</div>';
+    statusEl.innerHTML = '<div style="background:rgba(251,191,36,0.15); color:#fde047; padding:10px 14px; border-radius:6px; font-size:13px;">⏳ ' + tr('Partial check-in. Complete all 4 questions below.', "Check-in partiel. Réponds aux 4 questions ci-dessous.") + '</div>';
   } else {
     statusEl.innerHTML = '<div style="background:rgba(0,163,255,0.15); color:var(--accent-light); padding:10px 14px; border-radius:6px; font-size:13px;">👋 Please answer the 4 questions below for today.</div>';
   }
@@ -7717,7 +7733,7 @@ function updatePainSummary(locations) {
   const sum = document.getElementById('pain-summary');
   if (!sum) return;
   if (!locations || locations.length === 0) {
-    sum.innerHTML = '<div style="color:var(--text-dim); font-size:12px; text-align:center;">No body part selected yet</div>';
+    sum.innerHTML = '<div style="color:var(--text-dim); font-size:12px; text-align:center;">' + tr('No body part selected yet', 'Aucune zone du corps sélectionnée') + '</div>';
     return;
   }
   // Récupérer les labels lisibles depuis le SVG
@@ -7727,7 +7743,7 @@ function updatePainSummary(locations) {
     if (el) labels.push(el.getAttribute('data-label'));
     else labels.push(z);
   });
-  sum.innerHTML = '<div style="font-size:13px;"><b style="color:var(--red);">' + locations.length + ' zone(s) selected:</b> ' +
+  sum.innerHTML = '<div style="font-size:13px;"><b style="color:var(--red);">' + locations.length + tr(' zone(s) selected:', ' zone(s) sélectionnée(s) :') + '</b> ' +
                   labels.map(l => '<span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 8px; border-radius:4px; margin:2px; display:inline-block;">' + l + '</span>').join(' ') + '</div>';
 }
 
@@ -7812,10 +7828,10 @@ function renderHooperScale(key, currentValue) {
     const item = HOOPER_SCALE.find(i => i.value === currentValue);
     if (item) {
       const lbl = getHooperLabel(currentValue, isSleep ? 'labelSleep' : 'labelOther');
-      html += '<div style="text-align:center; margin-top:12px; font-size:12px; color:var(--text-dim);">Selected: <b style="color:var(--text);">' + currentValue + '/7</b> — ' + lbl + '</div>';
+      html += '<div style="text-align:center; margin-top:12px; font-size:12px; color:var(--text-dim);">' + tr('Selected: ', 'Sélectionné : ') + '<b style="color:var(--text);">' + currentValue + '/7</b> — ' + lbl + '</div>';
     }
   } else {
-    html += '<div style="text-align:center; margin-top:12px; font-size:11px; color:var(--text-dim);">Tap a smiley to rate</div>';
+    html += '<div style="text-align:center; margin-top:12px; font-size:11px; color:var(--text-dim);">' + tr('Tap a smiley to rate', 'Touche un smiley pour noter') + '</div>';
   }
   container.innerHTML = html;
 }
@@ -8381,7 +8397,7 @@ function renderPlayerMatchNotation(date, joueur, m) {
   } else if (lockInfo !== null) {
     const hrs = Math.floor(lockInfo.minutes / 60), mins = lockInfo.minutes % 60;
     const timeStr = hrs > 0 ? (hrs + 'h ' + mins + 'min') : (mins + ' min');
-    html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ ' + (lockInfo.type === 'edit' ? 'Editable for ' + timeStr + ' more' : 'You have ' + timeStr + ' left to rate') + '</div>';
+    html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ ' + (lockInfo.type === 'edit' ? tr('Editable for ', 'Modifiable encore ') + timeStr + tr(' more', '') : tr('You have ', 'Tu as ') + timeStr + tr(' left to rate', ' pour évaluer')) + '</div>';
   }
 
   const rpeUnique = getRPEJoueurSeance(date, joueur, seanceNom);
@@ -8452,7 +8468,7 @@ function renderPlayerSeanceNotation(date, joueur, seance) {
     if (lockInfo.type === 'session' && !hasEntry) {
       html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ ' + tr('You have ', 'Tu as ') + timeStr + tr(' left to rate this session', ' pour évaluer cette séance') + '</div>';
     } else if (lockInfo.type === 'edit') {
-      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ Editable for ' + timeStr + ' more</div>';
+      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ ' + tr('Editable for ', 'Modifiable encore ') + timeStr + tr(' more', '') + '</div>';
     } else {
       html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ ' + timeStr + ' left</div>';
     }
