@@ -1708,7 +1708,7 @@
       <div style="text-align:center; padding:12px;">
         <div style="font-size:24px; margin-bottom:4px;">✅</div>
         <div style="color:var(--green); font-weight:600;"data-en="All your answers are submitted for today" data-fr="Toutes tes réponses sont enregistrées pour aujourd'hui">All your answers are submitted for today</div>
-        <div style="color:var(--text-dim); font-size:12px; margin-top:4px;">You can update any answer above if needed.</div>
+        <div style="color:var(--text-dim); font-size:12px; margin-top:4px;" data-en="You can update any answer above if needed." data-fr="Tu peux modifier une réponse ci-dessus si besoin.">You can update any answer above if needed.</div>
       </div>
     </div>
   </div>
@@ -2413,7 +2413,15 @@ function renderSeancePlanModal(spId, joueur) {
     const rpeVal = getSeancePlanRPE(spId, joueur);
     if (estJoueurConcerne || currentRole === 'admin' || currentRole === 'staff') {
       if (rpeVal !== null) {
-        html += '<div style="font-size:13px; margin-bottom:8px;">Effort ressenti (RPE) : <b style="color:var(--accent-light);">' + rpeVal + '/10</b>' + (sp.duree_min ? ' · charge : <b>' + (rpeVal * sp.duree_min) + ' UA</b>' : '') + '</div>';
+        // Côté joueur : référence textuelle (ex: "Très difficile"), sans UA
+        // Côté staff : référence + charge UA pour l'analyse
+        const refLabel = getRPELabel(rpeVal);
+        const labelEffort = tr('Effort ressenti (RPE) : ', 'Effort ressenti (RPE) : ');
+        if (estJoueurConcerne) {
+          html += '<div style="font-size:13px; margin-bottom:8px;">' + labelEffort + '<b style="color:var(--accent-light);">' + rpeVal + '/10</b>' + (refLabel ? ' · <b>' + escapeHtml(refLabel) + '</b>' : '') + '</div>';
+        } else {
+          html += '<div style="font-size:13px; margin-bottom:8px;">' + labelEffort + '<b style="color:var(--accent-light);">' + rpeVal + '/10</b>' + (refLabel ? ' · ' + escapeHtml(refLabel) : '') + (sp.duree_min ? ' · charge : <b>' + (rpeVal * sp.duree_min) + ' UA</b>' : '') + '</div>';
+        }
       }
     }
     // Le joueur concerné peut saisir/modifier son RPE
@@ -7555,6 +7563,42 @@ function getHooperLabel(value, type) {
   return row ? row[type] : '';
 }
 
+// Traduction des libellés des parties du corps (utilisés dans le résumé Hooper)
+const PAIN_LABELS_FR = {
+  'Achilles L': 'Tendon d\'Achille G',           'Achilles R': 'Tendon d\'Achille D',
+  'Adductor L': 'Adducteur G',                    'Adductor R': 'Adducteur D',
+  'Ankle L': 'Cheville G',                        'Ankle R': 'Cheville D',
+  'Biceps L': 'Biceps G',                         'Biceps R': 'Biceps D',
+  'Calf L': 'Mollet G',                           'Calf R': 'Mollet D',
+  'Chest L': 'Pectoral G',                        'Chest R': 'Pectoral D',
+  'Forearm L': 'Avant-bras G',                    'Forearm R': 'Avant-bras D',
+  'Forearm L (back)': 'Avant-bras G (arrière)',   'Forearm R (back)': 'Avant-bras D (arrière)',
+  'Glute L': 'Fessier G',                         'Glute R': 'Fessier D',
+  'Hamstring L': 'Ischio G',                      'Hamstring R': 'Ischio D',
+  'Head': 'Tête',                                 'Head (back)': 'Tête (arrière)',
+  'Hip flexor L': 'Fléchisseur de hanche G',      'Hip flexor R': 'Fléchisseur de hanche D',
+  'Knee L': 'Genou G',                            'Knee R': 'Genou D',
+  'Knee back L': 'Genou G (arrière)',             'Knee back R': 'Genou D (arrière)',
+  'Lats L': 'Grand dorsal G',                     'Lats R': 'Grand dorsal D',
+  'Lower abs': 'Abdos bas',                       'Upper abs': 'Abdos haut',
+  'Lower back': 'Bas du dos',                     'Mid back': 'Milieu du dos',
+  'Neck (back)': 'Nuque',                         'Neck (front)': 'Cou',
+  'Oblique L': 'Oblique G',                       'Oblique R': 'Oblique D',
+  'Quadriceps L': 'Quadriceps G',                 'Quadriceps R': 'Quadriceps D',
+  'Sacrum / lumbar': 'Sacrum / lombaires',
+  'Shin L': 'Tibia G',                            'Shin R': 'Tibia D',
+  'Shoulder L (back)': 'Épaule G (arrière)',      'Shoulder R (back)': 'Épaule D (arrière)',
+  'Shoulder L (front)': 'Épaule G (avant)',       'Shoulder R (front)': 'Épaule D (avant)',
+  'Trapezius': 'Trapèzes',
+  'Triceps L': 'Triceps G',                       'Triceps R': 'Triceps D',
+  'Upper back L': 'Haut du dos G',                'Upper back R': 'Haut du dos D'
+};
+
+function translatePainLabel(label) {
+  if (playerLang() === 'fr' && PAIN_LABELS_FR[label]) return PAIN_LABELS_FR[label];
+  return label;
+}
+
 // Cache local des données Hooper (chargé depuis Supabase)
 let hooperData = [];
 
@@ -7679,11 +7723,11 @@ async function renderPlayerHooper() {
   // Status banner
   const statusEl = document.getElementById('hooper-status');
   if (existing && computeHooperIndex(existing) !== null) {
-    statusEl.innerHTML = '<div style="background:rgba(74,222,128,0.15); color:var(--green); padding:10px 14px; border-radius:6px; font-size:13px;">✅ Check-in submitted for this date. You can update your answers below.</div>';
+    statusEl.innerHTML = '<div style="background:rgba(74,222,128,0.15); color:var(--green); padding:10px 14px; border-radius:6px; font-size:13px;">✅ ' + tr('Check-in submitted for this date. You can update your answers below.', "Check-in enregistré pour cette date. Tu peux modifier tes réponses ci-dessous.") + '</div>';
   } else if (existing) {
     statusEl.innerHTML = '<div style="background:rgba(251,191,36,0.15); color:#fde047; padding:10px 14px; border-radius:6px; font-size:13px;">⏳ ' + tr('Partial check-in. Complete all 4 questions below.', "Check-in partiel. Réponds aux 4 questions ci-dessous.") + '</div>';
   } else {
-    statusEl.innerHTML = '<div style="background:rgba(0,163,255,0.15); color:var(--accent-light); padding:10px 14px; border-radius:6px; font-size:13px;">👋 Please answer the 4 questions below for today.</div>';
+    statusEl.innerHTML = '<div style="background:rgba(0,163,255,0.15); color:var(--accent-light); padding:10px 14px; border-radius:6px; font-size:13px;">👋 ' + tr('Please answer the 4 questions below for today.', 'Réponds aux 4 questions ci-dessous pour aujourd\'hui.') + '</div>';
   }
 
   // Rendre les 4 échelles
@@ -7740,7 +7784,7 @@ function updatePainSummary(locations) {
   const labels = [];
   locations.forEach(z => {
     const el = document.querySelector('.muscle[data-zone="' + z + '"]');
-    if (el) labels.push(el.getAttribute('data-label'));
+    if (el) labels.push(translatePainLabel(el.getAttribute('data-label')));
     else labels.push(z);
   });
   sum.innerHTML = '<div style="font-size:13px;"><b style="color:var(--red);">' + locations.length + tr(' zone(s) selected:', ' zone(s) sélectionnée(s) :') + '</b> ' +
