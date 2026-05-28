@@ -1345,13 +1345,13 @@
   <!-- ========== VUE JOUEUR : SAISIR MON RPE ========== -->
   <div class="view" id="view-player-rpe">
     <div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">
-      <h2 style="color:var(--accent-light); font-size:18px;">⭐ Rate your sessions</h2>
-      <p style="color:var(--text); font-size:14px; margin-top:4px;">Rate the difficulty of each session you completed, on a scale from 0 (rest) to 10 (maximal effort).</p>
+      <h2 style="color:var(--accent-light); font-size:18px;" data-en="⭐ Rate your sessions" data-fr="⭐ Note tes séances">⭐ Rate your sessions</h2>
+      <p style="color:var(--text); font-size:14px; margin-top:4px;" data-en="<span>Rate the difficulty of each session you completed, on a scale from 0 (rest) to 10 (maximal effort).</span>" data-fr="Note la difficulté de chaque séance que tu as effectuée, sur une échelle de 0 (repos) à 10 (effort maximal).">Rate the difficulty of each session you completed, on a scale from 0 (rest) to 10 (maximal effort).</p>
     </div>
 
     <div class="form-row">
       <div>
-        <label>Date to rate</label>
+        <label data-en="Date to rate" data-fr="Date à noter">Date to rate</label>
         <input type="date" id="player-rpe-date" />
       </div>
     </div>
@@ -1365,27 +1365,27 @@
       <!-- Tableau Borg CR-10 sur le côté -->
       <div>
         <div class="card" style="position:sticky; top:20px;">
-          <h2>📋 Rating scale</h2>
+          <h2 data-en="📋 Rating scale" data-fr="📋 Échelle de notation">📋 Rating scale</h2>
           <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">
-            Choose the rating that best matches how you felt during the session.
+            <span data-en="<span>Choose the rating that best matches how you felt during the session.</span>" data-fr="Choisis la note qui correspond le mieux à ton ressenti pendant la séance.">Choose the rating that best matches how you felt during the session.</span>
           </div>
           <table style="width:100%; font-size:12px;">
             <tbody>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#3b82f6; color:white; font-weight:700;">0</span></td><td style="padding:6px;">Complete rest</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#3b82f6; color:white; font-weight:700;">1</span></td><td style="padding:6px;">Very very easy</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#10b981; color:white; font-weight:700;">2</span></td><td style="padding:6px;">Easy</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#10b981; color:white; font-weight:700;">3</span></td><td style="padding:6px;">Moderate</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#84cc16; color:white; font-weight:700;">4</span></td><td style="padding:6px;">Somewhat hard</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#84cc16; color:white; font-weight:700;">5</span></td><td style="padding:6px;">Hard</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#3b82f6; color:white; font-weight:700;">0</span></td><td style="padding:6px;" data-en="Complete rest" data-fr="Repos complet">Complete rest</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#3b82f6; color:white; font-weight:700;">1</span></td><td style="padding:6px;" data-en="Very very easy" data-fr="Très très facile">Very very easy</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#10b981; color:white; font-weight:700;">2</span></td><td style="padding:6px;" data-en="Easy" data-fr="Facile">Easy</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#10b981; color:white; font-weight:700;">3</span></td><td style="padding:6px;" data-en="Moderate" data-fr="Modéré">Moderate</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#84cc16; color:white; font-weight:700;">4</span></td><td style="padding:6px;" data-en="Somewhat hard" data-fr="Un peu difficile">Somewhat hard</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#84cc16; color:white; font-weight:700;">5</span></td><td style="padding:6px;" data-en="Hard" data-fr="Difficile">Hard</td></tr>
               <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#eab308; color:white; font-weight:700;">6</span></td><td style="padding:6px;">Hard +</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#f59e0b; color:white; font-weight:700;">7</span></td><td style="padding:6px;">Very hard</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#f59e0b; color:white; font-weight:700;">7</span></td><td style="padding:6px;" data-en="Very hard" data-fr="Très difficile">Very hard</td></tr>
               <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#f97316; color:white; font-weight:700;">8</span></td><td style="padding:6px;">Very hard +</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#ef4444; color:white; font-weight:700;">9</span></td><td style="padding:6px;">Very very hard</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#dc2626; color:white; font-weight:700;">10</span></td><td style="padding:6px;">Maximal</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#ef4444; color:white; font-weight:700;">9</span></td><td style="padding:6px;" data-en="Very very hard" data-fr="Très très difficile">Very very hard</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#dc2626; color:white; font-weight:700;">10</span></td><td style="padding:6px;" data-en="Maximal" data-fr="Maximal">Maximal</td></tr>
             </tbody>
           </table>
           <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); font-size:11px; color:var(--text-dim);">
-            💡 Tip: be honest, these ratings help us adapt your training.
+            <span>💡 Tip: be honest, these ratings help us adapt your training.</span>
           </div>
         </div>
       </div>
@@ -1395,27 +1395,27 @@
   <!-- ========== VUE JOUEUR : MES NOTES ========== -->
   <div class="view" id="view-player-history">
     <div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">
-      <h2 style="color:var(--accent-light); font-size:18px;">📊 My ratings</h2>
-      <p style="color:var(--text); font-size:14px; margin-top:4px;">Here you can find all the ratings you have already submitted.</p>
+      <h2 style="color:var(--accent-light); font-size:18px;" data-en="📊 My ratings" data-fr="📊 Mes notes">📊 My ratings</h2>
+      <p style="color:var(--text); font-size:14px; margin-top:4px;" data-en="<span>Here you can find all the ratings you have already submitted.</span>" data-fr="Retrouve ici toutes les notes que tu as déjà saisies.">Here you can find all the ratings you have already submitted.</p>
     </div>
 
     <div class="stats-grid">
-      <div class="stat"><div class="stat-label">Ratings submitted</div><div class="stat-value" id="player-stat-count">—</div></div>
-      <div class="stat"><div class="stat-label">Average RPE</div><div class="stat-value" id="player-stat-avg">—</div></div>
-      <div class="stat"><div class="stat-label">Rated sessions</div><div class="stat-value" id="player-stat-sessions">—</div></div>
-      <div class="stat"><div class="stat-label">Active days</div><div class="stat-value" id="player-stat-days">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Ratings submitted" data-fr="Notes saisies">Ratings submitted</div><div class="stat-value" id="player-stat-count">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Average RPE" data-fr="RPE moyen">Average RPE</div><div class="stat-value" id="player-stat-avg">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Rated sessions" data-fr="Séances notées">Rated sessions</div><div class="stat-value" id="player-stat-sessions">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Active days" data-fr="Jours actifs">Active days</div><div class="stat-value" id="player-stat-days">—</div></div>
     </div>
 
     <div class="card">
-      <h2>RPE evolution</h2>
+      <h2 data-en="RPE evolution" data-fr="Évolution du RPE">RPE evolution</h2>
       <div class="chart-container tall"><canvas id="player-chart-evolution"></canvas></div>
     </div>
 
     <div class="card">
-      <h2>Detailed history</h2>
+      <h2 data-en="Detailed history" data-fr="Historique détaillé">Detailed history</h2>
       <div class="table-wrap" style="max-height:500px;">
         <table id="player-history-table">
-          <thead><tr><th>Date</th><th>Session</th><th>Drill</th><th>RPE</th><th>Feeling</th></tr></thead>
+          <thead><tr><th data-en="Date" data-fr="Date">Date</th><th data-en="Session" data-fr="Séance">Session</th><th data-en="Drill" data-fr="Exercice">Drill</th><th data-en="RPE" data-fr="RPE">RPE</th><th data-en="Feeling" data-fr="Ressenti">Feeling</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -1426,8 +1426,8 @@
   <!-- ========== VUE JOUEUR : DAILY HOOPER CHECK-IN ========== -->
   <div class="view" id="view-player-hooper">
     <div class="card" style="background:linear-gradient(135deg, var(--bg-card), #14532d); border:none;">
-      <h2 style="color:var(--green); font-size:18px;">💚 Daily check-in</h2>
-      <p style="color:var(--text); font-size:14px; margin-top:4px;">Tell us how you feel today. This takes 30 seconds and helps us monitor your wellness.</p>
+      <h2 style="color:var(--green); font-size:18px;" data-en="💚 Daily check-in" data-fr="💚 État de forme du jour">💚 Daily check-in</h2>
+      <p style="color:var(--text); font-size:14px; margin-top:4px;" data-en="<span>Tell us how you feel today. This takes 30 seconds and helps us monitor your wellness.</span>" data-fr="Dis-nous comment tu te sens aujourd&#39;hui. Cela prend 30 secondes et nous aide à suivre ta forme.">Tell us how you feel today. This takes 30 seconds and helps us monitor your wellness.</p>
     </div>
 
     <div class="form-row">
@@ -1450,38 +1450,38 @@
     <!-- 4 questions Hooper -->
     <div class="card">
       <div class="hooper-question" data-key="sleep_quality">
-        <h3 style="font-size:15px; margin-bottom:4px;">😴 Sleep quality</h3>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">How well did you sleep last night?</p>
+        <h3 style="font-size:15px; margin-bottom:4px;" data-en="😴 Sleep quality" data-fr="😴 Qualité du sommeil">😴 Sleep quality</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="<span>How well did you sleep last night?</span>" data-fr="Comment as-tu dormi la nuit dernière ?">How well did you sleep last night?</p>
         <div class="hooper-scale" data-key="sleep_quality"></div>
       </div>
     </div>
 
     <div class="card">
       <div class="hooper-question" data-key="fatigue">
-        <h3 style="font-size:15px; margin-bottom:4px;">⚡ Fatigue level</h3>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">How tired do you feel right now?</p>
+        <h3 style="font-size:15px; margin-bottom:4px;" data-en="⚡ Fatigue level" data-fr="⚡ Niveau de fatigue">⚡ Fatigue level</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="<span>How tired do you feel right now?</span>" data-fr="À quel point te sens-tu fatigué en ce moment ?">How tired do you feel right now?</p>
         <div class="hooper-scale" data-key="fatigue"></div>
       </div>
     </div>
 
     <div class="card">
       <div class="hooper-question" data-key="stress">
-        <h3 style="font-size:15px; margin-bottom:4px;">🧠 Stress level</h3>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">How stressed do you feel today?</p>
+        <h3 style="font-size:15px; margin-bottom:4px;" data-en="🧠 Stress level" data-fr="🧠 Niveau de stress">🧠 Stress level</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="<span>How stressed do you feel today?</span>" data-fr="À quel point te sens-tu stressé aujourd&#39;hui ?">How stressed do you feel today?</p>
         <div class="hooper-scale" data-key="stress"></div>
       </div>
     </div>
 
     <div class="card">
       <div class="hooper-question" data-key="muscle_soreness">
-        <h3 style="font-size:15px; margin-bottom:4px;">💪 Muscle soreness</h3>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Do you feel any muscle pain or soreness? Rate the overall intensity.</p>
+        <h3 style="font-size:15px; margin-bottom:4px;" data-en="💪 Muscle soreness" data-fr="💪 Douleurs musculaires">💪 Muscle soreness</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="<span>Do you feel any muscle pain or soreness? Rate the overall intensity.</span>" data-fr="Ressens-tu des douleurs musculaires ? Évalue l&#39;intensité globale.">Do you feel any muscle pain or soreness? Rate the overall intensity.</p>
         <div class="hooper-scale" data-key="muscle_soreness"></div>
 
         <!-- Zone de localisation (apparaît si soreness > 1) -->
         <div id="pain-localization" style="display:none; margin-top:20px; padding-top:20px; border-top:1px solid var(--border);">
-          <h4 style="font-size:14px; margin-bottom:4px;">🎯 Where do you feel the pain?</h4>
-          <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Click on the body parts where you feel pain. Click again to deselect.</p>
+          <h4 style="font-size:14px; margin-bottom:4px;" data-en="<span>🎯 Where do you feel the pain?</span>" data-fr="🎯 Où ressens-tu la douleur ?">🎯 Where do you feel the pain?</h4>
+          <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="<span>Click on the body parts where you feel pain. Click again to deselect.</span>" data-fr="Clique sur les zones où tu ressens une douleur. Reclique pour désélectionner.">Click on the body parts where you feel pain. Click again to deselect.</p>
           <div id="mannequin-container" style="background:var(--bg-elevated); border-radius:10px; padding:16px; overflow-x:auto;"><svg viewBox="0 0 640 720" xmlns="http://www.w3.org/2000/svg" style="max-width:100%; height:auto;">
   <defs>
     <style>
@@ -1497,7 +1497,7 @@
 
   <!-- ============================== VUE AVANT ============================== -->
   <g transform="translate(0,0)">
-    <text x="160" y="22" class="body-label">FRONT</text>
+    <text x="160" y="22" class="body-label" data-en="FRONT" data-fr="DEVANT">FRONT</text>
 
     <!-- Silhouette de fond (anatomique stylisée) -->
     <!-- Tête -->
@@ -1597,7 +1597,7 @@
 
   <!-- ============================== VUE ARRIÈRE ============================== -->
   <g transform="translate(320,0)">
-    <text x="160" y="22" class="body-label">BACK</text>
+    <text x="160" y="22" class="body-label" data-en="BACK" data-fr="DOS">BACK</text>
 
     <!-- Silhouette miroir (mêmes courbes) -->
     <ellipse cx="160" cy="65" rx="32" ry="38" class="body-base"/>
@@ -1681,8 +1681,8 @@
 
     <!-- Notes facultatives -->
     <div class="card">
-      <h3 style="font-size:15px; margin-bottom:4px;">📝 Anything else? <span style="font-size:11px; color:var(--text-dim); font-weight:normal;">(optional)</span></h3>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Share any information you think might be useful for the staff.</p>
+      <h3 style="font-size:15px; margin-bottom:4px;">📝 Anything else? <span style="font-size:11px; color:var(--text-dim); font-weight:normal;"><span>(optional)</span></span></h3>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;"><span>Share any information you think might be useful for the staff.</span></p>
       <textarea id="hooper-notes" rows="3" placeholder="E.g. slight headache, didn't sleep well after a noisy night..."
                 style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
       <div style="text-align:right; margin-top:8px;">
@@ -2005,6 +2005,7 @@ async function loadProfileAndStart() {
   initAll();
   updateMessagesBadge();
   updateSeancesBadge();
+  applyPlayerLanguage();  // Applique la langue lecteur (EN pour PSG, FR pour TEGG)
   setupRealtime();
 }
 
@@ -2357,6 +2358,51 @@ async function setSeancePlanRPE(spId, valeur) {
   if (f) f.rpe = valeur;
   renderSeancePlanModal(spId, joueur);
   toast('Effort ressenti enregistré : ' + valeur + '/10', 'success');
+}
+
+// ============================================================
+// LANGUE DE L'INTERFACE LECTEUR (joueur)
+// PSG = anglais, TEGG = français. Le staff/admin reste en français.
+// ============================================================
+function playerLang() {
+  // Seuls les lecteurs ont une langue dépendante de l'org ; TEGG = fr, PSG = en
+  if (currentRole === 'lecteur') {
+    return (currentOrg === 'TEGG') ? 'fr' : 'en';
+  }
+  return 'fr';
+}
+
+// Renvoie le texte selon la langue du lecteur
+function t(en, fr) {
+  return (playerLang() === 'fr') ? fr : en;
+}
+
+// Applique la langue à tous les éléments porteurs de data-en / data-fr
+function applyPlayerLanguage() {
+  const lang = playerLang();
+  document.querySelectorAll('[data-en]').forEach(el => {
+    const txt = (lang === 'fr') ? (el.getAttribute('data-fr') || el.getAttribute('data-en')) : el.getAttribute('data-en');
+    if (txt !== null) el.textContent = txt;
+  });
+  // Bouton de déconnexion (texte selon langue lecteur)
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    if (currentRole === 'lecteur') logoutBtn.textContent = (lang === 'fr') ? '↪ Déconnexion' : '↪ Log out';
+    else logoutBtn.textContent = '↪ Déconnexion';
+  }
+  // Libellés des onglets joueur
+  const navTrads = {
+    'player-rpe': { en: '⭐ Rate sessions', fr: '⭐ Noter les séances' },
+    'player-history': { en: '📊 My ratings', fr: '📊 Mes notes' },
+    'player-hooper': { en: '💚 Daily check-in', fr: '💚 État de forme' },
+    'player-seances': { en: '📋 My sessions', fr: '📋 Mes séances' }
+  };
+  Object.keys(navTrads).forEach(view => {
+    const btn = document.querySelector('.nav-btn.player-only[data-view="' + view + '"]');
+    if (btn && !btn.dataset.badgeActive) {
+      btn.textContent = (lang === 'fr') ? navTrads[view].fr : navTrads[view].en;
+    }
+  });
 }
 
 // Détecte la vue actuellement active
@@ -3546,6 +3592,8 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
       else gestionToggle.classList.remove('has-active');
     }
     closeGestionMenu();
+    // Si on est lecteur, ré-appliquer la langue à chaque changement de vue (au cas où la vue contient du nouveau contenu)
+    if (currentRole === 'lecteur') setTimeout(applyPlayerLanguage, 0);
     // Render on demand
     if (view === 'overview') renderOverview();
     else if (view === 'calendar') renderCalendar();
