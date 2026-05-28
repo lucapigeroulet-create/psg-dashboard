@@ -1839,9 +1839,17 @@
   <!-- ========== JOUEUR : MES SÉANCES PLANIFIÉES ========== -->
   <div class="view" id="view-player-seances">
     <div class="card">
-      <h2>📋 Mes séances à effectuer</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Les séances que le staff t'a assignées. Clique pour voir le détail et marque-les comme faites.</p>
-      <div id="player-seances-list"></div>
+      <h2>📋 Mon planning</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Les séances que le staff t'a assignées, jour par jour. Clique sur une séance pour le détail et marque-la comme faite.</p>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px;">
+        <button class="btn btn-secondary" onclick="playerWeekNav(-1)">← Semaine préc.</button>
+        <div id="player-week-label" style="font-weight:700; font-size:14px; text-align:center;"></div>
+        <button class="btn btn-secondary" onclick="playerWeekNav(1)">Semaine suiv. →</button>
+      </div>
+      <div style="text-align:center; margin-bottom:14px;">
+        <button class="btn btn-secondary" style="padding:4px 14px; font-size:12px;" onclick="playerWeekToday()">Cette semaine</button>
+      </div>
+      <div id="player-seances-week"></div>
     </div>
   </div>
 
@@ -2008,37 +2016,81 @@ async function logout() {
   location.reload();
 }
 
-// Vue joueur : liste de ses séances planifiées
+// Vue joueur : planning hebdomadaire de ses séances planifiées
+let playerWeekMonday = null; // Date (lundi) de la semaine affichée
+
+function playerWeekNav(delta) {
+  if (!playerWeekMonday) playerWeekMonday = getMondayOf(toLocalISO(new Date()));
+  playerWeekMonday.setDate(playerWeekMonday.getDate() + delta * 7);
+  renderPlayerSeances();
+}
+function playerWeekToday() {
+  playerWeekMonday = getMondayOf(toLocalISO(new Date()));
+  renderPlayerSeances();
+}
+
 function renderPlayerSeances() {
   if (!currentJoueurNom) return;
-  const listEl = document.getElementById('player-seances-list');
-  if (!listEl) return;
+  const weekEl = document.getElementById('player-seances-week');
+  const labelEl = document.getElementById('player-week-label');
+  if (!weekEl) return;
 
-  // Séances qui ciblent ce joueur, triées par date (à venir d'abord)
-  const mes = (state.bdd_seances_plan || [])
-    .filter(sp => seancePlanCibleJoueur(sp, currentJoueurNom))
-    .sort((a, b) => b.date.localeCompare(a.date));
+  // Semaine par défaut = semaine courante
+  if (!playerWeekMonday) playerWeekMonday = getMondayOf(toLocalISO(new Date()));
 
-  if (mes.length === 0) {
-    listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:12px;">Aucune séance planifiée pour le moment.</div>';
-    return;
+  // Construire les 7 jours de la semaine
+  const jours = [];
+  for (let i = 0; i < 7; i++) {
+    const dt = new Date(playerWeekMonday);
+    dt.setDate(dt.getDate() + i);
+    jours.push(toLocalISO(dt));
+  }
+  const noms = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+  const today = toLocalISO(new Date());
+
+  // Libellé de la semaine
+  if (labelEl) {
+    const [y1,m1,d1] = jours[0].split('-');
+    const [y2,m2,d2] = jours[6].split('-');
+    labelEl.textContent = 'Semaine du ' + d1 + '/' + m1 + ' au ' + d2 + '/' + m2;
   }
 
-  const today = toLocalISO(new Date());
-  listEl.innerHTML = mes.map(sp => {
-    const faite = seancePlanEstFaite(sp.id, currentJoueurNom);
-    const future = sp.date >= today;
-    const dateLabel = formatDateFR(sp.date) + (sp.date === today ? " (aujourd'hui)" : '');
-    return '<div onclick="openSeancePlanDetail(\'' + sp.id + '\', \'' + currentJoueurNom.replace(/\'/g, "\\'") + '\')" ' +
-      'style="border:1px solid ' + (faite ? 'var(--border)' : 'var(--accent)') + '; border-radius:10px; padding:12px 14px; margin-bottom:8px; cursor:pointer; background:' + (faite ? 'transparent' : 'rgba(0,163,255,0.06)') + ';">' +
-      '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
-        '<div style="font-weight:700; font-size:14px;">📋 ' + escapeHtml(sp.type || 'Séance') + (sp.duree_min ? ' · ' + sp.duree_min + ' min' : '') + '</div>' +
-        '<div style="font-size:12px;">' + (faite ? '<span style="color:var(--green);">✓ Fait</span>' : (future ? '<span style="color:var(--accent-light);">À faire</span>' : '<span style="color:var(--text-dim);">En retard</span>')) + '</div>' +
-      '</div>' +
-      '<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">' + dateLabel + (sp.piece_jointe ? ' · 📎 pièce jointe' : '') + '</div>' +
-      (sp.consignes ? '<div style="font-size:12px; color:var(--text-dim); margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(sp.consignes) + '</div>' : '') +
-    '</div>';
-  }).join('');
+  // Mes séances planifiées de cette semaine
+  const mesSeances = (state.bdd_seances_plan || []).filter(sp =>
+    seancePlanCibleJoueur(sp, currentJoueurNom) && jours.includes(sp.date)
+  );
+
+  let html = '';
+  jours.forEach((dateIso, i) => {
+    const isToday = (dateIso === today);
+    const [yy,mm,dd] = dateIso.split('-');
+    const seancesDuJour = mesSeances.filter(sp => sp.date === dateIso);
+
+    html += '<div style="border:1px solid ' + (isToday ? 'var(--accent)' : 'var(--border)') + '; border-radius:10px; padding:10px 12px; margin-bottom:8px; background:' + (isToday ? 'rgba(0,163,255,0.06)' : 'transparent') + ';">';
+    html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:' + (seancesDuJour.length ? '8px' : '0') + ';">';
+    html += '<div style="font-weight:700; font-size:13px;' + (isToday ? ' color:var(--accent-light);' : '') + '">' + noms[i] + ' ' + dd + '/' + mm + (isToday ? " · aujourd'hui" : '') + '</div>';
+    html += '</div>';
+
+    if (seancesDuJour.length === 0) {
+      html += '<div style="font-size:12px; color:var(--text-dim);">Aucune séance prévue</div>';
+    } else {
+      seancesDuJour.forEach(sp => {
+        const faite = seancePlanEstFaite(sp.id, currentJoueurNom);
+        const retard = !faite && dateIso < today;
+        html += '<div onclick="openSeancePlanDetail(\'' + sp.id + '\', \'' + currentJoueurNom.replace(/\'/g, "\\'") + '\')" ' +
+          'style="cursor:pointer; border-radius:8px; padding:8px 10px; margin-top:4px; background:' + (faite ? 'rgba(22,101,52,0.25)' : 'var(--bg-elevated)') + '; border-left:3px solid ' + (faite ? 'var(--green)' : (retard ? 'var(--text-dim)' : 'var(--accent)')) + ';">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">' +
+            '<span style="font-weight:600; font-size:13px;">📋 ' + escapeHtml(sp.type || 'Séance') + (sp.duree_min ? ' · ' + sp.duree_min + ' min' : '') + '</span>' +
+            '<span style="font-size:11px;">' + (faite ? '<span style="color:var(--green);">✓ Fait</span>' : (retard ? '<span style="color:var(--text-dim);">En retard</span>' : '<span style="color:var(--accent-light);">À faire</span>')) + '</span>' +
+          '</div>' +
+          (sp.consignes ? '<div style="font-size:11px; color:var(--text-dim); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(sp.consignes) + '</div>' : '') +
+        '</div>';
+      });
+    }
+    html += '</div>';
+  });
+
+  weekEl.innerHTML = html;
 }
 
 // Badge "séances à faire" sur l'onglet joueur
@@ -2158,10 +2210,17 @@ async function createSeancePlan() {
 // ============================================================
 let spModalCurrentJoueur = null;
 
-function openSeancePlanDetail(spId, joueur) {
+async function openSeancePlanDetail(spId, joueur) {
   const sp = (state.bdd_seances_plan || []).find(x => x.id === spId);
   if (!sp) return;
   spModalCurrentJoueur = joueur;
+  // Charger la pièce jointe à la demande (elle n'est pas chargée en masse pour alléger)
+  if (sp.piece_jointe_nom && sp.piece_jointe === undefined) {
+    try {
+      const { data } = await sb.from('seances_planifiees').select('piece_jointe').eq('id', spId).single();
+      sp.piece_jointe = (data && data.piece_jointe) ? data.piece_jointe : null;
+    } catch(e) { sp.piece_jointe = null; }
+  }
   const titleEl = document.getElementById('sp-modal-title');
   const contentEl = document.getElementById('sp-modal-content');
   if (titleEl) titleEl.textContent = '📋 ' + (sp.type || 'Séance planifiée');
@@ -2701,7 +2760,7 @@ async function loadState() {
 
     setLoad('Chargement des séances planifiées...');
     try {
-      const { data: sp } = await sb.from('seances_planifiees').select('*').eq('org', currentOrg).order('date', { ascending: false });
+      const { data: sp } = await sb.from('seances_planifiees').select('id,org,date,type,duree_min,consignes,piece_jointe_nom,cible_type,cible_groupe,cible_joueurs,auteur,created_at').eq('org', currentOrg).order('date', { ascending: false });
       state.bdd_seances_plan = sp || [];
       const { data: spf } = await sb.from('seances_planifiees_faites').select('*').eq('org', currentOrg);
       state.bdd_seances_plan_faites = spf || [];
