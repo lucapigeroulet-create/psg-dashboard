@@ -69,6 +69,37 @@
     white-space: nowrap;
   }
   nav button:hover { color: var(--text); }
+
+  /* Menu déroulant Gestion */
+  .nav-dropdown { position: relative; display: inline-block; }
+  .nav-dropdown-toggle { display: inline-flex; align-items: center; gap: 4px; }
+  .nav-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    z-index: 1000;
+    min-width: 220px;
+    padding: 6px;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .nav-dropdown-menu.open { display: flex; }
+  .nav-dropdown-menu .nav-btn {
+    border-bottom: none;
+    border-radius: 6px;
+    padding: 10px 14px;
+    text-align: left;
+    width: 100%;
+  }
+  .nav-dropdown-menu .nav-btn:hover { background: var(--bg-elevated); }
+  .nav-dropdown-menu .nav-btn.active { background: var(--accent); color: #fff; }
+  /* Le toggle reste actif visuellement si une de ses vues est ouverte */
+  .nav-dropdown-toggle.has-active { color: var(--text); border-bottom-color: var(--accent); }
   nav button.active {
     color: var(--accent-light);
     border-bottom-color: var(--accent);
@@ -504,15 +535,22 @@
   <button class="nav-btn" data-view="rpe">💪 Charge RPE</button>
   <button class="nav-btn" data-view="gps">📡 Données GPS</button>
   <button class="nav-btn" data-view="injury">🏥 Disponibilité</button>
-  <button class="nav-btn" data-view="entry">✏️ Saisie séance</button>
-  <button class="nav-btn" data-view="match-entry">⚽ Saisie match</button>
-  <button class="nav-btn" data-view="rpe-entry">⭐ Saisie RPE</button>
-  <button class="nav-btn" data-view="history">📋 Historique séances</button>
-  <button class="nav-btn" data-view="settings">⚙️ Paramètres</button>
+  <div class="nav-dropdown" id="nav-gestion-dropdown">
+    <button type="button" class="nav-btn nav-dropdown-toggle" id="nav-gestion-toggle" onclick="toggleGestionMenu(event)">🛠️ Gestion <span style="font-size:10px;">▾</span></button>
+    <div class="nav-dropdown-menu" id="nav-gestion-menu">
+      <button class="nav-btn" data-view="entry">✏️ Saisie séance</button>
+      <button class="nav-btn" data-view="match-entry">⚽ Saisie match</button>
+      <button class="nav-btn" data-view="rpe-entry">⭐ Saisie RPE</button>
+      <button class="nav-btn" data-view="messages">📣 Messages</button>
+      <button class="nav-btn" data-view="history">📋 Historique séances</button>
+      <button class="nav-btn" data-view="settings">⚙️ Paramètres</button>
+    </div>
+  </div>
   <!-- Onglets joueur (visibles uniquement pour les lecteurs) -->
   <button class="nav-btn player-only" data-view="player-rpe" style="display:none;">⭐ Rate my sessions</button>
   <button class="nav-btn player-only" data-view="player-history" style="display:none;">📊 My ratings</button>
   <button class="nav-btn player-only" data-view="player-hooper" style="display:none;">💚 Daily check-in</button>
+  <button class="nav-btn player-only" data-view="messages" style="display:none;">📣 Messages</button>
   <button class="nav-btn" data-view="staff-hooper">💚 État de forme</button>
 </nav>
 
@@ -1706,6 +1744,53 @@
     </div>
   </div>
 
+
+  <!-- ========== MESSAGES (annonces staff → joueurs) ========== -->
+  <div class="view" id="view-messages">
+    <!-- Composer (staff uniquement) -->
+    <div class="card" id="messages-compose-card">
+      <h2>📣 Nouveau message</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Envoie une annonce aux joueurs. Tu verras qui l'a lue.</p>
+      <div class="form-row">
+        <div style="flex:1;">
+          <label>Titre (optionnel)</label>
+          <input type="text" id="msg-titre" placeholder="Ex: Convocation match samedi" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div style="flex:1;">
+          <label>Message</label>
+          <textarea id="msg-contenu" rows="4" placeholder="Votre annonce..." style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:14px; resize:vertical;"></textarea>
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Destinataires</label>
+          <select id="msg-cible-type" onchange="onMsgCibleChange()">
+            <option value="all">Toute l'équipe</option>
+            <option value="group">Un groupe</option>
+            <option value="players">Joueurs sélectionnés</option>
+          </select>
+        </div>
+        <div id="msg-cible-group-wrap" style="display:none;">
+          <label>Groupe</label>
+          <select id="msg-cible-group"></select>
+        </div>
+      </div>
+      <div id="msg-cible-players-wrap" style="display:none; margin-bottom:12px;">
+        <label style="display:block; margin-bottom:6px;">Sélectionne les joueurs</label>
+        <div id="msg-cible-players" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+      </div>
+      <button class="btn" onclick="sendMessage()">📤 Envoyer</button>
+    </div>
+
+    <!-- Liste des messages -->
+    <div class="card">
+      <h2 id="messages-list-title">📬 Messages</h2>
+      <div id="messages-list"></div>
+    </div>
+  </div>
+
 </main>
 
 <div class="toast" id="toast"></div>
@@ -1856,6 +1941,7 @@ async function loadProfileAndStart() {
   applyRoleRestrictions();
 
   initAll();
+  updateMessagesBadge();
   setupRealtime();
 }
 
@@ -1865,6 +1951,209 @@ async function logout() {
   if (sb) await sb.auth.signOut();
   // Recharger la page pour repartir à zéro
   location.reload();
+}
+
+// Détecte la vue actuellement active
+function getCurrentView() {
+  const active = document.querySelector('.view.active');
+  if (!active) return null;
+  const id = active.id || '';
+  return id.startsWith('view-') ? id.slice(5) : id;
+}
+
+// Met à jour le badge de messages non lus sur l'onglet du joueur
+function updateMessagesBadge() {
+  if (currentRole !== 'lecteur' || !currentJoueurNom) return;
+  const btn = document.querySelector('.nav-btn.player-only[data-view="messages"]');
+  if (!btn) return;
+  const visibles = (state.bdd_messages || []).filter(m => messageVisibleToPlayer(m, currentJoueurNom));
+  const unread = visibles.filter(m => !getMessageReads(m.id).some(r => r.joueur === currentJoueurNom)).length;
+  const base = '📣 Messages';
+  btn.textContent = unread > 0 ? (base + ' (' + unread + ')') : base;
+  if (unread > 0) {
+    btn.style.color = 'var(--accent)';
+    btn.style.fontWeight = '700';
+  } else {
+    btn.style.color = '';
+    btn.style.fontWeight = '';
+  }
+}
+
+// ============================================================
+// MESSAGERIE INTERNE : annonces staff → joueurs
+// ============================================================
+
+// Déterminer les joueurs ciblés par un message
+function getMessageTargets(msg) {
+  if (msg.cible_type === 'all') return getAllPlayers();
+  if (msg.cible_type === 'group') {
+    return (state.joueurs || []).filter(j => j.groupe === msg.cible_groupe).map(j => j.nom);
+  }
+  if (msg.cible_type === 'players') {
+    return Array.isArray(msg.cible_joueurs) ? msg.cible_joueurs : [];
+  }
+  return [];
+}
+
+// Un message concerne-t-il le joueur courant ?
+function messageVisibleToPlayer(msg, joueur) {
+  return getMessageTargets(msg).includes(joueur);
+}
+
+// Accusés de lecture pour un message
+function getMessageReads(messageId) {
+  return (state.bdd_message_reads || []).filter(r => r.message_id === messageId);
+}
+
+function onMsgCibleChange() {
+  const type = document.getElementById('msg-cible-type').value;
+  document.getElementById('msg-cible-group-wrap').style.display = (type === 'group') ? '' : 'none';
+  document.getElementById('msg-cible-players-wrap').style.display = (type === 'players') ? '' : 'none';
+  if (type === 'group') {
+    const sel = document.getElementById('msg-cible-group');
+    sel.innerHTML = (state.groupes || []).map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+  }
+  if (type === 'players') {
+    const wrap = document.getElementById('msg-cible-players');
+    wrap.innerHTML = getAllPlayers().map(p => {
+      const pe = escapeHtml(p);
+      return '<label style="display:inline-flex; align-items:center; gap:4px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:14px; padding:4px 10px; font-size:12px; cursor:pointer;">' +
+        '<input type="checkbox" class="msg-player-cb" value="' + pe + '" style="margin:0;"> ' + pe + '</label>';
+    }).join('');
+  }
+}
+
+async function sendMessage() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const titre = document.getElementById('msg-titre').value.trim();
+  const contenu = document.getElementById('msg-contenu').value.trim();
+  if (!contenu) { toast('Le message est vide', 'error'); return; }
+  const cibleType = document.getElementById('msg-cible-type').value;
+  let cibleGroupe = null, cibleJoueurs = [];
+  if (cibleType === 'group') {
+    cibleGroupe = document.getElementById('msg-cible-group').value;
+    if (!cibleGroupe) { toast('Choisis un groupe', 'error'); return; }
+  } else if (cibleType === 'players') {
+    cibleJoueurs = Array.from(document.querySelectorAll('.msg-player-cb:checked')).map(cb => cb.value);
+    if (cibleJoueurs.length === 0) { toast('Sélectionne au moins un joueur', 'error'); return; }
+  }
+  const row = {
+    org: currentOrg,
+    auteur: currentUser ? (currentUser.email || 'Staff') : 'Staff',
+    titre: titre || null,
+    contenu: contenu,
+    cible_type: cibleType,
+    cible_groupe: cibleGroupe,
+    cible_joueurs: cibleJoueurs
+  };
+  const { data, error } = await sb.from('messages').insert(row).select();
+  if (error) { toast('Erreur envoi : ' + error.message, 'error'); return; }
+  // Ajouter localement
+  if (data && data[0]) state.bdd_messages.unshift(data[0]);
+  // Réinitialiser le formulaire
+  document.getElementById('msg-titre').value = '';
+  document.getElementById('msg-contenu').value = '';
+  document.getElementById('msg-cible-type').value = 'all';
+  onMsgCibleChange();
+  toast('Message envoyé', 'success');
+  renderMessages();
+}
+
+async function deleteMessage(id) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  if (!confirm('Supprimer ce message ?')) return;
+  const { error } = await sb.from('messages').delete().eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  state.bdd_messages = state.bdd_messages.filter(m => m.id !== id);
+  toast('Message supprimé', 'success');
+  renderMessages();
+}
+
+// Un joueur marque un message comme lu
+async function markMessageRead(id) {
+  if (currentRole !== 'lecteur' || !currentJoueurNom) return;
+  // Déjà lu ?
+  if ((state.bdd_message_reads || []).some(r => r.message_id === id && r.joueur === currentJoueurNom)) return;
+  const row = { message_id: id, joueur: currentJoueurNom, org: currentOrg };
+  const { data, error } = await sb.from('message_reads').insert(row).select();
+  if (error) { return; }
+  if (data && data[0]) state.bdd_message_reads.push(data[0]);
+  renderMessages();
+  updateMessagesBadge();
+}
+
+function renderMessages() {
+  const isStaff = (currentRole === 'admin' || currentRole === 'staff');
+  // Carte de composition : staff seulement
+  const composeCard = document.getElementById('messages-compose-card');
+  if (composeCard) composeCard.style.display = isStaff ? '' : 'none';
+  if (isStaff) onMsgCibleChange();
+
+  const listEl = document.getElementById('messages-list');
+  const titleEl = document.getElementById('messages-list-title');
+  if (!listEl) return;
+
+  let messages = (state.bdd_messages || []).slice();
+  // Pour un joueur : ne montrer que les messages qui le ciblent
+  if (!isStaff) {
+    messages = messages.filter(m => messageVisibleToPlayer(m, currentJoueurNom));
+  }
+
+  if (titleEl) {
+    if (isStaff) {
+      titleEl.textContent = '📬 Messages envoyés (' + messages.length + ')';
+    } else {
+      const unread = messages.filter(m => !getMessageReads(m.id).some(r => r.joueur === currentJoueurNom)).length;
+      titleEl.textContent = '📬 Mes messages' + (unread > 0 ? ' (' + unread + ' non lu' + (unread > 1 ? 's' : '') + ')' : '');
+    }
+  }
+
+  if (messages.length === 0) {
+    listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:12px;">Aucun message.</div>';
+    return;
+  }
+
+  listEl.innerHTML = messages.map(m => {
+    const date = formatDateFR(m.created_at ? m.created_at.slice(0,10) : '');
+    const heure = m.created_at ? new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+    const cibleLabel = m.cible_type === 'all' ? "Toute l'équipe"
+      : m.cible_type === 'group' ? ('Groupe ' + (m.cible_groupe || ''))
+      : (Array.isArray(m.cible_joueurs) ? m.cible_joueurs.length + ' joueur(s)' : 'Joueurs');
+
+    if (isStaff) {
+      // Vue staff : message + accusés de lecture
+      const targets = getMessageTargets(m);
+      const reads = getMessageReads(m.id);
+      const readNames = reads.map(r => r.joueur);
+      const lus = targets.filter(t => readNames.includes(t));
+      const nonLus = targets.filter(t => !readNames.includes(t));
+      return '<div style="border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px;">' +
+        '<div style="display:flex; justify-content:space-between; align-items:start; gap:10px;">' +
+          '<div style="flex:1;">' +
+            (m.titre ? '<div style="font-weight:700; font-size:15px; margin-bottom:4px;">' + escapeHtml(m.titre) + '</div>' : '') +
+            '<div style="font-size:14px; white-space:pre-wrap;">' + escapeHtml(m.contenu) + '</div>' +
+          '</div>' +
+          '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="deleteMessage(\'' + m.id + '\')">🗑️</button>' +
+        '</div>' +
+        '<div style="font-size:11px; color:var(--text-dim); margin-top:8px;">' + date + ' ' + heure + ' · ' + escapeHtml(cibleLabel) + '</div>' +
+        '<div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--border);">' +
+          '<div style="font-size:12px; margin-bottom:4px;"><b style="color:var(--green);">✓ Lu par ' + lus.length + '/' + targets.length + '</b></div>' +
+          (nonLus.length > 0 ? '<div style="font-size:11px; color:var(--text-dim);">En attente : ' + nonLus.map(escapeHtml).join(', ') + '</div>' : '<div style="font-size:11px; color:var(--green);">Tout le monde a lu ✓</div>') +
+        '</div>' +
+      '</div>';
+    } else {
+      // Vue joueur : message + bouton accuser réception
+      const isRead = getMessageReads(m.id).some(r => r.joueur === currentJoueurNom);
+      return '<div style="border:1px solid ' + (isRead ? 'var(--border)' : 'var(--accent)') + '; border-radius:10px; padding:14px; margin-bottom:10px; background:' + (isRead ? 'transparent' : 'rgba(0,163,255,0.06)') + ';">' +
+        (m.titre ? '<div style="font-weight:700; font-size:15px; margin-bottom:4px;">' + escapeHtml(m.titre) + '</div>' : '') +
+        '<div style="font-size:14px; white-space:pre-wrap;">' + escapeHtml(m.contenu) + '</div>' +
+        '<div style="font-size:11px; color:var(--text-dim); margin-top:8px;">' + date + ' ' + heure + (m.auteur ? ' · ' + escapeHtml(m.auteur) : '') + '</div>' +
+        (isRead
+          ? '<div style="font-size:12px; color:var(--green); margin-top:8px;">✓ Lu</div>'
+          : '<button class="btn" style="margin-top:8px; padding:6px 14px; font-size:12px;" onclick="markMessageRead(\'' + m.id + '\')">✓ Marquer comme lu</button>') +
+      '</div>';
+    }
+  }).join('');
 }
 
 // ============================================================
@@ -1913,17 +2202,18 @@ function applyRoleRestrictions() {
   if (logoutBtn) {
     logoutBtn.textContent = (currentRole === 'lecteur') ? '↪ Log out' : '↪ Déconnexion';
   }
+  const gestionDropdown = document.getElementById('nav-gestion-dropdown');
   if (currentRole === 'lecteur') {
-    // Pour un joueur : interface ultra-simplifiée avec seulement 2 onglets dédiés
+    // Pour un joueur : interface ultra-simplifiée avec seulement les onglets dédiés
     // Masquer TOUS les onglets staff et n'afficher que les onglets joueur
     document.querySelectorAll('.nav-btn').forEach(btn => {
-      const view = btn.dataset.view;
       if (btn.classList.contains('player-only')) {
         btn.style.display = ''; // Afficher les onglets joueur
       } else {
         btn.style.display = 'none'; // Cacher tout le reste
       }
     });
+    if (gestionDropdown) gestionDropdown.style.display = 'none'; // Cacher le menu Gestion
     // Forcer l'affichage sur "Saisir mon RPE" au démarrage
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -1933,8 +2223,9 @@ function applyRoleRestrictions() {
       document.getElementById('view-player-rpe').classList.add('active');
     }
   } else {
-    // Staff/admin : cacher les onglets joueur
+    // Staff/admin : cacher les onglets joueur, réafficher le menu Gestion
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
+    if (gestionDropdown) gestionDropdown.style.display = '';
   }
 }
 
@@ -2062,7 +2353,9 @@ async function loadState() {
     bdd_gps: [],
     bdd_matchs: [],
     types_seances: [],
-    groupes: []
+    groupes: [],
+    bdd_messages: [],
+    bdd_message_reads: []
   };
   const setLoad = (t) => { document.getElementById('loading-text').textContent = t; };
 
@@ -2115,6 +2408,14 @@ async function loadState() {
       const { data: matchs } = await sb.from('matchs').select('*').eq('org', currentOrg).order('date', { ascending: false });
       state.bdd_matchs = matchs || [];
     } catch(e) { state.bdd_matchs = []; }
+
+    setLoad('Chargement des messages...');
+    try {
+      const { data: msgs } = await sb.from('messages').select('*').eq('org', currentOrg).order('created_at', { ascending: false });
+      state.bdd_messages = msgs || [];
+      const { data: reads } = await sb.from('message_reads').select('*').eq('org', currentOrg);
+      state.bdd_message_reads = reads || [];
+    } catch(e) { state.bdd_messages = []; state.bdd_message_reads = []; }
 
     setLoad('Chargement des check-ins Hooper...');
     await loadHooperFromSupabase();
@@ -2259,7 +2560,7 @@ let realtimeChannels = [];
 
 function setupRealtime() {
   if (realtimeChannels.length > 0) return; // déjà configuré
-  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests'];
+  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads'];
 
   tables.forEach(table => {
     const channel = sb.channel('realtime-' + table)
@@ -2274,6 +2575,34 @@ function setupRealtime() {
 
 function handleRealtimeChange(table, payload) {
   const { eventType, new: newRow, old: oldRow } = payload;
+
+  // ===== Messagerie =====
+  if (table === 'messages') {
+    // Ignorer les messages d'une autre organisation
+    if (newRow && newRow.org && newRow.org !== currentOrg) return;
+    if (eventType === 'DELETE') {
+      state.bdd_messages = (state.bdd_messages || []).filter(m => m.id !== oldRow.id);
+    } else {
+      const idx = (state.bdd_messages || []).findIndex(m => m.id === newRow.id);
+      if (idx >= 0) state.bdd_messages[idx] = newRow;
+      else state.bdd_messages.unshift(newRow);
+    }
+    if (getCurrentView() === 'messages') renderMessages();
+    updateMessagesBadge();
+    return;
+  }
+  if (table === 'message_reads') {
+    if (newRow && newRow.org && newRow.org !== currentOrg) return;
+    if (eventType === 'DELETE') {
+      state.bdd_message_reads = (state.bdd_message_reads || []).filter(r => r.id !== oldRow.id);
+    } else {
+      const idx = (state.bdd_message_reads || []).findIndex(r => r.id === newRow.id);
+      if (idx >= 0) state.bdd_message_reads[idx] = newRow;
+      else state.bdd_message_reads.push(newRow);
+    }
+    if (getCurrentView() === 'messages') renderMessages();
+    return;
+  }
 
   if (table === 'seances') {
     if (eventType === 'DELETE') {
@@ -2682,13 +3011,41 @@ function formatDateFR(dateStr) {
 // ============================================================================
 // NAVIGATION
 // ============================================================================
+// ===== Menu déroulant Gestion =====
+function toggleGestionMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('nav-gestion-menu');
+  if (menu) menu.classList.toggle('open');
+}
+function closeGestionMenu() {
+  const menu = document.getElementById('nav-gestion-menu');
+  if (menu) menu.classList.remove('open');
+}
+// Fermer le menu si on clique ailleurs
+document.addEventListener('click', (e) => {
+  const dd = document.getElementById('nav-gestion-dropdown');
+  if (dd && !dd.contains(e.target)) closeGestionMenu();
+});
+
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    // Le toggle du menu déroulant n'a pas de vue : il ouvre/ferme seulement le menu
+    if (!btn.dataset.view) return;
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     btn.classList.add('active');
     const view = btn.dataset.view;
-    document.getElementById('view-' + view).classList.add('active');
+    const viewEl = document.getElementById('view-' + view);
+    if (!viewEl) return;
+    viewEl.classList.add('active');
+    // Gérer l'état visuel du menu déroulant Gestion
+    const gestionViews = ['entry', 'match-entry', 'rpe-entry', 'history', 'settings'];
+    const gestionToggle = document.getElementById('nav-gestion-toggle');
+    if (gestionToggle) {
+      if (gestionViews.includes(view)) gestionToggle.classList.add('has-active');
+      else gestionToggle.classList.remove('has-active');
+    }
+    closeGestionMenu();
     // Render on demand
     if (view === 'overview') renderOverview();
     else if (view === 'calendar') renderCalendar();
@@ -2704,6 +3061,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'player-history') renderPlayerHistory();
     else if (view === 'player-hooper') renderPlayerHooper();
     else if (view === 'staff-hooper') renderStaffHooper();
+    else if (view === 'messages') renderMessages();
   });
 });
 
