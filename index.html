@@ -230,7 +230,7 @@
   .cal-cell.planned { background: #1e293b66; }
   .cal-planned { background:#3730a3; color:#c7d2fe; border-radius:4px; padding:2px 4px; margin:1px 0; cursor:pointer; font-size:11px; font-weight:600; }
   .cal-planned:hover { background:#4338ca; }
-  .cal-planned.done { background:#16653480; color:#86efac; text-decoration:line-through; }
+  .cal-planned.done { background:#16a34a; color:#dcfce7; border:1px solid #86efac; box-shadow:0 0 0 1px rgba(34,197,94,0.4) inset; }
   .cal-cell.rest { background: #37415188; }
   .cal-cell.injury { background: #7f1d1d88; }
   .cal-cell.sick { background: #78350f88; }
@@ -736,6 +736,17 @@
           <select id="cal-filter-group" onchange="renderCalendar()">
             <option value="">Tous</option>
           </select>
+        </div>
+        <div class="filter-group">
+          <label>Du</label>
+          <input type="date" id="cal-filter-start" onchange="renderCalendar()" />
+        </div>
+        <div class="filter-group">
+          <label>Au (max 10 jours)</label>
+          <input type="date" id="cal-filter-end" onchange="renderCalendar()" />
+        </div>
+        <div class="filter-group" style="align-self:flex-end;">
+          <button class="btn btn-secondary" style="padding:6px 14px; font-size:12px;" onclick="resetCalendarDateFilter()">↺ 10 derniers jours</button>
         </div>
       </div>
       <div id="calendarContainer"></div>
@@ -3510,9 +3521,10 @@ function seancePlanEstFaite(spId, joueur) {
 }
 
 function setSeancesJoueur(date, joueur, seances) {
-  // Ne jamais persister les badges de match (préfixe ⚽) dans le planning :
-  // ils proviennent de la table matchs, pas du planning d'entraînement.
-  const clean = (seances || []).filter(s => !(typeof s === 'string' && s.indexOf('⚽') === 0));
+  // Ne jamais persister dans le planning :
+  //  - les badges de match (préfixe ⚽) : ils viennent de la table matchs
+  //  - les séances planifiées individuelles (préfixe 📋) : elles viennent de la table seances_planifiees
+  const clean = (seances || []).filter(s => !(typeof s === 'string' && (s.indexOf('⚽') === 0 || s.indexOf('📋') === 0)));
   const idx = state.bdd_ent.findIndex(x => x.date === date && x.joueur === joueur);
   if (idx >= 0) {
     if (clean.length === 0) state.bdd_ent.splice(idx, 1);
@@ -4370,6 +4382,15 @@ function destroyChart(id) {
 // ============================================================================
 // CALENDRIER
 // ============================================================================
+function resetCalendarDateFilter() {
+  // Vider les champs date pour revenir à la vue par défaut (10 derniers jours)
+  const s = document.getElementById('cal-filter-start');
+  const e = document.getElementById('cal-filter-end');
+  if (s) s.value = '';
+  if (e) e.value = '';
+  renderCalendar();
+}
+
 function renderCalendar() {
   // Initialiser le formulaire de planification (staff uniquement)
   const planCard = document.getElementById('calendar-plan-card');
@@ -4395,7 +4416,24 @@ function renderCalendar() {
   if (groupFilter) players = players.filter(p => getJoueurInfo(p).groupe === groupFilter);
   players = players.sort();
 
-  const dates = getAllDates();
+  // Calcul des dates : par défaut les 10 derniers jours avec activité,
+  // ou la plage choisie dans les filtres (limitée à 10 jours max)
+  let dates = getAllDates();
+  const startEl = document.getElementById('cal-filter-start');
+  const endEl = document.getElementById('cal-filter-end');
+  let startVal = startEl ? startEl.value : '';
+  let endVal = endEl ? endEl.value : '';
+
+  if (startVal || endVal) {
+    // L'utilisateur a saisi une plage : on filtre les dates en conséquence
+    dates = dates.filter(d => (!startVal || d >= startVal) && (!endVal || d <= endVal));
+    // Limite dure à 10 jours : on garde les 10 plus récents
+    if (dates.length > 10) dates = dates.slice(-10);
+  } else {
+    // Pas de filtre : 10 derniers jours d'activité par défaut
+    dates = dates.slice(-10);
+  }
+
   const container = document.getElementById('calendarContainer');
 
   if (dates.length === 0 || players.length === 0) {
@@ -4420,7 +4458,7 @@ function renderCalendar() {
           const label = s.slice(2, sep);
           const spId = s.slice(sep + 1);
           const faite = seancePlanEstFaite(spId, p);
-          return '<div class="cal-planned' + (faite ? ' done' : '') + '" onclick="openSeancePlanDetail(\'' + spId + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="Voir le détail">📋 ' + escapeHtml(label.trim()) + (faite ? ' ✓' : '') + '</div>';
+          return '<div class="cal-planned' + (faite ? ' done' : '') + '" onclick="openSeancePlanDetail(\'' + spId + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="' + (faite ? 'Séance effectuée' : 'Séance planifiée — voir le détail') + '">' + (faite ? '✅' : '📋') + ' ' + escapeHtml(label.trim()) + '</div>';
         }
         return '<div>' + s + '</div>';
       }).join('');
@@ -6501,15 +6539,19 @@ function renderAffectation() {
   tbody.innerHTML = players.map(p => {
     const seances = getSeancesJoueur(date, p.nom);
     const badges = seances.map(s => {
-      const sEsc = escapeHtml(s);
       const pEsc = escapeHtml(p.nom);
       // Un match (préfixe ⚽) vient de la saisie match : badge informatif, non supprimable ici
       if (s && s.indexOf('⚽') === 0) {
-        return '<span class="badge ' + getSeanceBadgeClass(s) + '" title="Match (modifiable dans Saisie match)">' + sEsc + '</span>';
+        return '<span class="badge ' + getSeanceBadgeClass(s) + '" title="Match (modifiable dans Saisie match)">' + escapeHtml(s) + '</span>';
+      }
+      // Une séance planifiée (préfixe 📋 ... |id) : afficher proprement, non supprimable ici (à gérer dans la carte dédiée)
+      if (s && s.indexOf('📋 ') === 0 && s.indexOf('|') > 0) {
+        const labelClean = s.slice(2, s.lastIndexOf('|')).trim();
+        return '<span class="badge" style="background:#3730a3; color:#c7d2fe;" title="Séance planifiée (modifiable dans le calendrier)">📋 ' + escapeHtml(labelClean) + '</span>';
       }
       return '<span class="badge ' + getSeanceBadgeClass(s) + '" style="cursor:pointer;" ' +
              'onclick="removeOneSeance(\'' + p.nom.replace(/'/g, "\\'") + '\', \'' + s.replace(/'/g, "\\'") + '\')" ' +
-             'title="Cliquer pour retirer">' + sEsc + ' ✕</span>';
+             'title="Cliquer pour retirer">' + escapeHtml(s) + ' ✕</span>';
     }).join(' ');
     return '<tr><td><input type="checkbox" class="affect-check" data-player="' + escapeHtml(p.nom) + '"></td>' +
            '<td><b>' + escapeHtml(p.nom) + '</b></td><td>' + escapeHtml(p.groupe || '') + '</td><td>' + escapeHtml(p.poste || '') + '</td>' +
