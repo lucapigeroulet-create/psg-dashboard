@@ -75,14 +75,12 @@
   .nav-dropdown-toggle { display: inline-flex; align-items: center; gap: 4px; }
   .nav-dropdown-menu {
     display: none;
-    position: absolute;
-    top: 100%;
-    left: 0;
+    position: fixed;       /* fixed = échappe à l'overflow de la barre de nav */
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    z-index: 1000;
+    z-index: 5000;
     min-width: 220px;
     padding: 6px;
     flex-direction: column;
@@ -3015,7 +3013,22 @@ function formatDateFR(dateStr) {
 function toggleGestionMenu(e) {
   if (e) e.stopPropagation();
   const menu = document.getElementById('nav-gestion-menu');
-  if (menu) menu.classList.toggle('open');
+  const toggle = document.getElementById('nav-gestion-toggle');
+  if (!menu) return;
+  const willOpen = !menu.classList.contains('open');
+  menu.classList.toggle('open');
+  // Positionner le menu (fixed) juste sous le bouton Gestion
+  if (willOpen && toggle) {
+    const r = toggle.getBoundingClientRect();
+    menu.style.top = (r.bottom + 2) + 'px';
+    // Aligner à gauche du bouton, mais sans déborder à droite de l'écran
+    let left = r.left;
+    const menuWidth = menu.offsetWidth || 220;
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - menuWidth - 8);
+    }
+    menu.style.left = left + 'px';
+  }
 }
 function closeGestionMenu() {
   const menu = document.getElementById('nav-gestion-menu');
