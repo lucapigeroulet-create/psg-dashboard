@@ -2210,29 +2210,45 @@ async function createSeancePlan() {
 // ============================================================
 let spModalCurrentJoueur = null;
 
-async function openSeancePlanDetail(spId, joueur) {
+function openSeancePlanDetail(spId, joueur) {
   const sp = (state.bdd_seances_plan || []).find(x => x.id === spId);
   if (!sp) return;
   spModalCurrentJoueur = joueur;
-  // Charger la pièce jointe à la demande (elle n'est pas chargée en masse pour alléger)
+  // Afficher le modal IMMÉDIATEMENT (simple clic) puis charger la pièce jointe en arrière-plan
+  document.getElementById('sp-modal-overlay').style.display = 'flex';
+  renderSeancePlanModal(spId, joueur);
+  // Charger la pièce jointe à la demande si nécessaire, puis re-render
   if (sp.piece_jointe_nom && sp.piece_jointe === undefined) {
-    try {
-      const { data } = await sb.from('seances_planifiees').select('piece_jointe').eq('id', spId).single();
-      sp.piece_jointe = (data && data.piece_jointe) ? data.piece_jointe : null;
-    } catch(e) { sp.piece_jointe = null; }
+    sb.from('seances_planifiees').select('piece_jointe').eq('id', spId).single()
+      .then(({ data }) => {
+        sp.piece_jointe = (data && data.piece_jointe) ? data.piece_jointe : null;
+        // Re-render seulement si le modal est encore ouvert sur cette séance
+        if (spModalCurrentJoueur === joueur && document.getElementById('sp-modal-overlay').style.display === 'flex') {
+          renderSeancePlanModal(spId, joueur);
+        }
+      })
+      .catch(() => { sp.piece_jointe = null; });
   }
+}
+
+function renderSeancePlanModal(spId, joueur) {
+  const sp = (state.bdd_seances_plan || []).find(x => x.id === spId);
+  if (!sp) return;
   const titleEl = document.getElementById('sp-modal-title');
   const contentEl = document.getElementById('sp-modal-content');
   if (titleEl) titleEl.textContent = '📋 ' + (sp.type || 'Séance planifiée');
 
   const faite = seancePlanEstFaite(spId, joueur);
+  const estJoueurConcerne = (currentRole === 'lecteur' && joueur === currentJoueurNom);
   let html = '';
   html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">' + formatDateFR(sp.date) + (sp.duree_min ? ' · ' + sp.duree_min + ' min' : '') + ' · pour ' + escapeHtml(joueur) + '</div>';
   if (sp.consignes) {
     html += '<div style="background:var(--bg-elevated); border-radius:8px; padding:12px; margin-bottom:12px; white-space:pre-wrap; font-size:14px;">' + escapeHtml(sp.consignes) + '</div>';
   }
-  // Pièce jointe (image ou PDF en base64 data URL)
-  if (sp.piece_jointe) {
+  // Pièce jointe
+  if (sp.piece_jointe_nom && sp.piece_jointe === undefined) {
+    html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">📎 Chargement de la pièce jointe…</div>';
+  } else if (sp.piece_jointe) {
     if (sp.piece_jointe.indexOf('data:image') === 0) {
       html += '<img src="' + sp.piece_jointe + '" style="max-width:100%; border-radius:8px; margin-bottom:12px;" alt="illustration" />';
     } else if (sp.piece_jointe.indexOf('data:application/pdf') === 0) {
@@ -2243,13 +2259,37 @@ async function openSeancePlanDetail(spId, joueur) {
   html += '<div style="margin-top:10px;">';
   if (faite) {
     html += '<div style="color:var(--green); font-weight:600; margin-bottom:8px;">✓ Séance marquée comme faite</div>';
+    // RPE de la séance
+    const rpeVal = getSeancePlanRPE(spId, joueur);
+    if (estJoueurConcerne || currentRole === 'admin' || currentRole === 'staff') {
+      if (rpeVal !== null) {
+        html += '<div style="font-size:13px; margin-bottom:8px;">Effort ressenti (RPE) : <b style="color:var(--accent-light);">' + rpeVal + '/10</b>' + (sp.duree_min ? ' · charge : <b>' + (rpeVal * sp.duree_min) + ' UA</b>' : '') + '</div>';
+      }
+    }
+    // Le joueur concerné peut saisir/modifier son RPE
+    if (estJoueurConcerne) {
+      html += '<div id="sp-rpe-zone" style="margin:10px 0; padding:12px; background:var(--bg-elevated); border-radius:8px;">';
+      html += '<div style="font-size:13px; font-weight:600; margin-bottom:8px;">' + (rpeVal !== null ? 'Modifier ton effort ressenti :' : 'Quel a été ton effort ressenti ?') + '</div>';
+      html += '<div style="display:flex; flex-wrap:wrap; gap:4px;">';
+      for (let n = 0; n <= 10; n++) {
+        const sel = (rpeVal === n);
+        html += '<button onclick="setSeancePlanRPE(\'' + spId + '\', ' + n + ')" style="width:38px; height:38px; border-radius:8px; border:1px solid ' + (sel ? 'var(--accent)' : 'var(--border)') + '; background:' + (sel ? 'var(--accent)' : 'var(--bg-card)') + '; color:' + (sel ? '#fff' : 'var(--text)') + '; font-weight:700; cursor:pointer;">' + n + '</button>';
+      }
+      html += '</div>';
+      html += '<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">0 = repos total · 10 = effort maximal</div>';
+      html += '</div>';
+    }
     html += '<button class="btn btn-secondary" onclick="toggleSeancePlanFaite(\'' + spId + '\', false)">Annuler "fait"</button>';
   } else {
-    html += '<button class="btn" onclick="toggleSeancePlanFaite(\'' + spId + '\', true)">✓ Marquer comme fait</button>';
+    if (estJoueurConcerne) {
+      html += '<button class="btn" onclick="toggleSeancePlanFaite(\'' + spId + '\', true)">✓ Marquer comme fait</button>';
+    } else {
+      html += '<div style="color:var(--text-dim); font-size:13px;">Le joueur n\'a pas encore marqué cette séance comme faite.</div>';
+    }
   }
   html += '</div>';
 
-  // Côté staff : voir qui a fait
+  // Côté staff : voir qui a fait + le RPE moyen
   if (currentRole === 'admin' || currentRole === 'staff') {
     const targets = getSeancePlanTargets(sp);
     const faits = targets.filter(t => seancePlanEstFaite(spId, t));
@@ -2257,11 +2297,16 @@ async function openSeancePlanDetail(spId, joueur) {
     html += '<b style="color:var(--green);">Réalisée par ' + faits.length + '/' + targets.length + '</b>';
     const nonFaits = targets.filter(t => !faits.includes(t));
     if (nonFaits.length > 0) html += '<div style="color:var(--text-dim); margin-top:4px;">En attente : ' + nonFaits.map(escapeHtml).join(', ') + '</div>';
+    // RPE saisis
+    const rpes = faits.map(t => ({ j: t, r: getSeancePlanRPE(spId, t) })).filter(x => x.r !== null);
+    if (rpes.length > 0) {
+      const moy = (rpes.reduce((s, x) => s + x.r, 0) / rpes.length).toFixed(1);
+      html += '<div style="margin-top:6px;">RPE moyen : <b>' + moy + '/10</b> (' + rpes.length + ' réponse' + (rpes.length > 1 ? 's' : '') + ')</div>';
+    }
     html += '</div>';
   }
 
   if (contentEl) contentEl.innerHTML = html;
-  document.getElementById('sp-modal-overlay').style.display = 'flex';
 }
 
 function closeSeancePlanDetail() {
@@ -2285,11 +2330,33 @@ async function toggleSeancePlanFaite(spId, faire) {
     if (error) { toast('Erreur : ' + error.message, 'error'); return; }
     state.bdd_seances_plan_faites = state.bdd_seances_plan_faites.filter(f => !(f.seance_id === spId && f.joueur === joueur));
   }
-  openSeancePlanDetail(spId, joueur); // re-render le modal
+  renderSeancePlanModal(spId, joueur); // re-render le modal (sans re-fetch)
   if (getCurrentView() === 'calendar') renderCalendar();
   if (getCurrentView() === 'player-seances') renderPlayerSeances();
   updateSeancesBadge();
-  toast(faire ? 'Séance marquée comme faite' : 'Marquage annulé', 'success');
+  toast(faire ? 'Séance faite ✓ Indique ton effort ressenti (RPE)' : 'Marquage annulé', 'success');
+}
+
+// Récupérer le RPE saisi pour une séance planifiée par un joueur
+function getSeancePlanRPE(spId, joueur) {
+  const f = (state.bdd_seances_plan_faites || []).find(x => x.seance_id === spId && x.joueur === joueur);
+  if (!f || f.rpe === null || f.rpe === undefined) return null;
+  return Number(f.rpe);
+}
+
+// Le joueur saisit son RPE pour une séance planifiée faite
+async function setSeancePlanRPE(spId, valeur) {
+  const joueur = spModalCurrentJoueur;
+  if (!joueur) return;
+  if (currentRole === 'lecteur' && joueur !== currentJoueurNom) { toast('Action non autorisée', 'error'); return; }
+  const { error } = await sb.from('seances_planifiees_faites')
+    .update({ rpe: valeur }).eq('seance_id', spId).eq('joueur', joueur);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  // Mettre à jour localement
+  const f = (state.bdd_seances_plan_faites || []).find(x => x.seance_id === spId && x.joueur === joueur);
+  if (f) f.rpe = valeur;
+  renderSeancePlanModal(spId, joueur);
+  toast('Effort ressenti enregistré : ' + valeur + '/10', 'success');
 }
 
 // Détecte la vue actuellement active
@@ -3239,6 +3306,10 @@ function getSeancesPourDate(date) {
 
 // Récupérer le TYPE d'une séance à partir de son nom
 function getTypeForNom(date, nom) {
+  // Cas séance individuelle planifiée (préfixe ⭐)
+  if (nom && nom.indexOf('⭐ ') === 0) {
+    return 'Séance individuelle';
+  }
   // Cas match : type dérivé du groupe du match → "Match U18", "Match U15", etc.
   if (nom && nom.indexOf('⚽ MATCH') === 0) {
     const m = (state.bdd_matchs || []).find(x => x.date === date && matchSeanceNom(x) === nom);
@@ -4201,6 +4272,25 @@ function computeSRPE() {
     });
   });
 
+  // ===== Séances planifiées individuelles =====
+  // sRPE = durée prévue × RPE saisi par le joueur après avoir coché "fait"
+  (state.bdd_seances_plan || []).forEach(sp => {
+    (state.bdd_seances_plan_faites || []).filter(f => f.seance_id === sp.id).forEach(f => {
+      if (f.rpe === null || f.rpe === undefined || isNaN(f.rpe)) return;
+      const duree = sp.duree_min || 0;
+      const rpeVal = Number(f.rpe);
+      out.push({
+        date: sp.date,
+        joueur: f.joueur,
+        seance: '⭐ ' + (sp.type || 'Séance individuelle'),
+        duree: duree,
+        rpe: rpeVal,
+        sRPE: duree * rpeVal,
+        mode: 'individuelle'
+      });
+    });
+  });
+
   return out;
 }
 
@@ -4333,7 +4423,10 @@ function renderRPE() {
     const types = uniqueSorted(state.bdd_ent2.map(s => s.seance).filter(t => t && !STATUTS_NON_ENT.includes(t)));
     // Ajouter les types de match (Match U18, Match U15...) dérivés des matchs enregistrés
     const matchTypes = uniqueSorted((state.bdd_matchs || []).map(m => m.groupe ? ('Match ' + m.groupe) : 'Match'));
-    const allTypes = uniqueSorted([...types, ...matchTypes]);
+    // Ajouter "Séance individuelle" s'il existe des séances planifiées avec RPE
+    const hasIndiv = (state.bdd_seances_plan_faites || []).some(f => f.rpe !== null && f.rpe !== undefined);
+    const indivTypes = hasIndiv ? ['Séance individuelle'] : [];
+    const allTypes = uniqueSorted([...types, ...matchTypes, ...indivTypes]);
     typeSel.innerHTML = '<option value="">Tous types</option>' + allTypes.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
   }
 
