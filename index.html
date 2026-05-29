@@ -1051,6 +1051,23 @@
 
       <div class="form-row">
         <div>
+          <label>Type de match</label>
+          <select id="match-type" onchange="onMatchTypeChange()">
+            <option value="">— Choisir —</option>
+            <option value="amical">Amical</option>
+            <option value="championnat">Championnat</option>
+            <option value="coupe">Coupe</option>
+            <option value="autre">Autre</option>
+          </select>
+        </div>
+        <div id="match-type-detail-wrap" style="display:none;">
+          <label id="match-type-detail-label">Détail</label>
+          <input type="text" id="match-type-detail" placeholder="" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div>
           <label id="match-label-score">Score PSG</label>
           <input type="number" id="match-score-psg" min="0" placeholder="0" />
         </div>
@@ -6238,6 +6255,32 @@ function renderInjury() {
 // ============================================================================
 let currentMatchId = null; // id du match en cours d'édition (null = nouveau)
 
+// Adapte le label du détail selon le type de match choisi (journée / tour / libre)
+function onMatchTypeChange() {
+  const t = document.getElementById('match-type').value;
+  const wrap = document.getElementById('match-type-detail-wrap');
+  const label = document.getElementById('match-type-detail-label');
+  const input = document.getElementById('match-type-detail');
+  if (!wrap || !label || !input) return;
+  if (t === 'championnat') {
+    wrap.style.display = '';
+    label.textContent = 'N° de journée';
+    input.placeholder = 'ex : 12';
+  } else if (t === 'coupe') {
+    wrap.style.display = '';
+    label.textContent = 'N° de tour';
+    input.placeholder = 'ex : 32e';
+  } else if (t === 'autre') {
+    wrap.style.display = '';
+    label.textContent = 'Précision';
+    input.placeholder = 'ex : tournoi U15';
+  } else {
+    // amical ou aucun choix → pas de champ détail
+    wrap.style.display = 'none';
+    input.value = '';
+  }
+}
+
 function renderMatchEntry() {
   // Adapter les labels selon l'organisation active
   const orgLabel = currentOrg || 'PSG';
@@ -6246,11 +6289,28 @@ function renderMatchEntry() {
   if (lblEquipe) lblEquipe.textContent = 'Équipe ' + orgLabel;
   if (lblScore) lblScore.textContent = 'Score ' + orgLabel;
 
-  // Remplir le sélecteur d'équipe
+  // Remplir le sélecteur d'équipe selon l'organisation
+  //   PSG  : on liste les groupes de l'organisation (U18, U15...) — ils filtrent aussi les joueurs disponibles
+  //   TEGG : tous les joueurs appartiennent au groupe 'TEGG'. Le sélecteur sert juste à indiquer
+  //          AVEC QUELLE équipe le match se joue (N3 / Réserve R2 / Autre) — sans filtrer les joueurs.
   const groupeSel = document.getElementById('match-groupe');
-  if (groupeSel && groupeSel.options.length === 0) {
+  if (groupeSel) {
     ensureGroupsList();
-    groupeSel.innerHTML = '<option value="">— Équipe —</option>' + state.groupes.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+    const opts = [];
+    if (currentOrg === 'TEGG') {
+      // Liste fixe pour TEGG (peut être étendue facilement)
+      const teggEquipes = ['N3', 'Réserve R2', 'Autre'];
+      opts.push('<option value="">— Équipe —</option>');
+      teggEquipes.forEach(e => opts.push('<option value="' + e + '">' + e + '</option>'));
+    } else {
+      // PSG : groupes existants (filtre les joueurs disponibles)
+      opts.push('<option value="">— Équipe —</option>');
+      state.groupes.filter(g => g !== 'TEGG').forEach(g => opts.push('<option value="' + g + '">' + g + '</option>'));
+    }
+    // Préserver la sélection si elle existe encore
+    const current = groupeSel.value;
+    groupeSel.innerHTML = opts.join('');
+    if (current) for (const o of groupeSel.options) if (o.value === current) { groupeSel.value = current; break; }
   }
   // Date par défaut = aujourd'hui
   const dateInput = document.getElementById('match-date');
@@ -6296,9 +6356,14 @@ function renderMatchComposition() {
   const nbP = parseInt(document.getElementById('match-nb-periodes').value) || 2;
   const groupe = document.getElementById('match-groupe').value;
 
-  // Joueurs concernés (filtrés par équipe si sélectionnée)
+  // Joueurs concernés
+  //  - PSG : on filtre par groupe d'âge sélectionné (U18 ≠ U15)
+  //  - TEGG : tous les joueurs de l'organisation sont concernés, peu importe l'équipe N3/Réserve choisie
+  //          (un joueur peut jouer dans plusieurs équipes selon les besoins)
   let players = getAllPlayers();
-  if (groupe) players = players.filter(p => getJoueurInfo(p).groupe === groupe);
+  if (groupe && currentOrg !== 'TEGG') {
+    players = players.filter(p => getJoueurInfo(p).groupe === groupe);
+  }
 
   if (players.length === 0) {
     container.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:10px;">Aucun joueur. Sélectionne une équipe ou ajoute des joueurs.</div>';
@@ -6392,7 +6457,9 @@ async function saveMatch() {
     domicile: document.getElementById('match-domicile').value === 'true',
     nb_periodes: nbP,
     duree_periode: dureeP,
-    composition: composition
+    composition: composition,
+    type_match: document.getElementById('match-type').value || null,
+    type_detail: document.getElementById('match-type-detail').value.trim() || null
   };
 
   try {
@@ -6430,6 +6497,10 @@ function loadExistingMatch() {
   document.getElementById('match-score-adv').value = m.score_adversaire != null ? m.score_adversaire : '';
   document.getElementById('match-nb-periodes').value = m.nb_periodes || 2;
   document.getElementById('match-duree-periode').value = m.duree_periode || 45;
+  // Type de match
+  document.getElementById('match-type').value = m.type_match || '';
+  document.getElementById('match-type-detail').value = m.type_detail || '';
+  onMatchTypeChange(); // affiche / cache le champ détail selon le type
   // Reconstruire la composition
   matchCompositionState = {};
   (m.composition || []).forEach(c => {
@@ -6444,13 +6515,15 @@ function loadExistingMatch() {
 function resetMatchForm() {
   currentMatchId = null;
   matchCompositionState = {};
-  ['match-heure', 'match-adversaire', 'match-niveau', 'match-score-psg', 'match-score-adv'].forEach(id => {
+  ['match-heure', 'match-adversaire', 'match-niveau', 'match-score-psg', 'match-score-adv', 'match-type', 'match-type-detail'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   document.getElementById('match-nb-periodes').value = 2;
   document.getElementById('match-duree-periode').value = 45;
   const existSel = document.getElementById('match-existing'); if (existSel) existSel.value = '';
   document.getElementById('match-delete-btn').style.display = 'none';
+  const detailWrap = document.getElementById('match-type-detail-wrap');
+  if (detailWrap) detailWrap.style.display = 'none';
   renderMatchPeriodes();
   renderMatchComposition();
 }
