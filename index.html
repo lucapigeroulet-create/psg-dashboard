@@ -799,6 +799,7 @@
     <!-- Graphique : charge quotidienne par joueur sur la semaine -->
     <div class="card">
       <h2>Charge quotidienne par jour (semaine sélectionnée)</h2>
+      <div id="rpe-weekly-players-filter" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; padding:8px; background:var(--bg-elevated); border-radius:8px;"></div>
       <div class="chart-container tall"><canvas id="chart-rpe-weekly"></canvas></div>
     </div>
 
@@ -2177,6 +2178,7 @@ function updateSeancesBadge() {
 let spFichierData = null;   // base64 du fichier joint
 let spFichierNom = null;
 let spEditingId = null;     // si non null : on est en mode édition d'une séance existante
+const rpeWeeklyHiddenJoueurs = new Set();  // joueurs masqués sur le graphique "Charge quotidienne par jour" 
 
 function onSpCibleChange() {
   const type = document.getElementById('sp-cible-type').value;
@@ -3196,8 +3198,14 @@ async function loadState() {
     const { data: types } = await sb.from('types_seances').select('nom').eq('org', currentOrg).order('nom');
     state.types_seances = (types || []).map(t => t.nom);
     if (state.types_seances.length === 0) {
-      // Fallback : types par défaut
-      state.types_seances = ['PSG U19','PSG U18','GYM U19','GYM U18','REST','INJURY','SICK','ABSENT','SUSPENDED'];
+      // Fallback adapté à l'organisation : on ne préremplit avec des types PSG que pour PSG.
+      // Pour TEGG (ou toute autre org), seuls les statuts système sont nécessaires —
+      // l'utilisateur ajoutera ses propres types de séances depuis les paramètres.
+      if (currentOrg === 'PSG') {
+        state.types_seances = ['PSG U19','PSG U18','GYM U19','GYM U18','REST','INJURY','SICK','ABSENT','SUSPENDED'];
+      } else {
+        state.types_seances = ['REST','INJURY','SICK','ABSENT','SUSPENDED'];
+      }
     }
 
     setLoad('Chargement des fiches séances...');
@@ -4906,6 +4914,24 @@ function computeACWR(joueur, mondayDate, typeFilter) {
   return (chronic > 0) ? (acute / chronic) : null;
 }
 
+// Bascule la visibilité d'un joueur sur le graphique "Charge quotidienne par jour"
+function toggleRPEPlayerVisible(nom) {
+  if (rpeWeeklyHiddenJoueurs.has(nom)) rpeWeeklyHiddenJoueurs.delete(nom);
+  else rpeWeeklyHiddenJoueurs.add(nom);
+  renderRPE();
+}
+// Tout afficher / tout masquer
+function toggleAllRPEPlayers(show) {
+  if (show) {
+    rpeWeeklyHiddenJoueurs.clear();
+  } else {
+    // Masquer tous les joueurs actuellement présents dans les rows
+    const allPlayers = (state.joueurs || []).map(j => j.nom);
+    allPlayers.forEach(n => rpeWeeklyHiddenJoueurs.add(n));
+  }
+  renderRPE();
+}
+
 function renderRPE() {
   // Remplir le sélecteur de semaines
   const weekSel = document.getElementById('rpe-week-select');
@@ -5019,13 +5045,47 @@ function renderRPE() {
   }
 
   // ===== Graphique : charge quotidienne par joueur (lignes par joueur) =====
+  // Tous les joueurs ayant une charge sont représentables. L'utilisateur peut les masquer/afficher individuellement.
   destroyChart('chart-rpe-weekly');
-  if (rows.length > 0) {
-    const palette = ['#00a3ff','#4fc3ff','#10b981','#eab308','#f97316','#ef4444','#a855f7','#ec4899','#14b8a6','#84cc16'];
-    const datasets = rows.slice(0, 10).map((r, i) => ({
+  const filterContainer = document.getElementById('rpe-weekly-players-filter');
+  if (rows.length === 0) {
+    if (filterContainer) filterContainer.innerHTML = '';
+  } else {
+    // Palette : 10 couleurs de base + génération HSL au-delà pour distinguer 30+ joueurs
+    const baseColors = ['#00a3ff','#4fc3ff','#10b981','#eab308','#f97316','#ef4444','#a855f7','#ec4899','#14b8a6','#84cc16'];
+    const colorFor = (i) => i < baseColors.length ? baseColors[i] : `hsl(${(i * 47) % 360}, 70%, 60%)`;
+
+    // Construire le panneau de cases à cocher (toggles)
+    if (filterContainer) {
+      const allHidden = rows.every(r => rpeWeeklyHiddenJoueurs.has(r.joueur));
+      const allShown = rows.every(r => !rpeWeeklyHiddenJoueurs.has(r.joueur));
+      let html = '<div style="display:flex; align-items:center; gap:8px; width:100%; margin-bottom:6px;">';
+      html += '<span style="font-size:11px; color:var(--text-dim); font-weight:600;">Joueurs affichés (' + rows.filter(r => !rpeWeeklyHiddenJoueurs.has(r.joueur)).length + '/' + rows.length + ') :</span>';
+      html += '<button type="button" onclick="toggleAllRPEPlayers(true)" style="padding:2px 8px; font-size:11px; background:var(--bg-card); color:var(--text-dim); border:1px solid var(--border); border-radius:4px; cursor:pointer;" ' + (allShown ? 'disabled' : '') + '>Tout afficher</button>';
+      html += '<button type="button" onclick="toggleAllRPEPlayers(false)" style="padding:2px 8px; font-size:11px; background:var(--bg-card); color:var(--text-dim); border:1px solid var(--border); border-radius:4px; cursor:pointer;" ' + (allHidden ? 'disabled' : '') + '>Tout masquer</button>';
+      html += '</div>';
+      html += rows.map((r, i) => {
+        const hidden = rpeWeeklyHiddenJoueurs.has(r.joueur);
+        const color = colorFor(i);
+        const nomEsc = r.joueur.replace(/'/g, "\\'");
+        return '<button type="button" onclick="toggleRPEPlayerVisible(\'' + nomEsc + '\')" ' +
+               'style="padding:3px 10px; font-size:11px; border-radius:12px; cursor:pointer; ' +
+                      'background:' + (hidden ? 'var(--bg-card)' : color) + '; ' +
+                      'color:' + (hidden ? 'var(--text-dim)' : '#fff') + '; ' +
+                      'border:1px solid ' + (hidden ? 'var(--border)' : color) + '; ' +
+                      'opacity:' + (hidden ? '0.55' : '1') + '; font-weight:600;" ' +
+               'title="' + (hidden ? 'Cliquer pour afficher' : 'Cliquer pour masquer') + '">' +
+               (hidden ? '○' : '●') + ' ' + escapeHtml(r.joueur) + '</button>';
+      }).join('');
+      filterContainer.innerHTML = html;
+    }
+
+    // Ne tracer que les joueurs non masqués (plus de limite à 10)
+    const visibleRows = rows.map((r, i) => ({ r, i })).filter(x => !rpeWeeklyHiddenJoueurs.has(x.r.joueur));
+    const datasets = visibleRows.map(({ r, i }) => ({
       label: r.joueur,
       data: r.daily,
-      borderColor: palette[i % palette.length],
+      borderColor: colorFor(i),
       backgroundColor: 'transparent',
       tension: 0.3,
       borderWidth: 2,
