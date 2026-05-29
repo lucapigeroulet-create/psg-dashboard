@@ -1026,7 +1026,7 @@
           <input type="time" id="match-heure" />
         </div>
         <div>
-          <label>Équipe PSG</label>
+          <label id="match-label-equipe">Équipe PSG</label>
           <select id="match-groupe" onchange="onMatchGroupeChange()"></select>
         </div>
       </div>
@@ -1051,7 +1051,7 @@
 
       <div class="form-row">
         <div>
-          <label>Score PSG</label>
+          <label id="match-label-score">Score PSG</label>
           <input type="number" id="match-score-psg" min="0" placeholder="0" />
         </div>
         <div>
@@ -2973,6 +2973,9 @@ async function switchOrg(org) {
   document.getElementById('data-loading-overlay').style.display = 'none';
   initAll();
   setupRealtime();
+  // Re-rendre la vue active si elle dépend de l'organisation
+  const v = (typeof getCurrentView === 'function') ? getCurrentView() : null;
+  if (v === 'match-entry' && typeof renderMatchEntry === 'function') renderMatchEntry();
   toast('Vue ' + org + ' activée', 'success');
 }
 
@@ -6236,6 +6239,13 @@ function renderInjury() {
 let currentMatchId = null; // id du match en cours d'édition (null = nouveau)
 
 function renderMatchEntry() {
+  // Adapter les labels selon l'organisation active
+  const orgLabel = currentOrg || 'PSG';
+  const lblEquipe = document.getElementById('match-label-equipe');
+  const lblScore = document.getElementById('match-label-score');
+  if (lblEquipe) lblEquipe.textContent = 'Équipe ' + orgLabel;
+  if (lblScore) lblScore.textContent = 'Score ' + orgLabel;
+
   // Remplir le sélecteur d'équipe
   const groupeSel = document.getElementById('match-groupe');
   if (groupeSel && groupeSel.options.length === 0) {
