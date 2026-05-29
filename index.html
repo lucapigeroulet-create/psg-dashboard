@@ -2053,7 +2053,7 @@ async function loadProfileAndStart() {
 }
 
 async function logout() {
-  const msg = (currentRole === 'lecteur') ? 'Log out?' : 'Se déconnecter ?';
+  const msg = (currentRole === 'lecteur' && playerLang() === 'en') ? 'Log out?' : 'Se déconnecter ?';
   if (!confirm(msg)) return;
   if (sb) await sb.auth.signOut();
   // Recharger la page pour repartir à zéro
@@ -2906,18 +2906,18 @@ function renderMessages() {
       titleEl.textContent = '📬 Messages envoyés (' + messages.length + ')';
     } else {
       const unread = messages.filter(m => !getMessageReads(m.id).some(r => r.joueur === currentJoueurNom)).length;
-      titleEl.textContent = '📬 Mes messages' + (unread > 0 ? ' (' + unread + ' non lu' + (unread > 1 ? 's' : '') + ')' : '');
+      titleEl.textContent = '📬 ' + tr('My messages', 'Mes messages') + (unread > 0 ? ' (' + unread + ' ' + (playerLang() === 'fr' ? ('non lu' + (unread > 1 ? 's' : '')) : ('unread' + (unread > 1 ? '' : ''))) + ')' : '');
     }
   }
 
   if (messages.length === 0) {
-    listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:12px;">Aucun message.</div>';
+    listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:12px;">' + tr('No message.', 'Aucun message.') + '</div>';
     return;
   }
 
   listEl.innerHTML = messages.map(m => {
     const date = formatDateFR(m.created_at ? m.created_at.slice(0,10) : '');
-    const heure = m.created_at ? new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+    const heure = m.created_at ? new Date(m.created_at).toLocaleTimeString(playerLang() === 'fr' ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
     const cibleLabel = m.cible_type === 'all' ? "Toute l'équipe"
       : m.cible_type === 'group' ? ('Groupe ' + (m.cible_groupe || ''))
       : (Array.isArray(m.cible_joueurs) ? m.cible_joueurs.length + ' joueur(s)' : 'Joueurs');
@@ -2951,8 +2951,8 @@ function renderMessages() {
         '<div style="font-size:14px; white-space:pre-wrap;">' + escapeHtml(m.contenu) + '</div>' +
         '<div style="font-size:11px; color:var(--text-dim); margin-top:8px;">' + date + ' ' + heure + (m.auteur ? ' · ' + escapeHtml(m.auteur) : '') + '</div>' +
         (isRead
-          ? '<div style="font-size:12px; color:var(--green); margin-top:8px;">✓ Lu</div>'
-          : '<button class="btn" style="margin-top:8px; padding:6px 14px; font-size:12px;" onclick="markMessageRead(\'' + m.id + '\')">✓ Marquer comme lu</button>') +
+          ? '<div style="font-size:12px; color:var(--green); margin-top:8px;">✓ ' + tr('Read', 'Lu') + '</div>'
+          : '<button class="btn" style="margin-top:8px; padding:6px 14px; font-size:12px;" onclick="markMessageRead(\'' + m.id + '\')">✓ ' + tr('Mark as read', 'Marquer comme lu') + '</button>') +
       '</div>';
     }
   }).join('');
@@ -2999,11 +2999,7 @@ function updateOrgSwitcherUI() {
 }
 
 function applyRoleRestrictions() {
-  // Adapter le bouton de déconnexion selon la langue
-  const logoutBtn = document.getElementById('logout-btn');
-  if (logoutBtn) {
-    logoutBtn.textContent = (currentRole === 'lecteur') ? '↪ Log out' : '↪ Déconnexion';
-  }
+  // Le texte du bouton de déconnexion est géré par applyPlayerLanguage selon l'organisation
   const gestionDropdown = document.getElementById('nav-gestion-dropdown');
   if (currentRole === 'lecteur') {
     // Pour un joueur : interface ultra-simplifiée avec seulement les onglets dédiés
@@ -3891,7 +3887,10 @@ function getCellStatusClass(seances) {
 function formatDateFR(dateStr) {
   const [y, m, d] = dateStr.split('-');
   const dt = new Date(y, m-1, d);
-  const jours = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+  // Noms de jours : FR par défaut, EN pour les lecteurs PSG (playerLang() === 'en')
+  const joursFR = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+  const joursEN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const jours = (typeof playerLang === 'function' && playerLang() === 'en') ? joursEN : joursFR;
   return jours[dt.getDay()] + ' ' + d + '/' + m;
 }
 
