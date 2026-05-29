@@ -742,13 +742,14 @@
           <input type="date" id="cal-filter-start" onchange="renderCalendar()" />
         </div>
         <div class="filter-group">
-          <label>Au (max 10 jours)</label>
+          <label>Au</label>
           <input type="date" id="cal-filter-end" onchange="renderCalendar()" />
         </div>
         <div class="filter-group" style="align-self:flex-end;">
-          <button class="btn btn-secondary" style="padding:6px 14px; font-size:12px;" onclick="resetCalendarDateFilter()">↺ 10 derniers jours</button>
+          <button class="btn btn-secondary" style="padding:6px 14px; font-size:12px;" onclick="resetCalendarDateFilter()">↺ Autour d'aujourd'hui</button>
         </div>
       </div>
+      <div style="font-size:11px; color:var(--text-dim); margin-top:-4px; margin-bottom:8px;">Affiche jusqu'à 10 jours. Vue par défaut : ~5 jours passés + aujourd'hui + les jours à venir avec activité (ex. séances planifiées).</div>
       <div id="calendarContainer"></div>
     </div>
   </div>
@@ -3667,12 +3668,13 @@ function escapeHtml(s) {
 }
 
 function getAllDates() {
-  // Inclure toutes les dates où il y a un planning, une séance, un RPE ou un match
+  // Inclure toutes les dates où il y a un planning, une séance, un RPE, un match ou une séance planifiée (incl. dates futures)
   const all = [];
   (state.bdd_ent || []).forEach(x => all.push(x.date));
   (state.bdd_ent2 || []).forEach(x => all.push(x.date));
   (state.bdd_rpe || []).forEach(x => all.push(x.date));
   (state.bdd_matchs || []).forEach(x => all.push(x.date));
+  (state.bdd_seances_plan || []).forEach(x => all.push(x.date));  // intègre les séances planifiées à venir
   return uniqueSorted(all);
 }
 
@@ -4416,22 +4418,42 @@ function renderCalendar() {
   if (groupFilter) players = players.filter(p => getJoueurInfo(p).groupe === groupFilter);
   players = players.sort();
 
-  // Calcul des dates : par défaut les 10 derniers jours avec activité,
-  // ou la plage choisie dans les filtres (limitée à 10 jours max)
+  // Calcul des dates :
+  //  - par défaut : fenêtre autour d'aujourd'hui (5 jours passés + aujourd'hui + jours futurs avec activité, dans la limite de 10 jours total)
+  //  - avec filtres : on respecte la plage choisie (limitée à 10 jours)
   let dates = getAllDates();
   const startEl = document.getElementById('cal-filter-start');
   const endEl = document.getElementById('cal-filter-end');
   let startVal = startEl ? startEl.value : '';
   let endVal = endEl ? endEl.value : '';
+  const today = toLocalISO(new Date());
 
   if (startVal || endVal) {
-    // L'utilisateur a saisi une plage : on filtre les dates en conséquence
+    // Plage explicite saisie par l'utilisateur
     dates = dates.filter(d => (!startVal || d >= startVal) && (!endVal || d <= endVal));
-    // Limite dure à 10 jours : on garde les 10 plus récents
-    if (dates.length > 10) dates = dates.slice(-10);
+    if (dates.length > 10) {
+      // Si la plage déborde 10 jours, garder ceux les plus proches d'aujourd'hui
+      const refDate = (today >= (startVal || '0000') && today <= (endVal || '9999')) ? today : (startVal || endVal);
+      dates.sort((a, b) => Math.abs(a.localeCompare(refDate)) - Math.abs(b.localeCompare(refDate)));
+      dates = dates.slice(0, 10).sort();
+    }
   } else {
-    // Pas de filtre : 10 derniers jours d'activité par défaut
-    dates = dates.slice(-10);
+    // Pas de filtre : fenêtre autour d'aujourd'hui
+    const pastDates = dates.filter(d => d < today).slice(-5);   // jusqu'à 5 jours passés
+    const futureDates = dates.filter(d => d >= today);          // tous les jours présents/futurs avec activité
+    let combined = [...pastDates, ...futureDates];
+    // Garantir qu'aujourd'hui est dans la liste, même sans activité
+    if (!combined.includes(today)) combined.push(today);
+    combined = Array.from(new Set(combined)).sort();
+    // Limite à 10 jours : on coupe les futures les plus lointaines en priorité
+    if (combined.length > 10) {
+      const past = combined.filter(d => d < today);
+      const future = combined.filter(d => d >= today);
+      // Garder tous les passés (≤5) + compléter avec les premiers futurs jusqu'à 10
+      const room = Math.max(0, 10 - past.length);
+      combined = [...past, ...future.slice(0, room)];
+    }
+    dates = combined;
   }
 
   const container = document.getElementById('calendarContainer');
