@@ -7255,11 +7255,28 @@ function renderStaffMatchNotation(date, joueur, m) {
 }
 
 function renderRPECard(date, groupFilter) {
-  const rows = getRPEPlayersForDate(date, groupFilter);
+  const allRows = getRPEPlayersForDate(date, groupFilter);
   const container = document.getElementById('rpe-card-container');
 
+  // Ne garder que les joueurs ayant quelque chose à noter :
+  //  - au moins une séance (hors statut système REST/INJURY/SICK/ABSENT/SUSPENDED), OU
+  //  - au moins un match du jour avec un temps de jeu > 0
+  const rows = allRows.filter(r => {
+    const seancesNotables = (r.seances || []).filter(s => !STATUTS_NON_ENT.includes(s));
+    if (seancesNotables.length > 0) return true;
+    const aJoueMatch = (state.bdd_matchs || []).some(m =>
+      m.date === date && (m.composition || []).some(c => c.joueur === r.joueur && (c.total_min || 0) > 0)
+    );
+    return aJoueMatch;
+  });
+
+  const masques = allRows.length - rows.length;
+
   if (rows.length === 0) {
-    container.innerHTML = '<div class="empty-state">Aucun joueur ce jour.</div>';
+    const msg = allRows.length === 0
+      ? 'Aucun joueur ce jour.'
+      : 'Aucun joueur à noter ce jour (' + allRows.length + ' joueur' + (allRows.length > 1 ? 's' : '') + ' sans séance ni match).';
+    container.innerHTML = '<div class="empty-state">' + msg + '</div>';
     return;
   }
 
