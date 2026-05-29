@@ -2992,9 +2992,20 @@ async function switchOrg(org) {
   document.getElementById('data-loading-overlay').style.display = 'none';
   initAll();
   setupRealtime();
+
+  // Réinitialiser les filtres qui dépendent de l'organisation
+  // (sinon ils gardent leur valeur entre les orgs et peuvent vider l'affichage)
+  ['cal-filter-group', 'cal-filter-start', 'cal-filter-end',
+   'rpe-filter-group', 'rpe-filter-type'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
   // Re-rendre la vue active si elle dépend de l'organisation
   const v = (typeof getCurrentView === 'function') ? getCurrentView() : null;
   if (v === 'match-entry' && typeof renderMatchEntry === 'function') renderMatchEntry();
+  if (v === 'calendar' && typeof renderCalendar === 'function') renderCalendar();
+  if (v === 'rpe' && typeof renderRPE === 'function') renderRPE();
   toast('Vue ' + org + ' activée', 'success');
 }
 
