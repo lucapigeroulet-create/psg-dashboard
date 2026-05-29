@@ -1891,6 +1891,23 @@ const INITIAL_DATA = {"joueurs":[{"nom":"Abdoulaye","groupe":"PSG U19","poste":"
 
 // Catégories de séances
 const STATUTS_NON_ENT = ['REST', 'INJURY', 'SICK', 'ABSENT', 'SUSPENDED'];
+// Libellés affichables (les codes restent en interne pour ne pas casser la logique)
+const STATUT_LABELS_FR = {
+  'REST': 'Repos',
+  'INJURY': 'Blessure',
+  'SICK': 'Malade',
+  'ABSENT': 'Absent',
+  'SUSPENDED': 'Suspendu'
+};
+// Retourne le libellé affichable d'un code de statut.
+// - Staff/admin (interface FR) : toujours en français
+// - Lecteur TEGG : français ; Lecteur PSG : code anglais conservé
+function getStatutLabel(code) {
+  if (!code) return code;
+  // Pour les lecteurs PSG : garder l'anglais (cohérent avec leur interface)
+  if (currentRole === 'lecteur' && currentOrg !== 'TEGG') return code;
+  return STATUT_LABELS_FR[code] || code;
+}
 const STATUTS_INDISPO = ['INJURY', 'SICK', 'ABSENT', 'SUSPENDED'];
 const TYPES_GAME = ['GAME U19', 'GAME U16', 'GAME TEGG'];
 const TYPES_GYM = ['GYM U19', 'GYM U16', 'REHAB GYM', 'INDIV GYM'];
@@ -4644,7 +4661,9 @@ function renderCalendar() {
           const faite = seancePlanEstFaite(spId, p);
           return '<div class="cal-planned' + (faite ? ' done' : '') + '" onclick="openSeancePlanDetail(\'' + spId + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="' + (faite ? 'Séance effectuée' : 'Séance planifiée — voir le détail') + '">' + (faite ? '✅' : '📋') + ' ' + escapeHtml(label.trim()) + '</div>';
         }
-        return '<div>' + s + '</div>';
+        // Si c'est un statut système, afficher son libellé localisé
+        const labelToShow = STATUTS_NON_ENT.includes(s) ? getStatutLabel(s) : s;
+        return '<div>' + escapeHtml(labelToShow) + '</div>';
       }).join('');
       html += '<div class="cal-cell ' + cls + '">' + (content || '<span style="color:var(--text-dim)">—</span>') + '</div>';
     });
@@ -6522,7 +6541,7 @@ function renderAffectSeanceSelect() {
 
   html += '<optgroup label="Statut">';
   STATUTS_NON_ENT.forEach(s => {
-    html += '<option value="' + s + '">' + s + '</option>';
+    html += '<option value="' + s + '">' + escapeHtml(getStatutLabel(s)) + '</option>';
   });
   html += '</optgroup>';
 
@@ -6733,9 +6752,10 @@ function renderAffectation() {
         const labelClean = s.slice(2, s.lastIndexOf('|')).trim();
         return '<span class="badge" style="background:#3730a3; color:#c7d2fe;" title="Séance planifiée (modifiable dans le calendrier)">📋 ' + escapeHtml(labelClean) + '</span>';
       }
+      const displayLbl = STATUTS_NON_ENT.includes(s) ? getStatutLabel(s) : s;
       return '<span class="badge ' + getSeanceBadgeClass(s) + '" style="cursor:pointer;" ' +
              'onclick="removeOneSeance(\'' + p.nom.replace(/'/g, "\\'") + '\', \'' + s.replace(/'/g, "\\'") + '\')" ' +
-             'title="Cliquer pour retirer">' + escapeHtml(s) + ' ✕</span>';
+             'title="Cliquer pour retirer">' + escapeHtml(displayLbl) + ' ✕</span>';
     }).join(' ');
     return '<tr><td><input type="checkbox" class="affect-check" data-player="' + escapeHtml(p.nom) + '"></td>' +
            '<td><b>' + escapeHtml(p.nom) + '</b></td><td>' + escapeHtml(p.groupe || '') + '</td><td>' + escapeHtml(p.poste || '') + '</td>' +
@@ -9356,8 +9376,9 @@ function renderTypesSettings() {
     const nb = state.bdd_ent2.filter(s => s.seance === t).length;
     const isStatus = STATUTS_NON_ENT.includes(t);
     const tEsc = t.replace(/'/g, "\\'");
+    const displayLabel = isStatus ? getStatutLabel(t) : t;
     return '<tr>' +
-      '<td><span class="badge ' + getSeanceBadgeClass(t) + '">' + t + '</span>' + (isStatus ? ' <span style="font-size:10px;color:var(--text-dim);">(statut)</span>' : '') + '</td>' +
+      '<td><span class="badge ' + getSeanceBadgeClass(t) + '">' + escapeHtml(displayLabel) + '</span>' + (isStatus ? ' <span style="font-size:10px;color:var(--text-dim);">(statut système, code interne : ' + t + ')</span>' : '') + '</td>' +
       '<td>' + nb + ' séance(s) créée(s)</td>' +
       '<td style="white-space:nowrap;">' +
         (isStatus ? '<span style="color:var(--text-dim);font-size:11px;">Type système, non modifiable</span>' :
