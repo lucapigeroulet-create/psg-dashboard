@@ -749,7 +749,7 @@
           <button class="btn btn-secondary" style="padding:6px 14px; font-size:12px;" onclick="resetCalendarDateFilter()">↺ Autour d'aujourd'hui</button>
         </div>
       </div>
-      <div style="font-size:11px; color:var(--text-dim); margin-top:-4px; margin-bottom:8px;">Affiche jusqu'à 10 jours. Vue par défaut : ~5 jours passés + aujourd'hui + les jours à venir avec activité (ex. séances planifiées).</div>
+      <div style="font-size:11px; color:var(--text-dim); margin-top:-4px; margin-bottom:8px;">Affiche jusqu'à 10 jours consécutifs (y compris les jours sans activité). Vue par défaut : 5 jours passés + aujourd'hui + jours à venir. Pour voir plus loin, choisis une plage de dates.</div>
       <div id="calendarContainer"></div>
     </div>
   </div>
@@ -4418,42 +4418,67 @@ function renderCalendar() {
   if (groupFilter) players = players.filter(p => getJoueurInfo(p).groupe === groupFilter);
   players = players.sort();
 
-  // Calcul des dates :
-  //  - par défaut : fenêtre autour d'aujourd'hui (5 jours passés + aujourd'hui + jours futurs avec activité, dans la limite de 10 jours total)
-  //  - avec filtres : on respecte la plage choisie (limitée à 10 jours)
-  let dates = getAllDates();
+  // Calcul des dates : on affiche TOUS les jours de la plage (pas seulement ceux avec activité),
+  // pour une lecture continue. La plage est bornée à 10 jours.
+  //  - sans filtre : fenêtre autour d'aujourd'hui (5 jours passés inclus + 5 suivants = 10 jours)
+  //  - avec filtres : on respecte les dates « Du » / « Au » saisies, limitées à 10 jours
+  const activityDates = getAllDates();
   const startEl = document.getElementById('cal-filter-start');
   const endEl = document.getElementById('cal-filter-end');
   let startVal = startEl ? startEl.value : '';
   let endVal = endEl ? endEl.value : '';
   const today = toLocalISO(new Date());
 
-  if (startVal || endVal) {
-    // Plage explicite saisie par l'utilisateur
-    dates = dates.filter(d => (!startVal || d >= startVal) && (!endVal || d <= endVal));
+  // Helper : générer toutes les dates ISO entre 2 bornes (inclusives)
+  function buildDateRange(fromIso, toIso) {
+    const out = [];
+    const [y1,m1,d1] = fromIso.split('-').map(Number);
+    const [y2,m2,d2] = toIso.split('-').map(Number);
+    const cur = new Date(y1, m1-1, d1);
+    const end = new Date(y2, m2-1, d2);
+    while (cur <= end && out.length < 60) {  // garde-fou : 60 jours max absolu
+      out.push(toLocalISO(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return out;
+  }
+
+  let dates;
+  if (startVal && endVal) {
+    // Plage complète saisie
+    dates = buildDateRange(startVal, endVal);
     if (dates.length > 10) {
-      // Si la plage déborde 10 jours, garder ceux les plus proches d'aujourd'hui
-      const refDate = (today >= (startVal || '0000') && today <= (endVal || '9999')) ? today : (startVal || endVal);
+      // Garder les 10 jours les plus proches d'aujourd'hui (ou du début/fin si aujourd'hui est hors plage)
+      const refDate = (today >= startVal && today <= endVal) ? today : startVal;
       dates.sort((a, b) => Math.abs(a.localeCompare(refDate)) - Math.abs(b.localeCompare(refDate)));
       dates = dates.slice(0, 10).sort();
     }
+  } else if (startVal) {
+    // Seulement « Du » : 10 jours à partir de cette date
+    const start = startVal;
+    const endDt = new Date(start);
+    endDt.setDate(endDt.getDate() + 9);
+    dates = buildDateRange(start, toLocalISO(endDt));
+  } else if (endVal) {
+    // Seulement « Au » : 10 jours se terminant à cette date
+    const end = endVal;
+    const startDt = new Date(end);
+    startDt.setDate(startDt.getDate() - 9);
+    dates = buildDateRange(toLocalISO(startDt), end);
   } else {
-    // Pas de filtre : fenêtre autour d'aujourd'hui
-    const pastDates = dates.filter(d => d < today).slice(-5);   // jusqu'à 5 jours passés
-    const futureDates = dates.filter(d => d >= today);          // tous les jours présents/futurs avec activité
-    let combined = [...pastDates, ...futureDates];
-    // Garantir qu'aujourd'hui est dans la liste, même sans activité
-    if (!combined.includes(today)) combined.push(today);
-    combined = Array.from(new Set(combined)).sort();
-    // Limite à 10 jours : on coupe les futures les plus lointaines en priorité
-    if (combined.length > 10) {
-      const past = combined.filter(d => d < today);
-      const future = combined.filter(d => d >= today);
-      // Garder tous les passés (≤5) + compléter avec les premiers futurs jusqu'à 10
-      const room = Math.max(0, 10 - past.length);
-      combined = [...past, ...future.slice(0, room)];
+    // Pas de filtre : fenêtre autour d'aujourd'hui (5 jours avant + aujourd'hui + 4 jours après)
+    const startDt = new Date();
+    startDt.setDate(startDt.getDate() - 5);
+    const endDt = new Date();
+    endDt.setDate(endDt.getDate() + 4);
+    dates = buildDateRange(toLocalISO(startDt), toLocalISO(endDt));
+    // Si des séances planifiées vont plus loin que +4 jours, étendre prudemment jusqu'à 10 jours total
+    const futureWithActivity = activityDates.filter(d => d > toLocalISO(endDt));
+    if (futureWithActivity.length > 0) {
+      const farthest = futureWithActivity[Math.min(futureWithActivity.length - 1, 3)]; // jusqu'à 4 dates supplémentaires
+      const extended = buildDateRange(toLocalISO(startDt), farthest);
+      dates = extended.length <= 10 ? extended : extended.slice(0, 10);
     }
-    dates = combined;
   }
 
   const container = document.getElementById('calendarContainer');
