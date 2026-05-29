@@ -2417,62 +2417,115 @@ function renderSeancePlanModal(spId, joueur) {
       html += '<a href="' + sp.piece_jointe + '" download="' + escapeHtml(sp.piece_jointe_nom || 'document.pdf') + '" class="btn btn-secondary" style="display:inline-block; margin-bottom:12px;">📄 Ouvrir le PDF (' + escapeHtml(sp.piece_jointe_nom || 'document.pdf') + ')</a>';
     }
   }
-  // Bouton fait / non fait
+  // === Zone d'action principale ===
+  // Côté joueur : règles de fenêtre de validation (jour J + 24h)
+  // Côté staff/admin : libre, plus une zone dédiée à la gestion par joueur en dessous
   html += '<div style="margin-top:10px;">';
+
+  const windowStatus = getValidationWindowStatus(sp.date);
+
   if (faite) {
-    html += '<div style="color:var(--green); font-weight:600; margin-bottom:8px;">✓ Séance marquée comme faite</div>';
-    // RPE de la séance
+    html += '<div style="color:var(--green); font-weight:600; margin-bottom:8px;">✓ ' + tr('Session marked as done', 'Séance marquée comme faite') + '</div>';
     const rpeVal = getSeancePlanRPE(spId, joueur);
-    if (estJoueurConcerne || currentRole === 'admin' || currentRole === 'staff') {
-      if (rpeVal !== null) {
-        // Côté joueur : référence textuelle (ex: "Très difficile"), sans UA
-        // Côté staff : référence + charge UA pour l'analyse
-        const refLabel = getRPELabel(rpeVal);
-        const labelEffort = tr('Effort ressenti (RPE) : ', 'Effort ressenti (RPE) : ');
-        if (estJoueurConcerne) {
-          html += '<div style="font-size:13px; margin-bottom:8px;">' + labelEffort + '<b style="color:var(--accent-light);">' + rpeVal + '/10</b>' + (refLabel ? ' · <b>' + escapeHtml(refLabel) + '</b>' : '') + '</div>';
-        } else {
-          html += '<div style="font-size:13px; margin-bottom:8px;">' + labelEffort + '<b style="color:var(--accent-light);">' + rpeVal + '/10</b>' + (refLabel ? ' · ' + escapeHtml(refLabel) : '') + (sp.duree_min ? ' · charge : <b>' + (rpeVal * sp.duree_min) + ' UA</b>' : '') + '</div>';
-        }
+    if (rpeVal !== null) {
+      const refLabel = getRPELabel(rpeVal);
+      const labelEffort = tr('Perceived effort (RPE): ', 'Effort ressenti (RPE) : ');
+      if (estJoueurConcerne) {
+        html += '<div style="font-size:13px; margin-bottom:8px;">' + labelEffort + '<b style="color:var(--accent-light);">' + rpeVal + '/10</b>' + (refLabel ? ' · <b>' + escapeHtml(refLabel) + '</b>' : '') + '</div>';
+      } else {
+        html += '<div style="font-size:13px; margin-bottom:8px;">' + labelEffort + '<b style="color:var(--accent-light);">' + rpeVal + '/10</b>' + (refLabel ? ' · ' + escapeHtml(refLabel) : '') + (sp.duree_min ? ' · charge : <b>' + (rpeVal * sp.duree_min) + ' UA</b>' : '') + '</div>';
       }
     }
-    // Le joueur concerné peut saisir/modifier son RPE
-    if (estJoueurConcerne) {
+    // Saisie/modif RPE par le joueur (uniquement dans la fenêtre)
+    if (estJoueurConcerne && windowStatus === 'open') {
       html += '<div id="sp-rpe-zone" style="margin:10px 0; padding:12px; background:var(--bg-elevated); border-radius:8px;">';
-      html += '<div style="font-size:13px; font-weight:600; margin-bottom:8px;">' + (rpeVal !== null ? 'Modifier ton effort ressenti :' : 'Quel a été ton effort ressenti ?') + '</div>';
+      html += '<div style="font-size:13px; font-weight:600; margin-bottom:8px;">' + (rpeVal !== null ? tr('Update your perceived effort:', 'Modifier ton effort ressenti :') : tr('How hard was the session?', 'Quel a été ton effort ressenti ?')) + '</div>';
       html += '<div style="display:flex; flex-wrap:wrap; gap:4px;">';
       for (let n = 0; n <= 10; n++) {
         const sel = (rpeVal === n);
         html += '<button onclick="setSeancePlanRPE(\'' + spId + '\', ' + n + ')" style="width:38px; height:38px; border-radius:8px; border:1px solid ' + (sel ? 'var(--accent)' : 'var(--border)') + '; background:' + (sel ? 'var(--accent)' : 'var(--bg-card)') + '; color:' + (sel ? '#fff' : 'var(--text)') + '; font-weight:700; cursor:pointer;">' + n + '</button>';
       }
       html += '</div>';
-      html += '<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">0 = repos total · 10 = effort maximal</div>';
+      html += '<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">' + tr('0 = full rest · 10 = maximal effort', '0 = repos total · 10 = effort maximal') + '</div>';
       html += '</div>';
+    } else if (estJoueurConcerne && windowStatus === 'expired') {
+      html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">🔒 ' + tr('The 24h window has closed.', 'Le délai de 24 h est passé.') + '</div>';
     }
-    html += '<button class="btn btn-secondary" onclick="toggleSeancePlanFaite(\'' + spId + '\', false)">Annuler "fait"</button>';
+    // Bouton "Annuler fait" : joueur seulement dans la fenêtre ; staff/admin toujours
+    if ((estJoueurConcerne && windowStatus === 'open') || currentRole === 'admin' || currentRole === 'staff') {
+      html += '<button class="btn btn-secondary" onclick="toggleSeancePlanFaite(\'' + spId + '\', false)">' + tr('Cancel "done"', 'Annuler "fait"') + '</button>';
+    }
   } else {
+    // Pas encore faite
     if (estJoueurConcerne) {
-      html += '<button class="btn" onclick="toggleSeancePlanFaite(\'' + spId + '\', true)">✓ Marquer comme fait</button>';
+      if (windowStatus === 'too_early') {
+        html += '<div style="background:rgba(251,191,36,0.15); color:#fde047; padding:12px 14px; border-radius:8px; font-size:13px; margin-bottom:8px;">⏰ ' + tr('Please follow the schedule: you can validate this session on the planned day.', 'Merci de respecter le timing du planning : tu pourras valider cette séance le jour prévu.') + '</div>';
+        html += '<button class="btn" disabled style="opacity:0.5; cursor:not-allowed;">✓ ' + tr('Mark as done', 'Marquer comme fait') + '</button>';
+      } else if (windowStatus === 'expired') {
+        html += '<div style="background:rgba(239,68,68,0.15); color:#fca5a5; padding:12px 14px; border-radius:8px; font-size:13px; margin-bottom:8px;">🔒 ' + tr('The 24h window to validate this session has closed. Please ask your coach.', 'Le délai de 24 h pour valider cette séance est passé. Demande à ton coach.') + '</div>';
+        html += '<button class="btn" disabled style="opacity:0.5; cursor:not-allowed;">✓ ' + tr('Mark as done', 'Marquer comme fait') + '</button>';
+      } else {
+        html += '<button class="btn" onclick="toggleSeancePlanFaite(\'' + spId + '\', true)">✓ ' + tr('Mark as done', 'Marquer comme fait') + '</button>';
+      }
     } else {
       html += '<div style="color:var(--text-dim); font-size:13px;">Le joueur n\'a pas encore marqué cette séance comme faite.</div>';
     }
   }
   html += '</div>';
 
-  // Côté staff : voir qui a fait + le RPE moyen
+  // Côté staff/admin : gestion interactive par joueur (marquer fait, saisir RPE)
   if (currentRole === 'admin' || currentRole === 'staff') {
     const targets = getSeancePlanTargets(sp);
     const faits = targets.filter(t => seancePlanEstFaite(spId, t));
-    html += '<div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border); font-size:12px;">';
-    html += '<b style="color:var(--green);">Réalisée par ' + faits.length + '/' + targets.length + '</b>';
-    const nonFaits = targets.filter(t => !faits.includes(t));
-    if (nonFaits.length > 0) html += '<div style="color:var(--text-dim); margin-top:4px;">En attente : ' + nonFaits.map(escapeHtml).join(', ') + '</div>';
-    // RPE saisis
-    const rpes = faits.map(t => ({ j: t, r: getSeancePlanRPE(spId, t) })).filter(x => x.r !== null);
-    if (rpes.length > 0) {
-      const moy = (rpes.reduce((s, x) => s + x.r, 0) / rpes.length).toFixed(1);
-      html += '<div style="margin-top:6px;">RPE moyen : <b>' + moy + '/10</b> (' + rpes.length + ' réponse' + (rpes.length > 1 ? 's' : '') + ')</div>';
-    }
+    const rpes = faits.map(t => getSeancePlanRPE(spId, t)).filter(r => r !== null);
+    const moy = rpes.length > 0 ? (rpes.reduce((s,r)=>s+r,0)/rpes.length).toFixed(1) : null;
+
+    html += '<div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">';
+    html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:6px;">';
+    html += '<div style="font-size:13px;"><b style="color:var(--green);">✓ Réalisée par ' + faits.length + '/' + targets.length + '</b>';
+    if (moy !== null) html += ' · RPE moyen : <b>' + moy + '/10</b>';
+    html += '</div></div>';
+    html += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">⚙️ Gestion staff : tu peux marquer une séance comme faite ou saisir le RPE à la place d\'un joueur si besoin.</div>';
+
+    // Tableau par joueur
+    html += '<div style="max-height:280px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">';
+    html += '<table style="width:100%; font-size:12px; border-collapse:collapse;">';
+    html += '<thead style="background:var(--bg-elevated); position:sticky; top:0;"><tr>' +
+            '<th style="text-align:left; padding:6px 8px;">Joueur</th>' +
+            '<th style="text-align:center; padding:6px 8px;">Fait</th>' +
+            '<th style="text-align:center; padding:6px 8px;">RPE</th>' +
+            '</tr></thead><tbody>';
+    targets.forEach(t => {
+      const estFait = seancePlanEstFaite(spId, t);
+      const rpeT = getSeancePlanRPE(spId, t);
+      const refT = (rpeT !== null) ? getRPELabel(rpeT) : '';
+      const tEsc = t.replace(/'/g, "\\'");
+      html += '<tr style="border-top:1px solid var(--border);">';
+      html += '<td style="padding:6px 8px;">' + escapeHtml(t) + '</td>';
+      // Colonne "Fait" : bouton toggle
+      html += '<td style="text-align:center; padding:6px 8px;">';
+      if (estFait) {
+        html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="adminToggleSeancePlanFaite(\'' + spId + '\', \'' + tEsc + '\', false)" title="Annuler la validation">✓ Fait</button>';
+      } else {
+        html += '<button class="btn" style="padding:3px 8px; font-size:11px;" onclick="adminToggleSeancePlanFaite(\'' + spId + '\', \'' + tEsc + '\', true)">Marquer fait</button>';
+      }
+      html += '</td>';
+      // Colonne "RPE" : input numérique 0-10 (seulement si fait)
+      html += '<td style="text-align:center; padding:6px 8px;">';
+      if (estFait) {
+        const rpeAttr = (rpeT !== null) ? rpeT : '';
+        html += '<input type="number" min="0" max="10" step="1" value="' + rpeAttr + '" ' +
+                'style="width:48px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:3px 4px; text-align:center; font-size:12px;" ' +
+                'onchange="adminSetSeancePlanRPE(\'' + spId + '\', \'' + tEsc + '\', this.value)" ' +
+                'placeholder="—" />';
+        if (refT) html += '<div style="font-size:10px; color:var(--text-dim); margin-top:2px;">' + escapeHtml(refT) + '</div>';
+      } else {
+        html += '<span style="color:var(--text-dim); font-size:11px;">—</span>';
+      }
+      html += '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
     html += '</div>';
   }
 
@@ -2497,6 +2550,21 @@ async function toggleSeancePlanFaite(spId, faire) {
   if (!joueur) return;
   // Sécurité : un lecteur ne peut cocher que pour lui-même
   if (currentRole === 'lecteur' && joueur !== currentJoueurNom) { toast('Action non autorisée', 'error'); return; }
+  // Fenêtre de validation : seul le joueur est soumis aux règles de timing
+  if (currentRole === 'lecteur' && faire) {
+    const sp = (state.bdd_seances_plan || []).find(x => x.id === spId);
+    if (sp) {
+      const status = getValidationWindowStatus(sp.date);
+      if (status === 'too_early') {
+        toast(tr('Please wait for the planned day to validate this session.', 'Merci de respecter le timing du planning : tu pourras valider cette séance le jour prévu.'), 'error');
+        return;
+      }
+      if (status === 'expired') {
+        toast(tr('The 24h window has closed. Please ask your coach.', 'Le délai de 24 h est passé. Demande à ton coach de valider la séance.'), 'error');
+        return;
+      }
+    }
+  }
   if (faire) {
     const row = { seance_id: spId, joueur: joueur, org: currentOrg };
     const { data, error } = await sb.from('seances_planifiees_faites').insert(row).select();
@@ -2514,6 +2582,60 @@ async function toggleSeancePlanFaite(spId, faire) {
   toast(faire ? 'Séance faite ✓ Indique ton effort ressenti (RPE)' : 'Marquage annulé', 'success');
 }
 
+// Statut de la fenêtre de validation d'une séance planifiée pour le joueur :
+// - 'too_early' : la date n'est pas encore arrivée
+// - 'open'      : on est entre le jour J et J+1 (24h après J inclus)
+// - 'expired'   : passé J+1, le joueur ne peut plus valider lui-même (mais l'admin peut)
+function getValidationWindowStatus(dateIso) {
+  const today = toLocalISO(new Date());
+  if (dateIso > today) return 'too_early';
+  // Jour J et J+1 sont autorisés
+  const [y, m, d] = dateIso.split('-').map(Number);
+  const planDate = new Date(y, m - 1, d);
+  const dayAfter = new Date(planDate); dayAfter.setDate(dayAfter.getDate() + 1);
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+  if (todayDate.getTime() <= dayAfter.getTime()) return 'open';
+  return 'expired';
+}
+
+// === Actions admin/staff : marquer une séance fait/non fait OU saisir un RPE pour n'importe quel joueur ===
+// (Aucun contrôle de fenêtre : le staff peut intervenir à tout moment)
+async function adminToggleSeancePlanFaite(spId, joueur, faire) {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { toast('Action non autorisée', 'error'); return; }
+  if (faire) {
+    const row = { seance_id: spId, joueur: joueur, org: currentOrg };
+    const { data, error } = await sb.from('seances_planifiees_faites').insert(row).select();
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+    if (data && data[0]) state.bdd_seances_plan_faites.push(data[0]);
+    toast(joueur + ' : séance marquée comme faite', 'success');
+  } else {
+    const { error } = await sb.from('seances_planifiees_faites').delete().eq('seance_id', spId).eq('joueur', joueur);
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+    state.bdd_seances_plan_faites = state.bdd_seances_plan_faites.filter(f => !(f.seance_id === spId && f.joueur === joueur));
+    toast(joueur + ' : marquage annulé', 'success');
+  }
+  // Re-render le modal en gardant l'ouverture sur le joueur d'origine
+  renderSeancePlanModal(spId, spModalCurrentJoueur);
+  if (getCurrentView() === 'calendar') renderCalendar();
+}
+
+async function adminSetSeancePlanRPE(spId, joueur, valeur) {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { toast('Action non autorisée', 'error'); return; }
+  let v = null;
+  if (valeur !== '' && valeur !== null && valeur !== undefined) {
+    v = parseInt(valeur, 10);
+    if (isNaN(v) || v < 0 || v > 10) { toast('RPE invalide (0-10)', 'error'); return; }
+  }
+  const { error } = await sb.from('seances_planifiees_faites')
+    .update({ rpe: v }).eq('seance_id', spId).eq('joueur', joueur);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  const f = (state.bdd_seances_plan_faites || []).find(x => x.seance_id === spId && x.joueur === joueur);
+  if (f) f.rpe = v;
+  renderSeancePlanModal(spId, spModalCurrentJoueur);
+  toast(joueur + ' : RPE enregistré (' + (v !== null ? v : '—') + ')', 'success');
+}
+
 // Récupérer le RPE saisi pour une séance planifiée par un joueur
 function getSeancePlanRPE(spId, joueur) {
   const f = (state.bdd_seances_plan_faites || []).find(x => x.seance_id === spId && x.joueur === joueur);
@@ -2526,6 +2648,21 @@ async function setSeancePlanRPE(spId, valeur) {
   const joueur = spModalCurrentJoueur;
   if (!joueur) return;
   if (currentRole === 'lecteur' && joueur !== currentJoueurNom) { toast('Action non autorisée', 'error'); return; }
+  // Fenêtre de validation côté joueur uniquement
+  if (currentRole === 'lecteur') {
+    const sp = (state.bdd_seances_plan || []).find(x => x.id === spId);
+    if (sp) {
+      const status = getValidationWindowStatus(sp.date);
+      if (status === 'too_early') {
+        toast(tr('Please wait for the planned day to enter your RPE.', 'Tu pourras saisir ton effort ressenti le jour de la séance.'), 'error');
+        return;
+      }
+      if (status === 'expired') {
+        toast(tr('The 24h window has closed.', 'Le délai de 24 h est passé. Demande à ton coach.'), 'error');
+        return;
+      }
+    }
+  }
   const { error } = await sb.from('seances_planifiees_faites')
     .update({ rpe: valeur }).eq('seance_id', spId).eq('joueur', joueur);
   if (error) { toast('Erreur : ' + error.message, 'error'); return; }
