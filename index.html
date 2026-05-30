@@ -2226,6 +2226,35 @@ function onSpFichierChange() {
   reader.readAsDataURL(file);
 }
 
+// Réinitialise le formulaire de planification (utilisé notamment au changement d'organisation)
+function resetSeancePlanForm() {
+  const ids = ['sp-date', 'sp-type', 'sp-duree', 'sp-consignes'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const cibleSel = document.getElementById('sp-cible-type');
+  if (cibleSel) cibleSel.value = 'all';
+  const groupWrap = document.getElementById('sp-cible-group-wrap');
+  const playersWrap = document.getElementById('sp-cible-players-wrap');
+  if (groupWrap) groupWrap.style.display = 'none';
+  if (playersWrap) playersWrap.style.display = 'none';
+  // Vider les sélecteurs de cibles spécifiques (groupes / joueurs)
+  const groupSel = document.getElementById('sp-cible-group');
+  if (groupSel) groupSel.innerHTML = '';
+  const playersList = document.getElementById('sp-cible-players');
+  if (playersList) playersList.innerHTML = '';
+  // Vider le fichier joint éventuel et son indicateur
+  const fInput = document.getElementById('sp-fichier');
+  if (fInput) fInput.value = '';
+  const fInfo = document.getElementById('sp-fichier-info');
+  if (fInfo) fInfo.textContent = '';
+  spFichierData = null; spFichierNom = null;
+  // Quitter le mode édition s'il était actif
+  spEditingId = null;
+  const btn = document.querySelector('#calendar-plan-card .btn');
+  if (btn) btn.textContent = '📋 Planifier la séance';
+  const planTitle = document.querySelector('#calendar-plan-card h2');
+  if (planTitle) planTitle.textContent = '📋 Planifier une séance';
+}
+
 async function createSeancePlan() {
   if (!canWrite()) { toast('Lecture seule', 'error'); return; }
   const date = document.getElementById('sp-date').value;
@@ -3007,6 +3036,10 @@ async function switchOrg(org) {
     if (el) el.value = '';
   });
 
+  // Réinitialiser le formulaire de planification de séance (sinon il garde
+  // les joueurs/groupes de l'organisation précédente)
+  if (typeof resetSeancePlanForm === 'function') resetSeancePlanForm();
+
   // Re-rendre la vue active si elle dépend de l'organisation
   const v = (typeof getCurrentView === 'function') ? getCurrentView() : null;
   if (v === 'match-entry' && typeof renderMatchEntry === 'function') renderMatchEntry();
@@ -3695,7 +3728,16 @@ function normalizeSeanceLabel(s) {
 
 function getSeancesJoueur(date, joueur) {
   const e = state.bdd_ent.find(x => x.date === date && x.joueur === joueur);
-  const seances = e ? e.seances.slice() : [];
+  // IMPORTANT : on retire d'emblée tout résidu '📋 ...' qui aurait été stocké dans le planning
+  // d'entraînement par erreur (ancien comportement). Les séances planifiées sont gérées via
+  // state.bdd_seances_plan plus bas, et ne doivent JAMAIS apparaître à la fois depuis bdd_ent et bdd_seances_plan.
+  // De même pour les matchs ('⚽') qui sont reconstruits depuis state.bdd_matchs.
+  const seances = e ? e.seances.filter(s => {
+    if (typeof s !== 'string') return true;
+    if (s.indexOf('📋') === 0) return false;
+    if (s.indexOf('⚽') === 0) return false;
+    return true;
+  }) : [];
   // Ajouter les matchs où le joueur a joué (temps > 0) ce jour-là
   (state.bdd_matchs || []).filter(m => m.date === date).forEach(m => {
     const joue = (m.composition || []).some(c => c.joueur === joueur && (c.total_min || 0) > 0);
@@ -6870,6 +6912,7 @@ async function saveSeance() {
   if (!date) { toast('Date requise', 'error'); return; }
   if (!nom) { toast('Le nom de la séance est obligatoire', 'error'); return; }
   if (!seance) { toast('Type de séance requis', 'error'); return; }
+  if (!duree || duree <= 0) { toast('La durée totale est obligatoire (en minutes)', 'error'); return; }
 
   // Vérifier l'unicité (date, nom) — sauf si on modifie la séance existante avec le même nom
   const conflit = state.bdd_ent2.find(x => x.date === date && x.nom === nom && x.nom !== editingOriginal);
