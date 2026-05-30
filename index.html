@@ -8574,6 +8574,119 @@ function renderStaffHooperPlayerChart() {
   }
 }
 
+// === Tooltip et modal détail pour les points Hooper jour par jour ===
+function showHooperPointTooltip(ev, date, joueur) {
+  const tip = document.getElementById('hooper-bee-tooltip');
+  if (!tip) return;
+  const h = getHooper(date, joueur);
+  if (!h) return;
+  document.getElementById('hooper-bee-tip-name').textContent = joueur;
+  document.getElementById('hooper-bee-tip-date').textContent = formatDateFR(date);
+  const idx = computeHooperIndex(h);
+  const interp = (idx !== null) ? interpretHooper(idx) : null;
+  let html = '';
+  html += '<div><b>Sleep :</b> ' + (h.sleep_quality ?? '—') + '/7 <span style="color:var(--text-dim); font-size:10px;">' + (h.sleep_quality ? escapeHtml(getHooperLabel(h.sleep_quality, 'labelSleep')) : '') + '</span></div>';
+  html += '<div><b>Fatigue :</b> ' + (h.fatigue ?? '—') + '/7 <span style="color:var(--text-dim); font-size:10px;">' + (h.fatigue ? escapeHtml(getHooperLabel(h.fatigue, 'labelOther')) : '') + '</span></div>';
+  html += '<div><b>Stress :</b> ' + (h.stress ?? '—') + '/7 <span style="color:var(--text-dim); font-size:10px;">' + (h.stress ? escapeHtml(getHooperLabel(h.stress, 'labelOther')) : '') + '</span></div>';
+  html += '<div><b>Soreness :</b> ' + (h.muscle_soreness ?? '—') + '/7 <span style="color:var(--text-dim); font-size:10px;">' + (h.muscle_soreness ? escapeHtml(getHooperLabel(h.muscle_soreness, 'labelOther')) : '') + '</span></div>';
+  if (idx !== null) {
+    html += '<div style="margin-top:6px; padding-top:5px; border-top:1px solid var(--border);"><b>Hooper :</b> <span style="color:' + interp.color + '; font-weight:700;">' + idx + '/28</span></div>';
+  }
+  const pains = Array.isArray(h.pain_locations) ? h.pain_locations.length : 0;
+  if (pains > 0) html += '<div style="font-size:11px; color:var(--orange); margin-top:3px;">⚠️ ' + pains + ' zone(s) douloureuse(s)</div>';
+  if (h.pain_notes) html += '<div style="font-size:11px; color:var(--accent-light); margin-top:3px;">💬 Remarques saisies</div>';
+  document.getElementById('hooper-bee-tip-content').innerHTML = html;
+  tip.style.display = 'block';
+  moveHooperPointTooltip(ev);
+}
+function moveHooperPointTooltip(ev) {
+  const tip = document.getElementById('hooper-bee-tooltip');
+  if (!tip || tip.style.display === 'none') return;
+  // Positionner le tooltip à droite du curseur ; basculer à gauche s'il déborde
+  const rect = tip.getBoundingClientRect();
+  let x = ev.clientX + 14;
+  let y = ev.clientY + 14;
+  if (x + rect.width > window.innerWidth - 8) x = ev.clientX - rect.width - 14;
+  if (y + rect.height > window.innerHeight - 8) y = ev.clientY - rect.height - 14;
+  tip.style.left = Math.max(8, x) + 'px';
+  tip.style.top  = Math.max(8, y) + 'px';
+}
+function hideHooperPointTooltip() {
+  const tip = document.getElementById('hooper-bee-tooltip');
+  if (tip) tip.style.display = 'none';
+}
+
+// Modal détail complet d'un test Hooper (joueur + date)
+function openHooperDetail(date, joueur) {
+  hideHooperPointTooltip();
+  const h = getHooper(date, joueur);
+  if (!h) { toast('Aucune donnée Hooper pour ce joueur ce jour.', 'error'); return; }
+  const overlay = document.getElementById('hooper-detail-modal');
+  if (!overlay) return;
+  document.getElementById('hooper-detail-title').textContent = '💚 État de forme — ' + joueur;
+  document.getElementById('hooper-detail-date').textContent = formatDateFR(date);
+
+  const idx = computeHooperIndex(h);
+  const interp = (idx !== null) ? interpretHooper(idx) : null;
+
+  // Lignes pour chaque indicateur
+  function row(label, value, type, color) {
+    const lbl = value ? escapeHtml(getHooperLabel(value, type)) : '';
+    return '<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:var(--bg-elevated); border-radius:6px; margin-bottom:6px;">' +
+      '<div><span style="color:' + color + '; font-weight:600;">' + label + '</span>' +
+      (lbl ? ' <span style="color:var(--text-dim); font-size:11px;">— ' + lbl + '</span>' : '') + '</div>' +
+      '<div style="font-weight:700; font-size:15px;">' + (value ?? '—') + '<span style="color:var(--text-dim); font-size:11px; font-weight:400;">/7</span></div>' +
+    '</div>';
+  }
+
+  let body = '';
+  body += row('😴 Sleep quality', h.sleep_quality, 'labelSleep', '#3b82f6');
+  body += row('⚡ Fatigue',       h.fatigue,       'labelOther', '#f59e0b');
+  body += row('🧠 Stress',        h.stress,        'labelOther', '#a855f7');
+  body += row('💪 Muscle soreness', h.muscle_soreness, 'labelOther', '#ef4444');
+
+  // Score Hooper total
+  if (idx !== null) {
+    body += '<div style="display:flex; justify-content:space-between; align-items:center; padding:12px 14px; background:' + interp.color + '20; border:1px solid ' + interp.color + '; border-radius:8px; margin-top:10px;">' +
+      '<div><div style="font-weight:700; font-size:14px;">Score Hooper</div>' +
+      '<div style="font-size:11px; color:var(--text-dim);">' + interp.label + '</div></div>' +
+      '<div style="font-weight:800; font-size:22px; color:' + interp.color + ';">' + idx + '<span style="font-size:13px; color:var(--text-dim); font-weight:400;">/28</span></div>' +
+    '</div>';
+  }
+
+  // Zones douloureuses
+  const painLocs = Array.isArray(h.pain_locations) ? h.pain_locations : [];
+  if (painLocs.length > 0) {
+    body += '<div style="margin-top:14px;">';
+    body += '<div style="font-size:12px; color:var(--text-dim); font-weight:600; margin-bottom:6px;">🎯 Zones douloureuses (' + painLocs.length + ')</div>';
+    // Récupérer les libellés via le SVG si possible, sinon afficher les codes
+    const labels = painLocs.map(z => {
+      const el = document.querySelector('.muscle[data-zone="' + z + '"]');
+      const lbl = el ? el.getAttribute('data-label') : z;
+      return translatePainLabel(lbl);
+    });
+    body += '<div style="display:flex; flex-wrap:wrap; gap:5px;">' +
+      labels.map(l => '<span style="background:rgba(239,68,68,0.15); color:#fca5a5; padding:3px 9px; border-radius:10px; font-size:11px;">' + escapeHtml(l) + '</span>').join('') +
+      '</div>';
+    body += '</div>';
+  }
+
+  // Remarques facultatives
+  if (h.pain_notes) {
+    body += '<div style="margin-top:14px;">';
+    body += '<div style="font-size:12px; color:var(--text-dim); font-weight:600; margin-bottom:6px;">📝 Remarques du joueur</div>';
+    body += '<div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:13px; line-height:1.5; white-space:pre-wrap; word-wrap:break-word;">' + escapeHtml(h.pain_notes) + '</div>';
+    body += '</div>';
+  }
+
+  document.getElementById('hooper-detail-body').innerHTML = body;
+  overlay.style.display = 'flex';
+}
+function closeHooperDetail() {
+  const overlay = document.getElementById('hooper-detail-modal');
+  if (overlay) overlay.style.display = 'none';
+}
+
 // === Rendu SVG jour par jour (toute l'équipe, sans labels) ===
 // Chaque point = (joueur, jour). X = date, Y = score Hooper. Pas de noms permanents :
 // les détails s'affichent au survol grâce à la balise <title> du SVG.
@@ -8691,11 +8804,16 @@ function renderHooperBeeswarmDaily(cutoffIso, periodDays) {
     }
   });
 
-  // Points (avec <title> SVG pour le tooltip natif au survol)
+  // Points : tooltip riche au survol + ouverture du détail au clic
   points.forEach(p => {
     const c = colorFor(p.idx);
-    const titleAttr = (p.joueur + ' — ' + formatDateFR(p.date) + ' — Hooper ' + p.idx + '/28').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    svg += '<circle cx="' + p.x + '" cy="' + p.y + '" r="5" fill="' + c + '" stroke="#0f1419" stroke-width="1" opacity="0.85" style="cursor:pointer; transition:opacity 0.15s;" onmouseover="this.setAttribute(\'r\',\'7\'); this.setAttribute(\'opacity\',\'1\');" onmouseout="this.setAttribute(\'r\',\'5\'); this.setAttribute(\'opacity\',\'0.85\');"><title>' + titleAttr + '</title></circle>';
+    const jEsc = p.joueur.replace(/'/g, "\\'");
+    svg += '<circle cx="' + p.x + '" cy="' + p.y + '" r="5" fill="' + c + '" stroke="#0f1419" stroke-width="1" opacity="0.85" ' +
+           'style="cursor:pointer; transition:opacity 0.15s;" ' +
+           'onmouseover="this.setAttribute(\'r\',\'7\'); this.setAttribute(\'opacity\',\'1\'); showHooperPointTooltip(event, \'' + p.date + '\', \'' + jEsc + '\')" ' +
+           'onmousemove="moveHooperPointTooltip(event)" ' +
+           'onmouseout="this.setAttribute(\'r\',\'5\'); this.setAttribute(\'opacity\',\'0.85\'); hideHooperPointTooltip()" ' +
+           'onclick="openHooperDetail(\'' + p.date + '\', \'' + jEsc + '\')"></circle>';
   });
 
   svg += '</svg>';
@@ -9983,5 +10101,28 @@ document.addEventListener('keydown', (e) => {
   </div>
 </div>
 
+
+<!-- Tooltip au survol des points Hooper jour par jour -->
+<div id="hooper-bee-tooltip" style="display:none; position:fixed; z-index:9998; pointer-events:none; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:10px 12px; box-shadow:0 4px 18px rgba(0,0,0,0.4); font-size:12px; min-width:180px; max-width:260px;">
+  <div id="hooper-bee-tip-name" style="font-weight:700; color:var(--accent-light); margin-bottom:3px;"></div>
+  <div id="hooper-bee-tip-date" style="font-size:11px; color:var(--text-dim); margin-bottom:8px;"></div>
+  <div id="hooper-bee-tip-content" style="line-height:1.6;"></div>
+  <div style="margin-top:6px; font-size:10px; color:var(--text-dim); border-top:1px solid var(--border); padding-top:5px;">🖱️ Clic pour le détail complet</div>
+</div>
+
+<!-- Modal détail complet test Hooper d'un joueur pour un jour -->
+<div id="hooper-detail-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center; padding:20px;" onclick="if(event.target===this) closeHooperDetail()">
+  <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:560px; width:100%; max-height:85vh; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <h3 id="hooper-detail-title" style="margin:0; color:var(--accent-light); font-size:17px;"></h3>
+      <button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="closeHooperDetail()">✕</button>
+    </div>
+    <div id="hooper-detail-date" style="color:var(--text-dim); font-size:12px; margin-bottom:16px;"></div>
+    <div id="hooper-detail-body"></div>
+    <div style="text-align:right; margin-top:16px;">
+      <button type="button" class="btn" onclick="closeHooperDetail()">OK</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
