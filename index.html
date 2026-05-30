@@ -2263,6 +2263,7 @@ async function createSeancePlan() {
   const duree = parseInt(document.getElementById('sp-duree').value) || null;
   const consignes = document.getElementById('sp-consignes').value.trim();
   if (!type && !consignes) { toast('Indique au moins un type ou des consignes', 'error'); return; }
+  if (!duree || duree <= 0) { toast('La durée est obligatoire (en minutes)', 'error'); return; }
 
   const cibleType = document.getElementById('sp-cible-type').value;
   let cibleGroupe = null, cibleJoueurs = [];
