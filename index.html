@@ -3673,6 +3673,26 @@ function getJoueurInfo(nom) {
   return state.joueurs.find(j => j.nom === nom) || { nom, groupe: '?', poste: '?' };
 }
 
+// Normalise un label de séance pour affichage :
+//  - "📋 Course|abc-123" → "Course" (séance planifiée)
+//  - "⚽ FC Lyon"        → "MATCH"  (match -> catégorie générique)
+//  - "Course"            → "Course" (séance normale)
+// Renvoie { label: <texte affiché>, key: <clé minuscule pour regroupement> }
+function normalizeSeanceLabel(s) {
+  if (typeof s !== 'string' || !s) return { label: '', key: '' };
+  let label = s;
+  // Préfixe match : regrouper sous "MATCH" (générique)
+  if (label.indexOf('⚽') === 0) {
+    return { label: 'MATCH', key: 'match' };
+  }
+  // Préfixe séance planifiée : extraire le type entre "📋 " et "|"
+  if (label.indexOf('📋 ') === 0) {
+    const cut = label.lastIndexOf('|');
+    label = (cut > 2) ? label.slice(2, cut).trim() : label.slice(2).trim();
+  }
+  return { label, key: label.toLowerCase() };
+}
+
 function getSeancesJoueur(date, joueur) {
   const e = state.bdd_ent.find(x => x.date === date && x.joueur === joueur);
   const seances = e ? e.seances.slice() : [];
@@ -3682,11 +3702,24 @@ function getSeancesJoueur(date, joueur) {
     if (joue) seances.push('⚽ ' + m.adversaire);
   });
   // Ajouter les séances PLANIFIÉES qui ciblent ce joueur ce jour-là (préfixe 📋)
-  (state.bdd_seances_plan || []).filter(sp => sp.date === date).forEach(sp => {
-    if (seancePlanCibleJoueur(sp, joueur)) {
+  // Dé-duplication double :
+  //  - par sp.id (protection ceinture+bretelles)
+  //  - par type normalisé (insensible à la casse) : deux séances de même type pour le même joueur
+  //    le même jour sont forcément des doublons puisqu'il n'y a pas de notion d'horaire
+  const seenSpIds = new Set();
+  const seenTypes = new Set();
+  (state.bdd_seances_plan || [])
+    .filter(sp => sp.date === date)
+    .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))  // garder le plus ancien si doublon
+    .forEach(sp => {
+      if (!sp.id || seenSpIds.has(sp.id)) return;
+      if (!seancePlanCibleJoueur(sp, joueur)) return;
+      const typeKey = (sp.type || 'Séance').toLowerCase().trim();
+      if (seenTypes.has(typeKey)) return;  // doublon par type → on ignore
+      seenSpIds.add(sp.id);
+      seenTypes.add(typeKey);
       seances.push('📋 ' + (sp.type || 'Séance') + '|' + sp.id);
-    }
-  });
+    });
   return seances;
 }
 
@@ -4128,14 +4161,30 @@ function renderOverviewActivity() {
   if (fromVal) dates = dates.filter(d => d >= fromVal);
   if (toVal) dates = dates.filter(d => d <= toVal);
 
-  const trainingTypes = uniqueSorted(
-    state.bdd_ent2.map(s => s.seance).filter(t => t && !STATUTS_NON_ENT.includes(t))
-  );
+  // Catégories d'entraînement présentes dans bdd_ent2, normalisées et regroupées insensiblement à la casse
+  // (les variantes "course"/"Course"/"COURSE" sont fusionnées sous une seule étiquette : la première rencontrée)
+  const trainingTypeMap = new Map();  // clé minuscule -> label canonique affiché
+  state.bdd_ent2.forEach(s => {
+    if (!s.seance || STATUTS_NON_ENT.includes(s.seance)) return;
+    const { label, key } = normalizeSeanceLabel(s.seance);
+    if (!label) return;
+    if (!trainingTypeMap.has(key)) trainingTypeMap.set(key, label);
+  });
   const statusCats = ['REST', 'INJURY', 'SICK', 'ABSENT', 'SUSPENDED'];
+  const trainingTypes = Array.from(trainingTypeMap.values()).sort((a, b) => a.localeCompare(b));
   const allCats = ['MATCH', ...trainingTypes, ...statusCats];
 
   const dayData = {};
   dates.forEach(d => { dayData[d] = {}; allCats.forEach(c => dayData[d][c] = 0); });
+
+  // Helper : pour un nom de séance (potentiellement préfixé "📋 ..." ou non), retourne le label canonique à compter.
+  // Récupère d'abord le type via getTypeForNom (si la séance existe dans bdd_ent2), sinon normalise directement.
+  function getCanonLabel(date, seanceNom) {
+    let candidate = getTypeForNom(date, seanceNom) || seanceNom;
+    const { label, key } = normalizeSeanceLabel(candidate);
+    // Si le label normalisé matche déjà une clé connue, utiliser le canonique du Map (pour fusionner les casses)
+    return trainingTypeMap.get(key) || label || candidate;
+  }
 
   state.bdd_ent.forEach(e => {
     if (!dayData[e.date]) return; // hors intervalle
@@ -4143,7 +4192,10 @@ function renderOverviewActivity() {
     const trainingSeances = seances.filter(x => !STATUTS_NON_ENT.includes(x));
     if (trainingSeances.length > 0) {
       const typesThisDay = new Set();
-      trainingSeances.forEach(s => { typesThisDay.add(getTypeForNom(e.date, s) || s); });
+      trainingSeances.forEach(s => {
+        const lbl = getCanonLabel(e.date, s);
+        if (lbl) typesThisDay.add(lbl);
+      });
       typesThisDay.forEach(t => {
         if (dayData[e.date][t] === undefined) dayData[e.date][t] = 0;
         dayData[e.date][t]++;
