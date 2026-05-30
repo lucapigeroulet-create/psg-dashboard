@@ -1784,7 +1784,7 @@
       <div class="filters">
         <div class="filter-group">
           <label>Joueur</label>
-          <select id="staff-hooper-player" onchange="renderStaffHooperPlayerChart()"><option value="">Tous (heatmap)</option></select>
+          <select id="staff-hooper-player" onchange="renderStaffHooperPlayerChart()"><option value="">Vue d'ensemble (moyenne)</option><option value="__daily__">Vue jour par jour (équipe)</option></select>
         </div>
         <div class="filter-group">
           <label>Période</label>
@@ -8380,8 +8380,11 @@ async function renderStaffHooper() {
   const playerSel = document.getElementById('staff-hooper-player');
   if (playerSel) {
     const current = playerSel.value;
-    playerSel.innerHTML = '<option value="">Tous (heatmap)</option>' +
-      getAllPlayers().map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+    playerSel.innerHTML = '<option value="">Vue d\'ensemble (moyenne)</option>' +
+      '<option value="__daily__">Vue jour par jour (équipe)</option>' +
+      '<optgroup label="Joueur (évolution détaillée)">' +
+      getAllPlayers().map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('') +
+      '</optgroup>';
     playerSel.value = current;
   }
 
@@ -8519,17 +8522,26 @@ function renderStaffHooperPlayerChart() {
 
   destroyChart('chart-staff-hooper-player');
 
-  // Basculer l'affichage selon le mode (1 joueur = canvas ; tous = SVG)
+  // Basculer l'affichage selon le mode :
+  //  - 1 joueur (nom)     : canvas Chart.js
+  //  - "__daily__"        : SVG jour par jour
+  //  - "" (Tous)          : SVG dispersion moyenne
   const canvasEl = document.getElementById('chart-staff-hooper-player');
   const beeWrap = document.getElementById('hooper-player-beeswarm');
   const beeLeg = document.getElementById('hooper-beeswarm-legend');
-  if (player) {
+  const isJoueur = (player && player !== '__daily__');
+  if (isJoueur) {
     if (canvasEl) canvasEl.style.display = 'block';
     if (beeWrap) { beeWrap.style.display = 'none'; beeWrap.innerHTML = ''; }
     if (beeLeg) beeLeg.style.display = 'none';
   }
 
-  if (player) {
+  if (player === '__daily__') {
+    renderHooperBeeswarmDaily(cutoffIso, periodDays);
+    return;
+  }
+
+  if (isJoueur) {
     // Vue détaillée 1 joueur : 4 lignes (Sleep / Fatigue / Stress / Soreness) + Total
     const mine = hooperData.filter(h => h.joueur === player && h.date >= cutoffIso).sort((a, b) => a.date.localeCompare(b.date));
     if (mine.length === 0) return;
@@ -8562,6 +8574,134 @@ function renderStaffHooperPlayerChart() {
   }
 }
 
+// === Rendu SVG jour par jour (toute l'équipe, sans labels) ===
+// Chaque point = (joueur, jour). X = date, Y = score Hooper. Pas de noms permanents :
+// les détails s'affichent au survol grâce à la balise <title> du SVG.
+function renderHooperBeeswarmDaily(cutoffIso, periodDays) {
+  const canvas = document.getElementById('chart-staff-hooper-player');
+  const wrap = document.getElementById('hooper-player-beeswarm');
+  const legend = document.getElementById('hooper-beeswarm-legend');
+  if (!wrap) return;
+
+  // Récupérer toutes les saisies de la période avec leur index Hooper calculé
+  const items = (hooperData || []).filter(h => h.date >= cutoffIso)
+    .map(h => ({ joueur: h.joueur, date: h.date, idx: computeHooperIndex(h) }))
+    .filter(x => x.idx !== null);
+
+  if (canvas) canvas.style.display = 'none';
+  wrap.style.display = 'block';
+  if (legend) {
+    legend.style.display = 'block';
+    legend.textContent = '💡 Un point = une saisie d\'un joueur pour un jour. Survole un point pour voir le détail. Hauteur = score Hooper (plus haut = plus de fatigue).';
+  }
+
+  if (items.length === 0) {
+    wrap.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-dim); font-size:13px;">Aucune donnée Hooper sur cette période.</div>';
+    return;
+  }
+
+  // Construire la liste de toutes les dates consécutives de la période (pour avoir un axe X continu)
+  const today = new Date();
+  const dates = [];
+  for (let d = periodDays - 1; d >= 0; d--) {
+    const dt = new Date(today);
+    dt.setDate(today.getDate() - d);
+    dates.push(toLocalISO(dt));
+  }
+  const dateIndex = {};
+  dates.forEach((d, i) => { dateIndex[d] = i; });
+
+  // Dimensions
+  const W = Math.max(wrap.clientWidth || 800, 600);
+  const H = 380;
+  const margin = { top: 18, right: 24, bottom: 40, left: 48 };
+  const innerW = W - margin.left - margin.right;
+  const innerH = H - margin.top - margin.bottom;
+
+  // Échelles
+  const yMin = 4, yMax = 28;
+  const yScale = (v) => margin.top + innerH - ((v - yMin) / (yMax - yMin)) * innerH;
+  // Largeur d'une colonne (un jour)
+  const colW = innerW / dates.length;
+  const xCenter = (di) => margin.left + (di + 0.5) * colW;
+
+  // Grouper les points par (jour, score arrondi) pour disperser horizontalement les égalités
+  const buckets = {};  // key = "di-score" -> liste de points
+  items.forEach(p => {
+    const di = dateIndex[p.date];
+    if (di === undefined) return;
+    const score = Math.round(p.idx);
+    const key = di + '-' + score;
+    if (!buckets[key]) buckets[key] = [];
+    buckets[key].push({ ...p, di, score });
+  });
+  Object.values(buckets).forEach(arr => arr.sort((a, b) => a.joueur.localeCompare(b.joueur)));
+
+  // Calculer la position X de chaque point au sein de son slot
+  // On limite la dispersion à 80% de la largeur de colonne
+  const points = [];
+  Object.values(buckets).forEach(arr => {
+    const n = arr.length;
+    const spread = Math.min(colW * 0.8, n * 7);  // resserre quand peu de points
+    arr.forEach((pt, i) => {
+      const offset = n === 1 ? 0 : ((i / (n - 1)) - 0.5) * spread;
+      const x = xCenter(pt.di) + offset;
+      const y = yScale(pt.idx);
+      points.push({ ...pt, x, y });
+    });
+  });
+
+  // Couleur
+  const colorFor = (idx) => interpretHooper(Math.round(idx)).color;
+
+  // Construire le SVG
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" style="background:transparent;">';
+
+  // Zones de couleur indicatives
+  const zones = [
+    { min: 4,  max: 9,  color: 'rgba(34,197,94,0.05)' },
+    { min: 10, max: 14, color: 'rgba(234,179,8,0.05)' },
+    { min: 15, max: 19, color: 'rgba(249,115,22,0.05)' },
+    { min: 20, max: 28, color: 'rgba(239,68,68,0.06)' }
+  ];
+  zones.forEach(z => {
+    const yTop = yScale(z.max);
+    const yBot = yScale(z.min);
+    svg += '<rect x="' + margin.left + '" y="' + yTop + '" width="' + innerW + '" height="' + (yBot - yTop) + '" fill="' + z.color + '"/>';
+  });
+
+  // Axe Y : graduations
+  for (let v = 4; v <= 28; v += 4) {
+    const y = yScale(v);
+    svg += '<line x1="' + margin.left + '" y1="' + y + '" x2="' + (margin.left + innerW) + '" y2="' + y + '" stroke="#1f3a5f" stroke-width="1" stroke-dasharray="2,3"/>';
+    svg += '<text x="' + (margin.left - 8) + '" y="' + (y + 4) + '" text-anchor="end" fill="#8ba3c1" font-size="11" font-family="system-ui,sans-serif">' + v + '</text>';
+  }
+  svg += '<text x="14" y="' + (margin.top + innerH / 2) + '" text-anchor="middle" fill="#8ba3c1" font-size="10" font-family="system-ui,sans-serif" transform="rotate(-90, 14, ' + (margin.top + innerH / 2) + ')">Score Hooper</text>';
+
+  // Axe X : libellés de jours (espacés pour rester lisibles)
+  // Afficher 1 label tous les N jours pour éviter le chevauchement
+  const labelStep = Math.max(1, Math.ceil(dates.length / 12));
+  dates.forEach((d, i) => {
+    const x = xCenter(i);
+    // Ligne verticale très légère pour séparer les jours
+    svg += '<line x1="' + x + '" y1="' + margin.top + '" x2="' + x + '" y2="' + (margin.top + innerH) + '" stroke="#1f3a5f" stroke-width="0.5" stroke-dasharray="1,4" opacity="0.4"/>';
+    if (i % labelStep === 0 || i === dates.length - 1) {
+      const lbl = formatDateFR(d).replace(/&/g,'&amp;');
+      svg += '<text x="' + x + '" y="' + (margin.top + innerH + 16) + '" text-anchor="middle" fill="#8ba3c1" font-size="10" font-family="system-ui,sans-serif">' + lbl + '</text>';
+    }
+  });
+
+  // Points (avec <title> SVG pour le tooltip natif au survol)
+  points.forEach(p => {
+    const c = colorFor(p.idx);
+    const titleAttr = (p.joueur + ' — ' + formatDateFR(p.date) + ' — Hooper ' + p.idx + '/28').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    svg += '<circle cx="' + p.x + '" cy="' + p.y + '" r="5" fill="' + c + '" stroke="#0f1419" stroke-width="1" opacity="0.85" style="cursor:pointer; transition:opacity 0.15s;" onmouseover="this.setAttribute(\'r\',\'7\'); this.setAttribute(\'opacity\',\'1\');" onmouseout="this.setAttribute(\'r\',\'5\'); this.setAttribute(\'opacity\',\'0.85\');"><title>' + titleAttr + '</title></circle>';
+  });
+
+  svg += '</svg>';
+  wrap.innerHTML = svg;
+}
+
 // === Rendu SVG du beeswarm "État de forme global" ===
 function renderHooperBeeswarm(cutoffIso, periodDays) {
   const canvas = document.getElementById('chart-staff-hooper-player');
@@ -8583,7 +8723,10 @@ function renderHooperBeeswarm(cutoffIso, periodDays) {
   // Basculer l'affichage : SVG visible, canvas masqué
   if (canvas) canvas.style.display = 'none';
   wrap.style.display = 'block';
-  if (legend) legend.style.display = 'block';
+  if (legend) {
+    legend.style.display = 'block';
+    legend.textContent = '💡 Chaque point = un joueur. Hauteur = score Hooper moyen sur la période (plus haut = plus de fatigue/stress). Égalités décalées horizontalement.';
+  }
 
   if (stats.length === 0) {
     wrap.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-dim); font-size:13px;">Aucune donnée Hooper sur cette période.</div>';
