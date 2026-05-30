@@ -2449,6 +2449,7 @@ function renderSeancesPlanHistory() {
 // ============================================================
 // SÉANCES PLANIFIÉES : détail + cocher "fait"
 // ============================================================
+let spCardIndex = 0;       // index du joueur affiché dans la vue carte du modal staff
 let spModalCurrentJoueur = null;
 
 function openSeancePlanDetail(spId, joueur) {
@@ -2475,8 +2476,12 @@ function openSeancePlanDetail(spId, joueur) {
 function renderSeancePlanModal(spId, joueur) {
   const sp = (state.bdd_seances_plan || []).find(x => x.id === spId);
   if (!sp) return;
+  spCurrentId = spId;
   const titleEl = document.getElementById('sp-modal-title');
   const contentEl = document.getElementById('sp-modal-content');
+  // Sauvegarde du scroll : on le restaurera après re-rendu, pour ne pas faire remonter
+  // la liste à chaque validation
+  const prevScroll = contentEl ? contentEl.scrollTop : 0;
   if (titleEl) titleEl.textContent = '📋 ' + (sp.type || 'Séance planifiée');
 
   const faite = seancePlanEstFaite(spId, joueur);
@@ -2615,7 +2620,11 @@ function renderSeancePlanModal(spId, joueur) {
     html += '</div>';
   }
 
-  if (contentEl) contentEl.innerHTML = html;
+  if (contentEl) {
+    contentEl.innerHTML = html;
+    // Restaurer la position de scroll pour ne pas faire remonter la vue après une validation
+    contentEl.scrollTop = prevScroll;
+  }
 }
 
 function closeSeancePlanDetail() {
@@ -4274,11 +4283,21 @@ function renderOverviewSeancesNonConfirmees() {
   container.innerHTML = html;
 }
 
-// Ouvre le modal de la séance planifiée pour un joueur précis (depuis le récap)
+// Ouvre le modal de la séance planifiée pour un joueur précis (depuis le récap).
+// Positionne la vue carte staff directement sur ce joueur.
 function openSeancePlanForConfirmation(spId, joueur) {
   const overlay = document.getElementById('sp-modal-overlay');
   if (!overlay) { toast('Modal introuvable', 'error'); return; }
   spModalCurrentJoueur = joueur;
+  // Calculer l'index du joueur cliqué dans la liste des cibles pour ouvrir la carte sur lui
+  const sp = (state.bdd_seances_plan || []).find(x => x.id === spId);
+  if (sp) {
+    const targets = getSeancePlanTargets(sp);
+    const i = targets.indexOf(joueur);
+    spCardIndex = (i >= 0) ? i : 0;
+  } else {
+    spCardIndex = 0;
+  }
   overlay.style.display = 'flex';
   renderSeancePlanModal(spId, joueur);
 }
