@@ -672,6 +672,13 @@
       <p style="color:var(--text-dim); font-size:12px; margin:8px 0;">Clique sur un joueur pour ouvrir son check-in Hooper.</p>
       <div id="overview-missing-hooper"></div>
     </div>
+
+    <!-- Séances planifiées non confirmées par les joueurs -->
+    <div class="card">
+      <h2>📋 Séances planifiées non confirmées</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Joueurs concernés par une séance passée qu'ils n'ont pas marquée comme faite. Clique sur un nom pour ouvrir le détail et marquer la séance faite / saisir la RPE.</p>
+      <div id="overview-seances-non-confirmees"></div>
+    </div>
   </div>
 
   
@@ -4179,6 +4186,9 @@ function renderOverview() {
 
   // ===== Listes de relances RPE / Hooper =====
   renderOverviewMissing();
+
+  // ===== Séances planifiées non marquées comme faites =====
+  renderOverviewSeancesNonConfirmees();
 }
 
 // Gestion du changement de scope (all / group / player)
@@ -4197,6 +4207,82 @@ function resetOverviewChargeDates() {
 }
 
 // Graphique d'activité quotidienne par état (avec filtre intervalle de dates)
+// Récapitulatif : couples (joueur, séance planifiée) où la séance est passée
+// (ou aujourd'hui) mais n'a pas encore été marquée comme faite par le joueur.
+// Au clic sur un nom, ouvre le modal de la séance planifiée — qui permet à
+// l'admin (ou au joueur lui-même) de la marquer faite et de saisir la RPE.
+function renderOverviewSeancesNonConfirmees() {
+  const container = document.getElementById('overview-seances-non-confirmees');
+  if (!container) return;
+
+  const todayIso = toLocalISO(new Date());
+  // Ne considérer que les séances dont la date <= aujourd'hui (passées + jour J)
+  const seancesPertinentes = (state.bdd_seances_plan || [])
+    .filter(sp => sp.date && sp.date <= todayIso)
+    .sort((a, b) => b.date.localeCompare(a.date)); // plus récentes en premier
+
+  // Pour chaque séance, lister les joueurs concernés qui n'ont PAS marqué fait
+  const groups = [];  // [{sp, joueursManquants: [...]}, ...]
+  seancesPertinentes.forEach(sp => {
+    let joueursConcernes;
+    if (sp.cible_type === 'all') {
+      joueursConcernes = (state.joueurs || []).map(j => j.nom);
+    } else if (sp.cible_type === 'group') {
+      joueursConcernes = (state.joueurs || []).filter(j => j.groupe === sp.cible_groupe).map(j => j.nom);
+    } else if (sp.cible_type === 'players') {
+      joueursConcernes = Array.isArray(sp.cible_joueurs) ? sp.cible_joueurs.slice() : [];
+    } else {
+      joueursConcernes = [];
+    }
+    const manquants = joueursConcernes.filter(j => !seancePlanEstFaite(sp.id, j));
+    if (manquants.length > 0) {
+      groups.push({ sp, joueursManquants: manquants });
+    }
+  });
+
+  if (groups.length === 0) {
+    container.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:14px; text-align:center; background:var(--bg-elevated); border-radius:8px;">✅ Toutes les séances planifiées passées ont été confirmées.</div>';
+    return;
+  }
+
+  // Total joueurs concernés (peut compter un joueur plusieurs fois s'il a plusieurs séances manquantes)
+  const totalManquants = groups.reduce((s, g) => s + g.joueursManquants.length, 0);
+
+  let html = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">';
+  html += '<b style="color:var(--accent-light);">' + totalManquants + '</b> confirmation(s) en attente sur <b>' + groups.length + '</b> séance(s).';
+  html += '</div>';
+
+  groups.forEach(({ sp, joueursManquants }) => {
+    const titre = (sp.type || 'Séance') + ' · ' + formatDateFR(sp.date) + (sp.duree_min ? ' · ' + sp.duree_min + ' min' : '');
+    html += '<div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:8px;">';
+    html += '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">';
+    html += '<div style="font-weight:600; font-size:13px; color:var(--accent-light);">📋 ' + escapeHtml(titre) + '</div>';
+    html += '<div style="font-size:11px; color:var(--text-dim);">' + joueursManquants.length + ' joueur(s)</div>';
+    html += '</div>';
+    html += '<div style="display:flex; flex-wrap:wrap; gap:5px;">';
+    html += joueursManquants.map(j => {
+      const jEsc = j.replace(/'/g, "\\'");
+      return '<button type="button" onclick="openSeancePlanForConfirmation(\'' + sp.id + '\', \'' + jEsc + '\')" ' +
+              'style="background:var(--bg-card); border:1px solid var(--border); border-radius:14px; padding:5px 12px; font-size:12px; cursor:pointer; color:var(--text); font-family:inherit;" ' +
+              'onmouseover="this.style.borderColor=\'var(--accent)\'; this.style.background=\'var(--bg-elevated)\'" ' +
+              'onmouseout="this.style.borderColor=\'var(--border)\'; this.style.background=\'var(--bg-card)\'" ' +
+              'title="Ouvrir le détail pour ' + escapeHtml(j) + '">' +
+        '<b>' + escapeHtml(j) + '</b> ✍️</button>';
+    }).join('');
+    html += '</div></div>';
+  });
+  container.innerHTML = html;
+}
+
+// Ouvre le modal de la séance planifiée pour un joueur précis (depuis le récap)
+function openSeancePlanForConfirmation(spId, joueur) {
+  const overlay = document.getElementById('sp-modal-overlay');
+  if (!overlay) { toast('Modal introuvable', 'error'); return; }
+  spModalCurrentJoueur = joueur;
+  overlay.style.display = 'flex';
+  renderSeancePlanModal(spId, joueur);
+}
+
 function renderOverviewActivity() {
   let dates = getAllDates();
   const fromVal = document.getElementById('overview-activity-from') ? document.getElementById('overview-activity-from').value : '';
