@@ -921,16 +921,55 @@
   <div class="view" id="view-injury">
     <div class="card">
       <h2>Disponibilité de l'effectif</h2>
-      <div class="chart-container tall"><canvas id="chart-availability"></canvas></div>
+      <div class="filters">
+        <div class="filter-group">
+          <label>Groupe</label>
+          <select id="injury-filter-group" onchange="renderInjury()"></select>
+        </div>
+        <div class="filter-group">
+          <label>Du</label>
+          <input type="date" id="injury-filter-start" onchange="renderInjury()" />
+        </div>
+        <div class="filter-group">
+          <label>Au</label>
+          <input type="date" id="injury-filter-end" onchange="renderInjury()" />
+        </div>
+        <div class="filter-group">
+          <label>&nbsp;</label>
+          <button class="btn btn-secondary" onclick="resetInjuryFilters()">↺ Réinitialiser</button>
+        </div>
+      </div>
+      <div class="stats-grid" id="injury-kpis" style="margin-bottom:0;"></div>
     </div>
+
     <div class="card">
-      <h2>Joueurs indisponibles</h2>
+      <h2>Jours d'indisponibilité par joueur</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">
+        Classement des joueurs les plus touchés, cumulé par type d'indisponibilité sur la période sélectionnée.
+      </p>
+      <div class="chart-container tall"><canvas id="chart-injury-ranking"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>Détail par joueur</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
+        Nombre de jours concernés par type. La colonne <b>Total jours</b> compte les jours distincts touchés par au moins une indisponibilité
+        (un même jour peut cumuler plusieurs types, ex. Blessure + Malade). <b>dont adaptés</b> = jours où le joueur, malgré un statut, a fait une séance (ex. REHAB FIELD).
+      </p>
       <div class="table-wrap">
         <table id="injury-table">
-          <thead><tr><th>Joueur</th><th>Groupe</th><th>Type</th><th>Jours</th><th>Dates</th></tr></thead>
+          <thead></thead>
           <tbody></tbody>
         </table>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>Évolution quotidienne</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">
+        Répartition de l'effectif jour par jour : disponibles, en charge adaptée (statut + séance) et indisponibles.
+      </p>
+      <div class="chart-container tall"><canvas id="chart-availability"></canvas></div>
     </div>
   </div>
 
@@ -6456,12 +6495,137 @@ function renderGPSWeekIndiv() {
 // ============================================================================
 // DISPONIBILITÉ
 // ============================================================================
+// Couleurs associées à chaque type d'indisponibilité (graphes + tableau)
+const STATUT_COLORS = { INJURY: '#f87171', SICK: '#fb923c', ABSENT: '#fbbf24', SUSPENDED: '#a78bfa' };
+
+// Lit l'état courant des filtres de l'onglet Disponibilité
+function getInjuryFilters() {
+  const g = document.getElementById('injury-filter-group');
+  const s = document.getElementById('injury-filter-start');
+  const e = document.getElementById('injury-filter-end');
+  return { groupe: g ? g.value : '', start: s ? s.value : '', end: e ? e.value : '' };
+}
+
+// (Re)remplit le sélecteur de groupe en conservant la valeur choisie
+function populateInjuryGroupFilter() {
+  const sel = document.getElementById('injury-filter-group');
+  if (!sel) return;
+  const prev = sel.value;
+  const groups = getAllGroups();
+  sel.innerHTML = '<option value="">Tous les groupes</option>' +
+    groups.map(g => '<option value="' + g + '">' + g + '</option>').join('');
+  if (prev && groups.indexOf(prev) !== -1) sel.value = prev;
+}
+
+// Réinitialise les filtres et rafraîchit la vue
+function resetInjuryFilters() {
+  ['injury-filter-group', 'injury-filter-start', 'injury-filter-end'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  renderInjury();
+}
+
 function renderInjury() {
-  const dates = getAllDates();
+  populateInjuryGroupFilter();
+  const f = getInjuryFilters();
+  const inRange = d => (!f.start || d >= f.start) && (!f.end || d <= f.end);
+  const inGroup = j => !f.groupe || getJoueurInfo(j).groupe === f.groupe;
+
+  // ---- Agrégation par joueur ----
+  // Pour chaque joueur on stocke, par type, l'ensemble des dates distinctes (évite de compter
+  // deux fois un jour où plusieurs entrées existent). On distingue aussi jours "totalement
+  // indispo" (aucune séance) des jours "adaptés" (statut + séance type REHAB).
+  const perPlayer = {};
+  function ensure(j) {
+    if (!perPlayer[j]) {
+      perPlayer[j] = { byType: {}, touched: new Set(), full: new Set(), adapted: new Set() };
+      STATUTS_INDISPO.forEach(t => perPlayer[j].byType[t] = new Set());
+    }
+    return perPlayer[j];
+  }
+  state.bdd_ent.forEach(e => {
+    if (!inRange(e.date) || !inGroup(e.joueur)) return;
+    const statuts = e.seances.filter(s => STATUTS_INDISPO.includes(s));
+    if (statuts.length === 0) return;
+    const p = ensure(e.joueur);
+    statuts.forEach(t => p.byType[t].add(e.date));
+    p.touched.add(e.date);
+    const hasTraining = e.seances.some(s => !STATUTS_NON_ENT.includes(s));
+    if (hasTraining) p.adapted.add(e.date); else p.full.add(e.date);
+  });
+
+  const players = Object.keys(perPlayer).map(j => {
+    const p = perPlayer[j];
+    const counts = {}; STATUTS_INDISPO.forEach(t => counts[t] = p.byType[t].size);
+    return { joueur: j, groupe: getJoueurInfo(j).groupe, counts, total: p.touched.size, adapted: p.adapted.size };
+  }).sort((a, b) => b.total - a.total || a.joueur.localeCompare(b.joueur));
+
+  // ---- KPIs ----
+  const totals = { all: 0 }; STATUTS_INDISPO.forEach(t => totals[t] = 0);
+  players.forEach(p => { totals.all += p.total; STATUTS_INDISPO.forEach(t => totals[t] += p.counts[t]); });
+  const kpiWrap = document.getElementById('injury-kpis');
+  if (kpiWrap) {
+    const card = (label, val, color, sub) =>
+      '<div class="stat"><div class="stat-label">' + label + '</div>' +
+      '<div class="stat-value"' + (color ? ' style="color:' + color + '"' : '') + '>' + val + '</div>' +
+      (sub ? '<div class="stat-sub">' + sub + '</div>' : '') + '</div>';
+    kpiWrap.innerHTML =
+      card('Jours d\'indispo', totals.all, null, players.length + ' joueur(s) concerné(s)') +
+      STATUTS_INDISPO.map(t => card(getStatutLabel(t), totals[t], STATUT_COLORS[t], 'jours cumulés')).join('');
+  }
+
+  // ---- Classement par joueur (barres horizontales empilées) ----
+  destroyChart('chart-injury-ranking');
+  const rankCanvas = document.getElementById('chart-injury-ranking');
+  if (rankCanvas) {
+    const rankPlayers = players.slice(0, 25);
+    if (rankPlayers.length === 0) {
+      charts['chart-injury-ranking'] = new Chart(rankCanvas, {
+        type: 'bar',
+        data: { labels: ['Aucune indisponibilité sur la période'], datasets: [{ data: [0], backgroundColor: '#1f3a5f' }] },
+        options: chartOpts({ indexAxis: 'y', legend: false })
+      });
+    } else {
+      charts['chart-injury-ranking'] = new Chart(rankCanvas, {
+        type: 'bar',
+        data: {
+          labels: rankPlayers.map(p => p.joueur),
+          datasets: STATUTS_INDISPO.map(t => ({
+            label: getStatutLabel(t),
+            data: rankPlayers.map(p => p.counts[t]),
+            backgroundColor: STATUT_COLORS[t],
+            borderRadius: 2
+          }))
+        },
+        options: chartOpts({ stacked: true, indexAxis: 'y' })
+      });
+    }
+  }
+
+  // ---- Tableau détaillé par joueur ----
+  const thead = document.querySelector('#injury-table thead');
+  if (thead) {
+    thead.innerHTML = '<tr><th>Joueur</th><th>Groupe</th>' +
+      STATUTS_INDISPO.map(t => '<th style="text-align:center;">' + getStatutLabel(t) + '</th>').join('') +
+      '<th style="text-align:center;">Total jours</th><th style="text-align:center;">dont adaptés</th></tr>';
+  }
+  const tbody = document.querySelector('#injury-table tbody');
+  const cell = (v, color) => v > 0
+    ? '<td style="text-align:center;color:' + color + ';font-weight:600;">' + v + '</td>'
+    : '<td style="text-align:center;color:var(--text-dim);">—</td>';
+  tbody.innerHTML = players.length === 0
+    ? '<tr><td colspan="' + (STATUTS_INDISPO.length + 4) + '" style="text-align:center;color:var(--text-dim);padding:20px;">Aucune indisponibilité sur la période.</td></tr>'
+    : players.map(p =>
+        '<tr><td><b>' + p.joueur + '</b></td><td>' + p.groupe + '</td>' +
+        STATUTS_INDISPO.map(t => cell(p.counts[t], STATUT_COLORS[t])).join('') +
+        '<td style="text-align:center;"><b>' + p.total + '</b></td>' +
+        '<td style="text-align:center;color:var(--text-dim);">' + (p.adapted > 0 ? p.adapted : '—') + '</td></tr>'
+      ).join('');
+
+  // ---- Évolution quotidienne (graphe historique, désormais filtré) ----
+  const dates = getAllDates().filter(inRange);
   const counts = dates.map(d => {
-    const rows = state.bdd_ent.filter(e => e.date === d);
-    // Un joueur est "indisponible total" s'il a un statut d'indispo ET aucune séance d'entraînement.
-    // S'il fait au moins une séance (ex: REHAB FIELD malgré INJURY), il est "partiellement dispo".
+    const rows = state.bdd_ent.filter(e => e.date === d && inGroup(e.joueur));
     let dispo = 0, partiel = 0, indispo = 0;
     const comptes = new Set();
     rows.forEach(e => {
@@ -6472,10 +6636,9 @@ function renderInjury() {
       else if (hasIndispo && hasTraining) partiel++;
       else dispo++;
     });
-    // Les joueurs ayant joué un match (temps > 0) sont disponibles, s'ils ne sont pas déjà comptés
     (state.bdd_matchs || []).filter(m => m.date === d).forEach(m => {
       (m.composition || []).forEach(c => {
-        if (c.joueur && (c.total_min || 0) > 0 && !comptes.has(c.joueur)) {
+        if (c.joueur && (c.total_min || 0) > 0 && !comptes.has(c.joueur) && inGroup(c.joueur)) {
           comptes.add(c.joueur);
           dispo++;
         }
@@ -6497,30 +6660,6 @@ function renderInjury() {
     },
     options: chartOpts({ stacked: true })
   });
-
-  // Table joueurs indispo
-  const indispoByPlayer = {};
-  state.bdd_ent.forEach(e => {
-    e.seances.forEach(s => {
-      if (STATUTS_INDISPO.includes(s)) {
-        if (!indispoByPlayer[e.joueur]) indispoByPlayer[e.joueur] = {};
-        if (!indispoByPlayer[e.joueur][s]) indispoByPlayer[e.joueur][s] = [];
-        indispoByPlayer[e.joueur][s].push(e.date);
-      }
-    });
-  });
-
-  const tbody = document.querySelector('#injury-table tbody');
-  const rows = [];
-  Object.entries(indispoByPlayer).forEach(([j, types]) => {
-    Object.entries(types).forEach(([t, ds]) => {
-      rows.push({ joueur: j, groupe: getJoueurInfo(j).groupe, type: t, jours: ds.length, dates: ds.sort() });
-    });
-  });
-  rows.sort((a,b) => b.jours - a.jours);
-  tbody.innerHTML = rows.length === 0
-    ? '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px;">Aucune indisponibilité.</td></tr>'
-    : rows.map(r => '<tr><td><b>' + r.joueur + '</b></td><td>' + r.groupe + '</td><td><span class="badge ' + getSeanceBadgeClass(r.type) + '">' + r.type + '</span></td><td>' + r.jours + '</td><td style="font-size:11px;color:var(--text-dim);">' + r.dates.map(formatDateFR).join(', ') + '</td></tr>').join('');
 }
 
 // ============================================================================
