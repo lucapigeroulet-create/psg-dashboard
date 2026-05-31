@@ -407,6 +407,47 @@
     .rpe-scale-btn { font-size: 16px; border-radius: 12px; }
     .rpe-session-card { padding: 16px; }
   }
+  /* ===== Routine physique builder ===== */
+  .routine-format-toggle { display:flex; gap:0; margin-bottom:14px; }
+  .routine-format-toggle label {
+    flex:1; text-align:center; padding:8px 12px; cursor:pointer;
+    background:var(--bg-elevated); border:1px solid var(--border); font-size:13px;
+    font-weight:600; color:var(--text-dim); transition:all 0.15s;
+  }
+  .routine-format-toggle label:first-child { border-radius:8px 0 0 8px; }
+  .routine-format-toggle label:last-child  { border-radius:0 8px 8px 0; border-left:none; }
+  .routine-format-toggle input[type=radio] { display:none; }
+  .routine-format-toggle input[type=radio]:checked + label { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  .routine-groupe {
+    border:1px solid var(--border); border-radius:10px; padding:12px;
+    margin-bottom:10px; background:var(--bg-elevated);
+  }
+  .routine-groupe-header { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .routine-groupe-header input { flex:1; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; font-weight:600; }
+  .routine-exo-grid { display:grid; gap:8px; }
+  .routine-exo-card {
+    background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:10px;
+    display:grid; grid-template-columns:1fr 1fr; gap:6px;
+  }
+  .routine-exo-card .exo-full { grid-column:1/-1; }
+  .routine-exo-card input, .routine-exo-card textarea {
+    width:100%; background:var(--bg-elevated); color:var(--text);
+    border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:12px;
+  }
+  .routine-exo-card textarea { resize:vertical; min-height:48px; }
+  .routine-exo-card label { display:block; font-size:10px; color:var(--text-dim); margin-bottom:2px; }
+
+  /* Affichage routine dans le modal */
+  .routine-display-groupe { margin-bottom:18px; }
+  .routine-display-groupe h4 { font-size:13px; color:var(--accent-light); margin-bottom:8px; border-bottom:1px solid var(--border); padding-bottom:4px; }
+  .routine-exo-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .routine-exo-table th { background:var(--bg-elevated); color:var(--text-dim); padding:6px 8px; text-align:left; font-weight:600; font-size:11px; }
+  .routine-exo-table td { padding:6px 8px; border-top:1px solid var(--border); vertical-align:top; }
+  .routine-exo-table tr:hover td { background:rgba(255,255,255,0.03); }
+  .routine-exo-name { font-weight:700; color:var(--text); }
+  .routine-exo-consignes { color:var(--text-dim); font-size:11px; margin-top:2px; }
+
   .rpe-status-line {
     background: var(--bg-elevated);
     padding: 12px 16px;
@@ -691,16 +732,39 @@
     <div class="card" id="calendar-plan-card">
       <h2>📋 Planifier une séance</h2>
       <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Assigne une séance à effectuer (course, renforcement...) à un ou plusieurs joueurs. Elle apparaîtra dans leur calendrier.</p>
+      <!-- Toggle format -->
+      <div class="routine-format-toggle">
+        <input type="radio" name="sp-format" id="sp-format-libre" value="libre" checked onchange="onSpFormatChange()">
+        <label for="sp-format-libre">✏️ Libre</label>
+        <input type="radio" name="sp-format" id="sp-format-routine" value="routine" onchange="onSpFormatChange()">
+        <label for="sp-format-routine">🏋️ Routine physique</label>
+      </div>
+
       <div class="form-row">
         <div><label>Date</label><input type="date" id="sp-date" /></div>
         <div><label>Type</label><input type="text" id="sp-type" placeholder="Ex: Course, Renforcement" list="sp-type-list" />
-          <datalist id="sp-type-list"><option value="Course"></option><option value="Renforcement"></option><option value="Récupération"></option><option value="Mobilité"></option><option value="Technique individuelle"></option></datalist>
+          <datalist id="sp-type-list"><option value="Course"></option><option value="Renforcement"></option><option value="Récupération"></option><option value="Mobilité"></option><option value="Technique individuelle"></option><option value="Routine physique"></option></datalist>
         </div>
         <div><label>Durée (min)</label><input type="number" id="sp-duree" min="0" placeholder="20" style="width:90px;" /></div>
       </div>
-      <div class="form-row">
-        <div style="flex:1;"><label>Consignes</label><textarea id="sp-consignes" rows="3" placeholder="Ex: 20 min de course en endurance, allure facile..." style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:14px; resize:vertical;"></textarea></div>
+
+      <!-- Format LIBRE : champ texte classique -->
+      <div id="sp-zone-libre">
+        <div class="form-row">
+          <div style="flex:1;"><label>Consignes</label><textarea id="sp-consignes" rows="3" placeholder="Ex: 20 min de course en endurance, allure facile..." style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:14px; resize:vertical;"></textarea></div>
+        </div>
       </div>
+
+      <!-- Format ROUTINE PHYSIQUE : builder structuré -->
+      <div id="sp-zone-routine" style="display:none;">
+        <div style="margin-bottom:10px;">
+          <label style="display:block; margin-bottom:4px; font-size:12px; color:var(--text-dim);">Description générale (optionnel)</label>
+          <input type="text" id="sp-routine-desc" placeholder="Ex: Travail d'activation avant entraînement" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:13px;" />
+        </div>
+        <div id="sp-routine-groupes"></div>
+        <button type="button" class="btn btn-secondary" onclick="spRoutineAddGroupe()" style="margin-bottom:12px;">＋ Ajouter un groupe d'exercices</button>
+      </div>
+
       <div class="form-row">
         <div><label>Illustration (image ou PDF, optionnel)</label><input type="file" id="sp-fichier" accept="image/*,application/pdf" onchange="onSpFichierChange()" /><div id="sp-fichier-info" style="font-size:11px; color:var(--text-dim); margin-top:4px;"></div></div>
       </div>
@@ -2496,7 +2560,123 @@ function updateSeancesBadge() {
 let spFichierData = null;   // base64 du fichier joint
 let spFichierNom = null;
 let spEditingId = null;     // si non null : on est en mode édition d'une séance existante
-const rpeWeeklyHiddenJoueurs = new Set();  // joueurs masqués sur le graphique "Charge quotidienne par jour" 
+const rpeWeeklyHiddenJoueurs = new Set();  // joueurs masqués sur le graphique "Charge quotidienne par jour"
+
+// ---- Format toggle ----
+function onSpFormatChange() {
+  const format = document.querySelector('input[name="sp-format"]:checked').value;
+  document.getElementById('sp-zone-libre').style.display    = (format === 'libre')   ? '' : 'none';
+  document.getElementById('sp-zone-routine').style.display  = (format === 'routine') ? '' : 'none';
+  if (format === 'routine' && document.getElementById('sp-routine-groupes').children.length === 0) {
+    spRoutineAddGroupe(); // ajouter un premier groupe vide au premier switch
+  }
+}
+
+// ---- Routine builder ----
+let spRoutineGroupeCount = 0;
+
+function spRoutineAddGroupe(nom, exercices) {
+  const id = ++spRoutineGroupeCount;
+  const container = document.getElementById('sp-routine-groupes');
+  const div = document.createElement('div');
+  div.className = 'routine-groupe';
+  div.id = 'sp-rg-' + id;
+  div.innerHTML = `
+    <div class="routine-groupe-header">
+      <input type="text" placeholder="Nom du groupe (ex: Activation, Gainage...)" value="${escapeHtml(nom || '')}" class="sp-rg-nom" />
+      <button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="spRoutineAddExo(${id})">＋ Exercice</button>
+      <button type="button" style="background:none; border:none; color:var(--red); cursor:pointer; font-size:18px; padding:0 4px;" onclick="document.getElementById('sp-rg-${id}').remove()">✕</button>
+    </div>
+    <div class="routine-exo-grid" id="sp-rg-exos-${id}"></div>`;
+  container.appendChild(div);
+  // Ajouter les exercices existants (mode édition) ou 1 vide
+  if (exercices && exercices.length > 0) {
+    exercices.forEach(ex => spRoutineAddExo(id, ex));
+  } else {
+    spRoutineAddExo(id);
+  }
+}
+
+let spRoutineExoCount = 0;
+function spRoutineAddExo(groupeId, exo) {
+  const id = ++spRoutineExoCount;
+  const grid = document.getElementById('sp-rg-exos-' + groupeId);
+  if (!grid) return;
+  const div = document.createElement('div');
+  div.className = 'routine-exo-card';
+  div.id = 'sp-exo-' + id;
+  div.innerHTML = `
+    <div class="exo-full" style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+      <div style="flex:1;"><label>Nom de l'exercice</label><input type="text" class="sp-exo-nom" placeholder="Ex: Gainage ours" value="${escapeHtml((exo && exo.nom) || '')}" /></div>
+      <button type="button" style="background:none; border:none; color:var(--red); cursor:pointer; font-size:16px; padding:0 4px; align-self:flex-end;" onclick="document.getElementById('sp-exo-${id}').remove()">✕</button>
+    </div>
+    <div><label>Répétitions</label><input type="text" class="sp-exo-reps" placeholder="Ex: 6 par jambe" value="${escapeHtml((exo && exo.reps) || '')}" /></div>
+    <div><label>Séries</label><input type="text" class="sp-exo-series" placeholder="Ex: 4" value="${escapeHtml((exo && exo.series) || '')}" /></div>
+    <div><label>Récupération</label><input type="text" class="sp-exo-recup" placeholder="Ex: 30 sec" value="${escapeHtml((exo && exo.recup) || '')}" /></div>
+    <div></div>
+    <div class="exo-full"><label>Consignes</label><textarea class="sp-exo-consignes" rows="2" placeholder="Description de l'exercice...">${escapeHtml((exo && exo.consignes) || '')}</textarea></div>`;
+  grid.appendChild(div);
+}
+
+function spRoutineCollect() {
+  const groupes = [];
+  document.querySelectorAll('#sp-routine-groupes .routine-groupe').forEach(gEl => {
+    const nom = (gEl.querySelector('.sp-rg-nom') || {}).value || '';
+    const exosEl = gEl.querySelectorAll('.routine-exo-card');
+    const exercices = [];
+    exosEl.forEach(eEl => {
+      const exNom = (eEl.querySelector('.sp-exo-nom') || {}).value || '';
+      if (!exNom.trim()) return; // ignorer les lignes vides
+      exercices.push({
+        nom: exNom.trim(),
+        reps: ((eEl.querySelector('.sp-exo-reps') || {}).value || '').trim(),
+        series: ((eEl.querySelector('.sp-exo-series') || {}).value || '').trim(),
+        recup: ((eEl.querySelector('.sp-exo-recup') || {}).value || '').trim(),
+        consignes: ((eEl.querySelector('.sp-exo-consignes') || {}).value || '').trim(),
+      });
+    });
+    if (nom.trim() || exercices.length > 0) groupes.push({ nom: nom.trim(), exercices });
+  });
+  return groupes;
+}
+
+function spRoutineReset() {
+  document.getElementById('sp-routine-groupes').innerHTML = '';
+  document.getElementById('sp-routine-desc').value = '';
+  spRoutineGroupeCount = 0;
+  spRoutineExoCount = 0;
+}
+
+// Détecte si une string consignes est une routine sérialisée
+function parseRoutineConsignes(consignes) {
+  if (!consignes || !consignes.startsWith('{"__format__":"routine"')) return null;
+  try { return JSON.parse(consignes); } catch(e) { return null; }
+}
+
+// Rend une routine dans le modal
+function renderRoutineDisplay(data) {
+  let h = '';
+  if (data.description) h += '<div style="font-size:13px; color:var(--text-dim); margin-bottom:12px; font-style:italic;">' + escapeHtml(data.description) + '</div>';
+  (data.groupes || []).forEach(g => {
+    h += '<div class="routine-display-groupe">';
+    if (g.nom) h += '<h4>🏋️ ' + escapeHtml(g.nom) + '</h4>';
+    if (g.exercices && g.exercices.length > 0) {
+      h += '<table class="routine-exo-table"><thead><tr><th>Exercice</th><th>Répétitions</th><th>Séries</th><th>Récupération</th></tr></thead><tbody>';
+      g.exercices.forEach(ex => {
+        h += '<tr>';
+        h += '<td><div class="routine-exo-name">' + escapeHtml(ex.nom) + '</div>' +
+             (ex.consignes ? '<div class="routine-exo-consignes">' + escapeHtml(ex.consignes) + '</div>' : '') + '</td>';
+        h += '<td>' + escapeHtml(ex.reps || '—') + '</td>';
+        h += '<td>' + escapeHtml(ex.series || '—') + '</td>';
+        h += '<td>' + escapeHtml(ex.recup || '—') + '</td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table>';
+    }
+    h += '</div>';
+  });
+  return h;
+}
 
 function onSpCibleChange() {
   const type = document.getElementById('sp-cible-type').value;
@@ -2540,8 +2720,12 @@ function onSpFichierChange() {
 
 // Réinitialise le formulaire de planification (utilisé notamment au changement d'organisation)
 function resetSeancePlanForm() {
-  const ids = ['sp-date', 'sp-type', 'sp-duree', 'sp-consignes'];
+  const ids = ['sp-date', 'sp-type', 'sp-duree', 'sp-consignes', 'sp-routine-desc'];
   ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  // Revenir au format libre
+  const fLibre = document.getElementById('sp-format-libre');
+  if (fLibre) { fLibre.checked = true; onSpFormatChange(); }
+  spRoutineReset();
   const cibleSel = document.getElementById('sp-cible-type');
   if (cibleSel) cibleSel.value = 'all';
   const groupWrap = document.getElementById('sp-cible-group-wrap');
@@ -2573,9 +2757,22 @@ async function createSeancePlan() {
   if (!date) { toast('Choisis une date', 'error'); return; }
   const type = document.getElementById('sp-type').value.trim();
   const duree = parseInt(document.getElementById('sp-duree').value) || null;
-  const consignes = document.getElementById('sp-consignes').value.trim();
-  if (!type && !consignes) { toast('Indique au moins un type ou des consignes', 'error'); return; }
   if (!duree || duree <= 0) { toast('La durée est obligatoire (en minutes)', 'error'); return; }
+
+  // Construire le champ consignes selon le format choisi
+  const spFormat = document.querySelector('input[name="sp-format"]:checked').value;
+  let consignes = '';
+  if (spFormat === 'routine') {
+    const groupes = spRoutineCollect();
+    if (groupes.length === 0 || groupes.every(g => g.exercices.length === 0)) {
+      toast('Ajoute au moins un exercice dans la routine', 'error'); return;
+    }
+    const desc = (document.getElementById('sp-routine-desc').value || '').trim();
+    consignes = JSON.stringify({ __format__: 'routine', description: desc, groupes });
+  } else {
+    consignes = document.getElementById('sp-consignes').value.trim();
+    if (!type && !consignes) { toast('Indique au moins un type ou des consignes', 'error'); return; }
+  }
 
   const cibleType = document.getElementById('sp-cible-type').value;
   let cibleGroupe = null, cibleJoueurs = [];
@@ -2628,6 +2825,9 @@ async function createSeancePlan() {
   document.getElementById('sp-fichier-info').textContent = '';
   spFichierData = null; spFichierNom = null;
   document.querySelectorAll('.sp-player-cb:checked').forEach(cb => cb.checked = false);
+  const fLibreReset = document.getElementById('sp-format-libre');
+  if (fLibreReset) { fLibreReset.checked = true; onSpFormatChange(); }
+  spRoutineReset();
 
   toast(spEditingId ? 'Séance mise à jour' : 'Séance planifiée créée', 'success');
   spEditingId = null;
@@ -2648,7 +2848,22 @@ function editSeancePlan(id) {
   document.getElementById('sp-date').value = sp.date;
   document.getElementById('sp-type').value = sp.type || '';
   document.getElementById('sp-duree').value = sp.duree_min || '';
-  document.getElementById('sp-consignes').value = sp.consignes || '';
+
+  // Déterminer le format et charger les données en conséquence
+  const routineData = parseRoutineConsignes(sp.consignes);
+  if (routineData) {
+    const fRoutine = document.getElementById('sp-format-routine');
+    if (fRoutine) { fRoutine.checked = true; onSpFormatChange(); }
+    spRoutineReset();
+    document.getElementById('sp-routine-desc').value = routineData.description || '';
+    (routineData.groupes || []).forEach(g => spRoutineAddGroupe(g.nom, g.exercices));
+  } else {
+    const fLibre = document.getElementById('sp-format-libre');
+    if (fLibre) { fLibre.checked = true; onSpFormatChange(); }
+    spRoutineReset();
+    document.getElementById('sp-consignes').value = sp.consignes || '';
+  }
+
   document.getElementById('sp-cible-type').value = sp.cible_type || 'players';
   onSpCibleChange();
   if (sp.cible_type === 'group') {
@@ -2681,6 +2896,9 @@ function cancelEditSeancePlan() {
   document.getElementById('sp-fichier-info').textContent = '';
   spFichierData = null; spFichierNom = null;
   document.querySelectorAll('.sp-player-cb:checked').forEach(cb => cb.checked = false);
+  const fLibreCancel = document.getElementById('sp-format-libre');
+  if (fLibreCancel) { fLibreCancel.checked = true; onSpFormatChange(); }
+  spRoutineReset();
   const btn = document.querySelector('#calendar-plan-card .btn');
   if (btn) btn.textContent = '📋 Planifier la séance';
   const planTitle = document.querySelector('#calendar-plan-card h2');
@@ -2794,7 +3012,14 @@ function renderSeancePlanModal(spId, joueur) {
   let html = '';
   html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">' + formatDateFR(sp.date) + (sp.duree_min ? ' · ' + sp.duree_min + ' min' : '') + ' · pour ' + escapeHtml(joueur) + '</div>';
   if (sp.consignes) {
-    html += '<div style="background:var(--bg-elevated); border-radius:8px; padding:12px; margin-bottom:12px; white-space:pre-wrap; font-size:14px;">' + escapeHtml(sp.consignes) + '</div>';
+    const routineData = parseRoutineConsignes(sp.consignes);
+    if (routineData) {
+      html += '<div style="background:var(--bg-elevated); border-radius:8px; padding:14px; margin-bottom:12px;">';
+      html += renderRoutineDisplay(routineData);
+      html += '</div>';
+    } else {
+      html += '<div style="background:var(--bg-elevated); border-radius:8px; padding:12px; margin-bottom:12px; white-space:pre-wrap; font-size:14px;">' + escapeHtml(sp.consignes) + '</div>';
+    }
   }
   // Pièce jointe
   if (sp.piece_jointe_nom && sp.piece_jointe === undefined) {
