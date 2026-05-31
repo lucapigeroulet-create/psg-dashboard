@@ -2589,8 +2589,9 @@ function onSpFormatChange() {
 // ---- Routine builder ----
 let spRoutineGroupeCount = 0;
 
-function spRoutineAddGroupe(nom, exercices) {
+function spRoutineAddGroupe(nom, exercices, desc) {
   const id = ++spRoutineGroupeCount;
+  const safeDesc = escapeHtml(desc || '');
   const container = document.getElementById('sp-routine-groupes');
   const div = document.createElement('div');
   div.className = 'routine-groupe';
@@ -2600,6 +2601,7 @@ function spRoutineAddGroupe(nom, exercices) {
       <input type="text" placeholder="Nom du groupe (ex: Activation, Gainage...)" value="${escapeHtml(nom || '')}" class="sp-rg-nom" />
       <button type="button" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:18px; padding:0 4px;" onclick="document.getElementById('sp-rg-${id}').remove()" title="Supprimer ce groupe">✕</button>
     </div>
+    <textarea class="sp-rg-desc" rows="2" placeholder="Consignes générales du groupe (optionnel)..." style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px; resize:vertical; margin-bottom:8px;">${safeDesc}</textarea>
     <div class="routine-exo-row" id="sp-rg-exos-${id}">
       <div class="routine-add-exo-col" onclick="spRoutineAddExo(${id})" title="Ajouter un exercice">＋</div>
     </div>`;
@@ -2645,11 +2647,12 @@ function spRoutineCollect() {
   const groupes = [];
   document.querySelectorAll('#sp-routine-groupes .routine-groupe').forEach(gEl => {
     const nom = (gEl.querySelector('.sp-rg-nom') || {}).value || '';
-    const exosEl = gEl.querySelectorAll('.routine-exo-card');
+    const desc = (gEl.querySelector('.sp-rg-desc') || {}).value || '';
+    const exosEl = gEl.querySelectorAll('.routine-exo-col');
     const exercices = [];
     exosEl.forEach(eEl => {
       const exNom = (eEl.querySelector('.sp-exo-nom') || {}).value || '';
-      if (!exNom.trim()) return; // ignorer les lignes vides
+      if (!exNom.trim()) return;
       exercices.push({
         nom: exNom.trim(),
         reps: ((eEl.querySelector('.sp-exo-reps') || {}).value || '').trim(),
@@ -2658,7 +2661,7 @@ function spRoutineCollect() {
         consignes: ((eEl.querySelector('.sp-exo-consignes') || {}).value || '').trim(),
       });
     });
-    if (nom.trim() || exercices.length > 0) groupes.push({ nom: nom.trim(), exercices });
+    if (nom.trim() || desc.trim() || exercices.length > 0) groupes.push({ nom: nom.trim(), desc: desc.trim(), exercices });
   });
   return groupes;
 }
@@ -2683,6 +2686,7 @@ function renderRoutineDisplay(data) {
   (data.groupes || []).forEach(g => {
     h += '<div class="routine-display-groupe">';
     if (g.nom) h += '<h4>🏋️ ' + escapeHtml(g.nom) + '</h4>';
+    if (g.desc) h += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:8px; font-style:italic;">' + escapeHtml(g.desc) + '</div>';
     if (g.exercices && g.exercices.length > 0) {
       h += '<div style="overflow-x:auto;"><table class="routine-exo-table"><thead><tr><th>Exercice</th><th>Répétitions</th><th>Séries</th><th>Récupération</th></tr></thead><tbody>';
       g.exercices.forEach(ex => {
@@ -2879,7 +2883,7 @@ function editSeancePlan(id) {
     if (fRoutine) { fRoutine.checked = true; onSpFormatChange(); }
     spRoutineReset();
     document.getElementById('sp-routine-desc').value = routineData.description || '';
-    (routineData.groupes || []).forEach(g => spRoutineAddGroupe(g.nom, g.exercices));
+    (routineData.groupes || []).forEach(g => spRoutineAddGroupe(g.nom, g.exercices, g.desc));
   } else {
     const fLibre = document.getElementById('sp-format-libre');
     if (fLibre) { fLibre.checked = true; onSpFormatChange(); }
@@ -3041,7 +3045,7 @@ function renderSeancePlanModal(spId, joueur) {
       html += renderRoutineDisplay(routineData);
       html += '</div>';
     } else {
-      html += '<div style="background:var(--bg-elevated); border-radius:8px; padding:12px; margin-bottom:12px; white-space:pre-wrap; font-size:14px;">' + escapeHtml(sp.consignes) + '</div>';
+      html += '<div style="background:var(--bg-elevated); border-radius:8px; padding:12px; margin-bottom:12px; white-space:pre-wrap; word-break:break-word; overflow-wrap:break-word; font-size:14px;">' + escapeHtml(sp.consignes) + '</div>';
     }
   }
   // Pièce jointe
