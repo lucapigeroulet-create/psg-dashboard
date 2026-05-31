@@ -542,6 +542,7 @@
     <div class="nav-dropdown-menu" id="nav-gestion-menu">
       <button class="nav-btn" data-view="entry">✏️ Saisie séance</button>
       <button class="nav-btn" data-view="match-entry">⚽ Saisie match</button>
+      <button class="nav-btn" data-view="injury-entry">🩹 Saisie blessures</button>
       <button class="nav-btn" data-view="rpe-entry">⭐ Saisie RPE</button>
       <button class="nav-btn" data-view="messages">📣 Messages</button>
       <button class="nav-btn" data-view="history">📋 Historique séances</button>
@@ -947,6 +948,21 @@
       <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">
         Classement des joueurs les plus touchés, cumulé par type d'indisponibilité sur la période sélectionnée.
       </p>
+      <div class="filters" id="injury-perplayer-filters" style="margin-bottom:14px;">
+        <div class="filter-group">
+          <label>Types affichés (classement + détail)</label>
+          <div id="injury-statut-filter" style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button type="button" class="btn" data-statut="INJURY" data-active="true" onclick="toggleInjuryStatutFilter(this)">Blessure</button>
+            <button type="button" class="btn" data-statut="SICK" data-active="true" onclick="toggleInjuryStatutFilter(this)">Malade</button>
+            <button type="button" class="btn" data-statut="ABSENT" data-active="true" onclick="toggleInjuryStatutFilter(this)">Absent</button>
+            <button type="button" class="btn" data-statut="SUSPENDED" data-active="true" onclick="toggleInjuryStatutFilter(this)">Suspendu</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label>Rechercher un joueur</label>
+          <input type="text" id="injury-search" placeholder="Nom du joueur…" oninput="renderInjury()" />
+        </div>
+      </div>
       <div class="chart-container tall"><canvas id="chart-injury-ranking"></canvas></div>
     </div>
 
@@ -970,6 +986,229 @@
         Répartition de l'effectif jour par jour : disponibles, en charge adaptée (statut + séance) et indisponibles.
       </p>
       <div class="chart-container tall"><canvas id="chart-availability"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ========== SAISIE BLESSURES ========== -->
+  <div class="view" id="view-injury-entry">
+    <div class="card">
+      <h2 id="bl-form-title">🩹 Déclaration d'une blessure</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:14px;">
+        Fiche inspirée du protocole PSG Academy Pro. Renseigne le maximum de champs pour un suivi médical précis.
+        <span id="bl-table-warning" style="display:none; color:var(--yellow);"></span>
+      </p>
+      <input type="hidden" id="bl-editing" value="" />
+
+      <h3>1 — Identité</h3>
+      <div class="form-row">
+        <div>
+          <label>Joueur <span style="color:var(--red);">*</span></label>
+          <select id="bl-joueur" onchange="onBlJoueurChange()"></select>
+        </div>
+        <div>
+          <label>Catégorie</label>
+          <input type="text" id="bl-categorie" placeholder="Ex : U19" />
+        </div>
+        <div>
+          <label>Date de la blessure <span style="color:var(--red);">*</span></label>
+          <input type="date" id="bl-date" />
+        </div>
+      </div>
+
+      <h3 style="margin-top:16px;">2 — Contexte</h3>
+      <div class="form-row">
+        <div>
+          <label>Conditions</label>
+          <select id="bl-contexte">
+            <option value="">—</option>
+            <option value="match">Match</option>
+            <option value="entrainement">Entraînement</option>
+            <option value="echauffement">Échauffement</option>
+          </select>
+        </div>
+        <div>
+          <label>Moment d'apparition</label>
+          <select id="bl-minute">
+            <option value="">—</option>
+            <option value="0-15">0 – 15e</option>
+            <option value="15-30">15 – 30e</option>
+            <option value="30-45">30 – 45e</option>
+            <option value="45-60">45 – 60e</option>
+            <option value="60-75">60 – 75e</option>
+            <option value="75-90">75 – 90e</option>
+            <option value=">90">&gt; 90e</option>
+          </select>
+        </div>
+        <div>
+          <label>Précision si &gt; 90e</label>
+          <input type="text" id="bl-minute-prec" placeholder="Ex : prolongations" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Choc ?</label>
+          <select id="bl-choc">
+            <option value="">—</option>
+            <option value="oui">Oui</option>
+            <option value="non">Non</option>
+          </select>
+        </div>
+        <div>
+          <label>Nb d'entraînements du jour</label>
+          <input type="number" id="bl-nb-ent" min="0" placeholder="Ex : 2" />
+        </div>
+        <div>
+          <label>Date du dernier jour de repos</label>
+          <input type="date" id="bl-repos" />
+        </div>
+      </div>
+
+      <h3 style="margin-top:16px;">3 — Équipements & lieu</h3>
+      <div class="form-row">
+        <div>
+          <label>Surface de jeu</label>
+          <select id="bl-surface">
+            <option value="">—</option>
+            <option value="herbe">Herbe</option>
+            <option value="synthetique">Synthétique</option>
+            <option value="stabilise">Stabilisé</option>
+            <option value="autre">Autre</option>
+          </select>
+        </div>
+        <div>
+          <label>Chaussures</label>
+          <select id="bl-chaussures">
+            <option value="">—</option>
+            <option value="vissees">Vissées</option>
+            <option value="moulees">Moulées</option>
+            <option value="running">Running</option>
+            <option value="autre">Autre</option>
+          </select>
+        </div>
+        <div>
+          <label>Domicile / Extérieur</label>
+          <select id="bl-domicile">
+            <option value="">—</option>
+            <option value="domicile">Domicile</option>
+            <option value="exterieur">Extérieur</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="full">
+          <label>Lieu</label>
+          <input type="text" id="bl-lieu" placeholder="Stade, ville…" />
+        </div>
+      </div>
+
+      <h3 style="margin-top:16px;">4 — Mécanismes</h3>
+      <div id="bl-mecanismes" style="display:flex; flex-wrap:wrap; gap:10px 18px; margin-bottom:8px;"></div>
+      <div class="form-row">
+        <div class="full">
+          <label>Autre mécanisme</label>
+          <input type="text" id="bl-meca-autre" placeholder="Précisez si besoin" />
+        </div>
+      </div>
+
+      <h3 style="margin-top:16px;">5 — Localisation</h3>
+      <div class="form-row">
+        <div>
+          <label>Zone touchée</label>
+          <select id="bl-zone">
+            <option value="">—</option>
+            <optgroup label="Muscles">
+              <option>Ischio-jambier</option><option>Quadriceps</option><option>Fessiers</option>
+              <option>Adducteur</option><option>Mollet</option>
+            </optgroup>
+            <optgroup label="Articulations">
+              <option>Hanche</option><option>Genou</option><option>Cheville</option>
+              <option>Épaule</option><option>Coude</option>
+            </optgroup>
+            <optgroup label="Autres parties du corps">
+              <option>Abdomen</option><option>Pubis</option><option>Bras</option><option>Main</option>
+              <option>Pied</option><option>Orteil</option><option>Talon</option><option>Tête</option>
+              <option>Nuque</option><option>Colonne vertébrale</option><option>Doigt</option><option>Visage</option>
+            </optgroup>
+            <option value="Autre">Autre</option>
+          </select>
+        </div>
+        <div>
+          <label>Précision zone</label>
+          <input type="text" id="bl-zone-autre" placeholder="Si « Autre »" />
+        </div>
+        <div>
+          <label>Côté</label>
+          <select id="bl-cote">
+            <option value="">—</option>
+            <option value="droite">Droite</option>
+            <option value="gauche">Gauche</option>
+            <option value="autre">Autre / bilatéral</option>
+          </select>
+        </div>
+      </div>
+
+      <h3 style="margin-top:16px;">6 — Description</h3>
+      <div class="form-row">
+        <div class="full">
+          <label>Description de la blessure</label>
+          <textarea id="bl-description" rows="3" placeholder="Nature, ressenti, diagnostic…"></textarea>
+        </div>
+      </div>
+
+      <h3 style="margin-top:16px;">7 — Indisponibilité</h3>
+      <div class="form-row">
+        <div>
+          <label>Durée d'indispo. prévisionnelle</label>
+          <input type="text" id="bl-duree" placeholder="Ex : 3 semaines" />
+        </div>
+        <div>
+          <label>Re-blessure ?</label>
+          <select id="bl-reblessure">
+            <option value="">—</option>
+            <option value="oui">Oui</option>
+            <option value="non">Non</option>
+          </select>
+        </div>
+        <div>
+          <label>Statut actuel</label>
+          <select id="bl-statut">
+            <option value="en_cours">En cours</option>
+            <option value="reathle">Réathlétisation</option>
+            <option value="disponible">Disponible</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>Début réathlétisation</label>
+          <input type="date" id="bl-debut-reathle" />
+        </div>
+        <div>
+          <label>Fin réathlé. prévisionnelle</label>
+          <input type="date" id="bl-fin-reathle" />
+        </div>
+      </div>
+
+      <div style="margin-top:16px; display:flex; gap:8px;">
+        <button class="btn" onclick="saveBlessure()">💾 Enregistrer la fiche</button>
+        <button class="btn btn-secondary" onclick="clearBlessureForm()">✨ Nouvelle fiche</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Fiches blessure déclarées</h2>
+      <div class="filters" style="margin-bottom:12px;">
+        <div class="filter-group">
+          <label>Filtrer par joueur</label>
+          <select id="bl-list-filter" onchange="renderBlessuresList()"></select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="bl-table">
+          <thead><tr><th>Joueur</th><th>Date</th><th>Zone</th><th>Côté</th><th>Contexte</th><th>Indispo prév.</th><th>Statut</th><th>Actions</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -3287,7 +3526,8 @@ async function loadState() {
     bdd_messages: [],
     bdd_message_reads: [],
     bdd_seances_plan: [],
-    bdd_seances_plan_faites: []
+    bdd_seances_plan_faites: [],
+    bdd_blessures: []
   };
   const setLoad = (t) => { document.getElementById('loading-text').textContent = t; };
 
@@ -3362,6 +3602,12 @@ async function loadState() {
       const { data: spf } = await sb.from('seances_planifiees_faites').select('*').eq('org', currentOrg);
       state.bdd_seances_plan_faites = spf || [];
     } catch(e) { state.bdd_seances_plan = []; state.bdd_seances_plan_faites = []; }
+
+    setLoad('Chargement des blessures...');
+    try {
+      const { data: bls } = await sb.from('blessures').select('*').eq('org', currentOrg).order('date_blessure', { ascending: false });
+      state.bdd_blessures = bls || [];
+    } catch(e) { state.bdd_blessures = []; }
 
     setLoad('Chargement des check-ins Hooper...');
     await loadHooperFromSupabase();
@@ -4116,7 +4362,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (!viewEl) return;
     viewEl.classList.add('active');
     // Gérer l'état visuel du menu déroulant Gestion
-    const gestionViews = ['entry', 'match-entry', 'rpe-entry', 'history', 'settings'];
+    const gestionViews = ['entry', 'match-entry', 'injury-entry', 'rpe-entry', 'history', 'settings'];
     const gestionToggle = document.getElementById('nav-gestion-toggle');
     if (gestionToggle) {
       if (gestionViews.includes(view)) gestionToggle.classList.add('has-active');
@@ -4133,6 +4379,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'injury') renderInjury();
     else if (view === 'entry') renderEntry();
     else if (view === 'match-entry') renderMatchEntry();
+    else if (view === 'injury-entry') renderInjuryEntry();
     else if (view === 'rpe-entry') renderRPEEntry();
     else if (view === 'history') renderHistory();
     else if (view === 'settings') renderSettings();
@@ -6525,20 +6772,35 @@ function resetInjuryFilters() {
   renderInjury();
 }
 
+// Active/désactive un type d'indisponibilité dans les filtres "par joueur"
+function toggleInjuryStatutFilter(el) {
+  const active = el.dataset.active !== 'false';
+  el.dataset.active = active ? 'false' : 'true';
+  el.classList.toggle('btn-secondary', active);   // désactivé = grisé
+  renderInjury();
+}
+
+// Retourne les types cochés ; si aucun n'est coché, on retombe sur tous
+function getInjurySelectedStatuts() {
+  const btns = document.querySelectorAll('#injury-statut-filter [data-statut]');
+  const sel = [];
+  btns.forEach(b => { if (b.dataset.active !== 'false') sel.push(b.dataset.statut); });
+  return sel.length ? sel : STATUTS_INDISPO.slice();
+}
+
 function renderInjury() {
   populateInjuryGroupFilter();
   const f = getInjuryFilters();
   const inRange = d => (!f.start || d >= f.start) && (!f.end || d <= f.end);
   const inGroup = j => !f.groupe || getJoueurInfo(j).groupe === f.groupe;
+  const selStatuts = getInjurySelectedStatuts();
+  const search = (document.getElementById('injury-search') ? document.getElementById('injury-search').value : '').trim().toLowerCase();
 
-  // ---- Agrégation par joueur ----
-  // Pour chaque joueur on stocke, par type, l'ensemble des dates distinctes (évite de compter
-  // deux fois un jour où plusieurs entrées existent). On distingue aussi jours "totalement
-  // indispo" (aucune séance) des jours "adaptés" (statut + séance type REHAB).
+  // ---- Agrégation par joueur (tous types, on conserve les ensembles de dates) ----
   const perPlayer = {};
   function ensure(j) {
     if (!perPlayer[j]) {
-      perPlayer[j] = { byType: {}, touched: new Set(), full: new Set(), adapted: new Set() };
+      perPlayer[j] = { byType: {}, touched: new Set(), adapted: new Set() };
       STATUTS_INDISPO.forEach(t => perPlayer[j].byType[t] = new Set());
     }
     return perPlayer[j];
@@ -6551,18 +6813,17 @@ function renderInjury() {
     statuts.forEach(t => p.byType[t].add(e.date));
     p.touched.add(e.date);
     const hasTraining = e.seances.some(s => !STATUTS_NON_ENT.includes(s));
-    if (hasTraining) p.adapted.add(e.date); else p.full.add(e.date);
+    if (hasTraining) p.adapted.add(e.date);
   });
 
-  const players = Object.keys(perPlayer).map(j => {
-    const p = perPlayer[j];
-    const counts = {}; STATUTS_INDISPO.forEach(t => counts[t] = p.byType[t].size);
-    return { joueur: j, groupe: getJoueurInfo(j).groupe, counts, total: p.touched.size, adapted: p.adapted.size };
-  }).sort((a, b) => b.total - a.total || a.joueur.localeCompare(b.joueur));
-
-  // ---- KPIs ----
+  // ---- KPIs (vue d'ensemble : tous types, indépendants des filtres par joueur) ----
+  const allPlayers = Object.keys(perPlayer);
   const totals = { all: 0 }; STATUTS_INDISPO.forEach(t => totals[t] = 0);
-  players.forEach(p => { totals.all += p.total; STATUTS_INDISPO.forEach(t => totals[t] += p.counts[t]); });
+  allPlayers.forEach(j => {
+    const p = perPlayer[j];
+    totals.all += p.touched.size;
+    STATUTS_INDISPO.forEach(t => totals[t] += p.byType[t].size);
+  });
   const kpiWrap = document.getElementById('injury-kpis');
   if (kpiWrap) {
     const card = (label, val, color, sub) =>
@@ -6570,9 +6831,22 @@ function renderInjury() {
       '<div class="stat-value"' + (color ? ' style="color:' + color + '"' : '') + '>' + val + '</div>' +
       (sub ? '<div class="stat-sub">' + sub + '</div>' : '') + '</div>';
     kpiWrap.innerHTML =
-      card('Jours d\'indispo', totals.all, null, players.length + ' joueur(s) concerné(s)') +
+      card('Jours d\'indispo', totals.all, null, allPlayers.length + ' joueur(s) concerné(s)') +
       STATUTS_INDISPO.map(t => card(getStatutLabel(t), totals[t], STATUT_COLORS[t], 'jours cumulés')).join('');
   }
+
+  // ---- Lignes "par joueur" filtrées par types sélectionnés + recherche ----
+  const players = allPlayers.map(j => {
+    const p = perPlayer[j];
+    const counts = {}; selStatuts.forEach(t => counts[t] = p.byType[t].size);
+    const union = new Set(); selStatuts.forEach(t => p.byType[t].forEach(d => union.add(d)));
+    let adapted = 0; union.forEach(d => { if (p.adapted.has(d)) adapted++; });
+    const fiches = (state.bdd_blessures || []).filter(b => b.joueur === j).length;
+    return { joueur: j, groupe: getJoueurInfo(j).groupe, counts, total: union.size, adapted, fiches };
+  })
+    .filter(p => p.total > 0)
+    .filter(p => !search || p.joueur.toLowerCase().indexOf(search) !== -1)
+    .sort((a, b) => b.total - a.total || a.joueur.localeCompare(b.joueur));
 
   // ---- Classement par joueur (barres horizontales empilées) ----
   destroyChart('chart-injury-ranking');
@@ -6582,7 +6856,7 @@ function renderInjury() {
     if (rankPlayers.length === 0) {
       charts['chart-injury-ranking'] = new Chart(rankCanvas, {
         type: 'bar',
-        data: { labels: ['Aucune indisponibilité sur la période'], datasets: [{ data: [0], backgroundColor: '#1f3a5f' }] },
+        data: { labels: ['Aucune indisponibilité (filtres actuels)'], datasets: [{ data: [0], backgroundColor: '#1f3a5f' }] },
         options: chartOpts({ indexAxis: 'y', legend: false })
       });
     } else {
@@ -6590,7 +6864,7 @@ function renderInjury() {
         type: 'bar',
         data: {
           labels: rankPlayers.map(p => p.joueur),
-          datasets: STATUTS_INDISPO.map(t => ({
+          datasets: selStatuts.map(t => ({
             label: getStatutLabel(t),
             data: rankPlayers.map(p => p.counts[t]),
             backgroundColor: STATUT_COLORS[t],
@@ -6606,23 +6880,24 @@ function renderInjury() {
   const thead = document.querySelector('#injury-table thead');
   if (thead) {
     thead.innerHTML = '<tr><th>Joueur</th><th>Groupe</th>' +
-      STATUTS_INDISPO.map(t => '<th style="text-align:center;">' + getStatutLabel(t) + '</th>').join('') +
-      '<th style="text-align:center;">Total jours</th><th style="text-align:center;">dont adaptés</th></tr>';
+      selStatuts.map(t => '<th style="text-align:center;">' + getStatutLabel(t) + '</th>').join('') +
+      '<th style="text-align:center;">Total jours</th><th style="text-align:center;">dont adaptés</th><th style="text-align:center;">Fiches 🩹</th></tr>';
   }
   const tbody = document.querySelector('#injury-table tbody');
   const cell = (v, color) => v > 0
     ? '<td style="text-align:center;color:' + color + ';font-weight:600;">' + v + '</td>'
     : '<td style="text-align:center;color:var(--text-dim);">—</td>';
   tbody.innerHTML = players.length === 0
-    ? '<tr><td colspan="' + (STATUTS_INDISPO.length + 4) + '" style="text-align:center;color:var(--text-dim);padding:20px;">Aucune indisponibilité sur la période.</td></tr>'
+    ? '<tr><td colspan="' + (selStatuts.length + 5) + '" style="text-align:center;color:var(--text-dim);padding:20px;">Aucune indisponibilité pour ces filtres.</td></tr>'
     : players.map(p =>
         '<tr><td><b>' + p.joueur + '</b></td><td>' + p.groupe + '</td>' +
-        STATUTS_INDISPO.map(t => cell(p.counts[t], STATUT_COLORS[t])).join('') +
+        selStatuts.map(t => cell(p.counts[t], STATUT_COLORS[t])).join('') +
         '<td style="text-align:center;"><b>' + p.total + '</b></td>' +
-        '<td style="text-align:center;color:var(--text-dim);">' + (p.adapted > 0 ? p.adapted : '—') + '</td></tr>'
+        '<td style="text-align:center;color:var(--text-dim);">' + (p.adapted > 0 ? p.adapted : '—') + '</td>' +
+        '<td style="text-align:center;">' + (p.fiches > 0 ? '<b>' + p.fiches + '</b>' : '<span style="color:var(--text-dim);">—</span>') + '</td></tr>'
       ).join('');
 
-  // ---- Évolution quotidienne (graphe historique, désormais filtré) ----
+  // ---- Évolution quotidienne (graphe historique, filtré groupe + période) ----
   const dates = getAllDates().filter(inRange);
   const counts = dates.map(d => {
     const rows = state.bdd_ent.filter(e => e.date === d && inGroup(e.joueur));
@@ -6660,6 +6935,249 @@ function renderInjury() {
     },
     options: chartOpts({ stacked: true })
   });
+}
+
+// ============================================================================
+// SAISIE BLESSURES (fiche détaillée)
+// ============================================================================
+
+// Liste des mécanismes possibles (valeur interne -> libellé)
+const BLESSURE_MECANISMES = [
+  ['course', 'Course'], ['reception', 'Réception'], ['rotation', 'Rotation'],
+  ['dribble', 'Dribble'], ['chute', 'Chute'], ['a_tacle', 'A taclé'],
+  ['est_tacle', 'Est taclé'], ['tir', 'Tir'], ['saut', 'Saut'],
+  ['etirement', 'Étirement'], ['collision', 'Collision']
+];
+const BLESSURE_STATUT_LABELS = { en_cours: 'En cours', reathle: 'Réathlétisation', disponible: 'Disponible' };
+const BLESSURE_STATUT_COLORS = { en_cours: '#f87171', reathle: '#fbbf24', disponible: '#4ade80' };
+
+// Construit dynamiquement les cases à cocher des mécanismes (une seule fois)
+function buildBlessureMecanismes() {
+  const wrap = document.getElementById('bl-mecanismes');
+  if (!wrap || wrap.dataset.built === '1') return;
+  wrap.innerHTML = BLESSURE_MECANISMES.map(([v, l]) =>
+    '<label style="display:inline-flex; align-items:center; gap:6px; margin:0; font-size:13px; color:var(--text); cursor:pointer;">' +
+    '<input type="checkbox" class="bl-meca" value="' + v + '" style="width:auto;" /> ' + l + '</label>'
+  ).join('');
+  wrap.dataset.built = '1';
+}
+
+// Pré-remplit la catégorie à partir du groupe du joueur sélectionné
+function onBlJoueurChange() {
+  const j = document.getElementById('bl-joueur').value;
+  const cat = document.getElementById('bl-categorie');
+  if (j && cat && !cat.value) {
+    const info = getJoueurInfo(j);
+    if (info && info.groupe && info.groupe !== '?') cat.value = info.groupe;
+  }
+}
+
+// Vide le formulaire pour une nouvelle saisie
+function clearBlessureForm() {
+  document.getElementById('bl-editing').value = '';
+  document.getElementById('bl-form-title').textContent = '🩹 Déclaration d\'une blessure';
+  ['bl-categorie','bl-date','bl-minute-prec','bl-nb-ent','bl-repos','bl-lieu','bl-meca-autre',
+   'bl-zone-autre','bl-description','bl-duree','bl-debut-reathle','bl-fin-reathle'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  ['bl-contexte','bl-minute','bl-choc','bl-surface','bl-chaussures','bl-domicile','bl-zone','bl-cote','bl-reblessure'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const st = document.getElementById('bl-statut'); if (st) st.value = 'en_cours';
+  document.querySelectorAll('#bl-mecanismes .bl-meca').forEach(cb => cb.checked = false);
+}
+
+function renderInjuryEntry() {
+  buildBlessureMecanismes();
+  // Remplir le sélecteur de joueurs
+  const sel = document.getElementById('bl-joueur');
+  if (sel) {
+    const prev = sel.value;
+    const players = getAllPlayers();
+    sel.innerHTML = '<option value="">— Choisir un joueur —</option>' +
+      players.map(p => '<option value="' + p + '">' + p + '</option>').join('');
+    if (prev) sel.value = prev;
+  }
+  // Sélecteur de filtre de la liste
+  const lf = document.getElementById('bl-list-filter');
+  if (lf) {
+    const prev = lf.value;
+    const players = getAllPlayers();
+    lf.innerHTML = '<option value="">Tous les joueurs</option>' +
+      players.map(p => '<option value="' + p + '">' + p + '</option>').join('');
+    if (prev) lf.value = prev;
+  }
+  // Avertissement si la table Supabase n'est pas encore créée
+  const warn = document.getElementById('bl-table-warning');
+  if (warn && !window.__blessuresTableOk && (state.bdd_blessures || []).length === 0) {
+    // on n'affiche l'avertissement qu'après une tentative d'écriture échouée (géré dans saveBlessure)
+  }
+  renderBlessuresList();
+}
+
+function renderBlessuresList() {
+  const tbody = document.querySelector('#bl-table tbody');
+  if (!tbody) return;
+  const filt = document.getElementById('bl-list-filter') ? document.getElementById('bl-list-filter').value : '';
+  let rows = (state.bdd_blessures || []).slice();
+  if (filt) rows = rows.filter(b => b.joueur === filt);
+  rows.sort((a, b) => (b.date_blessure || '').localeCompare(a.date_blessure || ''));
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:20px;">Aucune fiche blessure déclarée.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(b => {
+    const d = b.details || {};
+    const zone = b.zone || '—';
+    const cote = b.cote ? ({ droite: 'Droite', gauche: 'Gauche', autre: 'Autre' }[b.cote] || b.cote) : '—';
+    const ctx = d.contexte ? ({ match: 'Match', entrainement: 'Entraînement', echauffement: 'Échauffement' }[d.contexte] || d.contexte) : '—';
+    const statut = b.statut || 'en_cours';
+    const stLabel = BLESSURE_STATUT_LABELS[statut] || statut;
+    const stColor = BLESSURE_STATUT_COLORS[statut] || 'var(--text-dim)';
+    const idAttr = "'" + String(b.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+    return '<tr>' +
+      '<td><b>' + b.joueur + '</b></td>' +
+      '<td>' + (b.date_blessure ? formatDateFR(b.date_blessure) : '—') + '</td>' +
+      '<td>' + zone + '</td>' +
+      '<td>' + cote + '</td>' +
+      '<td>' + ctx + '</td>' +
+      '<td>' + (b.duree_indispo || '—') + '</td>' +
+      '<td><span class="badge" style="background:' + stColor + '22;color:' + stColor + ';">' + stLabel + '</span></td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button class="btn btn-secondary" style="padding:4px 8px;" onclick="editBlessure(' + idAttr + ')">✏️</button> ' +
+        '<button class="btn btn-danger" style="padding:4px 8px;" onclick="deleteBlessure(' + idAttr + ')">🗑️</button>' +
+      '</td></tr>';
+  }).join('');
+}
+
+// Recharge une fiche existante dans le formulaire
+function editBlessure(id) {
+  const b = (state.bdd_blessures || []).find(x => x.id === id);
+  if (!b) { toast('Fiche introuvable', 'error'); return; }
+  const d = b.details || {};
+  document.getElementById('bl-editing').value = b.id;
+  document.getElementById('bl-form-title').textContent = '🩹 Modifier la fiche de ' + b.joueur;
+  document.getElementById('bl-joueur').value = b.joueur || '';
+  document.getElementById('bl-categorie').value = b.categorie || '';
+  document.getElementById('bl-date').value = b.date_blessure || '';
+  document.getElementById('bl-contexte').value = d.contexte || '';
+  document.getElementById('bl-minute').value = d.minute || '';
+  document.getElementById('bl-minute-prec').value = d.minute_prec || '';
+  document.getElementById('bl-choc').value = d.choc || '';
+  document.getElementById('bl-nb-ent').value = (d.nb_entrainements != null ? d.nb_entrainements : '');
+  document.getElementById('bl-repos').value = d.date_repos || '';
+  document.getElementById('bl-surface').value = d.surface || '';
+  document.getElementById('bl-chaussures').value = d.chaussures || '';
+  document.getElementById('bl-domicile').value = d.domicile || '';
+  document.getElementById('bl-lieu').value = d.lieu || '';
+  document.getElementById('bl-meca-autre').value = d.meca_autre || '';
+  document.getElementById('bl-zone').value = b.zone || '';
+  document.getElementById('bl-zone-autre').value = d.zone_autre || '';
+  document.getElementById('bl-cote').value = b.cote || '';
+  document.getElementById('bl-description').value = d.description || '';
+  document.getElementById('bl-duree').value = b.duree_indispo || '';
+  document.getElementById('bl-reblessure').value = d.re_blessure || '';
+  document.getElementById('bl-statut').value = b.statut || 'en_cours';
+  document.getElementById('bl-debut-reathle').value = d.debut_reathle || '';
+  document.getElementById('bl-fin-reathle').value = d.fin_reathle || '';
+  const mecas = d.mecanismes || [];
+  document.querySelectorAll('#bl-mecanismes .bl-meca').forEach(cb => cb.checked = mecas.indexOf(cb.value) !== -1);
+  // Remonter en haut pour voir le formulaire
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function saveBlessure() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const joueur = document.getElementById('bl-joueur').value;
+  const date = document.getElementById('bl-date').value;
+  if (!joueur) { toast('Choisis un joueur', 'error'); return; }
+  if (!date) { toast('Indique la date de la blessure', 'error'); return; }
+
+  const val = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const mecanismes = Array.from(document.querySelectorAll('#bl-mecanismes .bl-meca:checked')).map(cb => cb.value);
+  const nbEnt = val('bl-nb-ent');
+
+  const details = {
+    contexte: val('bl-contexte'), minute: val('bl-minute'), minute_prec: val('bl-minute-prec'),
+    choc: val('bl-choc'), nb_entrainements: nbEnt === '' ? null : parseInt(nbEnt, 10),
+    date_repos: val('bl-repos'), surface: val('bl-surface'), chaussures: val('bl-chaussures'),
+    domicile: val('bl-domicile'), lieu: val('bl-lieu'), mecanismes: mecanismes, meca_autre: val('bl-meca-autre'),
+    zone_autre: val('bl-zone-autre'), description: val('bl-description'), re_blessure: val('bl-reblessure'),
+    debut_reathle: val('bl-debut-reathle'), fin_reathle: val('bl-fin-reathle')
+  };
+  const row = {
+    org: currentOrg,
+    joueur: joueur,
+    categorie: val('bl-categorie') || null,
+    date_blessure: date,
+    zone: val('bl-zone') || null,
+    cote: val('bl-cote') || null,
+    statut: val('bl-statut') || 'en_cours',
+    duree_indispo: val('bl-duree') || null,
+    details: details
+  };
+
+  const editingId = document.getElementById('bl-editing').value;
+  const saved = await saveBlessureToSupabase(row, editingId || null);
+  if (!saved) return;
+
+  if (editingId) {
+    const idx = (state.bdd_blessures || []).findIndex(x => x.id === saved.id);
+    if (idx !== -1) state.bdd_blessures[idx] = saved; else state.bdd_blessures.unshift(saved);
+    toast('Fiche mise à jour', 'success');
+  } else {
+    state.bdd_blessures.unshift(saved);
+    toast('Fiche blessure enregistrée', 'success');
+  }
+  clearBlessureForm();
+  renderBlessuresList();
+  // Rafraîchir la vue Disponibilité (colonne Fiches) si pertinent
+  if (document.querySelector('.view.active') && document.querySelector('.view.active').id === 'view-injury') renderInjury();
+}
+
+async function deleteBlessure(id) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  if (!confirm('Supprimer définitivement cette fiche blessure ?')) return;
+  const ok = await deleteBlessureFromSupabase(id);
+  if (!ok) return;
+  state.bdd_blessures = (state.bdd_blessures || []).filter(b => b.id !== id);
+  toast('Fiche supprimée', 'success');
+  renderBlessuresList();
+}
+
+// --- Couche Supabase pour les blessures ---
+async function saveBlessureToSupabase(row, id) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return null; }
+  try {
+    if (id) {
+      const { data, error } = await sb.from('blessures').update(row).eq('id', id).select();
+      if (error) throw error;
+      window.__blessuresTableOk = true;
+      return data && data[0];
+    } else {
+      const { data, error } = await sb.from('blessures').insert(row).select();
+      if (error) throw error;
+      window.__blessuresTableOk = true;
+      return data && data[0];
+    }
+  } catch (e) {
+    const msg = (e && e.message) ? e.message : String(e);
+    const warn = document.getElementById('bl-table-warning');
+    if (warn && /relation|table|exist|schema|404|not\s*found/i.test(msg)) {
+      warn.style.display = 'inline';
+      warn.textContent = ' ⚠️ La table « blessures » semble absente côté Supabase — voir les instructions de création.';
+    }
+    toast('Erreur sauvegarde blessure : ' + msg, 'error');
+    return null;
+  }
+}
+
+async function deleteBlessureFromSupabase(id) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return false; }
+  const { error } = await sb.from('blessures').delete().eq('id', id);
+  if (error) { toast('Erreur suppression : ' + error.message, 'error'); return false; }
+  return true;
 }
 
 // ============================================================================
