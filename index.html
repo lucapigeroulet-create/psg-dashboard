@@ -425,18 +425,32 @@
   }
   .routine-groupe-header { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
   .routine-groupe-header input { flex:1; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; font-weight:600; }
-  .routine-exo-grid { display:grid; gap:8px; }
-  .routine-exo-card {
-    background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:10px;
-    display:grid; grid-template-columns:1fr 1fr; gap:6px;
+  /* Exercices en colonnes (une colonne = un exercice) */
+  .routine-exo-row {
+    display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; align-items:stretch;
   }
-  .routine-exo-card .exo-full { grid-column:1/-1; }
-  .routine-exo-card input, .routine-exo-card textarea {
+  .routine-exo-col {
+    min-width:155px; max-width:180px; flex-shrink:0;
+    background:var(--bg-card); border:1px solid var(--border); border-radius:8px;
+    padding:8px; display:flex; flex-direction:column; gap:5px; position:relative;
+  }
+  .routine-exo-col label { display:block; font-size:10px; color:var(--text-dim); margin-bottom:1px; }
+  .routine-exo-col input, .routine-exo-col textarea {
     width:100%; background:var(--bg-elevated); color:var(--text);
-    border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:12px;
+    border:1px solid var(--border); border-radius:5px; padding:4px 7px; font-size:12px;
   }
-  .routine-exo-card textarea { resize:vertical; min-height:48px; }
-  .routine-exo-card label { display:block; font-size:10px; color:var(--text-dim); margin-bottom:2px; }
+  .routine-exo-col textarea { resize:vertical; min-height:54px; font-size:11px; }
+  .routine-exo-col .exo-del {
+    position:absolute; top:4px; right:5px;
+    background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:14px; line-height:1; padding:0;
+  }
+  .routine-exo-col .exo-del:hover { color:var(--red); }
+  .routine-add-exo-col {
+    min-width:42px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    background:var(--bg-elevated); border:1px dashed var(--border); border-radius:8px;
+    cursor:pointer; font-size:20px; color:var(--text-dim); transition:all 0.15s;
+  }
+  .routine-add-exo-col:hover { border-color:var(--accent); color:var(--accent); }
 
   /* Affichage routine dans le modal */
   .routine-display-groupe { margin-bottom:18px; }
@@ -2527,7 +2541,7 @@ function renderPlayerSeances() {
             '<span style="font-weight:600; font-size:13px;">📋 ' + escapeHtml(sp.type || tr('Session', 'Séance')) + (sp.duree_min ? ' · ' + sp.duree_min + ' min' : '') + '</span>' +
             '<span style="font-size:11px;">' + (faite ? '<span style="color:var(--green);">✓ ' + tr('Done', 'Fait') + '</span>' : (retard ? '<span style="color:var(--text-dim);">' + tr('Late', 'En retard') + '</span>' : '<span style="color:var(--accent-light);">' + tr('To do', 'À faire') + '</span>')) + '</span>' +
           '</div>' +
-          (sp.consignes ? '<div style="font-size:11px; color:var(--text-dim); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(sp.consignes) + '</div>' : '') +
+          (sp.consignes ? '<div style="font-size:11px; color:var(--text-dim); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + spConsignesResume(sp.consignes) + '</div>' : '') +
         '</div>';
       });
     }
@@ -2584,12 +2598,12 @@ function spRoutineAddGroupe(nom, exercices) {
   div.innerHTML = `
     <div class="routine-groupe-header">
       <input type="text" placeholder="Nom du groupe (ex: Activation, Gainage...)" value="${escapeHtml(nom || '')}" class="sp-rg-nom" />
-      <button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="spRoutineAddExo(${id})">＋ Exercice</button>
-      <button type="button" style="background:none; border:none; color:var(--red); cursor:pointer; font-size:18px; padding:0 4px;" onclick="document.getElementById('sp-rg-${id}').remove()">✕</button>
+      <button type="button" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:18px; padding:0 4px;" onclick="document.getElementById('sp-rg-${id}').remove()" title="Supprimer ce groupe">✕</button>
     </div>
-    <div class="routine-exo-grid" id="sp-rg-exos-${id}"></div>`;
+    <div class="routine-exo-row" id="sp-rg-exos-${id}">
+      <div class="routine-add-exo-col" onclick="spRoutineAddExo(${id})" title="Ajouter un exercice">＋</div>
+    </div>`;
   container.appendChild(div);
-  // Ajouter les exercices existants (mode édition) ou 1 vide
   if (exercices && exercices.length > 0) {
     exercices.forEach(ex => spRoutineAddExo(id, ex));
   } else {
@@ -2600,22 +2614,31 @@ function spRoutineAddGroupe(nom, exercices) {
 let spRoutineExoCount = 0;
 function spRoutineAddExo(groupeId, exo) {
   const id = ++spRoutineExoCount;
-  const grid = document.getElementById('sp-rg-exos-' + groupeId);
-  if (!grid) return;
-  const div = document.createElement('div');
-  div.className = 'routine-exo-card';
-  div.id = 'sp-exo-' + id;
-  div.innerHTML = `
-    <div class="exo-full" style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
-      <div style="flex:1;"><label>Nom de l'exercice</label><input type="text" class="sp-exo-nom" placeholder="Ex: Gainage ours" value="${escapeHtml((exo && exo.nom) || '')}" /></div>
-      <button type="button" style="background:none; border:none; color:var(--red); cursor:pointer; font-size:16px; padding:0 4px; align-self:flex-end;" onclick="document.getElementById('sp-exo-${id}').remove()">✕</button>
-    </div>
-    <div><label>Répétitions</label><input type="text" class="sp-exo-reps" placeholder="Ex: 6 par jambe" value="${escapeHtml((exo && exo.reps) || '')}" /></div>
+  const row = document.getElementById('sp-rg-exos-' + groupeId);
+  if (!row) return;
+  const col = document.createElement('div');
+  col.className = 'routine-exo-col';
+  col.id = 'sp-exo-' + id;
+  col.innerHTML = `
+    <button type="button" class="exo-del" onclick="document.getElementById('sp-exo-${id}').remove()" title="Supprimer">✕</button>
+    <div style="padding-right:16px;"><label>Exercice</label><input type="text" class="sp-exo-nom" placeholder="Ex: Gainage ours" value="${escapeHtml((exo && exo.nom) || '')}" /></div>
+    <div><label>Répétitions</label><input type="text" class="sp-exo-reps" placeholder="Ex: 6/jambe" value="${escapeHtml((exo && exo.reps) || '')}" /></div>
     <div><label>Séries</label><input type="text" class="sp-exo-series" placeholder="Ex: 4" value="${escapeHtml((exo && exo.series) || '')}" /></div>
     <div><label>Récupération</label><input type="text" class="sp-exo-recup" placeholder="Ex: 30 sec" value="${escapeHtml((exo && exo.recup) || '')}" /></div>
-    <div></div>
-    <div class="exo-full"><label>Consignes</label><textarea class="sp-exo-consignes" rows="2" placeholder="Description de l'exercice...">${escapeHtml((exo && exo.consignes) || '')}</textarea></div>`;
-  grid.appendChild(div);
+    <div><label>Consignes</label><textarea class="sp-exo-consignes" rows="3" placeholder="Description...">${escapeHtml((exo && exo.consignes) || '')}</textarea></div>`;
+  // Insérer avant le bouton ＋
+  const addBtn = row.querySelector('.routine-add-exo-col');
+  row.insertBefore(col, addBtn);
+}
+
+// Résumé lisible d'un champ consignes (routine ou texte libre)
+function spConsignesResume(consignes) {
+  if (!consignes) return '';
+  const rd = parseRoutineConsignes(consignes);
+  if (!rd) return escapeHtml(consignes);
+  const nbGroupes = (rd.groupes || []).length;
+  const nbExos = (rd.groupes || []).reduce((s, g) => s + (g.exercices || []).length, 0);
+  return '🏋️ Routine · ' + nbGroupes + ' groupe' + (nbGroupes > 1 ? 's' : '') + ' · ' + nbExos + ' exercice' + (nbExos > 1 ? 's' : '');
 }
 
 function spRoutineCollect() {
@@ -2661,7 +2684,7 @@ function renderRoutineDisplay(data) {
     h += '<div class="routine-display-groupe">';
     if (g.nom) h += '<h4>🏋️ ' + escapeHtml(g.nom) + '</h4>';
     if (g.exercices && g.exercices.length > 0) {
-      h += '<table class="routine-exo-table"><thead><tr><th>Exercice</th><th>Répétitions</th><th>Séries</th><th>Récupération</th></tr></thead><tbody>';
+      h += '<div style="overflow-x:auto;"><table class="routine-exo-table"><thead><tr><th>Exercice</th><th>Répétitions</th><th>Séries</th><th>Récupération</th></tr></thead><tbody>';
       g.exercices.forEach(ex => {
         h += '<tr>';
         h += '<td><div class="routine-exo-name">' + escapeHtml(ex.nom) + '</div>' +
@@ -2671,7 +2694,7 @@ function renderRoutineDisplay(data) {
         h += '<td>' + escapeHtml(ex.recup || '—') + '</td>';
         h += '</tr>';
       });
-      h += '</tbody></table>';
+      h += '</tbody></table></div>';
     }
     h += '</div>';
   });
@@ -2955,7 +2978,7 @@ function renderSeancesPlanHistory() {
         '<div style="flex:1;">' +
           '<div style="font-weight:700; font-size:14px;">📋 ' + escapeHtml(sp.type || tr('Session', 'Séance')) + (sp.duree_min ? ' · ' + sp.duree_min + ' min' : '') + '</div>' +
           '<div style="font-size:11px; color:var(--text-dim); margin-top:3px;">' + formatDateFR(sp.date) + ' · ' + escapeHtml(cibleLabel) + (sp.piece_jointe_nom ? ' · 📎' : '') + '</div>' +
-          (sp.consignes ? '<div style="font-size:12px; color:var(--text-dim); margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(sp.consignes) + '</div>' : '') +
+          (sp.consignes ? '<div style="font-size:12px; color:var(--text-dim); margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + spConsignesResume(sp.consignes) + '</div>' : '') +
           '<div style="font-size:11px; color:var(--green); margin-top:4px;">✓ Réalisée par ' + faits + '/' + targets.length + '</div>' +
         '</div>' +
         '<div style="display:flex; gap:4px; flex-direction:column;">' +
@@ -4303,17 +4326,13 @@ function getSeancesJoueur(date, joueur) {
   //  - par type normalisé (insensible à la casse) : deux séances de même type pour le même joueur
   //    le même jour sont forcément des doublons puisqu'il n'y a pas de notion d'horaire
   const seenSpIds = new Set();
-  const seenTypes = new Set();
   (state.bdd_seances_plan || [])
     .filter(sp => sp.date === date)
-    .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))  // garder le plus ancien si doublon
+    .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))
     .forEach(sp => {
       if (!sp.id || seenSpIds.has(sp.id)) return;
       if (!seancePlanCibleJoueur(sp, joueur)) return;
-      const typeKey = (sp.type || 'Séance').toLowerCase().trim();
-      if (seenTypes.has(typeKey)) return;  // doublon par type → on ignore
       seenSpIds.add(sp.id);
-      seenTypes.add(typeKey);
       seances.push('📋 ' + (sp.type || 'Séance') + '|' + sp.id);
     });
   return seances;
