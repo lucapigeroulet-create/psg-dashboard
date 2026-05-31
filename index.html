@@ -1198,6 +1198,10 @@
           <label>Fin réathlé. prévisionnelle</label>
           <input type="date" id="bl-fin-reathle" />
         </div>
+        <div>
+          <label>Date de fin réelle <span style="color:var(--text-dim);">(si terminée)</span></label>
+          <input type="date" id="bl-date-fin" />
+        </div>
       </div>
 
       <div style="margin-top:16px; display:flex; gap:8px;">
@@ -6838,6 +6842,16 @@ function renderInjury() {
     if (hasTraining) p.adapted.add(e.date);
   });
 
+  // Intègre les jours d'indisponibilité issus des fiches blessure déclarées
+  // (union avec les jours de planning → pas de double comptage d'une même date)
+  (state.bdd_blessures || []).forEach(b => {
+    if (!b.joueur || !inGroup(b.joueur)) return;
+    const dates = ficheInjuryDates(b, inRange);
+    if (dates.length === 0) return;
+    const p = ensure(b.joueur);
+    dates.forEach(d => { p.byType['INJURY'].add(d); p.touched.add(d); });
+  });
+
   // ---- KPIs (vue d'ensemble : tous types, indépendants des filtres par joueur) ----
   const allPlayers = Object.keys(perPlayer);
   const totals = { all: 0 }; STATUTS_INDISPO.forEach(t => totals[t] = 0);
@@ -7002,7 +7016,7 @@ function clearBlessureForm() {
   document.getElementById('bl-editing').value = '';
   document.getElementById('bl-form-title').textContent = '🩹 Déclaration d\'une blessure';
   ['bl-categorie','bl-date','bl-minute-prec','bl-nb-ent','bl-repos','bl-lieu','bl-meca-autre',
-   'bl-zone-autre','bl-description','bl-duree','bl-debut-reathle','bl-fin-reathle'].forEach(id => {
+   'bl-zone-autre','bl-description','bl-duree','bl-debut-reathle','bl-fin-reathle','bl-date-fin'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   ['bl-contexte','bl-minute','bl-choc','bl-surface','bl-chaussures','bl-domicile','bl-zone','bl-cote','bl-reblessure'].forEach(id => {
@@ -7061,6 +7075,9 @@ function renderBlessuresList() {
     const stLabel = BLESSURE_STATUT_LABELS[statut] || statut;
     const stColor = BLESSURE_STATUT_COLORS[statut] || 'var(--text-dim)';
     const idAttr = "'" + String(b.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+    const termBtn = (statut !== 'disponible')
+      ? '<button class="btn btn-success" style="padding:4px 8px;" title="Marquer comme terminée" onclick="terminerBlessure(' + idAttr + ')">✅</button> '
+      : '';
     return '<tr>' +
       '<td><b>' + b.joueur + '</b></td>' +
       '<td>' + (b.date_blessure ? formatDateFR(b.date_blessure) : '—') + '</td>' +
@@ -7069,7 +7086,7 @@ function renderBlessuresList() {
       '<td>' + ctx + '</td>' +
       '<td>' + (b.duree_indispo || '—') + '</td>' +
       '<td><span class="badge" style="background:' + stColor + '22;color:' + stColor + ';">' + stLabel + '</span></td>' +
-      '<td style="white-space:nowrap;">' +
+      '<td style="white-space:nowrap;">' + termBtn +
         '<button class="btn btn-secondary" style="padding:4px 8px;" onclick="editBlessure(' + idAttr + ')">✏️</button> ' +
         '<button class="btn btn-danger" style="padding:4px 8px;" onclick="deleteBlessure(' + idAttr + ')">🗑️</button>' +
       '</td></tr>';
@@ -7106,6 +7123,7 @@ function editBlessure(id) {
   document.getElementById('bl-statut').value = b.statut || 'en_cours';
   document.getElementById('bl-debut-reathle').value = d.debut_reathle || '';
   document.getElementById('bl-fin-reathle').value = d.fin_reathle || '';
+  document.getElementById('bl-date-fin').value = d.date_fin || '';
   const mecas = d.mecanismes || [];
   document.querySelectorAll('#bl-mecanismes .bl-meca').forEach(cb => cb.checked = mecas.indexOf(cb.value) !== -1);
   // Remonter en haut pour voir le formulaire
@@ -7129,7 +7147,7 @@ async function saveBlessure() {
     date_repos: val('bl-repos'), surface: val('bl-surface'), chaussures: val('bl-chaussures'),
     domicile: val('bl-domicile'), lieu: val('bl-lieu'), mecanismes: mecanismes, meca_autre: val('bl-meca-autre'),
     zone_autre: val('bl-zone-autre'), description: val('bl-description'), re_blessure: val('bl-reblessure'),
-    debut_reathle: val('bl-debut-reathle'), fin_reathle: val('bl-fin-reathle')
+    debut_reathle: val('bl-debut-reathle'), fin_reathle: val('bl-fin-reathle'), date_fin: val('bl-date-fin')
   };
   const row = {
     org: currentOrg,
@@ -7169,6 +7187,32 @@ async function deleteBlessure(id) {
   state.bdd_blessures = (state.bdd_blessures || []).filter(b => b.id !== id);
   toast('Fiche supprimée', 'success');
   renderBlessuresList();
+}
+
+// Marque une blessure comme terminée : statut "disponible" + date de fin réelle.
+// Borne ainsi le calcul automatique des jours d'indisponibilité.
+async function terminerBlessure(id) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const b = (state.bdd_blessures || []).find(x => x.id === id);
+  if (!b) { toast('Fiche introuvable', 'error'); return; }
+  const def = (b.details && b.details.date_fin) || todayYMD();
+  const saisie = prompt('Date de fin de l\'indisponibilité (AAAA-MM-JJ) :', def);
+  if (saisie === null) return;
+  const dd = (saisie.trim() || todayYMD());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dd)) { toast('Format de date invalide (AAAA-MM-JJ)', 'error'); return; }
+  const details = Object.assign({}, b.details || {}, { date_fin: dd });
+  const row = {
+    org: b.org, joueur: b.joueur, categorie: b.categorie, date_blessure: b.date_blessure,
+    zone: b.zone, cote: b.cote, statut: 'disponible', duree_indispo: b.duree_indispo, details: details
+  };
+  const saved = await saveBlessureToSupabase(row, b.id);
+  if (!saved) return;
+  const idx = state.bdd_blessures.findIndex(x => x.id === b.id);
+  if (idx !== -1) state.bdd_blessures[idx] = saved;
+  toast('Blessure marquée comme terminée', 'success');
+  renderBlessuresList();
+  const active = document.querySelector('.view.active');
+  if (active && active.id === 'view-injury') renderInjury();
 }
 
 // --- Couche Supabase pour les blessures ---
@@ -7217,32 +7261,67 @@ function daysBetweenInclusive(a, b) {
   return diff > 0 ? diff : 0;
 }
 
+// Date du jour au format AAAA-MM-JJ (heure locale, pas UTC)
+function todayYMD() {
+  return fmtYMD(new Date());
+}
+function fmtYMD(dt) {
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const d = String(dt.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + d;
+}
+
 // Calcule automatiquement les jours d'indisponibilité d'une fiche blessure.
 // - début = date_blessure
-// - si "disponible" : on s'arrête à la fin réathlé prévue (si passée) sinon aujourd'hui
+// - si terminée (statut "disponible") : fin = date de fin réelle si renseignée,
+//   sinon fin réathlé prévue, sinon aujourd'hui
 // - sinon (en cours / réathlé) : on compte jusqu'à aujourd'hui (jours écoulés)
 // - joursPrev = durée prévisionnelle totale si une fin réathlé est renseignée
 function computeFicheIndispo(b) {
   const start = b.date_blessure;
   if (!start) return { jours: null };
   const finPrev = (b.details && b.details.fin_reathle) || '';
-  const today = new Date().toISOString().slice(0, 10);
+  const finReelle = (b.details && b.details.date_fin) || '';
+  const today = todayYMD();
   const disponible = (b.statut === 'disponible');
   let end;
-  if (disponible) end = (finPrev && finPrev <= today) ? finPrev : today;
+  if (disponible) end = finReelle || (finPrev && finPrev <= today ? finPrev : today);
   else end = today;
   if (end < start) end = start;
   const jours = daysBetweenInclusive(start, end);
   const joursPrev = finPrev ? daysBetweenInclusive(start, finPrev) : null;
-  return { start: start, finPrev: finPrev, end: end, jours: jours, joursPrev: joursPrev, ongoing: !disponible };
+  return { start: start, finPrev: finPrev, finReelle: finReelle, end: end, jours: jours, joursPrev: joursPrev, ongoing: !disponible };
 }
 
-// Compte, pour un joueur, les jours distincts par statut sur la période filtrée
+// Liste les dates (AAAA-MM-JJ) couvertes par l'indisponibilité d'une fiche,
+// éventuellement restreintes à une période (fonction inRange)
+function ficheInjuryDates(b, inRange) {
+  const ind = computeFicheIndispo(b);
+  if (!ind || ind.jours == null) return [];
+  const out = [];
+  const cur = new Date(ind.start + 'T00:00:00');
+  const end = new Date(ind.end + 'T00:00:00');
+  let guard = 0;
+  while (cur <= end && guard < 1500) {
+    const ds = fmtYMD(cur);
+    if (!inRange || inRange(ds)) out.push(ds);
+    cur.setDate(cur.getDate() + 1);
+    guard++;
+  }
+  return out;
+}
+
+// Compte, pour un joueur, les jours distincts par statut sur la période filtrée.
+// Les jours "blessure" intègrent aussi les fiches blessure déclarées (union, sans double comptage).
 function playerStatusDayCounts(joueur, inRange) {
   const sets = { REST: new Set(), INJURY: new Set(), SICK: new Set(), ABSENT: new Set(), SUSPENDED: new Set() };
   state.bdd_ent.forEach(e => {
     if (e.joueur !== joueur || !inRange(e.date)) return;
     e.seances.forEach(s => { if (sets[s]) sets[s].add(e.date); });
+  });
+  (state.bdd_blessures || []).filter(b => b.joueur === joueur).forEach(b => {
+    ficheInjuryDates(b, inRange).forEach(d => sets.INJURY.add(d));
   });
   const out = {}; Object.keys(sets).forEach(k => out[k] = sets[k].size);
   return out;
@@ -7306,11 +7385,16 @@ function renderInjuryIndividual() {
       }
       const retour = ind.finPrev ? formatDateFR(ind.finPrev) : '—';
       const idAttr = "'" + String(b.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+      const term = (st !== 'disponible' && canWrite())
+        ? '<button class="btn btn-success" style="padding:4px 8px;" onclick="terminerBlessure(' + idAttr + ')">✅ Terminer</button> '
+        : '';
       html += '<tr><td>' + (b.date_blessure ? formatDateFR(b.date_blessure) : '—') + '</td>' +
         '<td>' + (b.zone || '—') + '</td><td>' + cote + '</td>' +
         '<td><span class="badge" style="background:' + stColor + '22;color:' + stColor + ';">' + stLabel + '</span></td>' +
         '<td>' + joursTxt + '</td><td>' + retour + '</td>' +
-        '<td><button class="btn btn-secondary" style="padding:4px 8px; white-space:nowrap;" onclick="openFicheResume(' + idAttr + ')">📄 Résumé</button></td></tr>';
+        '<td style="white-space:nowrap;">' + term +
+          '<button class="btn btn-secondary" style="padding:4px 8px;" onclick="openFicheResume(' + idAttr + ')">📄 Résumé</button>' +
+        '</td></tr>';
     });
     const totalFiche = fiches.reduce((a, b) => { const i = computeFicheIndispo(b); return a + (i.jours || 0); }, 0);
     html += '</tbody></table></div>';
@@ -7362,6 +7446,7 @@ function openFicheResume(id) {
   html += line('Début blessure', b.date_blessure ? formatDateFR(b.date_blessure) : '');
   html += line('Début réathlétisation', d.debut_reathle ? formatDateFR(d.debut_reathle) : '');
   html += line('Fin réathlé. prévue', d.fin_reathle ? formatDateFR(d.fin_reathle) : '');
+  html += line('Fin réelle (terminée)', d.date_fin ? formatDateFR(d.date_fin) : '');
   html += line('Durée indispo. prév.', b.duree_indispo ? escapeHtml(b.duree_indispo) : '');
   html += line('Re-blessure', d.re_blessure ? (d.re_blessure === 'oui' ? 'Oui' : 'Non') : '');
   if (d.description) {
