@@ -11601,9 +11601,10 @@ function showPainDetail(date, joueur) {
     '<div id="pain-detail-svg-container" style="background:var(--bg-elevated); border-radius:10px; padding:16px; overflow-x:auto;">' + svgHtml + '</div>' +
     painListHtml +
     (h.pain_notes ? '<div style="margin-top:16px; background:var(--bg-elevated); padding:12px 16px; border-left:3px solid var(--accent); border-radius:6px;"><div style="color:var(--text-dim); font-size:11px; text-transform:uppercase;">Notes du joueur</div><div style="margin-top:4px; font-size:14px;">' + escapeHtml(h.pain_notes) + '</div></div>' : '') +
-  '</div>';
+  '</div>' +
+  '<div id="pain-zone-tooltip" style="position:fixed; z-index:10000; pointer-events:none; display:none; background:#0f172a; color:#fff; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; border:1px solid var(--accent); white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,0.4);"></div>';
 
-  // Marquer les zones sélectionnées dans le clone + tooltip au survol (nom de la zone)
+  // Marquer les zones sélectionnées dans le clone + tooltip flottant au survol (nom de la zone)
   setTimeout(() => {
     const cont = document.getElementById('pain-detail-svg-container');
     if (!cont) return;
@@ -11612,14 +11613,25 @@ function showPainDetail(date, joueur) {
       const selected = locations.includes(z);
       // Le survol doit rester actif pour afficher le nom de la zone (mais aucun clic ne modifie les données)
       el.style.pointerEvents = '';
-      el.style.cursor = selected ? 'help' : 'default';
+      el.style.cursor = 'default';
       if (selected) el.classList.add('selected');
       else el.classList.remove('selected');
-      // Tooltip natif : nom de la zone au survol de la souris
-      let title = el.querySelector('title');
-      if (!title) { title = document.createElementNS('http://www.w3.org/2000/svg', 'title'); el.insertBefore(title, el.firstChild); }
-      title.textContent = translatePainLabel(el.getAttribute('data-label') || z);
     });
+    // Tooltip flottant qui suit la souris et affiche le nom de la zone survolée
+    const tip = document.getElementById('pain-zone-tooltip');
+    cont.addEventListener('mousemove', (e) => {
+      if (!tip) return;
+      const m = e.target.closest('.muscle');
+      if (m) {
+        tip.textContent = translatePainLabel(m.getAttribute('data-label') || m.getAttribute('data-zone'));
+        tip.style.display = 'block';
+        tip.style.left = (e.clientX + 14) + 'px';
+        tip.style.top = (e.clientY + 14) + 'px';
+      } else {
+        tip.style.display = 'none';
+      }
+    });
+    cont.addEventListener('mouseleave', () => { if (tip) tip.style.display = 'none'; });
   }, 0);
 
   // Fermer au clic hors modal
