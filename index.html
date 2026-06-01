@@ -791,7 +791,7 @@
       </div>
 
       <div class="form-row">
-        <div><label>Date</label><input type="date" id="sp-date" /></div>
+        <div><label>Date</label><input type="date" id="sp-date" onchange="updateSpRecurrencePreview()" /></div>
         <div><label>Type</label><input type="text" id="sp-type" placeholder="Ex: Course, Renforcement" list="sp-type-list" />
           <datalist id="sp-type-list"><option value="Course"></option><option value="Renforcement"></option><option value="Récupération"></option><option value="Mobilité"></option><option value="Technique individuelle"></option><option value="Routine physique"></option></datalist>
         </div>
@@ -826,6 +826,64 @@
         <label style="display:block; margin-bottom:6px;">Sélectionne les joueurs</label>
         <div id="sp-cible-players" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
       </div>
+      <!-- ── RÉCURRENCE ── -->
+      <div style="border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:12px; background:var(--bg-elevated);">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; font-size:13px; margin-bottom:0;">
+          <input type="checkbox" id="sp-recurrence-enabled" onchange="onSpRecurrenceChange()" style="width:16px; height:16px; cursor:pointer;" />
+          🔁 Répéter cette séance
+        </label>
+        <div id="sp-recurrence-options" style="display:none; margin-top:12px;">
+          <div class="form-row" style="margin-bottom:10px;">
+            <div>
+              <label>Fréquence</label>
+              <select id="sp-recurrence-mode" onchange="onSpRecurrenceModeChange()" style="min-width:180px;">
+                <option value="daily">Chaque jour</option>
+                <option value="weekly" selected>Chaque semaine</option>
+                <option value="every2">1 jour sur 2</option>
+                <option value="weekdays">Jours précis de la semaine</option>
+                <option value="custom">Tous les N jours</option>
+              </select>
+            </div>
+            <div id="sp-recurrence-custom-wrap" style="display:none;">
+              <label>Tous les (jours)</label>
+              <input type="number" id="sp-recurrence-interval" min="1" max="365" value="7" style="width:80px;" />
+            </div>
+          </div>
+          <!-- Jours précis de la semaine -->
+          <div id="sp-recurrence-weekdays-wrap" style="display:none; margin-bottom:10px;">
+            <label style="display:block; margin-bottom:6px; font-size:12px; color:var(--text-dim);">Sélectionne les jours</label>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button type="button" class="btn btn-secondary sp-weekday-btn" data-day="1" onclick="toggleSpWeekday(this)" style="padding:5px 10px; font-size:12px;">Lun</button>
+              <button type="button" class="btn btn-secondary sp-weekday-btn" data-day="2" onclick="toggleSpWeekday(this)" style="padding:5px 10px; font-size:12px;">Mar</button>
+              <button type="button" class="btn btn-secondary sp-weekday-btn" data-day="3" onclick="toggleSpWeekday(this)" style="padding:5px 10px; font-size:12px;">Mer</button>
+              <button type="button" class="btn btn-secondary sp-weekday-btn" data-day="4" onclick="toggleSpWeekday(this)" style="padding:5px 10px; font-size:12px;">Jeu</button>
+              <button type="button" class="btn btn-secondary sp-weekday-btn" data-day="5" onclick="toggleSpWeekday(this)" style="padding:5px 10px; font-size:12px;">Ven</button>
+              <button type="button" class="btn btn-secondary sp-weekday-btn" data-day="6" onclick="toggleSpWeekday(this)" style="padding:5px 10px; font-size:12px;">Sam</button>
+              <button type="button" class="btn btn-secondary sp-weekday-btn" data-day="0" onclick="toggleSpWeekday(this)" style="padding:5px 10px; font-size:12px;">Dim</button>
+            </div>
+          </div>
+          <!-- Fin de la récurrence -->
+          <div class="form-row" style="margin-bottom:0;">
+            <div>
+              <label>Fin de la répétition</label>
+              <select id="sp-recurrence-end-type" onchange="onSpRecurrenceEndChange()" style="min-width:160px;">
+                <option value="date">Jusqu'à une date</option>
+                <option value="count">Nombre d'occurrences</option>
+              </select>
+            </div>
+            <div id="sp-recurrence-end-date-wrap">
+              <label>Date de fin</label>
+              <input type="date" id="sp-recurrence-end-date" />
+            </div>
+            <div id="sp-recurrence-end-count-wrap" style="display:none;">
+              <label>Nombre de séances</label>
+              <input type="number" id="sp-recurrence-count" min="2" max="200" value="8" style="width:80px;" />
+            </div>
+          </div>
+          <div id="sp-recurrence-preview" style="margin-top:10px; font-size:12px; color:var(--accent-light);"></div>
+        </div>
+      </div>
+
       <button class="btn" onclick="createSeancePlan()">📋 Planifier la séance</button>
     </div>
 
@@ -2949,6 +3007,110 @@ function renderRoutineDisplay(data) {
   return h;
 }
 
+// ── RÉCURRENCE ────────────────────────────────────────────────────────────────
+function onSpRecurrenceChange() {
+  const enabled = document.getElementById('sp-recurrence-enabled').checked;
+  document.getElementById('sp-recurrence-options').style.display = enabled ? '' : 'none';
+  if (enabled) updateSpRecurrencePreview();
+}
+
+function onSpRecurrenceModeChange() {
+  const mode = document.getElementById('sp-recurrence-mode').value;
+  document.getElementById('sp-recurrence-custom-wrap').style.display   = (mode === 'custom')   ? '' : 'none';
+  document.getElementById('sp-recurrence-weekdays-wrap').style.display = (mode === 'weekdays') ? '' : 'none';
+  updateSpRecurrencePreview();
+}
+
+function onSpRecurrenceEndChange() {
+  const type = document.getElementById('sp-recurrence-end-type').value;
+  document.getElementById('sp-recurrence-end-date-wrap').style.display  = (type === 'date')  ? '' : 'none';
+  document.getElementById('sp-recurrence-end-count-wrap').style.display = (type === 'count') ? '' : 'none';
+  updateSpRecurrencePreview();
+}
+
+function toggleSpWeekday(btn) {
+  btn.classList.toggle('active');
+  btn.style.background  = btn.classList.contains('active') ? 'var(--accent)' : '';
+  btn.style.color       = btn.classList.contains('active') ? '#fff' : '';
+  btn.style.borderColor = btn.classList.contains('active') ? 'var(--accent)' : '';
+  updateSpRecurrencePreview();
+}
+
+function buildRecurrenceDates(startDateStr) {
+  if (!startDateStr) return [];
+  const mode    = document.getElementById('sp-recurrence-mode').value;
+  const endType = document.getElementById('sp-recurrence-end-type').value;
+
+  const start = new Date(startDateStr + 'T12:00:00');
+  const dates = [startDateStr];  // on inclut toujours la date de départ
+
+  const toISO = d => d.toISOString().split('T')[0];
+  const addDays = (d, n) => new Date(d.getTime() + n * 86400000);
+
+  if (endType === 'date') {
+    const endStr = document.getElementById('sp-recurrence-end-date').value;
+    if (!endStr || endStr <= startDateStr) return dates;
+    const end = new Date(endStr + 'T12:00:00');
+
+    if (mode === 'daily') {
+      let cur = addDays(start, 1);
+      while (cur <= end) { dates.push(toISO(cur)); cur = addDays(cur, 1); }
+    } else if (mode === 'weekly') {
+      let cur = addDays(start, 7);
+      while (cur <= end) { dates.push(toISO(cur)); cur = addDays(cur, 7); }
+    } else if (mode === 'every2') {
+      let cur = addDays(start, 2);
+      while (cur <= end) { dates.push(toISO(cur)); cur = addDays(cur, 2); }
+    } else if (mode === 'custom') {
+      const n = Math.max(1, parseInt(document.getElementById('sp-recurrence-interval').value) || 1);
+      let cur = addDays(start, n);
+      while (cur <= end) { dates.push(toISO(cur)); cur = addDays(cur, n); }
+    } else if (mode === 'weekdays') {
+      const activeDays = Array.from(document.querySelectorAll('.sp-weekday-btn.active')).map(b => parseInt(b.dataset.day));
+      if (activeDays.length === 0) return dates;
+      let cur = addDays(start, 1);
+      while (cur <= end) {
+        if (activeDays.includes(cur.getDay())) dates.push(toISO(cur));
+        cur = addDays(cur, 1);
+      }
+    }
+  } else {
+    const count = Math.max(2, Math.min(200, parseInt(document.getElementById('sp-recurrence-count').value) || 8));
+    if (mode === 'daily') {
+      for (let i = 1; i < count; i++) dates.push(toISO(addDays(start, i)));
+    } else if (mode === 'weekly') {
+      for (let i = 1; i < count; i++) dates.push(toISO(addDays(start, i * 7)));
+    } else if (mode === 'every2') {
+      for (let i = 1; i < count; i++) dates.push(toISO(addDays(start, i * 2)));
+    } else if (mode === 'custom') {
+      const n = Math.max(1, parseInt(document.getElementById('sp-recurrence-interval').value) || 1);
+      for (let i = 1; i < count; i++) dates.push(toISO(addDays(start, i * n)));
+    } else if (mode === 'weekdays') {
+      const activeDays = Array.from(document.querySelectorAll('.sp-weekday-btn.active')).map(b => parseInt(b.dataset.day));
+      if (activeDays.length === 0) return dates;
+      let cur = addDays(start, 1);
+      while (dates.length < count) {
+        if (activeDays.includes(cur.getDay())) dates.push(toISO(cur));
+        cur = addDays(cur, 1);
+        if (dates.length > 500) break; // sécurité
+      }
+    }
+  }
+  return [...new Set(dates)].sort(); // dédoublonner + trier
+}
+
+function updateSpRecurrencePreview() {
+  const previewEl = document.getElementById('sp-recurrence-preview');
+  if (!previewEl) return;
+  const startDate = document.getElementById('sp-date').value;
+  if (!startDate) { previewEl.textContent = '← Choisis d\'abord une date de départ'; return; }
+  const dates = buildRecurrenceDates(startDate);
+  if (dates.length <= 1) { previewEl.textContent = 'Aucune répétition générée avec ces paramètres.'; return; }
+  const fmt = d => new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', {day:'numeric', month:'short'});
+  const preview = dates.slice(0, 5).map(fmt).join(' · ') + (dates.length > 5 ? ` · … (${dates.length} séances au total)` : ` (${dates.length} séances)`);
+  previewEl.textContent = '📅 ' + preview;
+}
+
 function onSpCibleChange() {
   const type = document.getElementById('sp-cible-type').value;
   document.getElementById('sp-cible-group-wrap').style.display = (type === 'group') ? '' : 'none';
@@ -3070,23 +3232,43 @@ async function createSeancePlan() {
   };
   let data, error;
   if (spEditingId) {
-    // Mode édition : ne pas écraser la pièce jointe si l'utilisateur n'en a pas fourni de nouvelle
+    // Mode édition : jamais de récurrence
     const updateRow = Object.assign({}, row);
-    if (!spFichierData) {
-      delete updateRow.piece_jointe;
-      delete updateRow.piece_jointe_nom;
-    }
-    delete updateRow.auteur; // ne pas remplacer l'auteur original
+    if (!spFichierData) { delete updateRow.piece_jointe; delete updateRow.piece_jointe_nom; }
+    delete updateRow.auteur;
     ({ data, error } = await sb.from('seances_planifiees').update(updateRow).eq('id', spEditingId).select());
     if (!error && data && data[0]) {
       const idx = state.bdd_seances_plan.findIndex(s => s.id === spEditingId);
       if (idx >= 0) state.bdd_seances_plan[idx] = Object.assign({}, state.bdd_seances_plan[idx], data[0]);
     }
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
   } else {
-    ({ data, error } = await sb.from('seances_planifiees').insert(row).select());
-    if (!error && data && data[0]) state.bdd_seances_plan.unshift(data[0]);
+    // Récurrence : générer les dates
+    const recEnabled = document.getElementById('sp-recurrence-enabled')?.checked;
+    const allDates = recEnabled ? buildRecurrenceDates(date) : [date];
+
+    if (allDates.length > 1) {
+      // Insertion en lot
+      const rows = allDates.map(d => Object.assign({}, row, { date: d }));
+      ({ data, error } = await sb.from('seances_planifiees').insert(rows).select());
+      if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+      if (data) data.forEach(r => state.bdd_seances_plan.unshift(r));
+    } else {
+      ({ data, error } = await sb.from('seances_planifiees').insert(row).select());
+      if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+      if (data && data[0]) state.bdd_seances_plan.unshift(data[0]);
+    }
+    // Réinitialiser la récurrence
+    const recCheck = document.getElementById('sp-recurrence-enabled');
+    if (recCheck) { recCheck.checked = false; onSpRecurrenceChange(); }
+    document.querySelectorAll('.sp-weekday-btn.active').forEach(b => {
+      b.classList.remove('active'); b.style.background = ''; b.style.color = ''; b.style.borderColor = '';
+    });
+    const previewEl = document.getElementById('sp-recurrence-preview');
+    if (previewEl) previewEl.textContent = '';
+    const nCreated = data ? data.length : allDates.length;
+    toast(nCreated > 1 ? `✅ ${nCreated} séances planifiées` : 'Séance planifiée créée', 'success');
   }
-  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
 
   // Réinitialiser le formulaire
   document.getElementById('sp-type').value = '';
@@ -3100,7 +3282,7 @@ async function createSeancePlan() {
   if (fLibreReset) { fLibreReset.checked = true; onSpFormatChange(); }
   spRoutineReset();
 
-  toast(spEditingId ? 'Séance mise à jour' : 'Séance planifiée créée', 'success');
+  if (spEditingId) toast('Séance mise à jour', 'success');
   spEditingId = null;
   // Restaurer le bouton et le titre
   const btn = document.querySelector('#calendar-plan-card .btn');
