@@ -573,6 +573,7 @@
   .role-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; margin-left:8px; }
   .role-admin { background:#7c2d12; color:#fed7aa; }
   .role-staff { background:#1e3a8a; color:#93c5fd; }
+  .role-médical { background:#065f46; color:#6ee7b7; }
   .role-lecteur { background:#374151; color:#d1d5db; }
   .readonly-overlay { opacity: 0.6; pointer-events: none; }
 
@@ -623,6 +624,7 @@
   <button class="nav-btn" data-view="gps">📡 Données GPS</button>
   <button class="nav-btn" data-view="injury">🏥 Disponibilité</button>
   <button class="nav-btn staff-only-btn" data-view="medical" id="nav-medical-btn">🩺 Médical</button>
+  <button class="nav-btn médical-only-btn" data-view="injury-entry" style="display:none;">🩹 Saisie blessures</button>
   <div class="nav-dropdown" id="nav-gestion-dropdown">
     <button type="button" class="nav-btn nav-dropdown-toggle" id="nav-gestion-toggle" onclick="toggleGestionMenu(event)">🛠️ Gestion <span style="font-size:10px;">▾</span></button>
     <div class="nav-dropdown-menu" id="nav-gestion-menu">
@@ -2641,6 +2643,8 @@ async function loadProfileAndStart() {
     return;
   }
   currentRole = profile.role;
+  const MEDICAL_EMAILS = ['christian@tegg.fr', 'lucasm@tegg.fr'];
+  if (MEDICAL_EMAILS.includes((currentUser.email || '').toLowerCase())) currentRole = 'médical';
   currentJoueurNom = profile.joueur_nom;
   // Normaliser le nom (supprimer espaces superflus) pour fiabiliser le lien compte ↔ joueur
   if (currentJoueurNom) currentJoueurNom = String(currentJoueurNom).trim();
@@ -3902,6 +3906,16 @@ function applyRoleRestrictions() {
       if (ovView) ovView.classList.add('active');
       renderPlayerOverview();
     }
+  } else if (currentRole === 'médical') {
+    // Médical : vue dédiée — pas de Charge RPE ni Données GPS, Saisie blessures en direct
+    document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
+    if (gestionDropdown) gestionDropdown.style.display = 'none';
+    const btnExport = document.getElementById('btn-export-json');
+    if (btnExport) btnExport.style.display = 'none';
+    // Masquer Charge RPE et Données GPS
+    document.querySelectorAll('.nav-btn[data-view="rpe"], .nav-btn[data-view="gps"]').forEach(b => b.style.display = 'none');
+    // Afficher le bouton Saisie blessures direct
+    document.querySelectorAll('.médical-only-btn').forEach(b => b.style.display = '');
   } else {
     // Staff/admin : cacher les onglets joueur, réafficher le menu Gestion
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
@@ -3912,7 +3926,7 @@ function applyRoleRestrictions() {
 }
 
 function canWrite() {
-  return currentRole === 'admin' || currentRole === 'staff';
+  return currentRole === 'admin' || currentRole === 'staff' || currentRole === 'médical';
 }
 
 // Les lecteurs peuvent saisir leurs propres RPE
