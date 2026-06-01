@@ -3507,12 +3507,12 @@ function renderSeancesPlanHistory() {
           '<div style="font-size:11px; color:var(--text-dim); margin-top:3px;">' + spConsignesResume(sp.consignes) + '</div>' +
           '<div style="font-size:11px; color:var(--green); margin-top:4px;">✓ Réalisée par ' + faits + '/' + targets.length + '</div>' +
         '</div>' +
-        '<div style="display:flex; gap:4px; flex-direction:column;">' +
+        (currentRole !== 'direction' ? '<div style="display:flex; gap:4px; flex-direction:column;">' +
           (isEditing
             ? '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="cancelEditSeancePlan()">Annuler</button>'
             : '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="editSeancePlan(\'' + sp.id + '\')">✏️ Modifier</button>') +
           '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px; color:#f87171;" onclick="deleteSeancePlan(\'' + sp.id + '\')">🗑️ Supprimer</button>' +
-        '</div>' +
+        '</div>' : '') +
       '</div>' +
     '</div>';
   }
@@ -3536,6 +3536,31 @@ function renderSeancesPlanHistory() {
 // ============================================================
 let spCardIndex = 0;       // index du joueur affiché dans la vue carte du modal staff
 let spModalCurrentJoueur = null;
+
+function openPieceJointe(spId) {
+  const sp = (state.bdd_seances_plan || []).find(x => x.id === spId);
+  if (!sp || !sp.piece_jointe) return;
+  try {
+    const dataUrl = sp.piece_jointe;
+    const parts   = dataUrl.split(',');
+    const mime    = parts[0].split(':')[1].split(';')[0];          // ex: application/pdf
+    const binary  = atob(parts[1]);
+    const ab      = new ArrayBuffer(binary.length);
+    const ia      = new Uint8Array(ab);
+    for (let i = 0; i < binary.length; i++) ia[i] = binary.charCodeAt(i);
+    const blob    = new Blob([ab], { type: mime });
+    const url     = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    // Libérer la mémoire après ouverture
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  } catch(e) {
+    // Fallback : tentative directe (desktop)
+    const a = document.createElement('a');
+    a.href = sp.piece_jointe;
+    a.download = sp.piece_jointe_nom || 'document.pdf';
+    a.click();
+  }
+}
 
 function openSeancePlanDetail(spId, joueur) {
   const sp = (state.bdd_seances_plan || []).find(x => x.id === spId);
@@ -3590,7 +3615,7 @@ function renderSeancePlanModal(spId, joueur) {
     if (sp.piece_jointe.indexOf('data:image') === 0) {
       html += '<img src="' + sp.piece_jointe + '" style="max-width:100%; border-radius:8px; margin-bottom:12px;" alt="illustration" />';
     } else if (sp.piece_jointe.indexOf('data:application/pdf') === 0) {
-      html += '<a href="' + sp.piece_jointe + '" download="' + escapeHtml(sp.piece_jointe_nom || 'document.pdf') + '" class="btn btn-secondary" style="display:inline-block; margin-bottom:12px;">📄 Ouvrir le PDF (' + escapeHtml(sp.piece_jointe_nom || 'document.pdf') + ')</a>';
+      html += '<button onclick="openPieceJointe(\'' + sp.id + '\')" class="btn btn-secondary" style="display:inline-block; margin-bottom:12px;">📄 Ouvrir le PDF (' + escapeHtml(sp.piece_jointe_nom || 'document.pdf') + ')</button>';
     }
   }
   // === Zone d'action principale ===
@@ -4215,11 +4240,14 @@ function applyRoleRestrictions() {
     });
     // Afficher uniquement les boutons direction
     document.querySelectorAll('.direction-only-btn').forEach(b => b.style.display = '');
-    // Masquer les cartes inutiles dans la vue Calendrier (planification)
-    ['calendar-plan-card', 'calendar-plan-history-card'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = 'none';
-    });
+    // Masquer uniquement le formulaire de création (la liste des séances reste visible)
+    const planFormCard = document.getElementById('calendar-plan-card');
+    if (planFormCard) planFormCard.style.display = 'none';
+    // Afficher explicitement la carte des séances planifiées et changer le filtre par défaut sur "Toutes"
+    const histFormCard = document.getElementById('calendar-plan-history-card');
+    if (histFormCard) histFormCard.style.display = '';
+    const histFilter = document.getElementById('sp-hist-filter');
+    if (histFilter && histFilter.value === 'future') histFilter.value = 'all';
     // Masquer import/historique GPS
     ['gps-import-toggle', 'gps-history-toggle', 'gps-import-panel', 'gps-history-panel'].forEach(id => {
       const el = document.getElementById(id);
@@ -5954,7 +5982,8 @@ function renderCalendar() {
   // Initialiser le formulaire de planification (staff uniquement)
   const planCard = document.getElementById('calendar-plan-card');
   const histCard = document.getElementById('calendar-plan-history-card');
-  const isStaff = (currentRole === 'admin' || currentRole === 'staff');
+  const isStaff     = (currentRole === 'admin' || currentRole === 'staff');
+  const isDirection = (currentRole === 'direction');
   if (planCard) {
     planCard.style.display = isStaff ? '' : 'none';
     if (isStaff) {
@@ -5966,11 +5995,12 @@ function renderCalendar() {
     }
   }
   if (histCard) {
-    histCard.style.display = isStaff ? '' : 'none';
-    if (isStaff) renderSeancesPlanHistory();
+    // Direction : voir les séances planifiées (lecture seule) mais pas le formulaire de création
+    histCard.style.display = (isStaff || isDirection) ? '' : 'none';
+    if (isStaff || isDirection) renderSeancesPlanHistory();
   }
 
-  const groupFilter = document.getElementById('cal-filter-group').value;
+  const groupFilter = (document.getElementById('cal-filter-group') || {}).value || '';
   let players = state.joueurs.map(j => j.nom);
   if (groupFilter) players = players.filter(p => getJoueurInfo(p).groupe === groupFilter);
   players = players.sort();
