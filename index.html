@@ -3674,7 +3674,16 @@ function renderSeancePlanModal(spId, joueur) {
         html += '<div style="background:rgba(239,68,68,0.15); color:#fca5a5; padding:12px 14px; border-radius:8px; font-size:13px; margin-bottom:8px;">🔒 ' + tr('The 24h window to validate this session has closed. Please ask your coach.', 'Le délai de 24 h pour valider cette séance est passé. Demande à ton coach.') + '</div>';
         html += '<button class="btn" disabled style="opacity:0.5; cursor:not-allowed;">✓ ' + tr('Mark as done', 'Marquer comme fait') + '</button>';
       } else {
-        html += '<button class="btn" onclick="toggleSeancePlanFaite(\'' + spId + '\', true)">✓ ' + tr('Mark as done', 'Marquer comme fait') + '</button>';
+        // Validation obligatoirement liée à la note RPE : choisir une note = valider la séance
+        html += '<div id="sp-rpe-zone" style="margin:0 0 4px; padding:12px; background:var(--bg-elevated); border-radius:8px;">';
+        html += '<div style="font-size:13px; font-weight:600; margin-bottom:8px;">' + tr('To validate this session, rate your perceived effort (RPE):', 'Pour valider cette séance, indique ton effort ressenti (RPE) :') + '</div>';
+        html += '<div style="display:flex; flex-wrap:wrap; gap:4px;">';
+        for (let n = 0; n <= 10; n++) {
+          html += '<button onclick="validateSeanceWithRPE(\'' + spId + '\', ' + n + ')" style="width:38px; height:38px; border-radius:8px; border:1px solid var(--border); background:var(--bg-card); color:var(--text); font-weight:700; cursor:pointer;">' + n + '</button>';
+        }
+        html += '</div>';
+        html += '<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">' + tr('0 = full rest · 10 = maximal effort. The session is validated as soon as you pick a value.', '0 = repos total · 10 = effort maximal. La séance est validée dès que tu choisis une note.') + '</div>';
+        html += '</div>';
       }
     } else {
       html += '<div style="color:var(--text-dim); font-size:13px;">Le joueur n\'a pas encore marqué cette séance comme faite.</div>';
@@ -3763,6 +3772,12 @@ async function toggleSeancePlanFaite(spId, faire) {
   if (!joueur) return;
   // Sécurité : un lecteur ne peut cocher que pour lui-même
   if (currentRole === 'lecteur' && joueur !== currentJoueurNom) { toast('Action non autorisée', 'error'); return; }
+  // Règle : un joueur ne peut PAS valider une séance sans note RPE.
+  // La validation joueur passe désormais par validateSeanceWithRPE (fait + RPE en un geste).
+  if (currentRole === 'lecteur' && faire) {
+    toast(tr('Please rate your perceived effort (RPE) to validate.', 'Indique ta note RPE pour valider la séance.'), 'error');
+    return;
+  }
   // Fenêtre de validation : seul le joueur est soumis aux règles de timing
   if (currentRole === 'lecteur' && faire) {
     const sp = (state.bdd_seances_plan || []).find(x => x.id === spId);
@@ -3793,6 +3808,42 @@ async function toggleSeancePlanFaite(spId, faire) {
   if (getCurrentView() === 'player-seances') renderPlayerSeances();
   updateSeancesBadge();
   toast(faire ? 'Séance faite ✓ Indique ton effort ressenti (RPE)' : 'Marquage annulé', 'success');
+}
+
+// Le joueur valide une séance planifiée : la note RPE est OBLIGATOIRE.
+// L'insertion enregistre en une seule fois "fait" + RPE — pas de validation sans note.
+async function validateSeanceWithRPE(spId, valeur) {
+  const joueur = spModalCurrentJoueur;
+  if (!joueur) return;
+  if (currentRole === 'lecteur' && joueur !== currentJoueurNom) { toast('Action non autorisée', 'error'); return; }
+  const v = parseInt(valeur, 10);
+  if (isNaN(v) || v < 0 || v > 10) { toast(tr('Please pick an RPE between 0 and 10.', 'Choisis une note RPE entre 0 et 10.'), 'error'); return; }
+  // Fenêtre de validation côté joueur uniquement (jour J + 24 h)
+  if (currentRole === 'lecteur') {
+    const sp = (state.bdd_seances_plan || []).find(x => x.id === spId);
+    if (sp) {
+      const status = getValidationWindowStatus(sp.date);
+      if (status === 'too_early') {
+        toast(tr('Please wait for the planned day to validate this session.', 'Merci de respecter le timing du planning : tu pourras valider cette séance le jour prévu.'), 'error');
+        return;
+      }
+      if (status === 'expired') {
+        toast(tr('The 24h window has closed. Please ask your coach.', 'Le délai de 24 h est passé. Demande à ton coach de valider la séance.'), 'error');
+        return;
+      }
+    }
+  }
+  // Anti double-validation
+  if (seancePlanEstFaite(spId, joueur)) { renderSeancePlanModal(spId, joueur); return; }
+  const row = { seance_id: spId, joueur: joueur, org: currentOrg, rpe: v };
+  const { data, error } = await sb.from('seances_planifiees_faites').insert(row).select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (data && data[0]) state.bdd_seances_plan_faites.push(data[0]);
+  renderSeancePlanModal(spId, joueur);
+  if (getCurrentView() === 'calendar') renderCalendar();
+  if (getCurrentView() === 'player-seances') renderPlayerSeances();
+  updateSeancesBadge();
+  toast(tr('Session validated ✓ RPE ', 'Séance validée ✓ RPE ') + v + '/10', 'success');
 }
 
 // Statut de la fenêtre de validation d'une séance planifiée pour le joueur :
