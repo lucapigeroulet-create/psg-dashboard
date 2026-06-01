@@ -2732,7 +2732,7 @@ async function loadProfileAndStart() {
     return;
   }
   currentRole = profile.role;
-  const MEDICAL_EMAILS = ['christian@tegg.fr', 'lucasm@tegg.fr'];
+  const MEDICAL_EMAILS = ['christian@tegg.fr', 'lucasm@psg.fr'];
   if (MEDICAL_EMAILS.includes((currentUser.email || '').toLowerCase())) currentRole = 'médical';
   const DIRECTION_UUIDS = ['81c45962-3ba8-49aa-8e5d-0e9d8963d53f', 'c067d9aa-1193-41e4-bf0d-66c2ef511f02'];
   if (DIRECTION_UUIDS.includes(currentUser.id)) { currentRole = 'direction'; profile.org = 'TEGG'; }
@@ -2754,7 +2754,7 @@ async function loadProfileAndStart() {
   }
 
   // Restriction : certains comptes sont limités au dashboard PSG uniquement
-  const PSG_ONLY_EMAILS = ['lucasm@tegg.fr'];
+  const PSG_ONLY_EMAILS = ['lucasm@psg.fr'];
   if (PSG_ONLY_EMAILS.includes((currentUser.email || '').toLowerCase())) {
     window.currentAllowedOrgs = ['PSG'];
     currentOrg = 'PSG';
