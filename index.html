@@ -6270,6 +6270,7 @@ function handleGPSCSV(e) {
         maxdecel: gpsFindCol(headers, ['max deceleration', 'deceleration', 'décél']),
         maxaccel: gpsFindCol(headers, ['max acceleration', 'acceleration', 'accél']),
         decelCountHigh: gpsFindCol(headers, ['deceleration zone count: > 4', 'deceleration zone count: >4']),
+        accelCountHigh: gpsFindCol(headers, ['accelerations zone count: > 4', 'acceleration zone count: > 4', 'accelerations zone count: >4']),
         powerplays: gpsFindCol(headers, ['power plays', 'power play']),
         impacts: gpsFindCol(headers, ['impacts', 'impact']),
         workratio: gpsFindCol(headers, ['work ratio']),
@@ -6315,6 +6316,7 @@ function handleGPSCSV(e) {
           max_decel: gpsNum(r[cols.maxdecel]),
           max_accel: gpsNum(r[cols.maxaccel]),
           decel_count_high: cols.decelCountHigh ? Math.round(gpsNum(r[cols.decelCountHigh]) || 0) : null,
+          acc_count_high: cols.accelCountHigh ? Math.round(gpsNum(r[cols.accelCountHigh]) || 0) : null,
           power_plays: cols.powerplays ? Math.round(gpsNum(r[cols.powerplays]) || 0) : null,
           impacts: cols.impacts ? Math.round(gpsNum(r[cols.impacts]) || 0) : null,
           work_ratio: gpsNum(r[cols.workratio]),
@@ -6678,16 +6680,177 @@ function saveBestMatchData() {
   } catch(e) {}
 }
 
+function _findBestMatchEntry(player) {
+  const store = state.bdd_best_match || {};
+  // Correspondance exacte d'abord, puis insensible à la casse
+  return store[player]
+    || store[gpsCapitalize(player)]
+    || Object.entries(store).find(([k]) => k.toLowerCase() === player.toLowerCase())?.[1]
+    || null;
+}
+
 function getBestMatchRow(player) {
-  const bm = (state.bdd_best_match || {})[player];
+  const bm = _findBestMatchEntry(player);
   if (!bm) return null;
-  // Chercher d'abord split "all", sinon le premier enregistrement du match
+  // Métriques stockées directement (import CSV) → retourner comme ligne synthétique
+  if (bm.metrics) return bm.metrics;
+  // Sinon chercher dans bdd_gps par date + session_title
   const rows = state.bdd_gps.filter(r =>
     r.joueur === player &&
     r.date === bm.date &&
     (r.seance || r.session_title || '') === bm.session_title
   );
   return rows.find(r => (r.split_name || 'all').toLowerCase() === 'all') || rows[0] || null;
+}
+
+// Importe un CSV Catapult et stocke les métriques du meilleur match par joueur
+function onBestMatchClearCSV(player) {
+  if (!state.bdd_best_match) return;
+  // Supprimer toutes les clés qui correspondent à ce joueur (casse variable)
+  Object.keys(state.bdd_best_match).forEach(k => {
+    if (k.toLowerCase() === player.toLowerCase()) delete state.bdd_best_match[k];
+  });
+  saveBestMatchData();
+  renderBestMatch();
+}
+
+function parseBestMatchCSV(text) {
+  const parsed = gpsParseCSV(text);
+  const h = parsed.headers;
+  const cols = {
+    date:          gpsFindCol(h, ['date']),
+    session:       gpsFindCol(h, ['session title', 'session']),
+    split:         gpsFindCol(h, ['split name', 'split', 'period']),
+    player:        gpsFindCol(h, ['player name', 'player', 'nom', 'name']),
+    duration:      gpsFindCol(h, ['duration']),
+    distance:      gpsFindCol(h, ['distance (km)', 'total distance', 'distance']),
+    sprint:        gpsFindCol(h, ['sprint distance', 'sprint']),
+    hsr:           gpsFindCol(h, ['hsr', 'high speed']),
+    playerload:    gpsFindCol(h, ['player load', 'playerload']),
+    topspeed:      gpsFindCol(h, ['top speed', 'vitesse max', 'vmax']),
+    distmin:       gpsFindCol(h, ['distance per min', 'm/min']),
+    decelHigh:     gpsFindCol(h, ['deceleration zone count: > 4', 'deceleration zone count: >4']),
+    accelHigh:     gpsFindCol(h, ['accelerations zone count: > 4', 'acceleration zone count: > 4']),
+    powerplays:    gpsFindCol(h, ['power plays', 'power play']),
+    z3:            gpsFindCol(h, ['speed zone 3', 'zone 3']),
+    z4:            gpsFindCol(h, ['speed zone 4', 'zone 4']),
+    z5:            gpsFindCol(h, ['speed zone 5', 'zone 5']),
+  };
+  if (!cols.player) throw new Error('Colonne Player Name introuvable dans le CSV.');
+
+  const byPlayer = {};
+  parsed.rows.forEach(r => {
+    const player = cols.player ? gpsCapitalize(r[cols.player]) : null;
+    if (!player) return;
+    const splitName = (cols.split ? (r[cols.split] || 'all') : 'all').toString().trim().toLowerCase();
+    // Priorité au split "all" / "0"
+    const isAll = splitName === 'all' || splitName === '0';
+    if (byPlayer[player] && byPlayer[player]._isAll && !isAll) return;
+    if (byPlayer[player] && !byPlayer[player]._isAll && !isAll) return;
+
+    const durRaw = gpsNum(r[cols.duration]);
+    const durMin = durRaw !== null ? (durRaw > 300 ? Math.round(durRaw / 60) : durRaw) : null;
+    const z3v = gpsNum(r[cols.z3]) || 0;
+    const z4v = gpsNum(r[cols.z4]) || 0;
+    const z5v = gpsNum(r[cols.z5]) || 0;
+    let hsrVal = gpsNum(r[cols.hsr]);
+    if (hsrVal === null) { const s = z3v + z4v + z5v; hsrVal = s > 0 ? Math.round(s * 1000) : 0; }
+
+    byPlayer[player] = {
+      _isAll: isAll,
+      joueur:           player,
+      date:             cols.date ? gpsNormalizeDate(r[cols.date]) : null,
+      session_title:    cols.session ? r[cols.session] : null,
+      duree_min:        durMin,
+      distance_km:      gpsNum(r[cols.distance]),
+      sprint_dist_m:    gpsNum(r[cols.sprint]),
+      hsr:              hsrVal,
+      player_load:      gpsNum(r[cols.playerload]),
+      top_speed:        gpsNum(r[cols.topspeed]),
+      dist_per_min:     gpsNum(r[cols.distmin]),
+      decel_count_high: cols.decelHigh  ? Math.round(gpsNum(r[cols.decelHigh])  || 0) : null,
+      acc_count_high:   cols.accelHigh  ? Math.round(gpsNum(r[cols.accelHigh])  || 0) : null,
+      power_plays:      cols.powerplays ? Math.round(gpsNum(r[cols.powerplays]) || 0) : null,
+    };
+  });
+  return byPlayer;
+}
+
+function handleBestMatchCSV(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const byPlayer = parseBestMatchCSV(ev.target.result);
+      const players = Object.keys(byPlayer);
+      if (players.length === 0) { toast('Aucun joueur trouvé dans le CSV.', 'error'); return; }
+      if (!state.bdd_best_match) state.bdd_best_match = {};
+      players.forEach(p => {
+        const row = byPlayer[p];
+        state.bdd_best_match[p] = {
+          date: row.date,
+          session_title: row.session_title,
+          source: 'csv',
+          metrics: row
+        };
+      });
+      saveBestMatchData();
+      renderBestMatch();
+      toast('✅ Meilleur match importé pour ' + players.length + ' joueur(s) depuis le CSV.', 'success');
+    } catch(err) {
+      toast('Erreur parsing CSV : ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ── Scores composites Volume / Intensité ──────────────────────────────────────
+function _sumAccDec(row) {
+  const dec = gpsVal(row, 'decel_count_high') || 0;
+  const acc = (row.acc_count_high !== null && row.acc_count_high !== undefined)
+              ? (parseFloat(row.acc_count_high) || 0)
+              : dec; // fallback symétrique si acc manquant
+  return acc + dec;
+}
+
+function getVolumeScore(player, row) {
+  const bmRow = getBestMatchRow(player);
+  if (!bmRow) return null;
+  const pairs = [
+    [gpsVal(row, 'distance_km'),   gpsVal(bmRow, 'distance_km')],
+    [gpsVal(row, 'hsr'),           gpsVal(bmRow, 'hsr')],
+    [gpsVal(row, 'sprint_dist_m'), gpsVal(bmRow, 'sprint_dist_m')],
+    [_sumAccDec(row),              _sumAccDec(bmRow)],
+  ];
+  const valid = pairs.filter(([, b]) => b > 0);
+  if (valid.length === 0) return null;
+  const sum = valid.reduce((s, [c, b]) => s + c / b, 0);
+  return Math.round((sum / valid.length) * 100);
+}
+
+function getIntensityScore(player, row) {
+  const bmRow = getBestMatchRow(player);
+  if (!bmRow) return null;
+  const curDur = gpsVal(row,   'duree_min') || 1;
+  const bmDur  = gpsVal(bmRow, 'duree_min') || 1;
+  const pairs = [
+    [gpsVal(row, 'distance_km')   / curDur, gpsVal(bmRow, 'distance_km')   / bmDur],
+    [gpsVal(row, 'hsr')           / curDur, gpsVal(bmRow, 'hsr')           / bmDur],
+    [gpsVal(row, 'sprint_dist_m') / curDur, gpsVal(bmRow, 'sprint_dist_m') / bmDur],
+    [_sumAccDec(row)              / curDur, _sumAccDec(bmRow)              / bmDur],
+  ];
+  const valid = pairs.filter(([, b]) => b > 0);
+  if (valid.length === 0) return null;
+  const sum = valid.reduce((s, [c, b]) => s + c / b, 0);
+  return Math.round((sum / valid.length) * 100);
+}
+
+function scoreColor(pct) {
+  if (pct === null) return 'var(--text-dim)';
+  if (pct >= 85) return 'var(--green,#34d399)';
+  if (pct >= 65) return '#fbbf24';
+  return '#f87171';
 }
 
 function onBestMatchSelect(player, key) {
@@ -6701,7 +6864,8 @@ function onBestMatchSelect(player, key) {
   const sepIdx = key.indexOf('||');
   state.bdd_best_match[player] = {
     date: key.slice(0, sepIdx),
-    session_title: key.slice(sepIdx + 2)
+    session_title: key.slice(sepIdx + 2),
+    source: 'session'
   };
   saveBestMatchData();
   renderBestMatch();
@@ -6737,15 +6901,20 @@ function renderBestMatch() {
     { key: 'hsr',              label: 'HSR (m)',  dec: 0, mult: 1,    isMax: false },
     { key: 'sprint_dist_m',    label: 'Sprint',   dec: 0, mult: 1,    isMax: false },
     { key: 'top_speed',        label: 'Vmax',     dec: 1, mult: 1,    isMax: true  },
-    { key: 'decel_count_high', label: 'Déc >4',  dec: 0, mult: 1,    isMax: false },
+    { key: 'acc_count_high',   label: 'Acc >4',   dec: 0, mult: 1,    isMax: false },
+    { key: 'decel_count_high', label: 'Déc >4',   dec: 0, mult: 1,    isMax: false },
     { key: 'power_plays',      label: 'PP',       dec: 0, mult: 1,    isMax: false },
   ];
 
   let html = '<div class="card">';
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:8px;">';
   html += '<h2 style="margin:0;">🏆 Meilleur Match par Joueur</h2>';
+  html += '<label style="cursor:pointer;" title="Importer directement un CSV Catapult du meilleur match">';
+  html += '<input type="file" accept=".csv" style="display:none;" onchange="handleBestMatchCSV(event)">';
+  html += '<span class="btn" style="padding:6px 14px;font-size:12px;">📥 Importer CSV meilleur match</span>';
+  html += '</label>';
   html += '</div>';
-  html += '<p style="color:var(--text-dim);font-size:13px;margin-bottom:16px;">Sélectionne la référence de performance de chaque joueur. Les ratios <b>% Best</b> apparaîtront automatiquement dans le rapport de séance GPS.</p>';
+  html += '<p style="color:var(--text-dim);font-size:13px;margin-bottom:16px;">Importe un CSV Catapult du meilleur match, ou sélectionne une séance depuis la base de données. Les scores <b>Volume</b> et <b>Intensité</b> apparaîtront dans le rapport de séance GPS.</p>';
 
   html += '<div class="table-wrap"><table style="font-size:12px;width:100%;"><thead><tr>';
   html += '<th style="text-align:left;min-width:140px;">Joueur</th>';
@@ -6754,7 +6923,7 @@ function renderBestMatch() {
   html += '</tr></thead><tbody>';
 
   players.forEach((player, idx) => {
-    const bm = (state.bdd_best_match || {})[player];
+    const bm = _findBestMatchEntry(player);
     const bmRow = getBestMatchRow(player);
     const sessions = sessionsByPlayer[player] || [];
     const currentKey = bm ? (bm.date + '||' + bm.session_title) : '';
@@ -6765,7 +6934,14 @@ function renderBestMatch() {
     html += '<td style="text-align:left;font-weight:600;padding:8px 6px;">' + escapeHtml(player) + '</td>';
 
     html += '<td style="padding:6px;">';
-    if (sessions.length > 0) {
+    // Badge CSV si la référence vient d'un import direct
+    if (bm && bm.source === 'csv') {
+      const csvLabel = (bm.date ? formatDateFR(bm.date) + ' · ' : '') + (bm.session_title || 'CSV import');
+      html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
+      html += '<span style="background:rgba(52,211,153,0.15);border:1px solid #34d399;color:#34d399;padding:2px 8px;border-radius:10px;font-size:10px;white-space:nowrap;">📥 CSV · ' + escapeHtml(csvLabel.substring(0, 30)) + '</span>';
+      html += '<button onclick="onBestMatchClearCSV(\'' + playerEsc + '\')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:10px;padding:2px 4px;" title="Effacer et choisir depuis la BDD">✕</button>';
+      html += '</div>';
+    } else if (sessions.length > 0) {
       html += '<select style="width:100%;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;" onchange="onBestMatchSelect(\'' + playerEsc + '\', this.value)">';
       html += '<option value="">— Choisir un match —</option>';
       sessions.forEach(s => {
@@ -6999,6 +7175,10 @@ function renderGPSSession() {
   GPS_METRICS.forEach(m => { maxes[m.key] = Math.max.apply(null, rows.map(r => gpsDisplayVal(r, m)).concat([0])); });
 
   html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th>';
+  if (hasBestMatch) {
+    html += '<th style="background:rgba(52,211,153,0.12);color:#34d399;font-size:10px;white-space:nowrap;">📦 Volume</th>';
+    html += '<th style="background:rgba(251,191,36,0.12);color:#fbbf24;font-size:10px;white-space:nowrap;">⚡ Intensité</th>';
+  }
   GPS_METRICS.forEach(m => {
     html += '<th>' + m.label + (m.unit ? '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + m.unit + '</span>' : '') + '</th>';
     if (hasBestMatch && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
@@ -7010,6 +7190,14 @@ function renderGPSSession() {
   rows.sort((a, b) => gpsVal(b, 'distance_km') - gpsVal(a, 'distance_km'));
   rows.forEach(r => {
     html += '<tr><td style="text-align:left;font-weight:600;">' + escapeHtml(r.joueur) + '</td>';
+    if (hasBestMatch) {
+      const vol = getVolumeScore(r.joueur, r);
+      const inten = getIntensityScore(r.joueur, r);
+      html += '<td style="text-align:center;background:rgba(52,211,153,0.08);">' +
+        (vol !== null ? '<b style="color:' + scoreColor(vol) + ';font-size:13px;">' + vol + '%</b>' : '<span style="color:var(--text-dim);">—</span>') + '</td>';
+      html += '<td style="text-align:center;background:rgba(251,191,36,0.08);">' +
+        (inten !== null ? '<b style="color:' + scoreColor(inten) + ';font-size:13px;">' + inten + '%</b>' : '<span style="color:var(--text-dim);">—</span>') + '</td>';
+    }
     GPS_METRICS.forEach(m => {
       const v = gpsDisplayVal(r, m);
       const pct = pctOfMax(v, maxes[m.key]);
@@ -7029,9 +7217,13 @@ function renderGPSSession() {
   html += '</tbody></table></div>';
 
   if (hasBestMatch) {
-    html += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;padding:0 2px;">🏆 % Best = ratio normalisé par durée par rapport au meilleur match configuré. <a href="#" onclick="document.querySelector(\'.nav-btn[data-view=best-match]\').click();return false;" style="color:var(--accent-light);">Gérer les références →</a></div>';
+    html += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;padding:0 2px;">';
+    html += '📦 <b style="color:#34d399;">Volume</b> = moyenne (Dist + HSR + Sprint + ΣAcc:Déc) / référence × 100 &nbsp;·&nbsp; ';
+    html += '⚡ <b style="color:#fbbf24;">Intensité</b> = même calcul normalisé par minute &nbsp;·&nbsp; ';
+    html += '<a href="#" onclick="document.querySelector(\'.nav-btn[data-view=best-match]\').click();return false;" style="color:var(--accent-light);">Gérer les références →</a>';
+    html += '</div>';
   } else {
-    html += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;padding:0 2px;">💡 Configure un meilleur match par joueur pour voir les ratios % dans ce tableau. <a href="#" onclick="document.querySelector(\'.nav-btn[data-view=best-match]\').click();return false;" style="color:var(--accent-light);">Configurer →</a></div>';
+    html += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;padding:0 2px;">💡 Configure un meilleur match par joueur pour voir les scores Volume & Intensité. <a href="#" onclick="document.querySelector(\'.nav-btn[data-view=best-match]\').click();return false;" style="color:var(--accent-light);">Configurer →</a></div>';
   }
   html += '</div>';
 
