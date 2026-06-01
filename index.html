@@ -629,6 +629,7 @@
       <button class="nav-btn" data-view="match-entry">⚽ Saisie match</button>
       <button class="nav-btn" data-view="injury-entry">🩹 Saisie blessures</button>
       <button class="nav-btn" data-view="rpe-entry">⭐ Saisie RPE</button>
+      <button class="nav-btn" data-view="best-match">🏆 Meilleur Match</button>
       <button class="nav-btn" data-view="messages">📣 Messages</button>
       <button class="nav-btn" data-view="history">📋 Historique séances</button>
       <button class="nav-btn" data-view="settings">⚙️ Paramètres</button>
@@ -1865,6 +1866,11 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- ========== VUE MEILLEUR MATCH ========== -->
+  <div class="view" id="view-best-match">
+    <div id="best-match-content"></div>
   </div>
 
   <!-- ========== VUE JOUEUR : MES NOTES ========== -->
@@ -3856,7 +3862,8 @@ async function loadState() {
     bdd_message_reads: [],
     bdd_seances_plan: [],
     bdd_seances_plan_faites: [],
-    bdd_blessures: []
+    bdd_blessures: [],
+    bdd_best_match: {}
   };
   const setLoad = (t) => { document.getElementById('loading-text').textContent = t; };
 
@@ -3941,6 +3948,7 @@ async function loadState() {
     setLoad('Chargement des check-ins Hooper...');
     await loadHooperFromSupabase();
 
+    loadBestMatchData();
     setStatus('☁️ ' + state.joueurs.length + ' joueurs, ' + state.bdd_ent2.length + ' séances', false);
   } catch(e) {
     console.error('Erreur loadState:', e);
@@ -4710,6 +4718,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'rpe-entry') renderRPEEntry();
     else if (view === 'history') renderHistory();
     else if (view === 'settings') renderSettings();
+    else if (view === 'best-match') renderBestMatch();
     else if (view === 'player-rpe') renderPlayerRPE();
     else if (view === 'player-history') renderPlayerHistory();
     else if (view === 'player-hooper') renderPlayerHooper();
@@ -6652,6 +6661,175 @@ function onGPSSessionChange() {
   renderGPS();
 }
 
+// ============================================================================
+// MEILLEUR MATCH — persistance + gestion
+// ============================================================================
+
+function loadBestMatchData() {
+  try {
+    const raw = localStorage.getItem('best_match_' + currentOrg);
+    state.bdd_best_match = raw ? JSON.parse(raw) : {};
+  } catch(e) { state.bdd_best_match = {}; }
+}
+
+function saveBestMatchData() {
+  try {
+    localStorage.setItem('best_match_' + currentOrg, JSON.stringify(state.bdd_best_match));
+  } catch(e) {}
+}
+
+function getBestMatchRow(player) {
+  const bm = (state.bdd_best_match || {})[player];
+  if (!bm) return null;
+  // Chercher d'abord split "all", sinon le premier enregistrement du match
+  const rows = state.bdd_gps.filter(r =>
+    r.joueur === player &&
+    r.date === bm.date &&
+    (r.seance || r.session_title || '') === bm.session_title
+  );
+  return rows.find(r => (r.split_name || 'all').toLowerCase() === 'all') || rows[0] || null;
+}
+
+function onBestMatchSelect(player, key) {
+  if (!state.bdd_best_match) state.bdd_best_match = {};
+  if (!key) {
+    delete state.bdd_best_match[player];
+    saveBestMatchData();
+    renderBestMatch();
+    return;
+  }
+  const sepIdx = key.indexOf('||');
+  state.bdd_best_match[player] = {
+    date: key.slice(0, sepIdx),
+    session_title: key.slice(sepIdx + 2)
+  };
+  saveBestMatchData();
+  renderBestMatch();
+}
+
+function renderBestMatch() {
+  const container = document.getElementById('best-match-content');
+  if (!container) return;
+
+  if (!state.bdd_gps || state.bdd_gps.length === 0) {
+    container.innerHTML = '<div class="card"><div class="empty-state">Aucune donnée GPS disponible. Importe des séances GPS pour utiliser cette fonctionnalité.</div></div>';
+    return;
+  }
+
+  // Construire la liste des sessions disponibles par joueur (splits "all" uniquement)
+  const sessionsByPlayer = {};
+  state.bdd_gps.forEach(r => {
+    const splitOk = !r.split_name || r.split_name === 0 || (r.split_name || '').toString().toLowerCase() === 'all';
+    if (!splitOk) return;
+    const p = r.joueur;
+    if (!sessionsByPlayer[p]) sessionsByPlayer[p] = [];
+    const key = r.date + '||' + (r.seance || r.session_title || '');
+    if (!sessionsByPlayer[p].find(m => m.key === key)) {
+      sessionsByPlayer[p].push({ key, date: r.date, session_title: r.seance || r.session_title || '' });
+    }
+  });
+  Object.values(sessionsByPlayer).forEach(arr => arr.sort((a, b) => b.date.localeCompare(a.date)));
+
+  const players = uniqueSorted(state.bdd_gps.map(r => r.joueur));
+  const bmMetrics = [
+    { key: 'duree_min',        label: 'Min',      dec: 0, mult: 1,    isMax: false },
+    { key: 'distance_km',      label: 'Dist (m)', dec: 0, mult: 1000, isMax: false },
+    { key: 'hsr',              label: 'HSR (m)',  dec: 0, mult: 1,    isMax: false },
+    { key: 'sprint_dist_m',    label: 'Sprint',   dec: 0, mult: 1,    isMax: false },
+    { key: 'top_speed',        label: 'Vmax',     dec: 1, mult: 1,    isMax: true  },
+    { key: 'decel_count_high', label: 'Déc >4',  dec: 0, mult: 1,    isMax: false },
+    { key: 'power_plays',      label: 'PP',       dec: 0, mult: 1,    isMax: false },
+  ];
+
+  let html = '<div class="card">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">';
+  html += '<h2 style="margin:0;">🏆 Meilleur Match par Joueur</h2>';
+  html += '</div>';
+  html += '<p style="color:var(--text-dim);font-size:13px;margin-bottom:16px;">Sélectionne la référence de performance de chaque joueur. Les ratios <b>% Best</b> apparaîtront automatiquement dans le rapport de séance GPS.</p>';
+
+  html += '<div class="table-wrap"><table style="font-size:12px;width:100%;"><thead><tr>';
+  html += '<th style="text-align:left;min-width:140px;">Joueur</th>';
+  html += '<th style="min-width:200px;">Référence (meilleur match)</th>';
+  bmMetrics.forEach(m => { html += '<th>' + m.label + '</th>'; });
+  html += '</tr></thead><tbody>';
+
+  players.forEach((player, idx) => {
+    const bm = (state.bdd_best_match || {})[player];
+    const bmRow = getBestMatchRow(player);
+    const sessions = sessionsByPlayer[player] || [];
+    const currentKey = bm ? (bm.date + '||' + bm.session_title) : '';
+    const playerEsc = player.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const bg = idx % 2 === 0 ? '' : 'background:rgba(255,255,255,0.025);';
+
+    html += '<tr style="' + bg + '">';
+    html += '<td style="text-align:left;font-weight:600;padding:8px 6px;">' + escapeHtml(player) + '</td>';
+
+    html += '<td style="padding:6px;">';
+    if (sessions.length > 0) {
+      html += '<select style="width:100%;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;" onchange="onBestMatchSelect(\'' + playerEsc + '\', this.value)">';
+      html += '<option value="">— Choisir un match —</option>';
+      sessions.forEach(s => {
+        const label = formatDateFR(s.date) + (s.session_title ? ' · ' + s.session_title.substring(0, 35) : '');
+        html += '<option value="' + escapeHtml(s.key) + '"' + (s.key === currentKey ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+      });
+      html += '</select>';
+    } else {
+      html += '<span style="color:var(--text-dim);font-size:11px;">Aucune donnée GPS</span>';
+    }
+    html += '</td>';
+
+    bmMetrics.forEach(m => {
+      if (bmRow) {
+        const v = gpsVal(bmRow, m.key) * m.mult;
+        const display = v > 0 ? (m.dec === 0 ? Math.round(v) : v.toFixed(m.dec)) : '—';
+        html += '<td style="text-align:center;color:var(--accent-light);padding:6px;">' + display + '</td>';
+      } else {
+        html += '<td style="text-align:center;color:var(--text-dim);padding:6px;">—</td>';
+      }
+    });
+
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+
+  // Résumé : combien de joueurs ont un best match configuré
+  const configured = players.filter(p => (state.bdd_best_match || {})[p]).length;
+  html += '<div style="margin-top:12px;font-size:12px;color:var(--text-dim);">✅ ' + configured + ' / ' + players.length + ' joueur(s) avec une référence configurée.</div>';
+  html += '</div>';
+
+  container.innerHTML = html;
+}
+
+function getBestMatchRatio(player, metricKey, currentRow) {
+  const bmRow = getBestMatchRow(player);
+  if (!bmRow) return null;
+  const bmVal  = gpsVal(bmRow, metricKey);
+  const curVal = gpsVal(currentRow, metricKey);
+  if (!bmVal || bmVal === 0) return null;
+  // Pour les métriques cumulatives : normaliser par durée pour comparer équitablement
+  const isMax = (metricKey === 'top_speed');
+  if (isMax) {
+    return curVal / bmVal;
+  }
+  const bmDur  = gpsVal(bmRow, 'duree_min') || 90;
+  const curDur = gpsVal(currentRow, 'duree_min') || 90;
+  if (!curDur || curDur === 0) return curVal / bmVal;
+  return (curVal / curDur) / (bmVal / bmDur);
+}
+
+function ratioColor(ratio) {
+  if (ratio === null) return 'var(--text-dim)';
+  if (ratio >= 0.85) return 'var(--green,#34d399)';
+  if (ratio >= 0.65) return '#fbbf24';
+  return '#f87171';
+}
+
+function ratioLabel(ratio) {
+  if (ratio === null) return '';
+  return Math.round(ratio * 100) + '%';
+}
+
 function renderGPS() {
   if (!state.bdd_gps || state.bdd_gps.length === 0) {
     document.getElementById('gps-content').innerHTML = '<div class="card"><div class="empty-state">Aucune donnée GPS importée. Utilise l\'outil d\'import GPS pour ajouter des séances.</div></div>';
@@ -6813,12 +6991,20 @@ function renderGPSSession() {
   html += '<div class="stat"><div class="stat-label">Vmax moyenne</div><div class="stat-value" style="font-size:20px;">' + avgVmax.toFixed(1) + '</div></div>';
   html += '</div>';
 
+  // Vérifier si des ratios best match sont disponibles pour cette séance
+  const hasBestMatch = rows.some(r => getBestMatchRow(r.joueur) !== null);
+
   // Tableau par joueur avec barres de % (valeurs en mètres)
   const maxes = {};
   GPS_METRICS.forEach(m => { maxes[m.key] = Math.max.apply(null, rows.map(r => gpsDisplayVal(r, m)).concat([0])); });
 
   html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th>';
-  GPS_METRICS.forEach(m => { html += '<th>' + m.label + (m.unit ? '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + m.unit + '</span>' : '') + '</th>'; });
+  GPS_METRICS.forEach(m => {
+    html += '<th>' + m.label + (m.unit ? '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + m.unit + '</span>' : '') + '</th>';
+    if (hasBestMatch && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
+      html += '<th style="font-size:10px;color:var(--accent-light);white-space:nowrap;">% Best</th>';
+    }
+  });
   html += '</tr></thead><tbody>';
 
   rows.sort((a, b) => gpsVal(b, 'distance_km') - gpsVal(a, 'distance_km'));
@@ -6831,10 +7017,22 @@ function renderGPSSession() {
       html += '<td style="text-align:center;position:relative;">' +
         '<div style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;background:rgba(0,163,255,0.18);"></div>' +
         '<span style="position:relative;">' + (v > 0 ? display : '·') + '</span></td>';
+      if (hasBestMatch && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
+        const ratio = getBestMatchRatio(r.joueur, m.key, r);
+        const col = ratioColor(ratio);
+        const lbl = ratio !== null ? ratioLabel(ratio) : '—';
+        html += '<td style="text-align:center;font-weight:700;color:' + col + ';font-size:11px;">' + lbl + '</td>';
+      }
     });
     html += '</tr>';
   });
   html += '</tbody></table></div>';
+
+  if (hasBestMatch) {
+    html += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;padding:0 2px;">🏆 % Best = ratio normalisé par durée par rapport au meilleur match configuré. <a href="#" onclick="document.querySelector(\'.nav-btn[data-view=best-match]\').click();return false;" style="color:var(--accent-light);">Gérer les références →</a></div>';
+  } else {
+    html += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;padding:0 2px;">💡 Configure un meilleur match par joueur pour voir les ratios % dans ce tableau. <a href="#" onclick="document.querySelector(\'.nav-btn[data-view=best-match]\').click();return false;" style="color:var(--accent-light);">Configurer →</a></div>';
+  }
   html += '</div>';
 
   // Graphique : métrique au choix par joueur
