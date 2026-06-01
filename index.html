@@ -421,6 +421,19 @@
     }
     .rpe-scale-btn { font-size: 16px; border-radius: 12px; }
     .rpe-session-card { padding: 16px; }
+    /* Vue mobile : passer en colonne unique et mettre l'échelle en premier */
+    #player-rpe-layout {
+      grid-template-columns: 1fr !important;
+    }
+    #player-rpe-main { order: 2; }
+    #player-rpe-layout > div:last-child { order: 1; }
+    /* Réduire la table de référence sur mobile */
+    #player-rpe-layout > div:last-child .card {
+      position: static !important;
+      padding: 12px;
+    }
+    #player-rpe-layout > div:last-child table { font-size: 11px; }
+    #player-rpe-layout > div:last-child td { padding: 3px 6px !important; }
   }
   /* ===== Routine physique builder ===== */
   .routine-format-toggle { display:flex; gap:0; margin-bottom:14px; }
