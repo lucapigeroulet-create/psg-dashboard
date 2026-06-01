@@ -2753,6 +2753,14 @@ async function loadProfileAndStart() {
     currentOrg = profile.org || 'PSG';
   }
 
+  // Restriction : certains comptes sont limités au dashboard PSG uniquement
+  const PSG_ONLY_EMAILS = ['lucasm@tegg.fr'];
+  if (PSG_ONLY_EMAILS.includes((currentUser.email || '').toLowerCase())) {
+    window.currentAllowedOrgs = ['PSG'];
+    currentOrg = 'PSG';
+    try { localStorage.setItem('current_org', 'PSG'); } catch(e) {}
+  }
+
   // Cacher le login, afficher le chargement des données
   document.getElementById('login-overlay').style.display = 'none';
   document.getElementById('data-loading-overlay').style.display = 'flex';
