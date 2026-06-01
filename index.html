@@ -10605,7 +10605,7 @@ async function renderPlayerOverview() {
             '<div style="font-size:22px; font-weight:700; color:' + color + ';">✅ ' + (isFR ? 'Rempli' : 'Done') + '</div>' +
             '<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">Hooper Index : <b style="color:' + color + ';">' + idx + '/28</b></div>' +
           '</div>' +
-          '<button class="btn btn-secondary" onclick="switchView(\'player-hooper\')">' + (isFR ? '✏️ Modifier' : '✏️ Edit') + '</button>' +
+          '<button class="btn btn-secondary" onclick="document.querySelector(\'.nav-btn[data-view=player-hooper]\').click()">' + (isFR ? '✏️ Modifier' : '✏️ Edit') + '</button>' +
         '</div>';
     } else {
       hEl.innerHTML =
@@ -10615,7 +10615,7 @@ async function renderPlayerOverview() {
             '<div style="font-size:18px; font-weight:700; color:var(--yellow);">⚠️ ' + (isFR ? 'Non rempli' : 'Not submitted') + '</div>' +
             '<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">' + (isFR ? 'Réponds aux 4 questions de bien-être.' : 'Answer the 4 wellness questions.') + '</div>' +
           '</div>' +
-          '<button class="btn" onclick="switchView(\'player-hooper\')">' + (isFR ? '💚 Remplir maintenant' : '💚 Fill in now') + '</button>' +
+          '<button class="btn" onclick="document.querySelector(\'.nav-btn[data-view=player-hooper]\').click()">' + (isFR ? '💚 Remplir maintenant' : '💚 Fill in now') + '</button>' +
         '</div>';
     }
   }
