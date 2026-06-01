@@ -605,6 +605,7 @@
 <nav>
   <button class="nav-btn active" data-view="overview">📊 Vue d'ensemble</button>
   <button class="nav-btn" data-view="calendar">📅 Calendrier</button>
+  <button class="nav-btn" data-view="staff-hooper">💚 État de forme</button>
   <button class="nav-btn" data-view="rpe">💪 Charge RPE</button>
   <button class="nav-btn" data-view="gps">📡 Données GPS</button>
   <button class="nav-btn" data-view="injury">🏥 Disponibilité</button>
@@ -621,12 +622,12 @@
     </div>
   </div>
   <!-- Onglets joueur (visibles uniquement pour les lecteurs) -->
-  <button class="nav-btn player-only" data-view="player-rpe" style="display:none;">⭐ Rate my sessions</button>
-  <button class="nav-btn player-only" data-view="player-history" style="display:none;">📊 My ratings</button>
-  <button class="nav-btn player-only" data-view="player-hooper" style="display:none;">💚 Daily check-in</button>
-  <button class="nav-btn player-only" data-view="player-seances" style="display:none;">📋 Mes séances</button>
-  <button class="nav-btn player-only" data-view="messages" style="display:none;">📣 Messages</button>
-  <button class="nav-btn" data-view="staff-hooper">💚 État de forme</button>
+  <button class="nav-btn player-only" data-view="player-overview" style="display:none;" data-en="🏠 Overview" data-fr="🏠 Vue d'ensemble">🏠 Vue d'ensemble</button>
+  <button class="nav-btn player-only" data-view="player-seances" style="display:none;" data-en="📋 My sessions" data-fr="📋 Mes séances">📋 Mes séances</button>
+  <button class="nav-btn player-only" data-view="player-rpe" style="display:none;" data-en="⭐ Rate sessions" data-fr="⭐ Noter les séances">⭐ Rate sessions</button>
+  <button class="nav-btn player-only" data-view="player-history" style="display:none;" data-en="📊 My ratings" data-fr="📊 Mes notes">📊 My ratings</button>
+  <button class="nav-btn player-only" data-view="player-hooper" style="display:none;" data-en="💚 Daily check-in" data-fr="💚 État de forme">💚 Daily check-in</button>
+  <button class="nav-btn player-only" data-view="messages" style="display:none;" data-en="📣 Messages" data-fr="📣 Messages">📣 Messages</button>
 </nav>
 
 <main>
@@ -1779,6 +1780,29 @@
     </div>
   </div>
 
+
+  <!-- ========== VUE JOUEUR : OVERVIEW ========== -->
+  <div class="view" id="view-player-overview">
+
+    <!-- État de forme du jour -->
+    <div class="card" id="po-hooper-card">
+      <h2 data-en="💚 Today's wellness" data-fr="💚 État de forme du jour">💚 État de forme du jour</h2>
+      <div id="po-hooper-content"></div>
+    </div>
+
+    <!-- RPE à noter -->
+    <div class="card" id="po-rpe-card">
+      <h2 data-en="⭐ Sessions to rate" data-fr="⭐ Séances à noter">⭐ Séances à noter</h2>
+      <div id="po-rpe-content"></div>
+    </div>
+
+    <!-- Séances 7 jours à venir -->
+    <div class="card" id="po-seances-card">
+      <h2 data-en="📋 Upcoming sessions (7 days)" data-fr="📋 Séances à venir (7 jours)">📋 Séances à venir (7 jours)</h2>
+      <div id="po-seances-content"></div>
+    </div>
+
+  </div>
 
   <!-- ========== VUE JOUEUR : SAISIR MON RPE ========== -->
   <div class="view" id="view-player-rpe">
@@ -3384,17 +3408,13 @@ function applyPlayerLanguage() {
     else logoutBtn.textContent = '↪ Déconnexion';
   }
   // Libellés des onglets joueur
-  const navTrads = {
-    'player-rpe': { en: '⭐ Rate sessions', fr: '⭐ Noter les séances' },
-    'player-history': { en: '📊 My ratings', fr: '📊 Mes notes' },
-    'player-hooper': { en: '💚 Daily check-in', fr: '💚 État de forme' },
-    'player-seances': { en: '📋 My sessions', fr: '📋 Mes séances' }
-  };
-  Object.keys(navTrads).forEach(view => {
+  // Les libellés des onglets joueur sont gérés par les attributs data-en/data-fr
+  // (déjà traités par la boucle querySelectorAll('[data-en]') ci-dessus)
+  // On gère uniquement les boutons avec badge actif (badge écrase data-en)
+  const navBadgeExceptions = ['player-seances'];
+  navBadgeExceptions.forEach(view => {
     const btn = document.querySelector('.nav-btn.player-only[data-view="' + view + '"]');
-    if (btn && !btn.dataset.badgeActive) {
-      btn.textContent = (lang === 'fr') ? navTrads[view].fr : navTrads[view].en;
-    }
+    if (btn && btn.dataset.badgeActive) return; // laisser le badge gérer le texte
   });
 }
 
@@ -3675,13 +3695,15 @@ function applyRoleRestrictions() {
     if (gestionDropdown) gestionDropdown.style.display = 'none'; // Cacher le menu Gestion
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = 'none'; // Cacher l'export JSON aux joueurs
-    // Forcer l'affichage sur "Saisir mon RPE" au démarrage
+    // Forcer l'affichage sur "Vue d'ensemble" au démarrage joueur
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    const playerRpeBtn = document.querySelector('.nav-btn[data-view="player-rpe"]');
-    if (playerRpeBtn) {
-      playerRpeBtn.classList.add('active');
-      document.getElementById('view-player-rpe').classList.add('active');
+    const playerOvBtn = document.querySelector('.nav-btn[data-view="player-overview"]');
+    if (playerOvBtn) {
+      playerOvBtn.classList.add('active');
+      const ovView = document.getElementById('view-player-overview');
+      if (ovView) ovView.classList.add('active');
+      renderPlayerOverview();
     }
   } else {
     // Staff/admin : cacher les onglets joueur, réafficher le menu Gestion
@@ -4101,6 +4123,7 @@ function handleRealtimeChange(table, payload) {
     const v = getCurrentView();
     if (v === 'calendar') renderCalendar();
     if (v === 'player-seances') renderPlayerSeances();
+    if (v === 'player-overview') renderPlayerOverview();
     updateSeancesBadge();
     return;
   }
@@ -4116,6 +4139,7 @@ function handleRealtimeChange(table, payload) {
     const v = getCurrentView();
     if (v === 'calendar') renderCalendar();
     if (v === 'player-seances') renderPlayerSeances();
+    if (v === 'player-overview') renderPlayerOverview();
     updateSeancesBadge();
     return;
   }
@@ -4676,6 +4700,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'player-rpe') renderPlayerRPE();
     else if (view === 'player-history') renderPlayerHistory();
     else if (view === 'player-hooper') renderPlayerHooper();
+    else if (view === 'player-overview') renderPlayerOverview();
     else if (view === 'staff-hooper') renderStaffHooper();
     else if (view === 'messages') renderMessages();
     else if (view === 'player-seances') renderPlayerSeances();
@@ -10545,6 +10570,109 @@ document.addEventListener('change', function(e) {
 // ============================================================================
 // VUES JOUEUR (rôle lecteur)
 // ============================================================================
+
+async function renderPlayerOverview() {
+  if (!currentJoueurNom) return;
+  const isFR = (playerLang() === 'fr');
+  const today = toLocalISO(new Date());
+
+  // ── 1. État de forme du jour ──────────────────────────────────────────────
+  const hEl = document.getElementById('po-hooper-content');
+  if (hEl) {
+    if (hooperData.length === 0) { try { await loadHooperFromSupabase(); } catch(e) {} }
+    const h = getHooper(today, currentJoueurNom);
+    const idx = computeHooperIndex(h);
+    if (idx !== null) {
+      // Rempli complet
+      const color = idx <= 12 ? 'var(--green)' : idx <= 16 ? 'var(--yellow)' : 'var(--red)';
+      hEl.innerHTML =
+        '<div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">' +
+          '<div style="background:rgba(52,211,153,0.12); border:1px solid var(--green); border-radius:8px; padding:10px 16px; flex:1; min-width:180px;">' +
+            '<div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">' + (isFR ? 'Check-in du jour' : "Today's check-in") + '</div>' +
+            '<div style="font-size:22px; font-weight:700; color:' + color + ';">✅ ' + (isFR ? 'Rempli' : 'Done') + '</div>' +
+            '<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">Hooper Index : <b style="color:' + color + ';">' + idx + '/28</b></div>' +
+          '</div>' +
+          '<button class="btn btn-secondary" onclick="switchView(\'player-hooper\')">' + (isFR ? '✏️ Modifier' : '✏️ Edit') + '</button>' +
+        '</div>';
+    } else {
+      hEl.innerHTML =
+        '<div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">' +
+          '<div style="background:rgba(251,191,36,0.1); border:1px solid var(--yellow); border-radius:8px; padding:10px 16px; flex:1; min-width:180px;">' +
+            '<div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">' + (isFR ? 'Check-in du jour' : "Today's check-in") + '</div>' +
+            '<div style="font-size:18px; font-weight:700; color:var(--yellow);">⚠️ ' + (isFR ? 'Non rempli' : 'Not submitted') + '</div>' +
+            '<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">' + (isFR ? 'Réponds aux 4 questions de bien-être.' : 'Answer the 4 wellness questions.') + '</div>' +
+          '</div>' +
+          '<button class="btn" onclick="switchView(\'player-hooper\')">' + (isFR ? '💚 Remplir maintenant' : '💚 Fill in now') + '</button>' +
+        '</div>';
+    }
+  }
+
+  // ── 2. Séances à noter (faites sans RPE, fenêtre encore ouverte) ──────────
+  const rpeEl = document.getElementById('po-rpe-content');
+  if (rpeEl) {
+    const aNoter = (state.bdd_seances_plan || []).filter(sp => {
+      if (!seancePlanCibleJoueur(sp, currentJoueurNom)) return false;
+      if (!seancePlanEstFaite(sp.id, currentJoueurNom)) return false;
+      if (getSeancePlanRPE(sp.id, currentJoueurNom) !== null) return false;
+      return getValidationWindowStatus(sp.date) === 'open';
+    });
+    if (aNoter.length === 0) {
+      rpeEl.innerHTML = '<div style="color:var(--green); font-size:13px;">✅ ' + (isFR ? 'Aucune séance en attente de note.' : 'No sessions pending rating.') + '</div>';
+    } else {
+      rpeEl.innerHTML = aNoter.map(sp => {
+        return '<div onclick="openSeancePlanDetail(\'' + sp.id + '\', \'' + currentJoueurNom.replace(/'/g, "\\'") + '\')" ' +
+          'style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; margin-bottom:6px; cursor:pointer;" ' +
+          'onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'">' +
+          '<div>' +
+            '<div style="font-weight:600; font-size:13px;">' + escapeHtml(sp.type || (isFR ? 'Séance' : 'Session')) + '</div>' +
+            '<div style="font-size:11px; color:var(--text-dim);">' + formatDateFR(sp.date) + (sp.duree_min ? ' · ' + sp.duree_min + ' min' : '') + '</div>' +
+          '</div>' +
+          '<span style="font-size:11px; color:var(--yellow); font-weight:600;">⭐ ' + (isFR ? 'Noter' : 'Rate') + ' →</span>' +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  // ── 3. Séances à venir sur 7 jours ───────────────────────────────────────
+  const seancesEl = document.getElementById('po-seances-content');
+  if (seancesEl) {
+    const jours = [];
+    for (let i = 0; i < 7; i++) {
+      const dt = new Date(); dt.setDate(dt.getDate() + i);
+      jours.push(toLocalISO(dt));
+    }
+    const aVenir = (state.bdd_seances_plan || []).filter(sp =>
+      seancePlanCibleJoueur(sp, currentJoueurNom) && jours.includes(sp.date)
+    ).sort((a, b) => a.date.localeCompare(b.date));
+
+    if (aVenir.length === 0) {
+      seancesEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px;">' + (isFR ? 'Aucune séance planifiée sur les 7 prochains jours.' : 'No sessions planned for the next 7 days.') + '</div>';
+    } else {
+      seancesEl.innerHTML = aVenir.map(sp => {
+        const faite = seancePlanEstFaite(sp.id, currentJoueurNom);
+        const isToday = (sp.date === today);
+        const routineData = parseRoutineConsignes(sp.consignes);
+        const resume = routineData
+          ? '🏋️ ' + (routineData.groupes || []).reduce((s,g) => s + (g.exercices||[]).length, 0) + ' exercices'
+          : (sp.consignes ? escapeHtml(sp.consignes.slice(0, 60)) + (sp.consignes.length > 60 ? '…' : '') : '');
+        return '<div onclick="openSeancePlanDetail(\'' + sp.id + '\', \'' + currentJoueurNom.replace(/'/g, "\\'") + '\')" ' +
+          'style="display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg-elevated); border:1px solid ' + (isToday ? 'var(--accent)' : 'var(--border)') + '; border-radius:8px; margin-bottom:6px; cursor:pointer;" ' +
+          'onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'' + (isToday ? 'var(--accent)' : 'var(--border)') + '\'">' +
+          '<div style="min-width:42px; text-align:center;">' +
+            '<div style="font-size:16px; font-weight:700; color:' + (isToday ? 'var(--accent-light)' : 'var(--text)') + ';">' + sp.date.split('-')[2] + '</div>' +
+            '<div style="font-size:10px; color:var(--text-dim); text-transform:uppercase;">' + new Date(sp.date + 'T12:00:00').toLocaleDateString(isFR ? 'fr-FR' : 'en-GB', {weekday:'short'}) + '</div>' +
+          '</div>' +
+          '<div style="width:1px; height:32px; background:var(--border);"></div>' +
+          '<div style="flex:1;">' +
+            '<div style="font-weight:600; font-size:13px;">' + escapeHtml(sp.type || (isFR ? 'Séance' : 'Session')) + (sp.duree_min ? ' <span style="color:var(--text-dim); font-weight:400;">· ' + sp.duree_min + ' min</span>' : '') + '</div>' +
+            (resume ? '<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">' + resume + '</div>' : '') +
+          '</div>' +
+          '<span style="font-size:13px;">' + (faite ? '✅' : '⬜') + '</span>' +
+        '</div>';
+      }).join('');
+    }
+  }
+}
 
 function renderPlayerRPE() {
   const dateInput = document.getElementById('player-rpe-date');
