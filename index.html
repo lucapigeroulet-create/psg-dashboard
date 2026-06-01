@@ -889,16 +889,43 @@
 
     <!-- Historique des séances planifiées (staff) -->
     <div class="card" id="calendar-plan-history-card">
-      <h2>📋 Séances planifiées</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Les séances que tu as créées. Tu peux les modifier ou les supprimer.</p>
-      <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-        <select id="sp-hist-filter" onchange="renderSeancesPlanHistory()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px;">
-          <option value="future">À venir + aujourd'hui</option>
-          <option value="past">Passées</option>
-          <option value="all">Toutes</option>
-        </select>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+        <h2 style="margin:0;">📋 Séances planifiées <span id="sp-hist-count" style="font-size:12px; font-weight:400; color:var(--text-dim);"></span></h2>
+        <button class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="resetSpHistFilters()">↺ Réinitialiser</button>
+      </div>
+      <!-- Filtres -->
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; align-items:flex-end;">
+        <div>
+          <label style="display:block; font-size:11px; color:var(--text-dim); margin-bottom:3px;">Période</label>
+          <select id="sp-hist-filter" onchange="renderSeancesPlanHistory()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px;">
+            <option value="future">À venir + aujourd'hui</option>
+            <option value="past">Passées</option>
+            <option value="all">Toutes</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block; font-size:11px; color:var(--text-dim); margin-bottom:3px;">Joueur</label>
+          <select id="sp-hist-filter-joueur" onchange="renderSeancesPlanHistory()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px; min-width:130px;">
+            <option value="">Tous les joueurs</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block; font-size:11px; color:var(--text-dim); margin-bottom:3px;">Type</label>
+          <select id="sp-hist-filter-type" onchange="renderSeancesPlanHistory()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px; min-width:130px;">
+            <option value="">Tous les types</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block; font-size:11px; color:var(--text-dim); margin-bottom:3px;">Du</label>
+          <input type="date" id="sp-hist-filter-start" onchange="renderSeancesPlanHistory()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px;" />
+        </div>
+        <div>
+          <label style="display:block; font-size:11px; color:var(--text-dim); margin-bottom:3px;">Au</label>
+          <input type="date" id="sp-hist-filter-end" onchange="renderSeancesPlanHistory()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px;" />
+        </div>
       </div>
       <div id="sp-history-list"></div>
+      <div id="sp-history-expand" style="margin-top:6px;"></div>
     </div>
 
     <div class="card">
@@ -2708,7 +2735,7 @@ async function loadProfileAndStart() {
   const MEDICAL_EMAILS = ['christian@tegg.fr', 'lucasm@tegg.fr'];
   if (MEDICAL_EMAILS.includes((currentUser.email || '').toLowerCase())) currentRole = 'médical';
   const DIRECTION_UUIDS = ['81c45962-3ba8-49aa-8e5d-0e9d8963d53f', 'c067d9aa-1193-41e4-bf0d-66c2ef511f02'];
-  if (DIRECTION_UUIDS.includes(currentUser.id)) currentRole = 'direction';
+  if (DIRECTION_UUIDS.includes(currentUser.id)) { currentRole = 'direction'; profile.org = 'TEGG'; }
   currentJoueurNom = profile.joueur_nom;
   // Normaliser le nom (supprimer espaces superflus) pour fiabiliser le lien compte ↔ joueur
   if (currentJoueurNom) currentJoueurNom = String(currentJoueurNom).trim();
@@ -3378,30 +3405,99 @@ async function deleteSeancePlan(id) {
 }
 
 // Liste / historique des séances planifiées (staff)
+let spHistExpanded = false;  // état déroulé/replié de la liste
+
+function populateSpHistFilters() {
+  // Joueurs
+  const joueurSel = document.getElementById('sp-hist-filter-joueur');
+  if (joueurSel) {
+    const prev = joueurSel.value;
+    const players = getAllPlayers();
+    joueurSel.innerHTML = '<option value="">Tous les joueurs</option>' +
+      players.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+    if (prev) joueurSel.value = prev;
+  }
+  // Types
+  const typeSel = document.getElementById('sp-hist-filter-type');
+  if (typeSel) {
+    const prev = typeSel.value;
+    const types = [...new Set((state.bdd_seances_plan || []).map(s => s.type).filter(Boolean))].sort();
+    typeSel.innerHTML = '<option value="">Tous les types</option>' +
+      types.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
+    if (prev) typeSel.value = prev;
+  }
+}
+
+function resetSpHistFilters() {
+  ['sp-hist-filter-joueur','sp-hist-filter-type','sp-hist-filter-start','sp-hist-filter-end'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const p = document.getElementById('sp-hist-filter'); if (p) p.value = 'future';
+  spHistExpanded = false;
+  renderSeancesPlanHistory();
+}
+
 function renderSeancesPlanHistory() {
-  const listEl = document.getElementById('sp-history-list');
+  const listEl   = document.getElementById('sp-history-list');
+  const expandEl = document.getElementById('sp-history-expand');
+  const countEl  = document.getElementById('sp-hist-count');
   if (!listEl) return;
-  const filterEl = document.getElementById('sp-hist-filter');
-  const filter = filterEl ? filterEl.value : 'future';
-  const today = toLocalISO(new Date());
+
+  populateSpHistFilters();
+
+  const filter      = (document.getElementById('sp-hist-filter')        || {}).value || 'future';
+  const filterJoueur= (document.getElementById('sp-hist-filter-joueur') || {}).value || '';
+  const filterType  = (document.getElementById('sp-hist-filter-type')   || {}).value || '';
+  const filterStart = (document.getElementById('sp-hist-filter-start')  || {}).value || '';
+  const filterEnd   = (document.getElementById('sp-hist-filter-end')    || {}).value || '';
+  const today       = toLocalISO(new Date());
 
   let seances = (state.bdd_seances_plan || []).slice();
+
+  // Filtre période
   if (filter === 'future') seances = seances.filter(s => s.date >= today);
   else if (filter === 'past') seances = seances.filter(s => s.date < today);
-  // Tri : à venir d'abord croissant, passées d'abord récentes
+
+  // Filtre dates custom
+  if (filterStart) seances = seances.filter(s => s.date >= filterStart);
+  if (filterEnd)   seances = seances.filter(s => s.date <= filterEnd);
+
+  // Filtre type
+  if (filterType) seances = seances.filter(s => s.type === filterType);
+
+  // Filtre joueur : la séance cible ce joueur
+  if (filterJoueur) {
+    seances = seances.filter(sp => {
+      if (sp.cible_type === 'all') return true;
+      if (sp.cible_type === 'group') {
+        return (state.joueurs || []).some(j => j.nom === filterJoueur && j.groupe === sp.cible_groupe);
+      }
+      return Array.isArray(sp.cible_joueurs) && sp.cible_joueurs.includes(filterJoueur);
+    });
+  }
+
+  // Tri
   seances.sort((a, b) => (filter === 'past') ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date));
+
+  // Compteur
+  if (countEl) countEl.textContent = seances.length ? '(' + seances.length + ')' : '';
 
   if (seances.length === 0) {
     listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:10px;">Aucune séance.</div>';
+    if (expandEl) expandEl.innerHTML = '';
     return;
   }
 
-  listEl.innerHTML = seances.map(sp => {
+  const LIMIT = 3;
+  const visible = spHistExpanded ? seances : seances.slice(0, LIMIT);
+  const hidden  = seances.length - visible.length;
+
+  function spCard(sp) {
     const cibleLabel = sp.cible_type === 'all' ? "Toute l'équipe"
       : sp.cible_type === 'group' ? ('Groupe ' + (sp.cible_groupe || ''))
       : (Array.isArray(sp.cible_joueurs) ? sp.cible_joueurs.join(', ') : '');
     const targets = getSeancePlanTargets(sp);
-    const faits = targets.filter(t => seancePlanEstFaite(sp.id, t)).length;
+    const faits   = targets.filter(t => seancePlanEstFaite(sp.id, t)).length;
     const isEditing = (spEditingId === sp.id);
     return '<div style="border:1px solid ' + (isEditing ? 'var(--accent)' : 'var(--border)') + '; border-radius:10px; padding:10px 12px; margin-bottom:8px; background:' + (isEditing ? 'rgba(0,163,255,0.06)' : 'transparent') + ';">' +
       '<div style="display:flex; justify-content:space-between; align-items:start; gap:10px;">' +
@@ -3419,7 +3515,20 @@ function renderSeancesPlanHistory() {
         '</div>' +
       '</div>' +
     '</div>';
-  }).join('');
+  }
+
+  listEl.innerHTML = visible.map(spCard).join('');
+
+  // Bouton dérouler / replier
+  if (expandEl) {
+    if (!spHistExpanded && hidden > 0) {
+      expandEl.innerHTML = '<button class="btn btn-secondary" style="width:100%; font-size:12px; padding:8px;" onclick="spHistExpanded=true; renderSeancesPlanHistory();">▾ Voir ' + hidden + ' séance' + (hidden > 1 ? 's' : '') + ' de plus</button>';
+    } else if (spHistExpanded && seances.length > LIMIT) {
+      expandEl.innerHTML = '<button class="btn btn-secondary" style="width:100%; font-size:12px; padding:8px;" onclick="spHistExpanded=false; renderSeancesPlanHistory();">▴ Replier</button>';
+    } else {
+      expandEl.innerHTML = '';
+    }
+  }
 }
 
 // ============================================================
