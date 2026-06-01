@@ -573,8 +573,9 @@
   .role-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; margin-left:8px; }
   .role-admin { background:#7c2d12; color:#fed7aa; }
   .role-staff { background:#1e3a8a; color:#93c5fd; }
-  .role-médical { background:#065f46; color:#6ee7b7; }
-  .role-lecteur { background:#374151; color:#d1d5db; }
+  .role-médical   { background:#065f46; color:#6ee7b7; }
+  .role-direction { background:#4c1d95; color:#ddd6fe; }
+  .role-lecteur   { background:#374151; color:#d1d5db; }
   .readonly-overlay { opacity: 0.6; pointer-events: none; }
 
   /* Neutraliser le contour de focus natif sur les boutons Hooper */
@@ -625,6 +626,8 @@
   <button class="nav-btn staff-only-btn" data-view="medical" id="nav-medical-btn">🩺 Médical</button>
   <button class="nav-btn staff-only-btn" data-view="medical-notes" id="nav-medical-notes-btn">📋 Notes médicales</button>
   <button class="nav-btn médical-only-btn" data-view="injury-entry" style="display:none;">🩹 Saisie blessures</button>
+  <button class="nav-btn direction-only-btn" data-view="calendar" id="nav-direction-calendar-btn" style="display:none;">📅 Calendrier</button>
+  <button class="nav-btn direction-only-btn" data-view="gps"      id="nav-direction-gps-btn"      style="display:none;">📡 Données GPS</button>
   <div class="nav-dropdown" id="nav-gestion-dropdown">
     <button type="button" class="nav-btn nav-dropdown-toggle" id="nav-gestion-toggle" onclick="toggleGestionMenu(event)">🛠️ Gestion <span style="font-size:10px;">▾</span></button>
     <div class="nav-dropdown-menu" id="nav-gestion-menu">
@@ -2646,6 +2649,8 @@ async function loadProfileAndStart() {
   currentRole = profile.role;
   const MEDICAL_EMAILS = ['christian@tegg.fr', 'lucasm@tegg.fr'];
   if (MEDICAL_EMAILS.includes((currentUser.email || '').toLowerCase())) currentRole = 'médical';
+  const DIRECTION_UUIDS = ['81c45962-3ba8-49aa-8e5d-0e9d8963d53f', 'c067d9aa-1193-41e4-bf0d-66c2ef511f02'];
+  if (DIRECTION_UUIDS.includes(currentUser.id)) currentRole = 'direction';
   currentJoueurNom = profile.joueur_nom;
   // Normaliser le nom (supprimer espaces superflus) pour fiabiliser le lien compte ↔ joueur
   if (currentJoueurNom) currentJoueurNom = String(currentJoueurNom).trim();
@@ -3907,6 +3912,43 @@ function applyRoleRestrictions() {
       if (ovView) ovView.classList.add('active');
       renderPlayerOverview();
     }
+  } else if (currentRole === 'direction') {
+    // Direction sportive : calendrier des séances + données GPS uniquement, lecture seule
+    document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
+    if (gestionDropdown) gestionDropdown.style.display = 'none';
+    const btnExport = document.getElementById('btn-export-json');
+    if (btnExport) btnExport.style.display = 'none';
+    // Masquer tous les boutons staff génériques
+    document.querySelectorAll('.nav-btn:not(.player-only):not(.direction-only-btn)').forEach(b => {
+      b.style.display = 'none';
+    });
+    // Afficher uniquement les boutons direction
+    document.querySelectorAll('.direction-only-btn').forEach(b => b.style.display = '');
+    // Masquer les cartes inutiles dans la vue Calendrier (planification)
+    ['calendar-plan-card', 'calendar-plan-history-card'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    // Masquer import/historique GPS
+    ['gps-import-toggle', 'gps-history-toggle', 'gps-import-panel', 'gps-history-panel'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    // Masquer le filtre "Type de rapport" GPS — garder uniquement le sélecteur de séance
+    const gpsReportWrap = document.querySelector('#gps-report-type')?.closest('.filter-group');
+    if (gpsReportWrap) gpsReportWrap.style.display = 'none';
+    // Forcer le rapport de séance et afficher le sélecteur de date
+    const gpsReport = document.getElementById('gps-report-type');
+    if (gpsReport) gpsReport.value = 'session';
+    // Démarrer sur Calendrier
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    const calBtn = document.getElementById('nav-direction-calendar-btn');
+    if (calBtn) {
+      calBtn.classList.add('active');
+      const calView = document.getElementById('view-calendar');
+      if (calView) { calView.classList.add('active'); renderCalendar(); }
+    }
   } else if (currentRole === 'médical') {
     // Médical : vue dédiée — pas de Charge RPE ni Données GPS, Saisie blessures en direct
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
@@ -3928,6 +3970,7 @@ function applyRoleRestrictions() {
 
 function canWrite() {
   return currentRole === 'admin' || currentRole === 'staff' || currentRole === 'médical';
+  // 'direction' : lecture seule intentionnellement
 }
 
 // Les lecteurs peuvent saisir leurs propres RPE
@@ -7209,8 +7252,16 @@ function ratioLabel(ratio) {
 }
 
 function renderGPS() {
+  // Vue direction sportive : masquer les outils de gestion GPS
+  if (currentRole === 'direction') {
+    ['gps-import-toggle','gps-history-toggle','gps-import-panel','gps-history-panel'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.style.display = 'none';
+    });
+    const rg = document.querySelector('#gps-report-type')?.closest('.filter-group');
+    if (rg) rg.style.display = 'none';
+  }
   if (!state.bdd_gps || state.bdd_gps.length === 0) {
-    document.getElementById('gps-content').innerHTML = '<div class="card"><div class="empty-state">Aucune donnée GPS importée. Utilise l\'outil d\'import GPS pour ajouter des séances.</div></div>';
+    document.getElementById('gps-content').innerHTML = '<div class="card"><div class="empty-state">Aucune donnée GPS disponible.</div></div>';
     return;
   }
 
