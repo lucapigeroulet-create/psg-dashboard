@@ -11548,8 +11548,13 @@ function showPainDetail(date, joueur) {
   if (!h) return;
   const locations = Array.isArray(h.pain_locations) ? h.pain_locations : [];
 
-  // Récupérer les labels lisibles
-  const labels = [];
+  // Récupérer les labels lisibles de chaque zone depuis le SVG (data-label) + traduction
+  const zoneLabel = (z) => {
+    const el = document.querySelector('.muscle[data-zone="' + z + '"]');
+    return translatePainLabel(el ? el.getAttribute('data-label') : z);
+  };
+  const labels = locations.map(zoneLabel);
+
   // Cloner le mannequin original (depuis le DOM joueur si présent, sinon créer)
   // Pour staff, on génère un mini-overlay modal
   let modal = document.getElementById('pain-detail-modal');
@@ -11562,6 +11567,24 @@ function showPainDetail(date, joueur) {
 
   const intensity = h.muscle_soreness;
   const intensityLabel = intensity ? getHooperLabel(intensity, 'labelOther') : '—';
+
+  // Liste des zones douloureuses (chips). Survoler une chip met en avant la zone sur le mannequin.
+  const painListHtml = locations.length > 0
+    ? '<div style="margin-top:16px;">' +
+        '<div style="font-size:12px; color:var(--text-dim); font-weight:600; text-transform:uppercase; margin-bottom:8px;">📋 Zones douloureuses (' + locations.length + ')</div>' +
+        '<div style="display:flex; flex-wrap:wrap; gap:6px;">' +
+          locations.map((z, i) =>
+            '<span class="pain-chip" data-zone="' + escapeHtml(z) + '" ' +
+                  'onmouseenter="highlightPainZone(\'' + z.replace(/\'/g, "\\'") + '\', true)" ' +
+                  'onmouseleave="highlightPainZone(\'' + z.replace(/\'/g, "\\'") + '\', false)" ' +
+                  'title="' + escapeHtml(labels[i]) + '" ' +
+                  'style="background:rgba(239,68,68,0.18); color:#fca5a5; padding:4px 11px; border-radius:12px; font-size:12px; cursor:default;">' +
+              '🔴 ' + escapeHtml(labels[i]) +
+            '</span>'
+          ).join('') +
+        '</div>' +
+      '</div>'
+    : '<div style="margin-top:16px; text-align:center; color:var(--text-dim); font-size:12px;">Aucune zone sélectionnée</div>';
 
   // Récupérer le SVG du mannequin (clone depuis la vue joueur si dispo)
   const playerMannequin = document.getElementById('mannequin-container');
@@ -11576,19 +11599,26 @@ function showPainDetail(date, joueur) {
       '<button class="btn btn-secondary" onclick="document.getElementById(\'pain-detail-modal\').remove()">✕ Fermer</button>' +
     '</div>' +
     '<div id="pain-detail-svg-container" style="background:var(--bg-elevated); border-radius:10px; padding:16px; overflow-x:auto;">' + svgHtml + '</div>' +
+    painListHtml +
     (h.pain_notes ? '<div style="margin-top:16px; background:var(--bg-elevated); padding:12px 16px; border-left:3px solid var(--accent); border-radius:6px;"><div style="color:var(--text-dim); font-size:11px; text-transform:uppercase;">Notes du joueur</div><div style="margin-top:4px; font-size:14px;">' + escapeHtml(h.pain_notes) + '</div></div>' : '') +
-    '<div style="margin-top:16px; text-align:center; color:var(--text-dim); font-size:12px;">' + locations.length + ' zone(s) sélectionnée(s)</div>' +
   '</div>';
 
-  // Marquer les zones sélectionnées dans le clone, et désactiver les clics
+  // Marquer les zones sélectionnées dans le clone + tooltip au survol (nom de la zone)
   setTimeout(() => {
     const cont = document.getElementById('pain-detail-svg-container');
     if (!cont) return;
     cont.querySelectorAll('.muscle').forEach(el => {
-      el.style.pointerEvents = 'none';
       const z = el.getAttribute('data-zone');
-      if (locations.includes(z)) el.classList.add('selected');
+      const selected = locations.includes(z);
+      // Le survol doit rester actif pour afficher le nom de la zone (mais aucun clic ne modifie les données)
+      el.style.pointerEvents = '';
+      el.style.cursor = selected ? 'help' : 'default';
+      if (selected) el.classList.add('selected');
       else el.classList.remove('selected');
+      // Tooltip natif : nom de la zone au survol de la souris
+      let title = el.querySelector('title');
+      if (!title) { title = document.createElementNS('http://www.w3.org/2000/svg', 'title'); el.insertBefore(title, el.firstChild); }
+      title.textContent = translatePainLabel(el.getAttribute('data-label') || z);
     });
   }, 0);
 
@@ -11596,6 +11626,23 @@ function showPainDetail(date, joueur) {
   modal.addEventListener('click', function(e) {
     if (e.target === modal) modal.remove();
   });
+}
+
+// Survol d'une zone dans la liste → la met en avant sur le mannequin (et inversement)
+function highlightPainZone(zone, on) {
+  const cont = document.getElementById('pain-detail-svg-container');
+  if (!cont) return;
+  const el = cont.querySelector('.muscle[data-zone="' + zone + '"]');
+  if (!el) return;
+  if (on) {
+    el.style.filter = 'brightness(1.6)';
+    el.style.stroke = '#fde047';
+    el.style.strokeWidth = '3';
+  } else {
+    el.style.filter = '';
+    el.style.stroke = '';
+    el.style.strokeWidth = '';
+  }
 }
 
 // Listener date Hooper
