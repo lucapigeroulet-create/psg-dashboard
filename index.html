@@ -5566,7 +5566,8 @@ function renderOverviewActivity() {
   });
   const statusCats = ['REST', 'INJURY', 'SICK', 'ABSENT', 'SUSPENDED'];
   const trainingTypes = Array.from(trainingTypeMap.values()).sort((a, b) => a.localeCompare(b));
-  const allCats = ['MATCH', ...trainingTypes, ...statusCats];
+  const PLAN_CAT = 'SÉANCE PLANIFIÉE';
+  const allCats = ['MATCH', PLAN_CAT, ...trainingTypes, ...statusCats];
 
   const dayData = {};
   dates.forEach(d => { dayData[d] = {}; allCats.forEach(c => dayData[d][c] = 0); });
@@ -5608,11 +5609,27 @@ function renderOverviewActivity() {
     dayData[m.date]['MATCH'] += joueursMatch.size;
   });
 
+  // Compter les joueurs ayant effectué (validé) une séance planifiée, par jour de la séance
+  const planById = {};
+  (state.bdd_seances_plan || []).forEach(sp => { planById[sp.id] = sp; });
+  const planDoneByDay = {};  // date -> Set de joueurs ayant validé une séance planifiée ce jour
+  (state.bdd_seances_plan_faites || []).forEach(f => {
+    const sp = planById[f.seance_id];
+    if (!sp || !sp.date || !dayData[sp.date]) return;  // séance inconnue ou hors intervalle
+    if (!planDoneByDay[sp.date]) planDoneByDay[sp.date] = new Set();
+    planDoneByDay[sp.date].add(f.joueur);
+  });
+  Object.keys(planDoneByDay).forEach(d => {
+    if (dayData[d][PLAN_CAT] === undefined) dayData[d][PLAN_CAT] = 0;
+    dayData[d][PLAN_CAT] += planDoneByDay[d].size;
+  });
+
   const finalCats = Array.from(new Set([...allCats, ...dates.flatMap(d => Object.keys(dayData[d] || {}))]));
 
   const catColor = (cat) => {
     // Statuts : couleurs nettement distinctes
     if (cat === 'MATCH') return '#eab308';      // jaune doré
+    if (cat === 'SÉANCE PLANIFIÉE') return '#ec4899'; // rose vif — séances planifiées validées
     if (cat === 'REST') return '#64748b';       // gris-bleu
     if (cat === 'INJURY') return '#ef4444';     // rouge vif
     if (cat === 'SICK') return '#a855f7';       // violet
