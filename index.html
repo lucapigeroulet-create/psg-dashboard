@@ -250,6 +250,10 @@
   .cal-cell.injury { background: #7f1d1d88; }
   .cal-cell.sick { background: #78350f88; }
   .cal-cell.absent { background: #71341288; }
+  /* Colonne du jour : encadrée par des lignes verticales (accent) pour repérage rapide */
+  .cal-header.cal-today { border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); color: var(--accent-light); }
+  .cal-cell.cal-today { border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); }
+  .cal-cell.cal-today-last { border-bottom: 2px solid var(--accent); }
 
   .chart-container { position: relative; height: 360px; margin-top: 8px; }
   .chart-container.tall { height: 480px; }
@@ -6151,11 +6155,13 @@ function renderCalendar() {
     return;
   }
 
+  const todayIso = toLocalISO(new Date());
   let html = '<div class="calendar-grid" style="grid-template-columns: 160px repeat(' + dates.length + ', minmax(110px, 1fr));">';
   html += '<div class="cal-header">Joueur</div>';
-  dates.forEach(d => html += '<div class="cal-header">' + formatDateFR(d) + '</div>');
+  dates.forEach(d => html += '<div class="cal-header' + (d === todayIso ? ' cal-today' : '') + '">' + formatDateFR(d) + '</div>');
 
-  players.forEach(p => {
+  players.forEach((p, pi) => {
+    const isLastRow = (pi === players.length - 1);
     const info = getJoueurInfo(p);
     html += '<div class="cal-cell player-name"><div>' + p + '</div><div style="font-size:9px;color:var(--text-dim);">' + info.groupe + '</div></div>';
     dates.forEach(d => {
@@ -6174,7 +6180,8 @@ function renderCalendar() {
         const labelToShow = STATUTS_NON_ENT.includes(s) ? getStatutLabel(s) : s;
         return '<div>' + escapeHtml(labelToShow) + '</div>';
       }).join('');
-      html += '<div class="cal-cell ' + cls + '">' + (content || '<span style="color:var(--text-dim)">—</span>') + '</div>';
+      const todayCls = (d === todayIso) ? (' cal-today' + (isLastRow ? ' cal-today-last' : '')) : '';
+      html += '<div class="cal-cell ' + cls + todayCls + '">' + (content || '<span style="color:var(--text-dim)">—</span>') + '</div>';
     });
   });
   html += '</div>';
