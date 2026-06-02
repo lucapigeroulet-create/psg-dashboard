@@ -2360,6 +2360,88 @@
   </div>
 
 
+  <!-- ========== TESTING (tests physiques / performance — staff) ========== -->
+  <div class="view" id="view-testing">
+    <!-- 1) Catalogue des types de tests -->
+    <div class="card">
+      <h2>🧪 Catalogue des tests</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Crée les types de tests que tu pourras ensuite renseigner pour les joueurs (ex : Sprint 30m, VMA, Détente verticale…).</p>
+      <div class="form-row">
+        <div style="flex:2;">
+          <label>Nom du test</label>
+          <input type="text" id="tt-nom" placeholder="Ex : Sprint 30m" />
+        </div>
+        <div style="flex:1;">
+          <label>Catégorie (optionnel)</label>
+          <input type="text" id="tt-cat" placeholder="Ex : Vitesse" list="tt-cat-list" />
+          <datalist id="tt-cat-list"></datalist>
+        </div>
+        <div style="flex:1;">
+          <label>Unité (optionnel)</label>
+          <input type="text" id="tt-unite" placeholder="Ex : s, cm, km/h" />
+        </div>
+        <div style="display:flex; align-items:end;">
+          <button class="btn" onclick="createTestType()">➕ Ajouter</button>
+        </div>
+      </div>
+      <div id="test-types-list" style="margin-top:14px;"></div>
+    </div>
+
+    <!-- 2) Saisie d'un résultat -->
+    <div class="card">
+      <h2>✍️ Saisir un résultat</h2>
+      <div class="form-row">
+        <div style="flex:1;">
+          <label>Test</label>
+          <select id="tr-type"></select>
+        </div>
+        <div style="flex:1;">
+          <label>Joueur</label>
+          <select id="tr-joueur"></select>
+        </div>
+        <div>
+          <label>Date</label>
+          <input type="date" id="tr-date" />
+        </div>
+        <div>
+          <label>Valeur</label>
+          <input type="number" step="any" id="tr-valeur" placeholder="0" />
+        </div>
+        <div style="flex:1;">
+          <label>Notes (optionnel)</label>
+          <input type="text" id="tr-notes" placeholder="Remarque…" />
+        </div>
+        <div style="display:flex; align-items:end;">
+          <button class="btn" onclick="saveTestResult()">💾 Enregistrer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3) Résultats enregistrés -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <h2 style="margin:0;">📊 Résultats enregistrés</h2>
+        <div class="filters" style="margin:0;">
+          <div class="filter-group">
+            <label>Filtrer par test</label>
+            <select id="tr-filter-type" onchange="renderTestResults()"><option value="">Tous</option></select>
+          </div>
+          <div class="filter-group">
+            <label>Filtrer par joueur</label>
+            <select id="tr-filter-joueur" onchange="renderTestResults()"><option value="">Tous</option></select>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap" style="max-height:500px; margin-top:12px;">
+        <table id="test-results-table">
+          <thead><tr><th>Date</th><th>Test</th><th>Catégorie</th><th>Joueur</th><th>Valeur</th><th>Notes</th><th>Actions</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+
   <!-- ========== MESSAGES (annonces staff → joueurs) ========== -->
   <div class="view" id="view-messages">
     <!-- Composer (staff uniquement) -->
@@ -4338,8 +4420,8 @@ function applyRoleRestrictions() {
     if (gestionDropdown) gestionDropdown.style.display = 'none';
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = 'none';
-    // Masquer Charge RPE et Données GPS
-    document.querySelectorAll('.nav-btn[data-view="rpe"], .nav-btn[data-view="gps"]').forEach(b => b.style.display = 'none');
+    // Masquer Charge RPE, Données GPS et Testing (réservé staff/admin)
+    document.querySelectorAll('.nav-btn[data-view="rpe"], .nav-btn[data-view="gps"], .nav-btn[data-view="testing"]').forEach(b => b.style.display = 'none');
     // Afficher le bouton Saisie blessures direct
     document.querySelectorAll('.médical-only-btn').forEach(b => b.style.display = '');
   } else {
@@ -5364,6 +5446,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'player-seances') renderPlayerSeances();
     else if (view === 'medical') renderMedical();
     else if (view === 'medical-notes') renderMedicalNotes();
+    else if (view === 'testing') renderTesting();
   });
 });
 
@@ -13189,6 +13272,174 @@ function renderMedicalNotes() {
       '<button class="btn btn-secondary" style="padding:3px 10px; font-size:11px; color:#f87171;" onclick="deleteMedicalNote(' + JSON.stringify(n.id) + ')">🗑 Supprimer</button>' +
       '</div></div>';
   }).join('');
+}
+
+// ============================================================================
+// TESTING — catalogue de tests configurables + saisie de résultats (staff/admin)
+// ============================================================================
+function renderTesting() {
+  const dateEl = document.getElementById('tr-date');
+  if (dateEl && !dateEl.value) dateEl.value = toLocalISO(new Date());
+  populateTestingSelects();
+  renderTestTypesList();
+  renderTestResults();
+}
+
+function testTypeById(id) {
+  return (state.bdd_test_types || []).find(t => t.id === id) || null;
+}
+
+function populateTestingSelects() {
+  const types = (state.bdd_test_types || []).slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+  const players = getAllPlayers();
+
+  // Sélecteur de test (saisie)
+  const typeSel = document.getElementById('tr-type');
+  if (typeSel) {
+    const prev = typeSel.value;
+    typeSel.innerHTML = types.length
+      ? types.map(t => '<option value="' + t.id + '">' + escapeHtml(t.nom) + (t.unite ? ' (' + escapeHtml(t.unite) + ')' : '') + '</option>').join('')
+      : '<option value="">— Crée d\'abord un test —</option>';
+    if (prev) typeSel.value = prev;
+  }
+  // Sélecteur joueur (saisie)
+  const joueurSel = document.getElementById('tr-joueur');
+  if (joueurSel) {
+    const prev = joueurSel.value;
+    joueurSel.innerHTML = players.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+    if (prev) joueurSel.value = prev;
+  }
+  // Filtres
+  const fType = document.getElementById('tr-filter-type');
+  if (fType) {
+    const prev = fType.value;
+    fType.innerHTML = '<option value="">Tous</option>' + types.map(t => '<option value="' + t.id + '">' + escapeHtml(t.nom) + '</option>').join('');
+    fType.value = prev;
+  }
+  const fJoueur = document.getElementById('tr-filter-joueur');
+  if (fJoueur) {
+    const prev = fJoueur.value;
+    fJoueur.innerHTML = '<option value="">Tous</option>' + players.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+    fJoueur.value = prev;
+  }
+  // Datalist des catégories existantes
+  const dl = document.getElementById('tt-cat-list');
+  if (dl) {
+    const cats = [...new Set(types.map(t => t.categorie).filter(Boolean))].sort();
+    dl.innerHTML = cats.map(c => '<option value="' + escapeHtml(c) + '"></option>').join('');
+  }
+}
+
+function renderTestTypesList() {
+  const el = document.getElementById('test-types-list');
+  if (!el) return;
+  const types = (state.bdd_test_types || []).slice().sort((a, b) => (a.categorie || '').localeCompare(b.categorie || '') || (a.nom || '').localeCompare(b.nom || ''));
+  if (!types.length) { el.innerHTML = '<p style="color:var(--text-dim); font-size:12px;">Aucun test dans le catalogue. Ajoute-en un ci-dessus.</p>'; return; }
+  el.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:8px;">' + types.map(t => {
+    const nbResults = (state.bdd_test_results || []).filter(r => r.test_type_id === t.id).length;
+    return '<div style="display:flex; align-items:center; gap:8px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:6px 10px;">' +
+      '<span style="font-size:13px; font-weight:600;">' + escapeHtml(t.nom) + '</span>' +
+      (t.unite ? '<span style="font-size:11px; color:var(--text-dim);">' + escapeHtml(t.unite) + '</span>' : '') +
+      (t.categorie ? '<span style="font-size:10px; background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:1px 6px; color:var(--accent-light);">' + escapeHtml(t.categorie) + '</span>' : '') +
+      '<span style="font-size:10px; color:var(--text-dim);">' + nbResults + ' résultat(s)</span>' +
+      '<button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#f87171;" onclick="deleteTestType(\'' + t.id + '\')" title="Supprimer ce test et ses résultats">🗑</button>' +
+      '</div>';
+  }).join('') + '</div>';
+}
+
+function renderTestResults() {
+  const tbody = document.querySelector('#test-results-table tbody');
+  if (!tbody) return;
+  const fType = (document.getElementById('tr-filter-type') || {}).value || '';
+  const fJoueur = (document.getElementById('tr-filter-joueur') || {}).value || '';
+  let rows = (state.bdd_test_results || []).slice();
+  if (fType) rows = rows.filter(r => r.test_type_id === fType);
+  if (fJoueur) rows = rows.filter(r => r.joueur === fJoueur);
+  rows.sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.created_at || '').localeCompare(a.created_at || ''));
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-dim); padding:20px;">Aucun résultat pour ces filtres.</td></tr>'; return; }
+  tbody.innerHTML = rows.map(r => {
+    const t = testTypeById(r.test_type_id);
+    const nom = t ? t.nom : '—';
+    const cat = t && t.categorie ? t.categorie : '—';
+    const unite = t && t.unite ? t.unite : '';
+    const val = (r.valeur !== null && r.valeur !== undefined) ? (r.valeur + (unite ? ' ' + unite : '')) : '—';
+    return '<tr>' +
+      '<td>' + formatDateFR(r.date) + '</td>' +
+      '<td><b>' + escapeHtml(nom) + '</b></td>' +
+      '<td>' + escapeHtml(cat) + '</td>' +
+      '<td>' + escapeHtml(r.joueur) + '</td>' +
+      '<td><b style="color:var(--accent-light);">' + escapeHtml(String(val)) + '</b></td>' +
+      '<td>' + (r.notes ? escapeHtml(r.notes) : '<span style="color:var(--text-dim);">—</span>') + '</td>' +
+      '<td><button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#f87171;" onclick="deleteTestResult(\'' + r.id + '\')">🗑</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+async function createTestType() {
+  const nom = (document.getElementById('tt-nom').value || '').trim();
+  const categorie = (document.getElementById('tt-cat').value || '').trim() || null;
+  const unite = (document.getElementById('tt-unite').value || '').trim() || null;
+  if (!nom) { toast('Donne un nom au test', 'error'); return; }
+  if ((state.bdd_test_types || []).some(t => (t.nom || '').toLowerCase() === nom.toLowerCase())) {
+    toast('Un test porte déjà ce nom', 'error'); return;
+  }
+  const row = { org: currentOrg, nom, categorie, unite };
+  const { data, error } = await sb.from('test_types').insert(row).select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (data && data[0]) state.bdd_test_types.push(data[0]);
+  document.getElementById('tt-nom').value = '';
+  document.getElementById('tt-cat').value = '';
+  document.getElementById('tt-unite').value = '';
+  renderTesting();
+  toast('Test ajouté ✓', 'success');
+}
+
+async function deleteTestType(id) {
+  const t = testTypeById(id);
+  const nb = (state.bdd_test_results || []).filter(r => r.test_type_id === id).length;
+  const msg = nb > 0
+    ? 'Supprimer le test « ' + (t ? t.nom : '') + ' » et ses ' + nb + ' résultat(s) ?'
+    : 'Supprimer le test « ' + (t ? t.nom : '') + ' » ?';
+  if (!confirm(msg)) return;
+  const { error } = await sb.from('test_types').delete().eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  state.bdd_test_types = state.bdd_test_types.filter(x => x.id !== id);
+  state.bdd_test_results = state.bdd_test_results.filter(r => r.test_type_id !== id); // cascade côté DB
+  renderTesting();
+  toast('Test supprimé', 'success');
+}
+
+async function saveTestResult() {
+  const test_type_id = (document.getElementById('tr-type').value || '');
+  const joueur = (document.getElementById('tr-joueur').value || '');
+  const date = (document.getElementById('tr-date').value || '');
+  const valeurRaw = (document.getElementById('tr-valeur').value || '').trim();
+  const notes = (document.getElementById('tr-notes').value || '').trim() || null;
+  if (!test_type_id) { toast('Choisis un test', 'error'); return; }
+  if (!joueur) { toast('Choisis un joueur', 'error'); return; }
+  if (!date) { toast('Choisis une date', 'error'); return; }
+  if (valeurRaw === '') { toast('Saisis une valeur', 'error'); return; }
+  const valeur = parseFloat(valeurRaw.replace(',', '.'));
+  if (isNaN(valeur)) { toast('Valeur numérique invalide', 'error'); return; }
+  const row = { org: currentOrg, test_type_id, joueur, date, valeur, notes };
+  const { data, error } = await sb.from('test_results').insert(row).select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (data && data[0]) state.bdd_test_results.unshift(data[0]);
+  document.getElementById('tr-valeur').value = '';
+  document.getElementById('tr-notes').value = '';
+  renderTestTypesList();
+  renderTestResults();
+  toast('Résultat enregistré ✓', 'success');
+}
+
+async function deleteTestResult(id) {
+  if (!confirm('Supprimer ce résultat ?')) return;
+  const { error } = await sb.from('test_results').delete().eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  state.bdd_test_results = state.bdd_test_results.filter(r => r.id !== id);
+  renderTestTypesList();
+  renderTestResults();
+  toast('Résultat supprimé', 'success');
 }
 
 // ============================================================================
