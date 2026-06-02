@@ -627,6 +627,7 @@
   <button class="nav-btn" data-view="staff-hooper">💚 État de forme</button>
   <button class="nav-btn" data-view="rpe">💪 Charge RPE</button>
   <button class="nav-btn" data-view="gps">📡 Données GPS</button>
+  <button class="nav-btn staff-only-btn" data-view="testing" id="nav-testing-btn">🧪 Testing</button>
   <button class="nav-btn staff-only-btn" data-view="medical" id="nav-medical-btn">🩺 Médical</button>
   <button class="nav-btn staff-only-btn" data-view="medical-notes" id="nav-medical-notes-btn">📋 Notes médicales</button>
   <button class="nav-btn médical-only-btn" data-view="injury-entry" style="display:none;">🩹 Saisie blessures</button>
@@ -4482,7 +4483,9 @@ async function loadState() {
     bdd_seances_plan_faites: [],
     bdd_blessures: [],
     bdd_best_match: {},
-    bdd_medical_notes: []
+    bdd_medical_notes: [],
+    bdd_test_types: [],
+    bdd_test_results: []
   };
   const setLoad = (t) => { document.getElementById('loading-text').textContent = t; };
 
@@ -4569,6 +4572,14 @@ async function loadState() {
       const { data: mednotes } = await sb.from('medical_notes').select('*').eq('org', currentOrg).order('date', { ascending: false });
       state.bdd_medical_notes = mednotes || [];
     } catch(e) { state.bdd_medical_notes = []; }
+
+    setLoad('Chargement des tests...');
+    try {
+      const { data: tt } = await sb.from('test_types').select('*').eq('org', currentOrg).order('nom');
+      state.bdd_test_types = tt || [];
+      const { data: tr } = await sb.from('test_results').select('*').eq('org', currentOrg).order('date', { ascending: false });
+      state.bdd_test_results = tr || [];
+    } catch(e) { state.bdd_test_types = []; state.bdd_test_results = []; }
 
     setLoad('Chargement des check-ins Hooper...');
     await loadHooperFromSupabase();
@@ -5375,7 +5386,7 @@ function renderOverview() {
 
   // ===== État de l'effectif par jour (compact) =====
   const statusByDay = {};
-  dates.forEach(d => statusByDay[d] = { 'MATCH': 0, 'Entraîné': 0, REST: 0, INJURY: 0, SICK: 0, ABSENT: 0 });
+  dates.forEach(d => statusByDay[d] = { 'MATCH': 0, 'Entraîné': 0, 'Séance planifiée': 0, REST: 0, INJURY: 0, SICK: 0, ABSENT: 0 });
   // Joueurs ayant joué un match ce jour (comptés en MATCH, prioritaire sur entraînement)
   const matchPlayersByDay = {};
   (state.bdd_matchs || []).forEach(m => {
@@ -5399,8 +5410,29 @@ function renderOverview() {
     else cat = 'Entraîné';
     statusByDay[e.date][cat]++;
   });
-  const cats = ['MATCH', 'Entraîné', 'REST', 'INJURY', 'SICK', 'ABSENT'];
-  const colors = ['#eab308', '#22c55e', '#64748b', '#ef4444', '#a855f7', '#f97316'];
+
+  // ===== Séance planifiée : joueurs ayant validé une séance planifiée, non déjà comptés (match/entraînement/statut) =====
+  // On reconstitue l'ensemble des joueurs déjà classés par jour pour éviter de les compter deux fois.
+  const countedByDay = {};  // date -> Set des joueurs déjà classés
+  Object.keys(matchPlayersByDay).forEach(d => { countedByDay[d] = new Set(matchPlayersByDay[d]); });
+  state.bdd_ent.forEach(e => {
+    if (!statusByDay[e.date]) return;
+    if (!countedByDay[e.date]) countedByDay[e.date] = new Set();
+    countedByDay[e.date].add(e.joueur);
+  });
+  const planById = {};
+  (state.bdd_seances_plan || []).forEach(sp => { planById[sp.id] = sp; });
+  (state.bdd_seances_plan_faites || []).forEach(f => {
+    const sp = planById[f.seance_id];
+    if (!sp || !sp.date || !statusByDay[sp.date]) return;  // séance inconnue ou hors plage
+    if (!countedByDay[sp.date]) countedByDay[sp.date] = new Set();
+    if (countedByDay[sp.date].has(f.joueur)) return;        // déjà compté ailleurs
+    countedByDay[sp.date].add(f.joueur);
+    statusByDay[sp.date]['Séance planifiée']++;
+  });
+
+  const cats = ['MATCH', 'Entraîné', 'Séance planifiée', 'REST', 'INJURY', 'SICK', 'ABSENT'];
+  const colors = ['#eab308', '#22c55e', '#ec4899', '#64748b', '#ef4444', '#a855f7', '#f97316'];
   destroyChart('chart-status-stacked');
   charts['chart-status-stacked'] = new Chart(document.getElementById('chart-status-stacked'), {
     type: 'bar',
