@@ -4021,7 +4021,12 @@ async function validateSeanceWithRPE(spId, valeur) {
 // - 'too_early' : la date n'est pas encore arrivée
 // - 'open'      : on est entre le jour J et J+1 (24h après J inclus)
 // - 'expired'   : passé J+1, le joueur ne peut plus valider lui-même (mais l'admin peut)
+// Joueurs exemptés de la fenêtre de validation : peuvent valider une séance à
+// n'importe quelle date (avant le jour J ou après les 24 h). Basé sur l'email
+// du compte connecté, donc l'exemption ne vaut que pour ce joueur précis.
+const VALIDATION_WINDOW_EXEMPT_EMAILS = ['lucas@tegg.fr'];
 function getValidationWindowStatus(dateIso) {
+  if (VALIDATION_WINDOW_EXEMPT_EMAILS.includes(((currentUser && currentUser.email) || '').toLowerCase())) return 'open';
   const today = toLocalISO(new Date());
   if (dateIso > today) return 'too_early';
   // Jour J et J+1 sont autorisés
