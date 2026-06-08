@@ -2905,8 +2905,8 @@ async function loadProfileAndStart() {
   currentRole = profile.role;
   const MEDICAL_EMAILS = ['christian@tegg.fr', 'lucasm@psg.fr'];
   if (MEDICAL_EMAILS.includes((currentUser.email || '').toLowerCase())) currentRole = 'médical';
-  const DIRECTION_UUIDS = ['81c45962-3ba8-49aa-8e5d-0e9d8963d53f', 'c067d9aa-1193-41e4-bf0d-66c2ef511f02'];
-  if (DIRECTION_UUIDS.includes(currentUser.id)) { currentRole = 'direction'; profile.org = 'TEGG'; }
+  // Le rôle 'direction' et l'org viennent désormais directement de la table profiles
+  // (role='direction', org='TEGG'), garantis par les policies RLS. Plus de hardcode d'UID ici.
   currentJoueurNom = profile.joueur_nom;
   // Normaliser le nom (supprimer espaces superflus) pour fiabiliser le lien compte ↔ joueur
   if (currentJoueurNom) currentJoueurNom = String(currentJoueurNom).trim();
@@ -6349,21 +6349,6 @@ function renderCalendar() {
       const farthest = futureWithActivity[Math.min(futureWithActivity.length - 1, 3)]; // jusqu'à 4 dates supplémentaires
       const extended = buildDateRange(toLocalISO(startDt), farthest);
       dates = extended.length <= 10 ? extended : extended.slice(0, 10);
-    }
-    // Garde-fou : si la fenêtre autour d'aujourd'hui ne couvre AUCUNE activité mais
-    // qu'il existe des séances/plannings à d'autres dates (saison passée, données
-    // antérieures à aujourd'hui...), se recentrer sur l'activité la plus récente.
-    // Sinon le calendrier affiche les joueurs mais des cases vides alors que des
-    // données existent bel et bien.
-    const winStart = dates[0];
-    const winEnd   = dates[dates.length - 1];
-    const hasActivityInWindow = activityDates.some(d => d >= winStart && d <= winEnd);
-    if (!hasActivityInWindow && activityDates.length > 0) {
-      const lastActivity = activityDates[activityDates.length - 1]; // trié croissant → plus récente
-      const [ly, lm, ld] = lastActivity.split('-').map(Number);
-      const anchorStart = new Date(ly, lm - 1, ld);
-      anchorStart.setDate(anchorStart.getDate() - 9); // 10 jours se terminant sur la dernière activité
-      dates = buildDateRange(toLocalISO(anchorStart), lastActivity);
     }
   }
 
@@ -12516,11 +12501,13 @@ async function resetData() {
     'Cette action est irréversible. Continuer ?';
   if (!confirm(msg)) return;
 
-  // Supprimer sur Supabase
-  await sb.from('rpe_declarations').delete().not('id', 'is', null);
-  await sb.from('gps_data').delete().not('id', 'is', null);
-  await sb.from('plannings').delete().not('id', 'is', null);
-  await sb.from('seances').delete().not('id', 'is', null);
+  // Supprimer sur Supabase — UNIQUEMENT pour l'organisation active.
+  // ⚠️ Sans le filtre .eq('org', currentOrg), ces suppressions effaçaient les
+  // données de TOUTES les organisations (ex : un reset sur PSG vidait aussi TEGG).
+  await sb.from('rpe_declarations').delete().eq('org', currentOrg);
+  await sb.from('gps_data').delete().eq('org', currentOrg);
+  await sb.from('plannings').delete().eq('org', currentOrg);
+  await sb.from('seances').delete().eq('org', currentOrg);
 
   state.bdd_ent = [];
   state.bdd_ent2 = [];
