@@ -6350,6 +6350,21 @@ function renderCalendar() {
       const extended = buildDateRange(toLocalISO(startDt), farthest);
       dates = extended.length <= 10 ? extended : extended.slice(0, 10);
     }
+    // Garde-fou : si la fenêtre autour d'aujourd'hui ne couvre AUCUNE activité mais
+    // qu'il existe des séances/plannings à d'autres dates (saison passée, données
+    // antérieures à aujourd'hui...), se recentrer sur l'activité la plus récente.
+    // Sinon le calendrier affiche les joueurs mais des cases vides alors que des
+    // données existent bel et bien.
+    const winStart = dates[0];
+    const winEnd   = dates[dates.length - 1];
+    const hasActivityInWindow = activityDates.some(d => d >= winStart && d <= winEnd);
+    if (!hasActivityInWindow && activityDates.length > 0) {
+      const lastActivity = activityDates[activityDates.length - 1]; // trié croissant → plus récente
+      const [ly, lm, ld] = lastActivity.split('-').map(Number);
+      const anchorStart = new Date(ly, lm - 1, ld);
+      anchorStart.setDate(anchorStart.getDate() - 9); // 10 jours se terminant sur la dernière activité
+      dates = buildDateRange(toLocalISO(anchorStart), lastActivity);
+    }
   }
 
   const container = document.getElementById('calendarContainer');
