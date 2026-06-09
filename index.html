@@ -1037,6 +1037,7 @@
       <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
         Pour la semaine choisie : pourcentage de séances planifiées validées par joueur, avec le détail jour par jour
         (<b>validées / planifiées</b>). Vert = tout validé, orange = partiel, bleu = à faire, rouge = non validé depuis plus de 48 h.
+        <br>Le <b>% validé</b> ne tient compte que des séances <b>déjà validées</b> ou <b>échues (&gt; 48 h)</b> : les séances non validées de moins de 48 h (bleu) sont exclues du ratio. La colonne <b>Total</b>, elle, affiche toutes les séances planifiées.
         <br>💡 Clique sur les en-têtes <b>Joueur</b>, <b>% validé</b> ou <b>Total</b> pour trier le tableau.
       </p>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:flex-end;">
@@ -6522,23 +6523,28 @@ function computeBilanData() {
   players = players.filter(p => weekSeances.some(sp => seancePlanCibleJoueur(sp, p)));
 
   const rows = players.map(p => {
-    let weekDone = 0, weekTotal = 0;
+    let weekDone = 0, weekTotal = 0, weekRatioBase = 0;
     const days = dates.map(d => {
       const daySeances = weekSeances.filter(sp => sp.date === d && seancePlanCibleJoueur(sp, p));
       const total = daySeances.length;
       if (total === 0) return { total: 0, done: 0, status: 'none', titre: '' };
       const done = daySeances.filter(sp => seancePlanEstFaite(sp.id, p)).length;
+      const overdue = seancePlanEnRetard48h(d);
       weekDone += done; weekTotal += total;
+      // Dénominateur du ratio : on ne compte une séance non validée que si elle est
+      // échue depuis plus de 48 h (= ratée). Les séances non validées de moins de 48 h
+      // (à venir / pas encore dues) sont exclues du calcul du %.
+      weekRatioBase += overdue ? total : done;
       let status;
       if (done === total) status = 'done';
       else if (done > 0)  status = 'partial';
-      else if (seancePlanEnRetard48h(d)) status = 'overdue';
+      else if (overdue)   status = 'overdue';
       else status = 'todo';
       const titre = daySeances.map(sp => (seancePlanEstFaite(sp.id, p) ? '✅ ' : '⏳ ') + (sp.type || 'Séance')).join(' • ');
       return { total, done, status, titre };
     });
-    const pct = weekTotal > 0 ? Math.round(100 * weekDone / weekTotal) : null;
-    return { player: p, days, weekDone, weekTotal, pct };
+    const pct = weekRatioBase > 0 ? Math.round(100 * weekDone / weekRatioBase) : null;
+    return { player: p, days, weekDone, weekTotal, weekRatioBase, pct };
   });
 
   // Tri
