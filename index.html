@@ -301,6 +301,9 @@
   .cal-planned { background:#3730a3; color:#c7d2fe; border-radius:4px; padding:2px 4px; margin:1px 0; cursor:pointer; font-size:11px; font-weight:600; }
   .cal-planned:hover { background:#4338ca; }
   .cal-planned.done { background:#16a34a; color:#dcfce7; border:1px solid #86efac; box-shadow:0 0 0 1px rgba(34,197,94,0.4) inset; }
+  /* Séance planifiée non validée depuis plus de 48h : alerte rouge */
+  .cal-planned.overdue { background:#7f1d1d; color:#fecaca; border:1px solid #ef4444; box-shadow:0 0 0 1px rgba(239,68,68,0.5) inset; }
+  .cal-planned.overdue:hover { background:#991b1b; }
   .cal-cell.rest { background: #37415188; }
   .cal-cell.injury { background: #7f1d1d88; }
   .cal-cell.sick { background: #78350f88; }
@@ -951,7 +954,7 @@
     <div class="card" id="calendar-plan-history-card">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
         <h2 style="margin:0;">📋 Séances planifiées <span id="sp-hist-count" style="font-size:12px; font-weight:400; color:var(--text-dim);"></span></h2>
-        <button class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="resetSpHistFilters()">↺ Réinitialiser</button>
+        <button class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="resetSpHistFilters()">↺ Réinitialiser les filtres</button>
       </div>
       <!-- Filtres -->
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; align-items:flex-end;">
@@ -997,6 +1000,8 @@
         <div class="legend-item"><div class="legend-color" style="background:#78350f"></div>Malade</div>
         <div class="legend-item"><div class="legend-color" style="background:#713f12"></div>Absent</div>
         <div class="legend-item"><div class="legend-color" style="background:#3730a3"></div>📋 Planifiée</div>
+        <div class="legend-item"><div class="legend-color" style="background:#16a34a"></div>✅ Validée</div>
+        <div class="legend-item"><div class="legend-color" style="background:#7f1d1d; border:1px solid #ef4444;"></div>⚠️ Non validée &gt; 48h</div>
       </div>
       <div class="filters">
         <div class="filter-group">
@@ -5237,6 +5242,17 @@ function seancePlanEstFaite(spId, joueur) {
   return (state.bdd_seances_plan_faites || []).some(f => f.seance_id === spId && f.joueur === joueur);
 }
 
+// Une séance planifiée est « en retard » si plus de 48 h se sont écoulées depuis
+// le début (minuit, heure locale) de sa date prévue. Utilisé pour signaler en rouge
+// dans le calendrier les séances non validées de plus de 48 h.
+function seancePlanEnRetard48h(dateIso) {
+  if (!dateIso) return false;
+  const [y, m, d] = dateIso.split('-').map(Number);
+  if (!y || !m || !d) return false;
+  const debutJour = new Date(y, m - 1, d).getTime(); // minuit local de la date prévue
+  return (Date.now() - debutJour) > 48 * 60 * 60 * 1000;
+}
+
 function setSeancesJoueur(date, joueur, seances) {
   // Ne jamais persister dans le planning :
   //  - les badges de match (préfixe ⚽) : ils viennent de la table matchs
@@ -6382,7 +6398,12 @@ function renderCalendar() {
           const label = s.slice(2, sep);
           const spId = s.slice(sep + 1);
           const faite = seancePlanEstFaite(spId, p);
-          return '<div class="cal-planned' + (faite ? ' done' : '') + '" onclick="openSeancePlanDetail(\'' + spId + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="' + (faite ? 'Séance effectuée' : 'Séance planifiée — voir le détail') + '">' + (faite ? '✅' : '📋') + ' ' + escapeHtml(label.trim()) + '</div>';
+          // Non validée + prévue il y a plus de 48 h → alerte rouge
+          const overdue = !faite && seancePlanEnRetard48h(d);
+          const planCls = faite ? ' done' : (overdue ? ' overdue' : '');
+          const planIcon = faite ? '✅' : (overdue ? '⚠️' : '📋');
+          const planTitle = faite ? 'Séance effectuée' : (overdue ? 'Séance non validée depuis plus de 48 h' : 'Séance planifiée — voir le détail');
+          return '<div class="cal-planned' + planCls + '" onclick="openSeancePlanDetail(\'' + spId + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="' + planTitle + '">' + planIcon + ' ' + escapeHtml(label.trim()) + '</div>';
         }
         // Si c'est un statut système, afficher son libellé localisé
         const labelToShow = STATUTS_NON_ENT.includes(s) ? getStatutLabel(s) : s;
