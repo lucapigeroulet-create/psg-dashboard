@@ -4410,6 +4410,7 @@ async function switchOrg(org) {
   if (v === 'match-entry' && typeof renderMatchEntry === 'function') renderMatchEntry();
   if (v === 'calendar' && typeof renderCalendar === 'function') renderCalendar();
   if (v === 'rpe' && typeof renderRPE === 'function') renderRPE();
+  if (v === 'gps' && typeof renderGPS === 'function') renderGPS();
   toast('Vue ' + org + ' activée', 'success');
 }
 
@@ -5620,13 +5621,15 @@ function renderOverview() {
 
   // ===== Initialiser les filtres de charge =====
   const groupSel = document.getElementById('overview-charge-group');
-  if (groupSel && groupSel.options.length === 0) {
+  if (groupSel && (groupSel.options.length === 0 || groupSel.dataset.org !== currentOrg)) {
     ensureGroupsList();
     groupSel.innerHTML = state.groupes.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+    groupSel.dataset.org = currentOrg;
   }
   const playerSel = document.getElementById('overview-charge-player');
-  if (playerSel && playerSel.options.length === 0) {
+  if (playerSel && (playerSel.options.length === 0 || playerSel.dataset.org !== currentOrg)) {
     playerSel.innerHTML = getAllPlayers().map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+    playerSel.dataset.org = currentOrg;
   }
   // Bornes par défaut des intervalles de dates (charges + activité)
   const allDates = getAllDates();
@@ -6638,8 +6641,10 @@ function renderRPE() {
   if (!weekSel.value && weeks.length > 0) weekSel.value = weeks[0].mondayIso;
 
   // Remplir le filtre type
+  // On reconstruit quand l'organisation change (sinon le filtre garde les types
+  // de l'org précédente après un switch d'organisation).
   const typeSel = document.getElementById('rpe-filter-type');
-  if (typeSel.options.length <= 1) {
+  if (typeSel.options.length <= 1 || typeSel.dataset.org !== currentOrg) {
     const types = uniqueSorted(state.bdd_ent2.map(s => s.seance).filter(t => t && !STATUTS_NON_ENT.includes(t)));
     // Ajouter les types de match (Match U18, Match U15...) dérivés des matchs enregistrés
     const matchTypes = uniqueSorted((state.bdd_matchs || []).map(m => m.groupe ? ('Match ' + m.groupe) : 'Match'));
@@ -6648,19 +6653,26 @@ function renderRPE() {
     const indivTypes = hasIndiv ? ['Séance individuelle'] : [];
     const allTypes = uniqueSorted([...types, ...matchTypes, ...indivTypes]);
     typeSel.innerHTML = '<option value="">Tous types</option>' + allTypes.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
+    typeSel.value = '';
+    typeSel.dataset.org = currentOrg;
   }
 
-  // Remplir filtre groupe
+  // Remplir filtre groupe (idem : rebâtir sur changement d'organisation)
   const groupSel = document.getElementById('rpe-filter-group');
-  if (groupSel.options.length <= 1) {
+  if (groupSel.options.length <= 1 || groupSel.dataset.org !== currentOrg) {
     ensureGroupsList();
     groupSel.innerHTML = '<option value="">Toutes</option>' + state.groupes.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+    groupSel.value = '';
+    groupSel.dataset.org = currentOrg;
   }
 
-  // Remplir le sélecteur joueur du bilan individuel
+  // Remplir le sélecteur joueur du bilan individuel (rebâtir sur changement d'org
+  // pour afficher les joueurs de la bonne organisation)
   const indivSel = document.getElementById('rpe-indiv-player');
-  if (indivSel.options.length <= 1) {
+  if (indivSel.options.length <= 1 || indivSel.dataset.org !== currentOrg) {
     indivSel.innerHTML = '<option value="">Sélectionner...</option>' + getAllPlayers().map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+    indivSel.value = '';
+    indivSel.dataset.org = currentOrg;
   }
 
   if (weeks.length === 0) {
@@ -7903,15 +7915,19 @@ function renderGPS() {
   }
 
   const groupSel = document.getElementById('gps-group-select');
-  if (groupSel && groupSel.options.length <= 1) {
+  if (groupSel && (groupSel.options.length <= 1 || groupSel.dataset.org !== currentOrg)) {
     ensureGroupsList();
     groupSel.innerHTML = '<option value="">Toutes</option>' + state.groupes.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+    groupSel.value = '';
+    groupSel.dataset.org = currentOrg;
   }
 
   const playerSel = document.getElementById('gps-player-select');
-  if (playerSel && playerSel.options.length === 0) {
+  if (playerSel && (playerSel.options.length === 0 || playerSel.dataset.org !== currentOrg)) {
     const gpsPlayers = uniqueSorted(state.bdd_gps.map(x => x.joueur));
     playerSel.innerHTML = gpsPlayers.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+    playerSel.value = '';
+    playerSel.dataset.org = currentOrg;
   }
 
   const type = document.getElementById('gps-report-type').value;
