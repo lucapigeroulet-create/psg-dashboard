@@ -4411,6 +4411,7 @@ async function switchOrg(org) {
   if (v === 'calendar' && typeof renderCalendar === 'function') renderCalendar();
   if (v === 'rpe' && typeof renderRPE === 'function') renderRPE();
   if (v === 'gps' && typeof renderGPS === 'function') renderGPS();
+  if (v === 'entry' && typeof renderEntry === 'function') renderEntry();
   toast('Vue ' + org + ' activée', 'success');
 }
 
