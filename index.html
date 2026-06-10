@@ -1562,6 +1562,32 @@
       <h3 style="margin-top:16px;">Procédés (jusqu'à 8)</h3>
       <div id="procedes-container"></div>
 
+      <h3 style="margin-top:18px;">📝 Notes de séance (staff)</h3>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Notes internes sur le contenu de la séance — non visibles par les joueurs.</p>
+      <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px;">
+        <div>
+          <label>🏃 Athlétique</label>
+          <textarea id="entry-note-athletique" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Charge, intensité, préparation physique..."></textarea>
+        </div>
+        <div>
+          <label>⚽ Technique</label>
+          <textarea id="entry-note-technique" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Gestes, conduite, passes, finition..."></textarea>
+        </div>
+        <div>
+          <label>🧠 Tactique</label>
+          <textarea id="entry-note-tactique" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Animation, principes de jeu, schémas..."></textarea>
+        </div>
+        <div>
+          <label>💭 Mental</label>
+          <textarea id="entry-note-mental" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Engagement, concentration, attitude..."></textarea>
+        </div>
+      </div>
+
+      <h3 style="margin-top:18px;">👤 Remarques individuelles (staff)</h3>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Remarque par joueur sur le contenu d'entraînement de cette séance — interne, non visible par les joueurs.</p>
+      <div id="seance-remarques-container"></div>
+      <button type="button" class="btn btn-secondary" style="margin-top:8px; padding:6px 12px; font-size:12px;" onclick="addSeanceRemarqueRow()">+ Ajouter une remarque joueur</button>
+
       <div style="margin-top:16px; display:flex; gap:8px;">
         <button class="btn" onclick="saveSeance()">💾 Enregistrer la séance</button>
         <button class="btn btn-secondary" onclick="loadSeanceForEdit()">🔍 Charger pour modifier</button>
@@ -4728,6 +4754,8 @@ async function loadState() {
       date: s.date, nom: s.nom, seance: s.type_seance,
       duree_totale: parseFloat(s.duree_totale) || 0,
       procedes: s.procedes || [],
+      notes: s.notes || null,
+      remarques_joueurs: s.remarques_joueurs || null,
       created_at: s.created_at || null
     }));
 
@@ -4823,6 +4851,8 @@ async function saveSeanceToSupabase(seance) {
     type_seance: seance.seance,
     duree_totale: seance.duree_totale || 0,
     procedes: seance.procedes || [],
+    notes: seance.notes || null,
+    remarques_joueurs: seance.remarques_joueurs || null,
     org: currentOrg
   };
   const { error } = await sb.from('seances').upsert(row, { onConflict: 'date,nom' });
@@ -5020,6 +5050,8 @@ function handleRealtimeChange(table, payload) {
         date: newRow.date, nom: newRow.nom, seance: newRow.type_seance,
         duree_totale: parseFloat(newRow.duree_totale) || 0,
         procedes: newRow.procedes || [],
+        notes: newRow.notes || null,
+        remarques_joueurs: newRow.remarques_joueurs || null,
         created_at: newRow.created_at || null
       };
       if (idx >= 0) state.bdd_ent2[idx] = obj;
@@ -9695,6 +9727,9 @@ function renderEntry() {
   renderEntryExistingSelect();
   renderAffectSeanceSelect();
   renderProcedes();
+  // Réinitialiser les notes de séance et remarques individuelles (cohérent avec les procédés)
+  fillSeanceNotes(null);
+  clearSeanceRemarques();
   renderAffectation();
 }
 
@@ -9783,6 +9818,63 @@ function renderEntryExistingSelect() {
 }
 
 // Charge une séance existante dans le formulaire pour modification
+// ── Notes de séance (4 axes) ────────────────────────────────────────────────
+function collectSeanceNotes() {
+  const get = id => ((document.getElementById(id) || {}).value || '').trim();
+  return {
+    athletique: get('entry-note-athletique'),
+    technique:  get('entry-note-technique'),
+    tactique:   get('entry-note-tactique'),
+    mental:     get('entry-note-mental')
+  };
+}
+function fillSeanceNotes(notes) {
+  notes = notes || {};
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  set('entry-note-athletique', notes.athletique);
+  set('entry-note-technique', notes.technique);
+  set('entry-note-tactique', notes.tactique);
+  set('entry-note-mental', notes.mental);
+}
+
+// ── Remarques individuelles par joueur (rattachées à la séance) ──────────────
+function seanceRemarquePlayerOptions(selected) {
+  return '<option value="">— Joueur —</option>' + getAllPlayers().map(p =>
+    '<option value="' + escapeHtml(p) + '"' + (p === selected ? ' selected' : '') + '>' + escapeHtml(p) + '</option>'
+  ).join('');
+}
+function addSeanceRemarqueRow(joueur, texte) {
+  const cont = document.getElementById('seance-remarques-container');
+  if (!cont) return;
+  const row = document.createElement('div');
+  row.className = 'seance-remarque-row';
+  row.style.cssText = 'display:flex; gap:8px; margin-bottom:6px; align-items:flex-start;';
+  row.innerHTML =
+    '<select class="srq-joueur" style="min-width:150px;">' + seanceRemarquePlayerOptions(joueur || '') + '</select>' +
+    '<input type="text" class="srq-texte" maxlength="2000" placeholder="Remarque sur le contenu d\'entraînement..." style="flex:1; min-width:120px;" value="' + escapeHtml(texte || '') + '" />' +
+    '<button type="button" class="btn btn-danger" style="padding:4px 10px;" onclick="this.closest(\'.seance-remarque-row\').remove()">✕</button>';
+  cont.appendChild(row);
+}
+function clearSeanceRemarques() {
+  const cont = document.getElementById('seance-remarques-container');
+  if (cont) cont.innerHTML = '';
+}
+function renderSeanceRemarquesFromMap(map) {
+  clearSeanceRemarques();
+  Object.entries(map || {})
+    .filter(([j, t]) => j && t && String(t).trim())
+    .forEach(([j, t]) => addSeanceRemarqueRow(j, t));
+}
+function collectSeanceRemarques() {
+  const out = {};
+  document.querySelectorAll('#seance-remarques-container .seance-remarque-row').forEach(row => {
+    const j = ((row.querySelector('.srq-joueur') || {}).value || '').trim();
+    const t = ((row.querySelector('.srq-texte') || {}).value || '').trim();
+    if (j && t) out[j] = t; // une remarque par joueur ; la dernière saisie l'emporte
+  });
+  return out;
+}
+
 function loadExistingSeance() {
   const date = document.getElementById('entry-date').value;
   const nom = document.getElementById('entry-existing').value;
@@ -9797,6 +9889,9 @@ function loadExistingSeance() {
         if (el) el.value = '';
       });
     }
+    // Vider les notes de séance et les remarques individuelles
+    fillSeanceNotes(null);
+    clearSeanceRemarques();
     return;
   }
   const info = getSeanceInfo(date, nom);
@@ -9812,6 +9907,9 @@ function loadExistingSeance() {
       if (el) el.value = (p[k] ?? '');
     });
   }
+  // Notes de séance (4 axes) + remarques individuelles
+  fillSeanceNotes(info.notes);
+  renderSeanceRemarquesFromMap(info.remarques_joueurs);
 }
 
 function clearProcede(i) {
@@ -9866,7 +9964,9 @@ async function saveSeance() {
     }
   }
 
-  const obj = { date, seance, nom, duree_totale: duree, procedes };
+  const notes = collectSeanceNotes();
+  const remarques_joueurs = collectSeanceRemarques();
+  const obj = { date, seance, nom, duree_totale: duree, procedes, notes, remarques_joueurs };
 
   if (editingOriginal) {
     // Modification : retrouver et remplacer
