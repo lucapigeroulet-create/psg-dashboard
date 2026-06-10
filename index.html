@@ -1057,6 +1057,38 @@
         </table>
       </div>
     </div>
+
+    <!-- Comptage saisonnier des vignettes (thèmes travaillés) -->
+    <div class="card" id="calendar-vignettes-card">
+      <h2 style="margin:0 0 6px 0;">🏷️ Vignettes — comptage saison</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
+        Nombre de séances ayant travaillé chaque thème, par aspect. Mode <b>Équipe</b> = toutes les séances ;
+        mode <b>Joueur</b> = uniquement les séances auxquelles le joueur a été affecté.
+      </p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:flex-end;">
+        <div>
+          <label style="display:block; font-size:11px; color:var(--text-dim); margin-bottom:3px;">Vue</label>
+          <select id="vign-stats-mode" onchange="renderVignettesStats()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px;">
+            <option value="team">Équipe (par séance)</option>
+            <option value="player">Par joueur</option>
+          </select>
+        </div>
+        <div id="vign-stats-player-wrap" style="display:none;">
+          <label style="display:block; font-size:11px; color:var(--text-dim); margin-bottom:3px;">Joueur</label>
+          <select id="vign-stats-player" onchange="renderVignettesStats()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px; min-width:140px;"></select>
+        </div>
+        <div>
+          <label style="display:block; font-size:11px; color:var(--text-dim); margin-bottom:3px;">Du</label>
+          <input type="date" id="vign-stats-start" onchange="renderVignettesStats()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px;" />
+        </div>
+        <div>
+          <label style="display:block; font-size:11px; color:var(--text-dim); margin-bottom:3px;">Au</label>
+          <input type="date" id="vign-stats-end" onchange="renderVignettesStats()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px;" />
+        </div>
+        <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="document.getElementById('vign-stats-start').value='';document.getElementById('vign-stats-end').value='';renderVignettesStats()">↺ Toute la saison</button>
+      </div>
+      <div id="vign-stats-content"></div>
+    </div>
   </div>
 
   <!-- ========== RPE ========== -->
@@ -1562,24 +1594,36 @@
       <h3 style="margin-top:16px;">Procédés (jusqu'à 8)</h3>
       <div id="procedes-container"></div>
 
-      <h3 style="margin-top:18px;">📝 Notes de séance (staff)</h3>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Notes internes sur le contenu de la séance — non visibles par les joueurs.</p>
+      <h3 style="margin-top:18px;">📝 Notes & vignettes de séance (staff)</h3>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Notes internes + vignettes (thèmes travaillés) sur le contenu de la séance — non visibles par les joueurs. Tape une vignette puis <b>Entrée</b> pour l'ajouter ; les vignettes déjà utilisées sont proposées en autocomplétion.</p>
       <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px;">
         <div>
-          <label>🏃 Athlétique</label>
+          <label>🏃 Physique / Athlétique</label>
           <textarea id="entry-note-athletique" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Charge, intensité, préparation physique..."></textarea>
+          <div id="vign-chips-physique" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 4px;"></div>
+          <input type="text" id="vign-input-physique" list="vign-list-physique" placeholder="+ vignette (Entrée)…" style="width:100%;" onkeydown="vignInputKey(event,'physique')" />
+          <datalist id="vign-list-physique"></datalist>
         </div>
         <div>
           <label>⚽ Technique</label>
           <textarea id="entry-note-technique" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Gestes, conduite, passes, finition..."></textarea>
+          <div id="vign-chips-technique" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 4px;"></div>
+          <input type="text" id="vign-input-technique" list="vign-list-technique" placeholder="+ vignette (Entrée)…" style="width:100%;" onkeydown="vignInputKey(event,'technique')" />
+          <datalist id="vign-list-technique"></datalist>
         </div>
         <div>
           <label>🧠 Tactique</label>
           <textarea id="entry-note-tactique" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Animation, principes de jeu, schémas..."></textarea>
+          <div id="vign-chips-tactique" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 4px;"></div>
+          <input type="text" id="vign-input-tactique" list="vign-list-tactique" placeholder="+ vignette (Entrée)…" style="width:100%;" onkeydown="vignInputKey(event,'tactique')" />
+          <datalist id="vign-list-tactique"></datalist>
         </div>
         <div>
           <label>💭 Mental</label>
           <textarea id="entry-note-mental" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Engagement, concentration, attitude..."></textarea>
+          <div id="vign-chips-mental" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 4px;"></div>
+          <input type="text" id="vign-input-mental" list="vign-list-mental" placeholder="+ vignette (Entrée)…" style="width:100%;" onkeydown="vignInputKey(event,'mental')" />
+          <datalist id="vign-list-mental"></datalist>
         </div>
       </div>
 
@@ -4756,6 +4800,7 @@ async function loadState() {
       procedes: s.procedes || [],
       notes: s.notes || null,
       remarques_joueurs: s.remarques_joueurs || null,
+      vignettes: s.vignettes || null,
       created_at: s.created_at || null
     }));
 
@@ -4853,6 +4898,7 @@ async function saveSeanceToSupabase(seance) {
     procedes: seance.procedes || [],
     notes: seance.notes || null,
     remarques_joueurs: seance.remarques_joueurs || null,
+    vignettes: seance.vignettes || null,
     org: currentOrg
   };
   const { error } = await sb.from('seances').upsert(row, { onConflict: 'date,nom' });
@@ -5052,6 +5098,7 @@ function handleRealtimeChange(table, payload) {
         procedes: newRow.procedes || [],
         notes: newRow.notes || null,
         remarques_joueurs: newRow.remarques_joueurs || null,
+        vignettes: newRow.vignettes || null,
         created_at: newRow.created_at || null
       };
       if (idx >= 0) state.bdd_ent2[idx] = obj;
@@ -6372,6 +6419,12 @@ function renderCalendar() {
   if (bilanCard) {
     bilanCard.style.display = (isStaff || isDirection) ? '' : 'none';
     if (isStaff || isDirection) renderWeeklyBilan();
+  }
+  // Comptage saisonnier des vignettes (staff + direction uniquement)
+  const vignCard = document.getElementById('calendar-vignettes-card');
+  if (vignCard) {
+    vignCard.style.display = (isStaff || isDirection) ? '' : 'none';
+    if (isStaff || isDirection) renderVignettesStats();
   }
 
   const groupFilter = (document.getElementById('cal-filter-group') || {}).value || '';
@@ -9727,9 +9780,11 @@ function renderEntry() {
   renderEntryExistingSelect();
   renderAffectSeanceSelect();
   renderProcedes();
-  // Réinitialiser les notes de séance et remarques individuelles (cohérent avec les procédés)
+  // Réinitialiser les notes de séance, remarques individuelles et vignettes (cohérent avec les procédés)
   fillSeanceNotes(null);
   clearSeanceRemarques();
+  clearVignettes();
+  refreshVignetteDatalists();
   renderAffectation();
 }
 
@@ -9875,6 +9930,164 @@ function collectSeanceRemarques() {
   return out;
 }
 
+// ── Vignettes (thèmes travaillés) par aspect ────────────────────────────────
+const VIGNETTE_ASPECTS = [
+  { key: 'physique',  label: 'Physique',  icon: '🏃' },
+  { key: 'technique', label: 'Technique', icon: '⚽' },
+  { key: 'tactique',  label: 'Tactique',  icon: '🧠' },
+  { key: 'mental',    label: 'Mental',    icon: '💭' }
+];
+
+function vignInputKey(ev, aspect) {
+  if (ev.key === 'Enter' || ev.key === ',') {
+    ev.preventDefault();
+    addVignetteChip(aspect, ev.target.value);
+    ev.target.value = '';
+  }
+}
+function addVignetteChip(aspect, value) {
+  const v = (value || '').trim();
+  if (!v) return;
+  const cont = document.getElementById('vign-chips-' + aspect);
+  if (!cont) return;
+  const existing = Array.from(cont.querySelectorAll('.vign-chip')).map(c => (c.dataset.val || '').toLowerCase());
+  if (existing.includes(v.toLowerCase())) return; // dédup insensible à la casse
+  const chip = document.createElement('span');
+  chip.className = 'vign-chip';
+  chip.dataset.val = v;
+  chip.style.cssText = 'display:inline-flex; align-items:center; gap:5px; background:var(--bg-elevated); border:1px solid var(--accent); border-radius:12px; padding:2px 9px; font-size:11px;';
+  chip.innerHTML = escapeHtml(v) + ' <span style="cursor:pointer; color:var(--text-dim); font-weight:700;" onclick="this.closest(\'.vign-chip\').remove()">✕</span>';
+  cont.appendChild(chip);
+}
+function collectVignettes() {
+  const out = {};
+  VIGNETTE_ASPECTS.forEach(a => {
+    const cont = document.getElementById('vign-chips-' + a.key);
+    out[a.key] = cont ? Array.from(cont.querySelectorAll('.vign-chip')).map(c => c.dataset.val) : [];
+  });
+  return out;
+}
+function fillVignettes(map) {
+  map = map || {};
+  VIGNETTE_ASPECTS.forEach(a => {
+    const cont = document.getElementById('vign-chips-' + a.key);
+    if (cont) cont.innerHTML = '';
+    (Array.isArray(map[a.key]) ? map[a.key] : []).forEach(v => addVignetteChip(a.key, v));
+  });
+}
+function clearVignettes() {
+  VIGNETTE_ASPECTS.forEach(a => {
+    const cont = document.getElementById('vign-chips-' + a.key);
+    if (cont) cont.innerHTML = '';
+  });
+}
+// Toutes les vignettes déjà utilisées pour un aspect (autocomplétion + comptage)
+function getAllVignettes(aspect) {
+  const set = new Set();
+  (state.bdd_ent2 || []).forEach(s => {
+    const v = s.vignettes && s.vignettes[aspect];
+    if (Array.isArray(v)) v.forEach(x => { if (x) set.add(x); });
+  });
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+function refreshVignetteDatalists() {
+  VIGNETTE_ASPECTS.forEach(a => {
+    const dl = document.getElementById('vign-list-' + a.key);
+    if (dl) dl.innerHTML = getAllVignettes(a.key).map(v => '<option value="' + escapeHtml(v) + '"></option>').join('');
+  });
+}
+
+// Comptage saisonnier des vignettes (modes Équipe / Joueur)
+function renderVignettesStats() {
+  const contentEl = document.getElementById('vign-stats-content');
+  if (!contentEl) return;
+  const modeSel   = document.getElementById('vign-stats-mode');
+  const playerSel = document.getElementById('vign-stats-player');
+  const playerWrap= document.getElementById('vign-stats-player-wrap');
+  const startEl   = document.getElementById('vign-stats-start');
+  const endEl     = document.getElementById('vign-stats-end');
+
+  const mode = modeSel ? modeSel.value : 'team';
+  if (playerWrap) playerWrap.style.display = (mode === 'player') ? '' : 'none';
+
+  // Sélecteur joueur (reconstruit au changement d'org)
+  if (playerSel && playerSel.dataset.org !== currentOrg) {
+    const cur = playerSel.value;
+    const players = getAllPlayers();
+    playerSel.innerHTML = players.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+    if (cur && players.includes(cur)) playerSel.value = cur;
+    playerSel.dataset.org = currentOrg;
+  }
+
+  const fromIso = startEl ? startEl.value : '';
+  const toIso   = endEl ? endEl.value : '';
+
+  // Séances de la période (hors statuts)
+  let seances = (state.bdd_ent2 || []).filter(s => {
+    if (s.seance && STATUTS_NON_ENT.includes(s.seance)) return false;
+    if (fromIso && s.date < fromIso) return false;
+    if (toIso && s.date > toIso) return false;
+    return true;
+  });
+
+  let scopeLabel = '';
+  if (mode === 'player') {
+    const player = playerSel ? playerSel.value : '';
+    if (!player) { contentEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px;">Sélectionne un joueur.</div>'; return; }
+    // Séances auxquelles le joueur a été affecté (via plannings)
+    const keys = new Set();
+    (state.bdd_ent || []).forEach(pl => {
+      if (pl.joueur !== player) return;
+      (pl.seances || []).forEach(s => keys.add(pl.date + '|' + s));
+    });
+    seances = seances.filter(s => keys.has(s.date + '|' + s.nom));
+    scopeLabel = player;
+  }
+
+  // Comptage par aspect → vignette
+  const counts = {};
+  VIGNETTE_ASPECTS.forEach(a => counts[a.key] = {});
+  let nbAvecVignette = 0;
+  seances.forEach(s => {
+    let hasAny = false;
+    VIGNETTE_ASPECTS.forEach(a => {
+      const v = s.vignettes && s.vignettes[a.key];
+      if (Array.isArray(v)) v.forEach(tag => {
+        if (!tag) return;
+        counts[a.key][tag] = (counts[a.key][tag] || 0) + 1;
+        hasAny = true;
+      });
+    });
+    if (hasAny) nbAvecVignette++;
+  });
+
+  const blocks = VIGNETTE_ASPECTS.map(a => {
+    const entries = Object.entries(counts[a.key]).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]));
+    const max = entries.length ? entries[0][1] : 0;
+    const rows = entries.length
+      ? entries.map(([tag, n]) => {
+          const pct = max ? Math.round(100 * n / max) : 0;
+          return '<div style="display:flex; align-items:center; gap:8px; margin-bottom:5px;">' +
+            '<div style="flex:1; min-width:0;">' +
+              '<div style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(tag) + '</div>' +
+              '<div style="height:5px; background:var(--bg-card); border-radius:3px; overflow:hidden;"><div style="height:100%; width:' + pct + '%; background:var(--accent);"></div></div>' +
+            '</div>' +
+            '<div style="font-weight:700; font-size:13px; min-width:24px; text-align:right;">' + n + '</div>' +
+          '</div>';
+        }).join('')
+      : '<div style="color:var(--text-dim); font-size:12px;">—</div>';
+    return '<div style="flex:1; min-width:200px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:12px;">' +
+      '<div style="font-weight:700; margin-bottom:8px;">' + a.icon + ' ' + a.label + '</div>' + rows +
+    '</div>';
+  }).join('');
+
+  const header = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">' +
+    (mode === 'player' ? ('Joueur : <b style="color:var(--text);">' + escapeHtml(scopeLabel) + '</b> · ') : '') +
+    seances.length + ' séance(s) dans la période · ' + nbAvecVignette + ' avec vignette(s)</div>';
+
+  contentEl.innerHTML = header + '<div style="display:flex; gap:12px; flex-wrap:wrap;">' + blocks + '</div>';
+}
+
 function loadExistingSeance() {
   const date = document.getElementById('entry-date').value;
   const nom = document.getElementById('entry-existing').value;
@@ -9889,9 +10102,10 @@ function loadExistingSeance() {
         if (el) el.value = '';
       });
     }
-    // Vider les notes de séance et les remarques individuelles
+    // Vider les notes de séance, les remarques individuelles et les vignettes
     fillSeanceNotes(null);
     clearSeanceRemarques();
+    clearVignettes();
     return;
   }
   const info = getSeanceInfo(date, nom);
@@ -9907,9 +10121,10 @@ function loadExistingSeance() {
       if (el) el.value = (p[k] ?? '');
     });
   }
-  // Notes de séance (4 axes) + remarques individuelles
+  // Notes de séance (4 axes) + remarques individuelles + vignettes
   fillSeanceNotes(info.notes);
   renderSeanceRemarquesFromMap(info.remarques_joueurs);
+  fillVignettes(info.vignettes);
 }
 
 function clearProcede(i) {
@@ -9966,7 +10181,8 @@ async function saveSeance() {
 
   const notes = collectSeanceNotes();
   const remarques_joueurs = collectSeanceRemarques();
-  const obj = { date, seance, nom, duree_totale: duree, procedes, notes, remarques_joueurs };
+  const vignettes = collectVignettes();
+  const obj = { date, seance, nom, duree_totale: duree, procedes, notes, remarques_joueurs, vignettes };
 
   if (editingOriginal) {
     // Modification : retrouver et remplacer
