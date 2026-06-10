@@ -12190,6 +12190,15 @@ document.addEventListener('change', function(e) {
 // VUES JOUEUR (rôle lecteur)
 // ============================================================================
 
+// Ouvre la vue "Noter les séances" sur une date donnée (séances live)
+function playerRateLiveDate(dateIso) {
+  const di = document.getElementById('player-rpe-date');
+  if (di) di.value = dateIso;
+  const btn = document.querySelector('.nav-btn.player-only[data-view="player-rpe"]');
+  if (btn) btn.click();
+  else if (typeof renderPlayerRPE === 'function') renderPlayerRPE();
+}
+
 async function renderPlayerOverview() {
   if (!currentJoueurNom) return;
   const isFR = (playerLang() === 'fr');
@@ -12229,26 +12238,61 @@ async function renderPlayerOverview() {
   // ── 2. Séances à noter (faites sans RPE, fenêtre encore ouverte) ──────────
   const rpeEl = document.getElementById('po-rpe-content');
   if (rpeEl) {
-    const aNoter = (state.bdd_seances_plan || []).filter(sp => {
+    // ── Séances planifiées (autonomie) : validées mais pas encore notées, fenêtre ouverte ──
+    const planANoter = (state.bdd_seances_plan || []).filter(sp => {
       if (!seancePlanCibleJoueur(sp, currentJoueurNom)) return false;
       if (!seancePlanEstFaite(sp.id, currentJoueurNom)) return false;
       if (getSeancePlanRPE(sp.id, currentJoueurNom) !== null) return false;
       return getValidationWindowStatus(sp.date) === 'open';
     });
-    if (aNoter.length === 0) {
+
+    // ── Séances live (équipe) : dans le planning, non notées, fenêtre (48 h) encore ouverte ──
+    const cutoff = toLocalISO(new Date(Date.now() - 14 * 86400000)); // on ne remonte pas au-delà de 14 j
+    const liveANoter = [];
+    (state.bdd_ent || []).forEach(pl => {
+      if (pl.joueur !== currentJoueurNom) return;
+      if (pl.date > today || pl.date < cutoff) return; // ni futur, ni trop ancien
+      (pl.seances || []).forEach(s => {
+        if (STATUTS_NON_ENT.includes(s)) return;                                  // statut, pas une séance
+        if (getRPEJoueurSeance(pl.date, currentJoueurNom, s) !== null) return;      // déjà notée
+        if (isSessionWindowClosed(pl.date, s)) return;                             // fenêtre 48 h fermée
+        liveANoter.push({ date: pl.date, seance: s });
+      });
+    });
+    liveANoter.sort((a, b) => b.date.localeCompare(a.date));
+
+    if (planANoter.length === 0 && liveANoter.length === 0) {
       rpeEl.innerHTML = '<div style="color:var(--green); font-size:13px;">✅ ' + (isFR ? 'Aucune séance en attente de note.' : 'No sessions pending rating.') + '</div>';
     } else {
-      rpeEl.innerHTML = aNoter.map(sp => {
-        return '<div onclick="openSeancePlanDetail(\'' + sp.id + '\', \'' + currentJoueurNom.replace(/'/g, "\\'") + '\')" ' +
-          'style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; margin-bottom:6px; cursor:pointer;" ' +
-          'onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'">' +
+      const itemStyle = 'display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; margin-bottom:6px; cursor:pointer;';
+      const hover = 'onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'"';
+      const rate = '<span style="font-size:11px; color:var(--yellow); font-weight:600; white-space:nowrap;">⭐ ' + (isFR ? 'Noter' : 'Rate') + ' →</span>';
+
+      // Séances live (équipe)
+      const liveHtml = liveANoter.map(it => {
+        const badge = '<span style="display:inline-block; font-size:10px; font-weight:700; color:#86efac; background:rgba(34,197,94,0.15); border:1px solid #16a34a; border-radius:4px; padding:1px 6px; margin-right:6px;">🟢 LIVE</span>';
+        const msg = isFR ? "Séance d'équipe — à noter avant fermeture (48 h)" : 'Team session — rate before the 48h window closes';
+        return '<div onclick="playerRateLiveDate(\'' + it.date + '\')" style="' + itemStyle + '" ' + hover + '>' +
           '<div>' +
-            '<div style="font-weight:600; font-size:13px;">' + escapeHtml(sp.type || (isFR ? 'Séance' : 'Session')) + '</div>' +
-            '<div style="font-size:11px; color:var(--text-dim);">' + formatDateFR(sp.date) + (sp.duree_min ? ' · ' + sp.duree_min + ' min' : '') + '</div>' +
-          '</div>' +
-          '<span style="font-size:11px; color:var(--yellow); font-weight:600;">⭐ ' + (isFR ? 'Noter' : 'Rate') + ' →</span>' +
+            '<div style="font-weight:600; font-size:13px;">' + badge + escapeHtml(it.seance) + '</div>' +
+            '<div style="font-size:11px; color:var(--text-dim);">' + formatDateFR(it.date) + ' · ' + msg + '</div>' +
+          '</div>' + rate +
         '</div>';
       }).join('');
+
+      // Séances planifiées (autonomie)
+      const planHtml = planANoter.map(sp => {
+        const badge = '<span style="display:inline-block; font-size:10px; font-weight:700; color:#c7d2fe; background:rgba(99,102,241,0.18); border:1px solid #4338ca; border-radius:4px; padding:1px 6px; margin-right:6px;">🔵 ' + (isFR ? 'AUTONOMIE' : 'SELF') + '</span>';
+        const msg = isFR ? 'Séance planifiée en autonomie — à noter' : 'Self-guided planned session — to rate';
+        return '<div onclick="openSeancePlanDetail(\'' + sp.id + '\', \'' + currentJoueurNom.replace(/'/g, "\\'") + '\')" style="' + itemStyle + '" ' + hover + '>' +
+          '<div>' +
+            '<div style="font-weight:600; font-size:13px;">' + badge + escapeHtml(sp.type || (isFR ? 'Séance' : 'Session')) + '</div>' +
+            '<div style="font-size:11px; color:var(--text-dim);">' + formatDateFR(sp.date) + (sp.duree_min ? ' · ' + sp.duree_min + ' min' : '') + ' · ' + msg + '</div>' +
+          '</div>' + rate +
+        '</div>';
+      }).join('');
+
+      rpeEl.innerHTML = liveHtml + planHtml;
     }
   }
 
