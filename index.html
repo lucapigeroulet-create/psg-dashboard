@@ -688,8 +688,13 @@
   <button class="nav-btn" data-view="rpe">💪 Charge RPE</button>
   <button class="nav-btn" data-view="gps">📡 Données GPS</button>
   <button class="nav-btn staff-only-btn" data-view="testing" id="nav-testing-btn">🧪 Testing</button>
-  <button class="nav-btn staff-only-btn" data-view="medical" id="nav-medical-btn">🩺 Médical</button>
-  <button class="nav-btn staff-only-btn" data-view="medical-notes" id="nav-medical-notes-btn">📋 Notes médicales</button>
+  <div class="nav-dropdown" id="nav-medical-dropdown">
+    <button type="button" class="nav-btn nav-dropdown-toggle staff-only-btn" id="nav-medical-toggle" onclick="toggleMedicalMenu(event)">🩺 Médical <span style="font-size:10px;">▾</span></button>
+    <div class="nav-dropdown-menu" id="nav-medical-menu">
+      <button class="nav-btn" data-view="medical" id="nav-medical-btn">🏥 Disponibilités</button>
+      <button class="nav-btn" data-view="medical-notes" id="nav-medical-notes-btn">📋 Notes médicales</button>
+    </div>
+  </div>
   <button class="nav-btn médical-only-btn" data-view="injury-entry" style="display:none;">🩹 Saisie blessures</button>
   <button class="nav-btn direction-only-btn" data-view="calendar" id="nav-direction-calendar-btn" style="display:none;">📅 Séance</button>
   <button class="nav-btn direction-only-btn" data-view="gps"      id="nav-direction-gps-btn"      style="display:none;">📡 Données GPS</button>
@@ -5643,10 +5648,34 @@ function closeGestionMenu() {
   const menu = document.getElementById('nav-gestion-menu');
   if (menu) menu.classList.remove('open');
 }
-// Fermer le menu si on clique ailleurs
+function toggleMedicalMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('nav-medical-menu');
+  const toggle = document.getElementById('nav-medical-toggle');
+  if (!menu) return;
+  const willOpen = !menu.classList.contains('open');
+  menu.classList.toggle('open');
+  if (willOpen && toggle) {
+    const r = toggle.getBoundingClientRect();
+    menu.style.top = (r.bottom + 2) + 'px';
+    let left = r.left;
+    const menuWidth = menu.offsetWidth || 220;
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - menuWidth - 8);
+    }
+    menu.style.left = left + 'px';
+  }
+}
+function closeMedicalMenu() {
+  const menu = document.getElementById('nav-medical-menu');
+  if (menu) menu.classList.remove('open');
+}
+// Fermer les menus si on clique ailleurs
 document.addEventListener('click', (e) => {
   const dd = document.getElementById('nav-gestion-dropdown');
   if (dd && !dd.contains(e.target)) closeGestionMenu();
+  const md = document.getElementById('nav-medical-dropdown');
+  if (md && !md.contains(e.target)) closeMedicalMenu();
 });
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -5667,7 +5696,15 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
       if (gestionViews.includes(view)) gestionToggle.classList.add('has-active');
       else gestionToggle.classList.remove('has-active');
     }
+    // Gérer l'état visuel du menu déroulant Médical
+    const medicalViews = ['medical', 'medical-notes'];
+    const medicalToggle = document.getElementById('nav-medical-toggle');
+    if (medicalToggle) {
+      if (medicalViews.includes(view)) medicalToggle.classList.add('has-active');
+      else medicalToggle.classList.remove('has-active');
+    }
     closeGestionMenu();
+    closeMedicalMenu();
     // Si on est lecteur, ré-appliquer la langue à chaque changement de vue (au cas où la vue contient du nouveau contenu)
     if (currentRole === 'lecteur') setTimeout(applyPlayerLanguage, 0);
     // Render on demand
