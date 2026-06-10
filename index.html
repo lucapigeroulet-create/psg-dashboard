@@ -697,6 +697,7 @@
     <button type="button" class="nav-btn nav-dropdown-toggle" id="nav-gestion-toggle" onclick="toggleGestionMenu(event)">🛠️ Gestion <span style="font-size:10px;">▾</span></button>
     <div class="nav-dropdown-menu" id="nav-gestion-menu">
       <button class="nav-btn" data-view="entry">✏️ Saisie séance</button>
+      <button class="nav-btn" data-view="plan">📋 Planifier une séance</button>
       <button class="nav-btn" data-view="match-entry">⚽ Saisie match</button>
       <button class="nav-btn" data-view="injury-entry">🩹 Saisie blessures</button>
       <button class="nav-btn" data-view="rpe-entry">⭐ Saisie RPE</button>
@@ -1845,6 +1846,9 @@
       </div>
     </div>
   </div>
+  <!-- ========== PLANIFIER UNE SÉANCE (le formulaire y est déplacé par relocateSeancePanels) ========== -->
+  <div class="view" id="view-plan"></div>
+
   <!-- ========== HISTORIQUE DES SÉANCES ========== -->
   <div class="view" id="view-history">
     <div class="card">
@@ -3629,6 +3633,9 @@ async function createSeancePlan() {
 function editSeancePlan(id) {
   const sp = (state.bdd_seances_plan || []).find(s => s.id === id);
   if (!sp) return;
+  // Le formulaire vit désormais dans la vue "Planifier une séance" : y basculer si besoin
+  const planNav = document.querySelector('.nav-btn[data-view="plan"]');
+  if (planNav && (typeof getCurrentView !== 'function' || getCurrentView() !== 'plan')) planNav.click();
   spEditingId = id;
   document.getElementById('sp-date').value = sp.date;
   document.getElementById('sp-type').value = sp.type || '';
@@ -4566,6 +4573,8 @@ function updateOrgSwitcherUI() {
 }
 
 function applyRoleRestrictions() {
+  // Déplacer les cartes "Planifier une séance" / "Séances planifiées" selon le rôle
+  relocateSeancePanels();
   // Le texte du bouton de déconnexion est géré par applyPlayerLanguage selon l'organisation
   const gestionDropdown = document.getElementById('nav-gestion-dropdown');
   if (currentRole === 'lecteur') {
@@ -5652,7 +5661,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (!viewEl) return;
     viewEl.classList.add('active');
     // Gérer l'état visuel du menu déroulant Gestion
-    const gestionViews = ['entry', 'match-entry', 'injury-entry', 'rpe-entry', 'history', 'settings'];
+    const gestionViews = ['entry', 'plan', 'match-entry', 'injury-entry', 'rpe-entry', 'history', 'settings'];
     const gestionToggle = document.getElementById('nav-gestion-toggle');
     if (gestionToggle) {
       if (gestionViews.includes(view)) gestionToggle.classList.add('has-active');
@@ -5668,6 +5677,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'gps') renderGPS();
     else if (view === 'injury') renderInjury();
     else if (view === 'entry') renderEntry();
+    else if (view === 'plan') renderPlanView();
     else if (view === 'match-entry') renderMatchEntry();
     else if (view === 'injury-entry') renderInjuryEntry();
     else if (view === 'rpe-entry') renderRPEEntry();
@@ -6433,26 +6443,43 @@ function onCalRangeManual() {
   renderCalendar();
 }
 
-function renderCalendar() {
-  // Initialiser le formulaire de planification (staff uniquement)
+// Déplace les cartes "Planifier une séance" et "Séances planifiées" vers leurs nouvelles vues.
+//  - formulaire de planification  → vue "Planifier une séance" (menu Gestion)
+//  - liste des séances planifiées → vue "Historique séances" (staff/admin) OU calendrier (direction)
+function relocateSeancePanels() {
   const planCard = document.getElementById('calendar-plan-card');
   const histCard = document.getElementById('calendar-plan-history-card');
+  const planView = document.getElementById('view-plan');
+  const histView = document.getElementById('view-history');
+  const calView  = document.getElementById('view-calendar');
+  if (planCard && planView && planCard.parentElement !== planView) planView.appendChild(planCard);
+  if (histCard) {
+    const target = (currentRole === 'direction') ? calView : histView;
+    if (target && histCard.parentElement !== target) target.appendChild(histCard);
+  }
+}
+
+// Initialise le formulaire de la vue "Planifier une séance"
+function renderPlanView() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') return;
+  relocateSeancePanels();
+  const planCard = document.getElementById('calendar-plan-card');
+  if (planCard) planCard.style.display = '';
+  const spDate = document.getElementById('sp-date');
+  if (spDate && !spDate.value) spDate.value = toLocalISO(new Date());
+  const cibleWrap = document.getElementById('sp-cible-players');
+  if (cibleWrap && cibleWrap.children.length === 0) onSpCibleChange();
+}
+
+function renderCalendar() {
   const isStaff     = (currentRole === 'admin' || currentRole === 'staff');
   const isDirection = (currentRole === 'direction');
-  if (planCard) {
-    planCard.style.display = isStaff ? '' : 'none';
-    if (isStaff) {
-      const spDate = document.getElementById('sp-date');
-      if (spDate && !spDate.value) spDate.value = toLocalISO(new Date());
-      // Initialiser les destinataires si pas encore fait
-      const cibleWrap = document.getElementById('sp-cible-players');
-      if (cibleWrap && cibleWrap.children.length === 0) onSpCibleChange();
-    }
-  }
-  if (histCard) {
-    // Direction : voir les séances planifiées (lecture seule) mais pas le formulaire de création
-    histCard.style.display = (isStaff || isDirection) ? '' : 'none';
-    if (isStaff || isDirection) renderSeancesPlanHistory();
+  // Liste des séances planifiées : uniquement la direction la voit dans le calendrier
+  // (staff/admin la consultent désormais dans l'onglet "Historique séances").
+  const histCard = document.getElementById('calendar-plan-history-card');
+  if (histCard && isDirection) {
+    histCard.style.display = '';
+    renderSeancesPlanHistory();
   }
   // Bilan hebdomadaire des séances validées (staff + direction uniquement)
   const bilanCard = document.getElementById('calendar-weekly-bilan-card');
@@ -11192,6 +11219,12 @@ async function saveAllRPE() {
 let selectedHistKey = null;
 
 function renderHistory() {
+  // Liste des séances planifiées : désormais hébergée dans cet onglet pour staff/admin
+  if (currentRole === 'admin' || currentRole === 'staff') {
+    relocateSeancePanels();
+    const histCard = document.getElementById('calendar-plan-history-card');
+    if (histCard) { histCard.style.display = ''; renderSeancesPlanHistory(); }
+  }
   // Remplir les filtres
   const types = uniqueSorted(state.bdd_ent2.map(x => x.seance).filter(Boolean));
   const filterSel = document.getElementById('hist-filter-type');
