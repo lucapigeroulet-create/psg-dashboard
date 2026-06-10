@@ -12238,11 +12238,12 @@ async function renderPlayerOverview() {
   // ── 2. Séances à noter (faites sans RPE, fenêtre encore ouverte) ──────────
   const rpeEl = document.getElementById('po-rpe-content');
   if (rpeEl) {
-    // ── Séances planifiées (autonomie) : validées mais pas encore notées, fenêtre ouverte ──
+    // ── Séances planifiées (autonomie) : pas encore notées, fenêtre ouverte ──
+    // Règle : une séance planifiée apparaît tant qu'elle n'est pas notée — qu'elle soit
+    // déjà validée OU pas encore validée (dans ce cas il reste à la valider ET à la noter).
     const planANoter = (state.bdd_seances_plan || []).filter(sp => {
       if (!seancePlanCibleJoueur(sp, currentJoueurNom)) return false;
-      if (!seancePlanEstFaite(sp.id, currentJoueurNom)) return false;
-      if (getSeancePlanRPE(sp.id, currentJoueurNom) !== null) return false;
+      if (getSeancePlanRPE(sp.id, currentJoueurNom) !== null) return false; // déjà notée → plus rien à faire
       return getValidationWindowStatus(sp.date) === 'open';
     });
 
@@ -12283,7 +12284,10 @@ async function renderPlayerOverview() {
       // Séances planifiées (autonomie)
       const planHtml = planANoter.map(sp => {
         const badge = '<span style="display:inline-block; font-size:10px; font-weight:700; color:#c7d2fe; background:rgba(99,102,241,0.18); border:1px solid #4338ca; border-radius:4px; padding:1px 6px; margin-right:6px;">🔵 ' + (isFR ? 'AUTONOMIE' : 'SELF') + '</span>';
-        const msg = isFR ? 'Séance planifiée en autonomie — à noter' : 'Self-guided planned session — to rate';
+        const fait = seancePlanEstFaite(sp.id, currentJoueurNom);
+        const msg = fait
+          ? (isFR ? 'Séance planifiée en autonomie — à noter' : 'Self-guided planned session — to rate')
+          : (isFR ? 'Séance planifiée en autonomie — à valider et noter' : 'Self-guided planned session — to confirm & rate');
         return '<div onclick="openSeancePlanDetail(\'' + sp.id + '\', \'' + currentJoueurNom.replace(/'/g, "\\'") + '\')" style="' + itemStyle + '" ' + hover + '>' +
           '<div>' +
             '<div style="font-weight:600; font-size:13px;">' + badge + escapeHtml(sp.type || (isFR ? 'Séance' : 'Session')) + '</div>' +
