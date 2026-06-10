@@ -683,7 +683,7 @@
 
 <nav>
   <button class="nav-btn active" data-view="overview">📊 Vue d'ensemble</button>
-  <button class="nav-btn" data-view="calendar">📅 Calendrier</button>
+  <button class="nav-btn" data-view="calendar">📅 Séance</button>
   <button class="nav-btn" data-view="staff-hooper">💚 État de forme</button>
   <button class="nav-btn" data-view="rpe">💪 Charge RPE</button>
   <button class="nav-btn" data-view="gps">📡 Données GPS</button>
@@ -691,7 +691,7 @@
   <button class="nav-btn staff-only-btn" data-view="medical" id="nav-medical-btn">🩺 Médical</button>
   <button class="nav-btn staff-only-btn" data-view="medical-notes" id="nav-medical-notes-btn">📋 Notes médicales</button>
   <button class="nav-btn médical-only-btn" data-view="injury-entry" style="display:none;">🩹 Saisie blessures</button>
-  <button class="nav-btn direction-only-btn" data-view="calendar" id="nav-direction-calendar-btn" style="display:none;">📅 Calendrier</button>
+  <button class="nav-btn direction-only-btn" data-view="calendar" id="nav-direction-calendar-btn" style="display:none;">📅 Séance</button>
   <button class="nav-btn direction-only-btn" data-view="gps"      id="nav-direction-gps-btn"      style="display:none;">📡 Données GPS</button>
   <div class="nav-dropdown" id="nav-gestion-dropdown">
     <button type="button" class="nav-btn nav-dropdown-toggle" id="nav-gestion-toggle" onclick="toggleGestionMenu(event)">🛠️ Gestion <span style="font-size:10px;">▾</span></button>
@@ -852,13 +852,13 @@
         <input type="radio" name="sp-format" id="sp-format-libre" value="libre" checked onchange="onSpFormatChange()">
         <label for="sp-format-libre">✏️ Libre</label>
         <input type="radio" name="sp-format" id="sp-format-routine" value="routine" onchange="onSpFormatChange()">
-        <label for="sp-format-routine">🏋️ Routine physique</label>
+        <label for="sp-format-routine">🏋️ Séance détaillée</label>
       </div>
 
       <div class="form-row">
         <div><label>Date</label><input type="date" id="sp-date" onchange="updateSpRecurrencePreview()" /></div>
         <div><label>Type</label><input type="text" id="sp-type" placeholder="Ex: Course, Renforcement" list="sp-type-list" />
-          <datalist id="sp-type-list"><option value="Course"></option><option value="Renforcement"></option><option value="Récupération"></option><option value="Mobilité"></option><option value="Technique individuelle"></option><option value="Routine physique"></option></datalist>
+          <datalist id="sp-type-list"><option value="Course"></option><option value="Renforcement"></option><option value="Récupération"></option><option value="Mobilité"></option><option value="Technique individuelle"></option><option value="Séance détaillée"></option></datalist>
         </div>
         <div><label>Durée (min)</label><input type="number" id="sp-duree" min="0" placeholder="20" style="width:90px;" /></div>
       </div>
@@ -1013,12 +1013,16 @@
           </select>
         </div>
         <div class="filter-group">
+          <label>Semaine</label>
+          <select id="cal-filter-week" onchange="onCalWeekChange()" style="min-width:170px;"></select>
+        </div>
+        <div class="filter-group">
           <label>Du</label>
-          <input type="date" id="cal-filter-start" onchange="renderCalendar()" />
+          <input type="date" id="cal-filter-start" onchange="onCalRangeManual()" />
         </div>
         <div class="filter-group">
           <label>Au</label>
-          <input type="date" id="cal-filter-end" onchange="renderCalendar()" />
+          <input type="date" id="cal-filter-end" onchange="onCalRangeManual()" />
         </div>
         <div class="filter-group" style="align-self:flex-end;">
           <button class="btn btn-secondary" style="padding:6px 14px; font-size:12px;" onclick="resetCalendarDateFilter()">↺ Autour d'aujourd'hui</button>
@@ -6400,11 +6404,32 @@ function destroyChart(id) {
 // CALENDRIER
 // ============================================================================
 function resetCalendarDateFilter() {
-  // Vider les champs date pour revenir à la vue par défaut (10 derniers jours)
+  // Vider les champs date + la semaine pour revenir à la vue par défaut (autour d'aujourd'hui)
   const s = document.getElementById('cal-filter-start');
   const e = document.getElementById('cal-filter-end');
+  const w = document.getElementById('cal-filter-week');
   if (s) s.value = '';
   if (e) e.value = '';
+  if (w) w.value = '';
+  renderCalendar();
+}
+
+// Sélection d'une semaine → renseigne la plage Du/Au (lundi → dimanche)
+function onCalWeekChange() {
+  const w = document.getElementById('cal-filter-week');
+  const s = document.getElementById('cal-filter-start');
+  const e = document.getElementById('cal-filter-end');
+  if (w && w.value) {
+    const dates = weekDates(getMondayOf(w.value));
+    if (s) s.value = dates[0];
+    if (e) e.value = dates[6];
+  }
+  renderCalendar();
+}
+// Édition manuelle des dates → on désélectionne la semaine
+function onCalRangeManual() {
+  const w = document.getElementById('cal-filter-week');
+  if (w) w.value = '';
   renderCalendar();
 }
 
@@ -6440,6 +6465,21 @@ function renderCalendar() {
   if (vignCard) {
     vignCard.style.display = (isStaff || isDirection) ? '' : 'none';
     if (isStaff || isDirection) renderVignettesStats();
+  }
+
+  // Sélecteur semaine du calendrier (même format que les charges RPE)
+  const calWeekSel = document.getElementById('cal-filter-week');
+  if (calWeekSel) {
+    const calWeeks = getAvailableWeeks();
+    if (calWeekSel.dataset.org !== currentOrg || calWeekSel.dataset.count !== String(calWeeks.length)) {
+      const cur = calWeekSel.value;
+      calWeekSel.innerHTML = '<option value="">— Choisir —</option>' + calWeeks.map(w =>
+        '<option value="' + w.mondayIso + '">Semaine ' + w.week + ' (' + w.year + ') — ' + formatDateRange(w.monday) + '</option>'
+      ).join('');
+      if (cur && calWeeks.some(w => w.mondayIso === cur)) calWeekSel.value = cur;
+      calWeekSel.dataset.org = currentOrg;
+      calWeekSel.dataset.count = String(calWeeks.length);
+    }
   }
 
   const groupFilter = (document.getElementById('cal-filter-group') || {}).value || '';
