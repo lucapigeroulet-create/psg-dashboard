@@ -1060,10 +1060,10 @@
 
     <!-- Comptage saisonnier des vignettes (thèmes travaillés) -->
     <div class="card" id="calendar-vignettes-card">
-      <h2 style="margin:0 0 6px 0;">🏷️ Vignettes — comptage saison</h2>
+      <h2 style="margin:0 0 6px 0;">🏷️ Thèmes — comptage saison</h2>
       <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
         Nombre de séances ayant travaillé chaque thème, par aspect. Mode <b>Équipe</b> = toutes les séances ;
-        mode <b>Joueur</b> = uniquement les séances auxquelles le joueur a été affecté.
+        mode <b>Joueur</b> = uniquement les séances auxquelles le joueur a été affecté. Filtre par <b>semaine</b> ou par plage de dates libre.
       </p>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:flex-end;">
         <div>
@@ -1078,14 +1078,18 @@
           <select id="vign-stats-player" onchange="renderVignettesStats()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px; min-width:140px;"></select>
         </div>
         <div>
+          <label style="display:block; font-size:11px; color:var(--text-dim); margin-bottom:3px;">Semaine</label>
+          <select id="vign-stats-week" onchange="onVignWeekChange()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px; min-width:170px;"></select>
+        </div>
+        <div>
           <label style="display:block; font-size:11px; color:var(--text-dim); margin-bottom:3px;">Du</label>
-          <input type="date" id="vign-stats-start" onchange="renderVignettesStats()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px;" />
+          <input type="date" id="vign-stats-start" onchange="onVignRangeManual()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px;" />
         </div>
         <div>
           <label style="display:block; font-size:11px; color:var(--text-dim); margin-bottom:3px;">Au</label>
-          <input type="date" id="vign-stats-end" onchange="renderVignettesStats()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px;" />
+          <input type="date" id="vign-stats-end" onchange="onVignRangeManual()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px;" />
         </div>
-        <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="document.getElementById('vign-stats-start').value='';document.getElementById('vign-stats-end').value='';renderVignettesStats()">↺ Toute la saison</button>
+        <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="resetVignStatsPeriod()">↺ Toute la saison</button>
       </div>
       <div id="vign-stats-content"></div>
     </div>
@@ -2688,6 +2692,17 @@
         <button class="btn btn-secondary" style="padding:4px 12px;" onclick="closeSeancePlanDetail()">✕</button>
       </div>
       <div id="sp-modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Modal : détail des annotations d'une séance (notes / vignettes / remarques) -->
+  <div id="seance-detail-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9000; align-items:center; justify-content:center; padding:20px;" onclick="if(event.target===this) closeSeanceDetail()">
+    <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:14px; max-width:560px; width:100%; max-height:85vh; overflow-y:auto; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+      <div style="display:flex; justify-content:space-between; align-items:start; gap:10px; margin-bottom:14px;">
+        <h2 id="seance-detail-title" style="margin:0; font-size:18px;">Séance</h2>
+        <button class="btn btn-secondary" style="padding:4px 12px;" onclick="closeSeanceDetail()">✕</button>
+      </div>
+      <div id="seance-detail-content"></div>
     </div>
   </div>
 
@@ -6528,9 +6543,17 @@ function renderCalendar() {
           const planTitle = faite ? 'Séance effectuée' : (overdue ? 'Séance non validée depuis plus de 48 h' : 'Séance planifiée — voir le détail');
           return '<div class="cal-planned' + planCls + '" onclick="openSeancePlanDetail(\'' + spId + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="' + planTitle + '">' + planIcon + ' ' + escapeHtml(label.trim()) + '</div>';
         }
-        // Si c'est un statut système, afficher son libellé localisé
-        const labelToShow = STATUTS_NON_ENT.includes(s) ? getStatutLabel(s) : s;
-        return '<div>' + escapeHtml(labelToShow) + '</div>';
+        // Si c'est un statut système, afficher son libellé localisé (non cliquable)
+        if (STATUTS_NON_ENT.includes(s)) {
+          return '<div>' + escapeHtml(getStatutLabel(s)) + '</div>';
+        }
+        // Séance "live" (saisie séance) avec une fiche → cliquable pour voir les annotations
+        const fiche = getSeanceInfo(d, s);
+        if (fiche) {
+          const anno = seanceHasAnnotations(fiche);
+          return '<div style="cursor:pointer;" onclick="openSeanceDetail(\'' + d + '\', \'' + String(s).replace(/'/g, "\\'") + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="Voir le détail de la séance">' + (anno ? '📝 ' : '') + escapeHtml(s) + '</div>';
+        }
+        return '<div>' + escapeHtml(s) + '</div>';
       }).join('');
       const todayCls = (d === todayIso) ? (' cal-today' + (isLastRow ? ' cal-today-last' : '')) : '';
       html += '<div class="cal-cell ' + cls + todayCls + '">' + (content || '<span style="color:var(--text-dim)">—</span>') + '</div>';
@@ -10019,6 +10042,21 @@ function renderVignettesStats() {
     playerSel.dataset.org = currentOrg;
   }
 
+  // Sélecteur semaine (reconstruit au changement d'org ou de nb de semaines)
+  const weekSel = document.getElementById('vign-stats-week');
+  if (weekSel) {
+    const weeks = getAvailableWeeks();
+    if (weekSel.dataset.org !== currentOrg || weekSel.dataset.count !== String(weeks.length)) {
+      const cur = weekSel.value;
+      weekSel.innerHTML = '<option value="">— Toute la saison —</option>' + weeks.map(w =>
+        '<option value="' + w.mondayIso + '">Semaine ' + w.week + ' (' + w.year + ') — ' + formatDateRange(w.monday) + '</option>'
+      ).join('');
+      if (cur && weeks.some(w => w.mondayIso === cur)) weekSel.value = cur;
+      weekSel.dataset.org = currentOrg;
+      weekSel.dataset.count = String(weeks.length);
+    }
+  }
+
   const fromIso = startEl ? startEl.value : '';
   const toIso   = endEl ? endEl.value : '';
 
@@ -10086,6 +10124,109 @@ function renderVignettesStats() {
     seances.length + ' séance(s) dans la période · ' + nbAvecVignette + ' avec vignette(s)</div>';
 
   contentEl.innerHTML = header + '<div style="display:flex; gap:12px; flex-wrap:wrap;">' + blocks + '</div>';
+}
+
+// Sélection d'une semaine → renseigne la plage Du/Au (lundi → dimanche)
+function onVignWeekChange() {
+  const wsel = document.getElementById('vign-stats-week');
+  const startEl = document.getElementById('vign-stats-start');
+  const endEl = document.getElementById('vign-stats-end');
+  if (wsel && wsel.value) {
+    const dates = weekDates(getMondayOf(wsel.value));
+    if (startEl) startEl.value = dates[0];
+    if (endEl) endEl.value = dates[6];
+  }
+  renderVignettesStats();
+}
+// Édition manuelle des dates → on désélectionne la semaine
+function onVignRangeManual() {
+  const wsel = document.getElementById('vign-stats-week');
+  if (wsel) wsel.value = '';
+  renderVignettesStats();
+}
+// Réinitialise la période (toute la saison)
+function resetVignStatsPeriod() {
+  const wsel = document.getElementById('vign-stats-week');
+  const startEl = document.getElementById('vign-stats-start');
+  const endEl = document.getElementById('vign-stats-end');
+  if (wsel) wsel.value = '';
+  if (startEl) startEl.value = '';
+  if (endEl) endEl.value = '';
+  renderVignettesStats();
+}
+
+// ── Détail des annotations d'une séance (notes / vignettes / remarques) ──────
+// Correspondance entre clé de note et clé de vignette (l'aspect "physique" = note "athletique")
+const SEANCE_ANNOT_ASPECTS = [
+  { noteKey: 'athletique', vignKey: 'physique',  label: '🏃 Physique / Athlétique' },
+  { noteKey: 'technique',  vignKey: 'technique', label: '⚽ Technique' },
+  { noteKey: 'tactique',   vignKey: 'tactique',  label: '🧠 Tactique' },
+  { noteKey: 'mental',     vignKey: 'mental',    label: '💭 Mental' }
+];
+function seanceHasAnnotations(info) {
+  if (!info) return false;
+  const n = info.notes || {};
+  if (SEANCE_ANNOT_ASPECTS.some(a => (n[a.noteKey] || '').trim())) return true;
+  const v = info.vignettes || {};
+  if (SEANCE_ANNOT_ASPECTS.some(a => Array.isArray(v[a.vignKey]) && v[a.vignKey].length)) return true;
+  const r = info.remarques_joueurs || {};
+  if (Object.values(r).some(t => t && String(t).trim())) return true;
+  return false;
+}
+function openSeanceDetail(date, nom, joueur) {
+  const overlay = document.getElementById('seance-detail-modal');
+  const titleEl = document.getElementById('seance-detail-title');
+  const contentEl = document.getElementById('seance-detail-content');
+  if (!overlay || !contentEl) return;
+  const info = getSeanceInfo(date, nom);
+  titleEl.textContent = nom + (info && info.seance ? ' · ' + info.seance : '');
+
+  let html = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">' +
+    formatDateFR(date) + (info && info.duree_totale ? ' · ' + info.duree_totale + ' min' : '') + '</div>';
+
+  if (!info) {
+    html += '<div style="color:var(--text-dim);">Aucune fiche détaillée pour cette séance.</div>';
+    contentEl.innerHTML = html; overlay.style.display = 'flex'; return;
+  }
+
+  const notes = info.notes || {};
+  const vign = info.vignettes || {};
+  let anyAspect = false;
+  SEANCE_ANNOT_ASPECTS.forEach(a => {
+    const txt = (notes[a.noteKey] || '').trim();
+    const tags = Array.isArray(vign[a.vignKey]) ? vign[a.vignKey] : [];
+    if (!txt && tags.length === 0) return;
+    anyAspect = true;
+    html += '<div style="margin-bottom:10px; padding:10px 12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px;">' +
+      '<div style="font-weight:700; font-size:13px; margin-bottom:6px;">' + a.label + '</div>';
+    if (tags.length) html += '<div style="display:flex; flex-wrap:wrap; gap:4px;' + (txt ? ' margin-bottom:6px;' : '') + '">' +
+      tags.map(t => '<span style="background:var(--bg-card); border:1px solid var(--accent); border-radius:12px; padding:1px 8px; font-size:11px;">' + escapeHtml(t) + '</span>').join('') + '</div>';
+    if (txt) html += '<div style="font-size:13px; white-space:pre-wrap;">' + escapeHtml(txt) + '</div>';
+    html += '</div>';
+  });
+  if (!anyAspect) html += '<div style="color:var(--text-dim); font-size:13px; margin-bottom:10px;">Aucune note ni vignette sur cette séance.</div>';
+
+  // Remarques individuelles (la remarque du joueur cliqué est mise en évidence)
+  const rem = info.remarques_joueurs || {};
+  const remEntries = Object.entries(rem).filter(([j, t]) => t && String(t).trim());
+  if (remEntries.length) {
+    // remonter la remarque du joueur cliqué en premier
+    remEntries.sort((a, b) => (a[0] === joueur ? -1 : 0) - (b[0] === joueur ? -1 : 0));
+    html += '<h3 style="margin:14px 0 6px;">👤 Remarques individuelles</h3>';
+    html += remEntries.map(([j, t]) => {
+      const hl = (j === joueur);
+      return '<div style="margin-bottom:6px; padding:8px 10px; background:var(--bg-elevated); border:1px solid ' + (hl ? 'var(--accent)' : 'var(--border)') + '; border-radius:8px;">' +
+        '<b style="font-size:12px;' + (hl ? ' color:var(--accent-light);' : '') + '">' + escapeHtml(j) + (hl ? ' (sélectionné)' : '') + '</b>' +
+        '<div style="font-size:13px; white-space:pre-wrap;">' + escapeHtml(t) + '</div></div>';
+    }).join('');
+  }
+
+  contentEl.innerHTML = html;
+  overlay.style.display = 'flex';
+}
+function closeSeanceDetail() {
+  const ov = document.getElementById('seance-detail-modal');
+  if (ov) ov.style.display = 'none';
 }
 
 function loadExistingSeance() {
