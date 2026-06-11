@@ -688,6 +688,7 @@
 
 <nav>
   <button class="nav-btn active" data-view="overview">📊 Vue d'ensemble</button>
+  <button class="nav-btn" data-view="joueur">👤 Joueur</button>
   <button class="nav-btn" data-view="calendar">📅 Séance</button>
   <button class="nav-btn" data-view="staff-hooper">💚 État de forme</button>
   <button class="nav-btn" data-view="rpe">💪 Charge RPE</button>
@@ -1130,6 +1131,27 @@
       </div>
       <div id="vign-stats-content"></div>
     </div>
+  </div>
+
+  <!-- ========== TABLEAU DE BORD JOUEUR ========== -->
+  <div class="view" id="view-joueur">
+    <div class="card">
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <h2 style="margin:0;">👤 Tableau de bord joueur</h2>
+        <select id="joueur-dash-select" onchange="renderPlayerDashboard()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:14px; min-width:180px;"></select>
+        <select id="joueur-dash-period" onchange="renderPlayerDashboard()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:13px;">
+          <option value="all">Toute la saison</option>
+          <option value="90">90 derniers jours</option>
+          <option value="30">30 derniers jours</option>
+          <option value="7">7 derniers jours</option>
+        </select>
+      </div>
+      <p style="color:var(--text-dim); font-size:12px; margin-top:8px; margin-bottom:0;">
+        Vue individuelle consolidée : temps de jeu, temps et charge d'entraînement, meilleur match et rapport GPS. Le détail (graphiques) est sous les chiffres clés.
+      </p>
+    </div>
+    <div id="joueur-dash-kpis"></div>
+    <div id="joueur-dash-charts"></div>
   </div>
 
   <!-- ========== RPE ========== -->
@@ -1636,35 +1658,31 @@
       <div id="procedes-container"></div>
 
       <h3 style="margin-top:18px;">📝 Notes & vignettes de séance (staff)</h3>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Notes internes + vignettes (thèmes travaillés) sur le contenu de la séance — non visibles par les joueurs. Tape une vignette puis <b>Entrée</b> pour l'ajouter ; les vignettes déjà utilisées sont proposées en autocomplétion.</p>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Notes internes + vignettes (thèmes travaillés) sur le contenu de la séance — non visibles par les joueurs. Choisis les vignettes dans la liste déroulante (elles se gèrent dans <b>Paramètres → Vignettes</b>) ; pas de saisie libre, pour éviter les doublons dans le comptage.</p>
       <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px;">
         <div>
           <label>🏃 Physique / Athlétique</label>
           <textarea id="entry-note-athletique" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Charge, intensité, préparation physique..."></textarea>
           <div id="vign-chips-physique" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 4px;"></div>
-          <input type="text" id="vign-input-physique" list="vign-list-physique" placeholder="+ vignette (Entrée)…" style="width:100%;" onkeydown="vignInputKey(event,'physique')" />
-          <datalist id="vign-list-physique"></datalist>
+          <select id="vign-select-physique" onchange="onVignSelect('physique')" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:13px;"><option value="">+ Ajouter une vignette…</option></select>
         </div>
         <div>
           <label>⚽ Technique</label>
           <textarea id="entry-note-technique" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Gestes, conduite, passes, finition..."></textarea>
           <div id="vign-chips-technique" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 4px;"></div>
-          <input type="text" id="vign-input-technique" list="vign-list-technique" placeholder="+ vignette (Entrée)…" style="width:100%;" onkeydown="vignInputKey(event,'technique')" />
-          <datalist id="vign-list-technique"></datalist>
+          <select id="vign-select-technique" onchange="onVignSelect('technique')" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:13px;"><option value="">+ Ajouter une vignette…</option></select>
         </div>
         <div>
           <label>🧠 Tactique</label>
           <textarea id="entry-note-tactique" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Animation, principes de jeu, schémas..."></textarea>
           <div id="vign-chips-tactique" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 4px;"></div>
-          <input type="text" id="vign-input-tactique" list="vign-list-tactique" placeholder="+ vignette (Entrée)…" style="width:100%;" onkeydown="vignInputKey(event,'tactique')" />
-          <datalist id="vign-list-tactique"></datalist>
+          <select id="vign-select-tactique" onchange="onVignSelect('tactique')" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:13px;"><option value="">+ Ajouter une vignette…</option></select>
         </div>
         <div>
           <label>💭 Mental</label>
           <textarea id="entry-note-mental" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Engagement, concentration, attitude..."></textarea>
           <div id="vign-chips-mental" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 4px;"></div>
-          <input type="text" id="vign-input-mental" list="vign-list-mental" placeholder="+ vignette (Entrée)…" style="width:100%;" onkeydown="vignInputKey(event,'mental')" />
-          <datalist id="vign-list-mental"></datalist>
+          <select id="vign-select-mental" onchange="onVignSelect('mental')" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:13px;"><option value="">+ Ajouter une vignette…</option></select>
         </div>
       </div>
 
@@ -4585,6 +4603,7 @@ async function switchOrg(org) {
   // Re-rendre la vue active si elle dépend de l'organisation
   const v = (typeof getCurrentView === 'function') ? getCurrentView() : null;
   if (v === 'match-entry' && typeof renderMatchEntry === 'function') renderMatchEntry();
+  if (v === 'joueur' && typeof renderPlayerDashboard === 'function') renderPlayerDashboard();
   if (v === 'calendar' && typeof renderCalendar === 'function') renderCalendar();
   if (v === 'rpe' && typeof renderRPE === 'function') renderRPE();
   if (v === 'gps' && typeof renderGPS === 'function') renderGPS();
@@ -4656,6 +4675,9 @@ function applyRoleRestrictions() {
     });
     // Afficher uniquement les boutons direction
     document.querySelectorAll('.direction-only-btn').forEach(b => b.style.display = '');
+    // La direction a aussi accès au tableau de bord joueur (lecture seule)
+    const joueurNav = document.querySelector('.nav-btn[data-view="joueur"]');
+    if (joueurNav) joueurNav.style.display = '';
     // Masquer uniquement le formulaire de création (la liste des séances reste visible)
     const planFormCard = document.getElementById('calendar-plan-card');
     if (planFormCard) planFormCard.style.display = 'none';
@@ -5755,6 +5777,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (currentRole === 'lecteur') setTimeout(applyPlayerLanguage, 0);
     // Render on demand
     if (view === 'overview') renderOverview();
+    else if (view === 'joueur') renderPlayerDashboard();
     else if (view === 'calendar') renderCalendar();
     else if (view === 'rpe') renderRPE();
     else if (view === 'gps') renderGPS();
@@ -8355,6 +8378,117 @@ function onBestMatchSelect(player, key) {
   renderBestMatch();
 }
 
+// ============================================================================
+// TABLEAU DE BORD JOUEUR (vue individuelle consolidée)
+// ============================================================================
+function renderPlayerDashboard() {
+  const sel = document.getElementById('joueur-dash-select');
+  const kpiEl = document.getElementById('joueur-dash-kpis');
+  const chartsEl = document.getElementById('joueur-dash-charts');
+  if (!sel || !kpiEl || !chartsEl) return;
+
+  // Sélecteur joueur (reconstruit au changement d'org)
+  if (sel.dataset.org !== currentOrg) {
+    const cur = sel.value;
+    const players = getAllPlayers();
+    sel.innerHTML = '<option value="">— Choisir un joueur —</option>' + players.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+    if (cur && players.includes(cur)) sel.value = cur;
+    sel.dataset.org = currentOrg;
+  }
+
+  const player = sel.value;
+  if (!player) {
+    kpiEl.innerHTML = '<div class="card"><div class="empty-state">Sélectionne un joueur pour voir son tableau de bord.</div></div>';
+    ['chart-jdash-charge', 'chart-jdash-gps', 'chart-jdash-matchs'].forEach(destroyChart);
+    chartsEl.innerHTML = '';
+    return;
+  }
+
+  const periodSel = document.getElementById('joueur-dash-period');
+  const periodDays = (periodSel && periodSel.value !== 'all') ? parseInt(periodSel.value, 10) : null;
+  const today = toLocalISO(new Date());
+  const cutoff = periodDays ? toLocalISO(new Date(Date.now() - periodDays * 86400000)) : null;
+  const inPeriod = (d) => !cutoff || (d >= cutoff && d <= today);
+
+  // Temps de jeu (matchs)
+  const matchsJoueur = (state.bdd_matchs || []).filter(m => inPeriod(m.date) &&
+    (m.composition || []).some(c => c.joueur === player && (c.total_min || 0) > 0))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  let tempsJeu = 0;
+  matchsJoueur.forEach(m => { const c = (m.composition || []).find(x => x.joueur === player); tempsJeu += c ? (c.total_min || 0) : 0; });
+
+  // Temps d'entraînement (séances faites)
+  let tempsEntr = 0, nbSeances = 0;
+  (state.bdd_ent || []).forEach(e => {
+    if (e.joueur !== player || !inPeriod(e.date)) return;
+    (e.seances || []).forEach(s => {
+      if (typeof s !== 'string' || STATUTS_NON_ENT.includes(s) || s.indexOf('📋') === 0 || s.indexOf('⚽') === 0) return;
+      const info = getSeanceInfo(e.date, s);
+      if (info && info.duree_totale) { tempsEntr += info.duree_totale; nbSeances++; }
+    });
+  });
+
+  // Charge d'entraînement (sRPE) + groupage hebdo
+  const srpeAll = computeSRPE().filter(x => x.joueur === player && inPeriod(x.date));
+  const totalSRPE = srpeAll.reduce((s, x) => s + x.sRPE, 0);
+  const weekMap = {};
+  srpeAll.forEach(x => { const key = toLocalISO(getMondayOf(x.date)); weekMap[key] = (weekMap[key] || 0) + x.sRPE; });
+  const weekKeys = Object.keys(weekMap).sort();
+  const avgWeek = weekKeys.length ? Math.round(totalSRPE / weekKeys.length) : 0;
+
+  // Meilleur match (référence GPS, toutes périodes)
+  const bm = getBestMatchRow(player);
+
+  // GPS (splits "all")
+  const gpsRows = (state.bdd_gps || []).filter(r => r.joueur === player &&
+    ((r.split_name || 'all').toString().toLowerCase() === 'all') && inPeriod(r.date))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  let gpsDistTot = 0, gpsMax = 0;
+  gpsRows.forEach(r => { const d = parseFloat(r.distance_km) || 0; gpsDistTot += d; if (d > gpsMax) gpsMax = d; });
+
+  // ===== Cartes KPI =====
+  const card = (icon, titre, valeur, sub) =>
+    '<div style="flex:1; min-width:175px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:10px; padding:14px 16px;">' +
+      '<div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">' + icon + ' ' + titre + '</div>' +
+      '<div style="font-size:23px; font-weight:700; color:var(--accent-light);">' + valeur + '</div>' +
+      (sub ? '<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">' + sub + '</div>' : '') +
+    '</div>';
+  const fmtBm = bm
+    ? ((bm.distance_km != null ? (Math.round((parseFloat(bm.distance_km) || 0) * 1000) + ' m') : '—') + (bm.top_speed != null ? ' · ' + (parseFloat(bm.top_speed) || 0).toFixed(1) + ' km/h' : ''))
+    : '—';
+  kpiEl.innerHTML = '<div class="card"><div style="display:flex; gap:12px; flex-wrap:wrap;">' +
+    card('⏱️', 'Temps de jeu', tempsJeu + ' min', matchsJoueur.length + ' match(s)') +
+    card('🏃', "Temps d'entraînement", tempsEntr + ' min', nbSeances + ' séance(s)') +
+    card('💪', "Charge d'entraînement", Math.round(totalSRPE) + ' UA', 'Moy. ' + avgWeek + ' UA/sem.') +
+    card('🏆', 'Meilleur match (réf.)', fmtBm, bm ? '' : 'Aucune référence') +
+    card('📡', 'GPS', gpsDistTot.toFixed(1) + ' km', gpsRows.length + ' session(s) · max ' + gpsMax.toFixed(1) + ' km') +
+  '</div></div>';
+
+  // ===== Graphiques (détail) =====
+  chartsEl.innerHTML =
+    '<div class="card"><h3 style="margin-top:0;">💪 Charge d\'entraînement (sRPE) par semaine</h3><div class="chart-container"><canvas id="chart-jdash-charge"></canvas></div></div>' +
+    '<div class="card"><h3 style="margin-top:0;">📡 Distance GPS par session</h3><div class="chart-container"><canvas id="chart-jdash-gps"></canvas></div></div>' +
+    '<div class="card"><h3 style="margin-top:0;">⏱️ Temps de jeu par match</h3><div class="chart-container"><canvas id="chart-jdash-matchs"></canvas></div></div>';
+
+  ['chart-jdash-charge', 'chart-jdash-gps', 'chart-jdash-matchs'].forEach(destroyChart);
+
+  charts['chart-jdash-charge'] = new Chart(document.getElementById('chart-jdash-charge'), {
+    type: 'bar',
+    data: { labels: weekKeys.map(k => 'S' + getISOWeek(k).week), datasets: [{ label: 'sRPE (UA)', data: weekKeys.map(k => Math.round(weekMap[k])), backgroundColor: '#6366f1' }] },
+    options: chartOpts({ legend: false })
+  });
+  charts['chart-jdash-gps'] = new Chart(document.getElementById('chart-jdash-gps'), {
+    type: 'bar',
+    data: { labels: gpsRows.map(r => formatDateFR(r.date)), datasets: [{ label: 'Distance (km)', data: gpsRows.map(r => parseFloat(r.distance_km) || 0), backgroundColor: '#22c55e' }] },
+    options: chartOpts({ legend: false })
+  });
+  charts['chart-jdash-matchs'] = new Chart(document.getElementById('chart-jdash-matchs'), {
+    type: 'bar',
+    data: { labels: matchsJoueur.map(m => (m.adversaire || 'Match') + ' (' + m.date.slice(5) + ')'), datasets: [{ label: 'Minutes', data: matchsJoueur.map(m => { const c = (m.composition || []).find(x => x.joueur === player); return c ? (c.total_min || 0) : 0; }), backgroundColor: '#eab308' }] },
+    options: chartOpts({ legend: false })
+  });
+}
+
 function renderBestMatch() {
   const container = document.getElementById('best-match-content');
   if (!container) return;
@@ -10078,7 +10212,7 @@ function renderEntry() {
   fillSeanceNotes(null);
   clearSeanceRemarques();
   clearVignettes();
-  refreshVignetteDatalists();
+  refreshVignetteSelects();
   renderAffectation();
 }
 
@@ -10232,12 +10366,12 @@ const VIGNETTE_ASPECTS = [
   { key: 'mental',    label: 'Mental',    icon: '💭' }
 ];
 
-function vignInputKey(ev, aspect) {
-  if (ev.key === 'Enter' || ev.key === ',') {
-    ev.preventDefault();
-    addVignetteChip(aspect, ev.target.value);
-    ev.target.value = '';
-  }
+// Sélection d'une vignette depuis la bibliothèque (menu déroulant) → ajoute la pastille
+function onVignSelect(aspect) {
+  const sel = document.getElementById('vign-select-' + aspect);
+  if (!sel || !sel.value) return;
+  addVignetteChip(aspect, sel.value);
+  sel.value = '';
 }
 function addVignetteChip(aspect, value) {
   const v = (value || '').trim();
@@ -10250,8 +10384,14 @@ function addVignetteChip(aspect, value) {
   chip.className = 'vign-chip';
   chip.dataset.val = v;
   chip.style.cssText = 'display:inline-flex; align-items:center; gap:5px; background:var(--bg-elevated); border:1px solid var(--accent); border-radius:12px; padding:2px 9px; font-size:11px;';
-  chip.innerHTML = escapeHtml(v) + ' <span style="cursor:pointer; color:var(--text-dim); font-weight:700;" onclick="this.closest(\'.vign-chip\').remove()">✕</span>';
+  chip.innerHTML = escapeHtml(v) + ' <span style="cursor:pointer; color:var(--text-dim); font-weight:700;" onclick="removeVignetteChip(this, \'' + aspect + '\')">✕</span>';
   cont.appendChild(chip);
+  refreshVignetteSelects();
+}
+function removeVignetteChip(el, aspect) {
+  const chip = el.closest('.vign-chip');
+  if (chip) chip.remove();
+  refreshVignetteSelects();
 }
 function collectVignettes() {
   const out = {};
@@ -10268,12 +10408,14 @@ function fillVignettes(map) {
     if (cont) cont.innerHTML = '';
     (Array.isArray(map[a.key]) ? map[a.key] : []).forEach(v => addVignetteChip(a.key, v));
   });
+  refreshVignetteSelects();
 }
 function clearVignettes() {
   VIGNETTE_ASPECTS.forEach(a => {
     const cont = document.getElementById('vign-chips-' + a.key);
     if (cont) cont.innerHTML = '';
   });
+  refreshVignetteSelects();
 }
 // Toutes les vignettes déjà utilisées pour un aspect (autocomplétion + comptage)
 function getAllVignettes(aspect) {
@@ -10287,10 +10429,21 @@ function getAllVignettes(aspect) {
   });
   return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
-function refreshVignetteDatalists() {
+// Remplit les menus déroulants de vignettes UNIQUEMENT avec la bibliothèque gérée
+// (Paramètres → Vignettes), en excluant celles déjà choisies. Pas de saisie libre,
+// pour éviter les doublons dans le comptage.
+function refreshVignetteSelects() {
   VIGNETTE_ASPECTS.forEach(a => {
-    const dl = document.getElementById('vign-list-' + a.key);
-    if (dl) dl.innerHTML = getAllVignettes(a.key).map(v => '<option value="' + escapeHtml(v) + '"></option>').join('');
+    const sel = document.getElementById('vign-select-' + a.key);
+    if (!sel) return;
+    const cont = document.getElementById('vign-chips-' + a.key);
+    const used = cont ? Array.from(cont.querySelectorAll('.vign-chip')).map(c => (c.dataset.val || '').toLowerCase()) : [];
+    const lib = (typeof vignettesLibFor === 'function') ? vignettesLibFor(a.key) : [];
+    const available = lib.filter(nom => !used.includes(nom.toLowerCase()));
+    const placeholder = lib.length === 0
+      ? '<option value="">Aucune vignette — à créer dans Paramètres</option>'
+      : '<option value="">+ Ajouter une vignette…</option>';
+    sel.innerHTML = placeholder + available.map(nom => '<option value="' + escapeHtml(nom) + '">' + escapeHtml(nom) + '</option>').join('');
   });
 }
 
