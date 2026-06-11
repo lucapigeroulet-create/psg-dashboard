@@ -311,8 +311,8 @@
   .cal-cell.injury { background: #7f1d1d88; border-left: 3px solid #ef4444; }
   .cal-cell.sick { background: #78350f88; border-left: 3px solid #f59e0b; }
   .cal-cell.absent { background: #71341288; border-left: 3px solid #ea580c; }
-  /* Plusieurs séances dans une même cellule : léger soulignage pour les distinguer */
-  .cal-cell.multi > div:not(:last-child) { border-bottom: 1px solid rgba(255,255,255,0.16); padding-bottom: 3px; margin-bottom: 3px; }
+  /* Plusieurs séances dans une même cellule : séparation nette pour bien distinguer chaque séance */
+  .cal-cell.multi > div:not(:last-child) { border-bottom: 1px solid rgba(255,255,255,0.55); padding-bottom: 6px; margin-bottom: 6px; }
   /* Colonne du jour : encadrée par des lignes verticales (accent) pour repérage rapide */
   .cal-header.cal-today { border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); color: var(--accent-light); }
   .cal-cell.cal-today { border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); }
@@ -6650,6 +6650,11 @@ function renderCalendar() {
           const planTitle = faite ? 'Séance effectuée' : (overdue ? 'Séance non validée depuis plus de 48 h' : 'Séance planifiée — voir le détail');
           return '<div class="cal-planned' + planCls + '" onclick="openSeancePlanDetail(\'' + spId + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="' + planTitle + '">' + planIcon + ' ' + escapeHtml(label.trim()) + '</div>';
         }
+        // Match (préfixe ⚽) → cliquable pour voir les infos du match
+        if (typeof s === 'string' && s.indexOf('⚽') === 0) {
+          const adv = s.replace(/^⚽\s*/, '');
+          return '<div style="cursor:pointer;" onclick="openMatchDetail(\'' + d + '\', \'' + adv.replace(/'/g, "\\'") + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="Voir les infos du match">' + escapeHtml(s) + '</div>';
+        }
         // Si c'est un statut système, afficher son libellé localisé (non cliquable)
         if (STATUTS_NON_ENT.includes(s)) {
           return '<div>' + escapeHtml(getStatutLabel(s)) + '</div>';
@@ -10335,6 +10340,52 @@ function openSeanceDetail(date, nom, joueur) {
 function closeSeanceDetail() {
   const ov = document.getElementById('seance-detail-modal');
   if (ov) ov.style.display = 'none';
+}
+
+// Détail d'un match (réutilise la même modale que les séances)
+function openMatchDetail(date, adversaire, joueur) {
+  const overlay = document.getElementById('seance-detail-modal');
+  const titleEl = document.getElementById('seance-detail-title');
+  const contentEl = document.getElementById('seance-detail-content');
+  if (!overlay || !contentEl) return;
+  const m = (state.bdd_matchs || []).find(x => x.date === date && x.adversaire === adversaire);
+  titleEl.textContent = '⚽ Match vs ' + adversaire;
+  if (!m) {
+    contentEl.innerHTML = '<div style="color:var(--text-dim);">Match introuvable.</div>';
+    overlay.style.display = 'flex'; return;
+  }
+  const lieu = m.domicile ? 'Domicile' : 'Extérieur';
+  const meta = [formatDateFR(date)]
+    .concat(m.heure ? [escapeHtml(m.heure)] : [])
+    .concat([lieu])
+    .concat(m.niveau ? [escapeHtml(m.niveau)] : [])
+    .concat(m.groupe ? [escapeHtml(m.groupe)] : [])
+    .concat(m.type_match ? [escapeHtml(m.type_match)] : [])
+    .join(' · ');
+  const scoreLine = (m.score_psg != null && m.score_adversaire != null)
+    ? (escapeHtml(currentOrg) + ' ' + m.score_psg + ' – ' + m.score_adversaire + ' ' + escapeHtml(adversaire))
+    : 'Score non renseigné';
+
+  const comp = Array.isArray(m.composition) ? m.composition : [];
+  const me = comp.find(c => c.joueur === joueur);
+  const myMin = me ? (me.total_min || 0) : 0;
+
+  let html = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">' + meta + '</div>';
+  html += '<div style="font-size:18px; font-weight:700; margin-bottom:12px;">' + scoreLine + '</div>';
+  html += '<div style="margin-bottom:12px; padding:10px 12px; background:var(--bg-elevated); border:1px solid var(--accent); border-radius:8px;">' +
+    '<b>' + escapeHtml(joueur) + '</b> — ' + (myMin > 0 ? ('temps de jeu : <b style="color:var(--accent-light);">' + myMin + ' min</b>') : 'pas de temps de jeu enregistré') + '</div>';
+
+  const played = comp.filter(c => (c.total_min || 0) > 0).sort((a, b) => (b.total_min || 0) - (a.total_min || 0));
+  if (played.length) {
+    html += '<h3 style="margin:14px 0 6px;">Composition (temps de jeu)</h3>';
+    html += '<div class="table-wrap" style="max-height:300px;"><table style="width:100%; font-size:12px;"><tbody>' +
+      played.map(c => '<tr' + (c.joueur === joueur ? ' style="background:rgba(99,102,241,0.12);"' : '') + '>' +
+        '<td style="padding:4px 8px;">' + escapeHtml(c.joueur) + (c.joueur === joueur ? ' ◄' : '') + '</td>' +
+        '<td style="padding:4px 8px; text-align:right; font-weight:600;">' + (c.total_min || 0) + ' min</td></tr>').join('') +
+      '</tbody></table></div>';
+  }
+  contentEl.innerHTML = html;
+  overlay.style.display = 'flex';
 }
 
 function loadExistingSeance() {
