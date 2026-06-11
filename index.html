@@ -1047,8 +1047,10 @@
     <div class="card" id="calendar-themes-card">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:6px;">
         <h2 style="margin:0;">🎯 Détail des thèmes travaillés</h2>
-        <div>
-          <label style="font-size:11px; color:var(--text-dim); margin-right:6px;">Aspect</label>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <label style="font-size:11px; color:var(--text-dim);">Semaine</label>
+          <select id="themes-week" onchange="renderThemesGrid()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px; min-width:170px;"></select>
+          <label style="font-size:11px; color:var(--text-dim); margin-left:4px;">Aspect</label>
           <select id="themes-aspect" onchange="renderThemesGrid()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px;">
             <option value="physique">🏃 Physique</option>
             <option value="technique">⚽ Technique</option>
@@ -1058,7 +1060,7 @@
         </div>
       </div>
       <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
-        Une ligne par joueur, une colonne par jour : pour l'aspect choisi, les vignettes (et notes) des séances que chaque joueur a effectuées. Même fenêtre de dates et même filtre groupe que le calendrier ci-dessus.
+        Une ligne par joueur, une colonne par jour : pour l'aspect choisi, les vignettes (et notes) des séances que chaque joueur a effectuées. Choisis une <b>semaine</b> précise, ou « Calendrier » pour suivre la fenêtre du calendrier ci-dessus. Filtre groupe identique au calendrier.
       </p>
       <div class="table-wrap" id="themes-grid"></div>
     </div>
@@ -1954,6 +1956,7 @@
         <button class="settings-tab active" data-tab="groups" onclick="switchSettingsTab('groups')" style="flex:1; background:var(--bg-card); color:var(--accent-light); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">👥 Groupes</button>
         <button class="settings-tab" data-tab="players" onclick="switchSettingsTab('players')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">⚽ Joueurs</button>
         <button class="settings-tab" data-tab="types" onclick="switchSettingsTab('types')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">🏷️ Types de séances</button>
+        <button class="settings-tab" data-tab="vignettes" onclick="switchSettingsTab('vignettes')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">🎯 Vignettes</button>
       </div>
     </div>
 
@@ -2090,6 +2093,17 @@
             <tbody></tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <!-- Onglet VIGNETTES (thèmes classés par aspect) -->
+    <div id="settings-vignettes" class="settings-pane" style="display:none;">
+      <div class="card">
+        <h2>Vignettes (thèmes d'entraînement)</h2>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
+          Classe ici tes vignettes par aspect (Physique / Technique / Tactique / Mental). Elles seront proposées à la saisie d'une séance pour catégoriser facilement le contenu travaillé.
+        </p>
+        <div id="vignettes-lib-container"></div>
       </div>
     </div>
   </div>
@@ -4814,6 +4828,7 @@ async function loadState() {
     bdd_gps: [],
     bdd_matchs: [],
     types_seances: [],
+    vignettes_lib: [],
     groupes: [],
     bdd_messages: [],
     bdd_message_reads: [],
@@ -4849,6 +4864,12 @@ async function loadState() {
         state.types_seances = ['REST','INJURY','SICK','ABSENT','SUSPENDED'];
       }
     }
+
+    // Bibliothèque de vignettes (gérée dans les Paramètres), par aspect
+    try {
+      const { data: vignLib } = await sb.from('vignettes_lib').select('aspect,nom').eq('org', currentOrg).order('nom');
+      state.vignettes_lib = (vignLib || []).map(v => ({ aspect: v.aspect, nom: v.nom }));
+    } catch (e) { state.vignettes_lib = []; }
 
     setLoad('Chargement des fiches séances...');
     const { data: seances } = await sb.from('seances').select('*').eq('org', currentOrg).order('date');
@@ -6693,7 +6714,7 @@ function renderCalendar() {
         const fiche = getSeanceInfo(d, s);
         if (fiche) {
           const anno = seanceHasAnnotations(fiche);
-          return '<div style="cursor:pointer;" onclick="openSeanceDetail(\'' + d + '\', \'' + String(s).replace(/'/g, "\\'") + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="Voir le détail de la séance">' + (anno ? '📝 ' : '') + escapeHtml(s) + '</div>';
+          return '<div style="cursor:pointer;' + (anno ? ' font-weight:700;' : '') + '" onclick="openSeanceDetail(\'' + d + '\', \'' + String(s).replace(/'/g, "\\'") + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="' + (anno ? 'Séance annotée — voir le détail' : 'Voir le détail de la séance') + '">' + escapeHtml(s) + '</div>';
         }
         return '<div>' + escapeHtml(s) + '</div>';
       }).join('');
@@ -6718,7 +6739,23 @@ function renderThemesGrid() {
   const noteKeyFor = { physique: 'athletique', technique: 'technique', tactique: 'tactique', mental: 'mental' };
   const noteKey = noteKeyFor[aspectKey] || aspectKey;
 
-  const dates = calGridDates || [];
+  // Sélecteur de semaine : reconstruit au changement d'org / nb de semaines
+  const weekSel = document.getElementById('themes-week');
+  if (weekSel) {
+    const weeks = getAvailableWeeks();
+    if (weekSel.dataset.org !== currentOrg || weekSel.dataset.count !== String(weeks.length)) {
+      const cur = weekSel.value;
+      weekSel.innerHTML = '<option value="">Calendrier (fenêtre ci-dessus)</option>' + weeks.map(w =>
+        '<option value="' + w.mondayIso + '">Semaine ' + w.week + ' (' + w.year + ') — ' + formatDateRange(w.monday) + '</option>'
+      ).join('');
+      if (cur && weeks.some(w => w.mondayIso === cur)) weekSel.value = cur;
+      weekSel.dataset.org = currentOrg;
+      weekSel.dataset.count = String(weeks.length);
+    }
+  }
+
+  // Dates : semaine choisie (lundi→dimanche) sinon la fenêtre du calendrier
+  const dates = (weekSel && weekSel.value) ? weekDates(getMondayOf(weekSel.value)) : (calGridDates || []);
   const players = calGridPlayers || [];
   if (dates.length === 0 || players.length === 0) {
     gridEl.innerHTML = '<div class="empty-state">Aucune donnée à afficher.</div>';
@@ -9826,11 +9863,42 @@ function setMatchTemps(joueur, periodeIdx, value) {
   renderMatchComposition();
 }
 
+// Migre la clé "seance" des RPE déjà saisis (et déplace de date si besoin) SANS jamais
+// perdre les valeurs. Appelé quand on renomme/replanifie un match ou une séance, pour que
+// les RPE restent rattachés. Les RPE ne sont modifiables que via la prise de note RPE.
+async function migrateRPESeanceKey(oldDate, oldNom, newDate, newNom) {
+  if (oldDate === newDate && oldNom === newNom) return;
+  const affected = (state.bdd_rpe || []).filter(r =>
+    r.date === oldDate && Array.isArray(r.rpe) && r.rpe.some(it => it.seance === oldNom));
+  for (const r of affected) {
+    const item = r.rpe.find(it => it.seance === oldNom);
+    if (!item) continue;
+    if (oldDate === newDate) {
+      item.seance = newNom; // simple renommage de clé, valeur intacte
+      try { await sb.from('rpe_declarations').upsert({ date: r.date, joueur: r.joueur, rpe: r.rpe, org: currentOrg }, { onConflict: 'date,joueur' }); } catch (e) {}
+    } else {
+      // La date a changé : on déplace l'entrée vers la nouvelle date (fusion, sans doublon)
+      r.rpe = r.rpe.filter(it => it.seance !== oldNom);
+      let dest = (state.bdd_rpe || []).find(x => x.date === newDate && x.joueur === r.joueur);
+      if (!dest) { dest = { date: newDate, joueur: r.joueur, rpe: [] }; state.bdd_rpe.push(dest); }
+      if (!Array.isArray(dest.rpe)) dest.rpe = [];
+      dest.rpe = dest.rpe.filter(it => it.seance !== newNom);
+      dest.rpe.push({ seance: newNom, rpe: item.rpe });
+      try {
+        await sb.from('rpe_declarations').upsert({ date: r.date, joueur: r.joueur, rpe: r.rpe, org: currentOrg }, { onConflict: 'date,joueur' });
+        await sb.from('rpe_declarations').upsert({ date: dest.date, joueur: dest.joueur, rpe: dest.rpe, org: currentOrg }, { onConflict: 'date,joueur' });
+      } catch (e) {}
+    }
+  }
+}
+
 async function saveMatch() {
   if (!canWrite()) { toast('Réservé au staff/admin', 'error'); return; }
   const date = document.getElementById('match-date').value;
   const adversaire = document.getElementById('match-adversaire').value.trim();
   if (!date || !adversaire) { toast('Date et adversaire obligatoires', 'error'); return; }
+  // Mémoriser l'ancien match (avant mise à jour) pour migrer les RPE si le nom/la date change
+  const oldMatch = currentMatchId ? (state.bdd_matchs || []).find(m => m.id === currentMatchId) : null;
 
   const nbP = parseInt(document.getElementById('match-nb-periodes').value) || 2;
   const dureeP = parseInt(document.getElementById('match-duree-periode').value) || 45;
@@ -9872,6 +9940,15 @@ async function saveMatch() {
       result = await sb.from('matchs').insert(matchObj);
     }
     if (result.error) { toast('Erreur : ' + result.error.message, 'error'); return; }
+    // Préserver les RPE déjà saisis : si l'adversaire (= clé RPE) ou la date a changé,
+    // on migre la clé pour que les RPE restent rattachés au match (jamais réinitialisés ici).
+    if (oldMatch) {
+      const oldNom = '⚽ MATCH: ' + oldMatch.adversaire;
+      const newNom = '⚽ MATCH: ' + adversaire;
+      if (oldNom !== newNom || oldMatch.date !== date) {
+        await migrateRPESeanceKey(oldMatch.date, oldNom, date, newNom);
+      }
+    }
     toast(currentMatchId ? 'Match mis à jour' : 'Match enregistré', 'success');
     // Recharger les matchs
     const { data: matchs } = await sb.from('matchs').select('*').eq('org', currentOrg).order('date', { ascending: false });
@@ -10201,6 +10278,9 @@ function clearVignettes() {
 // Toutes les vignettes déjà utilisées pour un aspect (autocomplétion + comptage)
 function getAllVignettes(aspect) {
   const set = new Set();
+  // Bibliothèque gérée dans les Paramètres
+  (state.vignettes_lib || []).forEach(v => { if (v.aspect === aspect && v.nom) set.add(v.nom); });
+  // + vignettes déjà utilisées dans des séances
   (state.bdd_ent2 || []).forEach(s => {
     const v = s.vignettes && s.vignettes[aspect];
     if (Array.isArray(v)) v.forEach(x => { if (x) set.add(x); });
@@ -10570,20 +10650,17 @@ async function saveSeance() {
     const idx = state.bdd_ent2.findIndex(x => x.date === date && x.nom === editingOriginal);
     if (idx >= 0) {
       state.bdd_ent2[idx] = obj;
-      // Si le nom a changé, propager la mise à jour dans bdd_ent et bdd_rpe
+      // Si le nom a changé, propager (et PERSISTER) la mise à jour dans les plannings et les RPE,
+      // pour que les RPE déjà saisis restent rattachés à la séance (jamais réinitialisés ici).
       if (editingOriginal !== nom) {
-        state.bdd_ent.forEach(e => {
-          if (e.date === date) {
+        for (const e of state.bdd_ent) {
+          if (e.date === date && Array.isArray(e.seances) && e.seances.includes(editingOriginal)) {
             e.seances = e.seances.map(s => s === editingOriginal ? nom : s);
+            try { await sb.from('plannings').upsert({ date: e.date, joueur: e.joueur, seances: e.seances, org: currentOrg }, { onConflict: 'date,joueur' }); } catch (err) {}
           }
-        });
-        state.bdd_rpe.forEach(r => {
-          if (r.date === date && r.rpe) {
-            r.rpe.forEach(item => {
-              if (item.seance === editingOriginal) item.seance = nom;
-            });
-          }
-        });
+        }
+        // Migration de la clé RPE (valeurs intactes) + persistance
+        await migrateRPESeanceKey(date, editingOriginal, date, nom);
       }
     } else {
       state.bdd_ent2.push(obj);
@@ -13509,6 +13586,59 @@ function renderSettings() {
   if (currentSettingsTab === 'groups') renderGroupsSettings();
   else if (currentSettingsTab === 'players') renderPlayersSettings();
   else if (currentSettingsTab === 'types') renderTypesSettings();
+  else if (currentSettingsTab === 'vignettes') renderVignettesSettings();
+}
+
+// ---------- BIBLIOTHÈQUE DE VIGNETTES (par aspect) ----------
+function vignettesLibFor(aspect) {
+  return (state.vignettes_lib || [])
+    .filter(v => v.aspect === aspect)
+    .map(v => v.nom)
+    .sort((a, b) => a.localeCompare(b));
+}
+function renderVignettesSettings() {
+  const cont = document.getElementById('vignettes-lib-container');
+  if (!cont) return;
+  cont.innerHTML = VIGNETTE_ASPECTS.map(a => {
+    const items = vignettesLibFor(a.key);
+    const chips = items.length
+      ? items.map(nom => '<span style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-card); border:1px solid var(--accent); border-radius:14px; padding:3px 10px; font-size:12px;">' +
+          escapeHtml(nom) + '<span style="cursor:pointer; color:var(--text-dim); font-weight:700;" onclick="deleteVignetteLib(\'' + a.key + '\', \'' + nom.replace(/'/g, "\\'") + '\')">✕</span></span>').join(' ')
+      : '<span style="color:var(--text-dim); font-size:12px;">Aucune vignette pour cet aspect.</span>';
+    return '<div style="margin-bottom:16px; padding:12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px;">' +
+      '<div style="font-weight:700; margin-bottom:8px;">' + a.icon + ' ' + a.label + '</div>' +
+      '<div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">' +
+        '<input type="text" id="new-vignette-' + a.key + '" maxlength="60" placeholder="Nouvelle vignette…" style="flex:1; min-width:160px;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addVignetteLib(\'' + a.key + '\');}" />' +
+        '<button class="btn" style="padding:6px 14px;" onclick="addVignetteLib(\'' + a.key + '\')">+ Ajouter</button>' +
+      '</div>' +
+      '<div style="display:flex; flex-wrap:wrap; gap:6px;">' + chips + '</div>' +
+    '</div>';
+  }).join('');
+}
+async function addVignetteLib(aspect) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const input = document.getElementById('new-vignette-' + aspect);
+  const nom = (input && input.value || '').trim();
+  if (!nom) { toast('Nom vide', 'error'); return; }
+  if (vignettesLibFor(aspect).some(v => v.toLowerCase() === nom.toLowerCase())) { toast('Vignette déjà existante', 'error'); return; }
+  try {
+    const { error } = await sb.from('vignettes_lib').upsert({ aspect, nom, org: currentOrg }, { onConflict: 'aspect,nom,org' });
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); return; }
+  state.vignettes_lib.push({ aspect, nom });
+  if (input) input.value = '';
+  renderVignettesSettings();
+  toast('Vignette « ' + nom + ' » ajoutée', 'success');
+}
+async function deleteVignetteLib(aspect, nom) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  try {
+    const { error } = await sb.from('vignettes_lib').delete().eq('aspect', aspect).eq('nom', nom).eq('org', currentOrg);
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); return; }
+  state.vignettes_lib = state.vignettes_lib.filter(v => !(v.aspect === aspect && v.nom === nom));
+  renderVignettesSettings();
+  toast('Vignette supprimée', 'success');
 }
 
 function renderResetStats() {
