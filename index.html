@@ -297,19 +297,22 @@
     justify-content: center;
     padding-left: 10px;
   }
-  .cal-cell.train { background: #14322088; }
-  .cal-cell.match { background: #78540988; border-left: 2px solid #eab308; }
-  .cal-cell.planned { background: #1e293b66; }
+  /* Bande de couleur à gauche = état principal du joueur sur la journée (comme les matchs) */
+  .cal-cell.train { background: #14322088; border-left: 3px solid #22c55e; }
+  .cal-cell.match { background: #78540988; border-left: 3px solid #eab308; }
+  .cal-cell.planned { background: #1e293b66; border-left: 3px solid #6366f1; }
   .cal-planned { background:#3730a3; color:#c7d2fe; border-radius:4px; padding:2px 4px; margin:1px 0; cursor:pointer; font-size:11px; font-weight:600; }
   .cal-planned:hover { background:#4338ca; }
   .cal-planned.done { background:#16a34a; color:#dcfce7; border:1px solid #86efac; box-shadow:0 0 0 1px rgba(34,197,94,0.4) inset; }
   /* Séance planifiée non validée depuis plus de 48h : alerte rouge */
   .cal-planned.overdue { background:#7f1d1d; color:#fecaca; border:1px solid #ef4444; box-shadow:0 0 0 1px rgba(239,68,68,0.5) inset; }
   .cal-planned.overdue:hover { background:#991b1b; }
-  .cal-cell.rest { background: #37415188; }
-  .cal-cell.injury { background: #7f1d1d88; }
-  .cal-cell.sick { background: #78350f88; }
-  .cal-cell.absent { background: #71341288; }
+  .cal-cell.rest { background: #37415188; border-left: 3px solid #6b7280; }
+  .cal-cell.injury { background: #7f1d1d88; border-left: 3px solid #ef4444; }
+  .cal-cell.sick { background: #78350f88; border-left: 3px solid #f59e0b; }
+  .cal-cell.absent { background: #71341288; border-left: 3px solid #ea580c; }
+  /* Plusieurs séances dans une même cellule : léger soulignage pour les distinguer */
+  .cal-cell.multi > div:not(:last-child) { border-bottom: 1px solid rgba(255,255,255,0.16); padding-bottom: 3px; margin-bottom: 3px; }
   /* Colonne du jour : encadrée par des lignes verticales (accent) pour repérage rapide */
   .cal-header.cal-today { border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); color: var(--accent-light); }
   .cal-cell.cal-today { border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); }
@@ -1007,9 +1010,9 @@
         <div class="legend-item"><div class="legend-color" style="background:#7f1d1d"></div>Blessure</div>
         <div class="legend-item"><div class="legend-color" style="background:#78350f"></div>Malade</div>
         <div class="legend-item"><div class="legend-color" style="background:#713f12"></div>Absent</div>
-        <div class="legend-item"><div class="legend-color" style="background:#3730a3"></div>📋 Planifiée</div>
-        <div class="legend-item"><div class="legend-color" style="background:#16a34a"></div>✅ Validée</div>
-        <div class="legend-item"><div class="legend-color" style="background:#7f1d1d; border:1px solid #ef4444;"></div>⚠️ Non validée &gt; 48h</div>
+        <div class="legend-item"><div class="legend-color" style="background:#3730a3"></div>Planifiée</div>
+        <div class="legend-item"><div class="legend-color" style="background:#16a34a"></div>Validée</div>
+        <div class="legend-item"><div class="legend-color" style="background:#7f1d1d; border:1px solid #ef4444;"></div>Non validée &gt; 48h</div>
       </div>
       <div class="filters">
         <div class="filter-group">
@@ -6660,7 +6663,8 @@ function renderCalendar() {
         return '<div>' + escapeHtml(s) + '</div>';
       }).join('');
       const todayCls = (d === todayIso) ? (' cal-today' + (isLastRow ? ' cal-today-last' : '')) : '';
-      html += '<div class="cal-cell ' + cls + todayCls + '">' + (content || '<span style="color:var(--text-dim)">—</span>') + '</div>';
+      const multiCls = (seances.length > 1) ? ' multi' : '';
+      html += '<div class="cal-cell ' + cls + todayCls + multiCls + '">' + (content || '<span style="color:var(--text-dim)">—</span>') + '</div>';
     });
   });
   html += '</div>';
