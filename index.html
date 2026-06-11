@@ -311,8 +311,10 @@
   .cal-cell.injury { background: #7f1d1d88; border-left: 3px solid #ef4444; }
   .cal-cell.sick { background: #78350f88; border-left: 3px solid #f59e0b; }
   .cal-cell.absent { background: #71341288; border-left: 3px solid #ea580c; }
-  /* Plusieurs séances dans une même cellule : séparation nette pour bien distinguer chaque séance */
-  .cal-cell.multi > div:not(:last-child) { border-bottom: 2px solid rgba(255,255,255,0.85); padding-bottom: 7px; margin-bottom: 7px; }
+  /* Plusieurs séances dans une même cellule : léger cadre autour de chaque séance pour les distinguer.
+     (Les séances planifiées .cal-planned ont déjà leur propre encadré, on ne les double pas.) */
+  .cal-cell.multi > div:not(.cal-planned) { border: 1px solid rgba(255,255,255,0.3); border-radius: 5px; padding: 3px 6px; margin-bottom: 4px; }
+  .cal-cell.multi > div:last-child { margin-bottom: 0; }
   /* Colonne du jour : encadrée par des lignes verticales (accent) pour repérage rapide */
   .cal-header.cal-today { border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); color: var(--accent-light); }
   .cal-cell.cal-today { border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); }
@@ -6678,10 +6680,10 @@ function renderCalendar() {
           const planTitle = faite ? 'Séance effectuée' : (overdue ? 'Séance non validée depuis plus de 48 h' : 'Séance planifiée — voir le détail');
           return '<div class="cal-planned' + planCls + '" onclick="openSeancePlanDetail(\'' + spId + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="' + planTitle + '">' + planIcon + ' ' + escapeHtml(label.trim()) + '</div>';
         }
-        // Match (préfixe ⚽) → cliquable pour voir les infos du match
+        // Match (préfixe ⚽) → cliquable pour voir les infos du match (sans l'émoji devant le nom)
         if (typeof s === 'string' && s.indexOf('⚽') === 0) {
           const adv = s.replace(/^⚽\s*/, '');
-          return '<div style="cursor:pointer;" onclick="openMatchDetail(\'' + d + '\', \'' + adv.replace(/'/g, "\\'") + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="Voir les infos du match">' + escapeHtml(s) + '</div>';
+          return '<div style="cursor:pointer;" onclick="openMatchDetail(\'' + d + '\', \'' + adv.replace(/'/g, "\\'") + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="Voir les infos du match">' + escapeHtml(adv) + '</div>';
         }
         // Si c'est un statut système, afficher son libellé localisé (non cliquable)
         if (STATUTS_NON_ENT.includes(s)) {
