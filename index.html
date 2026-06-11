@@ -4714,8 +4714,15 @@ function applyRoleRestrictions() {
     // Staff/admin : cacher les onglets joueur, réafficher le menu Gestion
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
     if (gestionDropdown) gestionDropdown.style.display = '';
+    // Le rôle 'staff' a une interface allégée par rapport à l'admin :
+    // pas d'export JSON, pas de Notes médicales, pas de Paramètres.
+    const staffLimited = (currentRole === 'staff');
     const btnExport = document.getElementById('btn-export-json');
-    if (btnExport) btnExport.style.display = '';
+    if (btnExport) btnExport.style.display = staffLimited ? 'none' : '';
+    const medNotesBtn = document.getElementById('nav-medical-notes-btn');
+    if (medNotesBtn) medNotesBtn.style.display = staffLimited ? 'none' : '';
+    const settingsBtn = document.querySelector('.nav-btn[data-view="settings"]');
+    if (settingsBtn) settingsBtn.style.display = staffLimited ? 'none' : '';
   }
 }
 
