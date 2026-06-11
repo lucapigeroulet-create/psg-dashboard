@@ -688,8 +688,8 @@
 
 <nav>
   <button class="nav-btn active" data-view="overview">📊 Vue d'ensemble</button>
-  <button class="nav-btn" data-view="joueur">👤 Joueur</button>
   <button class="nav-btn" data-view="calendar">📅 Séance</button>
+  <button class="nav-btn" data-view="joueur">👤 Joueur</button>
   <button class="nav-btn" data-view="staff-hooper">💚 État de forme</button>
   <button class="nav-btn" data-view="rpe">💪 Charge RPE</button>
   <button class="nav-btn" data-view="gps">📡 Données GPS</button>
@@ -703,6 +703,7 @@
   </div>
   <button class="nav-btn médical-only-btn" data-view="injury-entry" style="display:none;">🩹 Saisie blessures</button>
   <button class="nav-btn direction-only-btn" data-view="calendar" id="nav-direction-calendar-btn" style="display:none;">📅 Séance</button>
+  <button class="nav-btn direction-only-btn" data-view="joueur"   id="nav-direction-joueur-btn"   style="display:none;">👤 Joueur</button>
   <button class="nav-btn direction-only-btn" data-view="gps"      id="nav-direction-gps-btn"      style="display:none;">📡 Données GPS</button>
   <div class="nav-dropdown" id="nav-gestion-dropdown">
     <button type="button" class="nav-btn nav-dropdown-toggle" id="nav-gestion-toggle" onclick="toggleGestionMenu(event)">🛠️ Gestion <span style="font-size:10px;">▾</span></button>
@@ -4675,17 +4676,10 @@ function applyRoleRestrictions() {
     });
     // Afficher uniquement les boutons direction
     document.querySelectorAll('.direction-only-btn').forEach(b => b.style.display = '');
-    // La direction a aussi accès au tableau de bord joueur (lecture seule)
-    const joueurNav = document.querySelector('.nav-btn[data-view="joueur"]');
-    if (joueurNav) joueurNav.style.display = '';
-    // Masquer uniquement le formulaire de création (la liste des séances reste visible)
+    // Direction : ni le formulaire de planification, ni la liste des séances planifiées
+    // ne sont affichés dans l'onglet Séance.
     const planFormCard = document.getElementById('calendar-plan-card');
     if (planFormCard) planFormCard.style.display = 'none';
-    // Afficher explicitement la carte des séances planifiées et changer le filtre par défaut sur "Toutes"
-    const histFormCard = document.getElementById('calendar-plan-history-card');
-    if (histFormCard) histFormCard.style.display = '';
-    const histFilter = document.getElementById('sp-hist-filter');
-    if (histFilter && histFilter.value === 'future') histFilter.value = 'all';
     // Masquer import/historique GPS
     ['gps-import-toggle', 'gps-history-toggle', 'gps-import-panel', 'gps-history-panel'].forEach(id => {
       const el = document.getElementById(id);
@@ -6559,10 +6553,9 @@ function relocateSeancePanels() {
   const histView = document.getElementById('view-history');
   const calView  = document.getElementById('view-calendar');
   if (planCard && planView && planCard.parentElement !== planView) planView.appendChild(planCard);
-  if (histCard) {
-    const target = (currentRole === 'direction') ? calView : histView;
-    if (target && histCard.parentElement !== target) target.appendChild(histCard);
-  }
+  // La liste des séances planifiées vit dans l'onglet "Historique séances" (staff/admin).
+  // La direction n'y a pas accès et ne la voit donc nulle part (plus affichée dans l'onglet Séance).
+  if (histCard && histView && histCard.parentElement !== histView) histView.appendChild(histCard);
 }
 
 // Initialise le formulaire de la vue "Planifier une séance"
@@ -6580,13 +6573,8 @@ function renderPlanView() {
 function renderCalendar() {
   const isStaff     = (currentRole === 'admin' || currentRole === 'staff');
   const isDirection = (currentRole === 'direction');
-  // Liste des séances planifiées : uniquement la direction la voit dans le calendrier
-  // (staff/admin la consultent désormais dans l'onglet "Historique séances").
-  const histCard = document.getElementById('calendar-plan-history-card');
-  if (histCard && isDirection) {
-    histCard.style.display = '';
-    renderSeancesPlanHistory();
-  }
+  // La liste des séances planifiées n'est plus affichée dans l'onglet Séance (ni staff ni direction) :
+  // elle se consulte uniquement dans l'onglet "Historique séances" (staff/admin).
   // Bilan hebdomadaire des séances validées (staff + direction uniquement)
   const bilanCard = document.getElementById('calendar-weekly-bilan-card');
   if (bilanCard) {
