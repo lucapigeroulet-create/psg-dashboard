@@ -2554,7 +2554,7 @@
       <div class="filters">
         <div class="filter-group">
           <label>Joueur</label>
-          <select id="staff-hooper-player" onchange="renderStaffHooperPlayerChart()"><option value="">Vue d'ensemble (moyenne)</option><option value="__daily__">Vue jour par jour (équipe)</option></select>
+          <select id="staff-hooper-player" onchange="renderStaffHooperPlayerChart()"><option value="">Vue d'ensemble (moyenne)</option><option value="__daily__" selected>Vue jour par jour (équipe)</option></select>
         </div>
         <div class="filter-group">
           <label>Période</label>
@@ -12331,13 +12331,13 @@ async function renderStaffHooper() {
   // Filtres
   const playerSel = document.getElementById('staff-hooper-player');
   if (playerSel) {
-    const current = playerSel.value;
     playerSel.innerHTML = '<option value="">Vue d\'ensemble (moyenne)</option>' +
       '<option value="__daily__">Vue jour par jour (équipe)</option>' +
       '<optgroup label="Joueur (évolution détaillée)">' +
       getAllPlayers().map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('') +
       '</optgroup>';
-    playerSel.value = current;
+    // Défaut imposé à chaque ouverture de l'onglet : vue jour par jour (équipe)
+    playerSel.value = '__daily__';
   }
 
   // Stats globales
