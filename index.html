@@ -6860,6 +6860,35 @@ function bilanSortArrow(key) {
   return bilanSortDir === 'asc' ? '▲' : '▼';
 }
 
+// ---- Notes rapides du bilan hebdomadaire (stockées en localStorage, par org) ----
+// Structure : { [mondayIso]: { [player]: "texte de la note" } }
+function getBilanNotesStore() {
+  try {
+    const raw = localStorage.getItem('bilan_notes_' + currentOrg);
+    return raw ? JSON.parse(raw) : {};
+  } catch(e) { return {}; }
+}
+function getBilanNote(weekIso, player) {
+  const store = getBilanNotesStore();
+  return (store[weekIso] && store[weekIso][player]) || '';
+}
+function setBilanNote(weekIso, player, value) {
+  const store = getBilanNotesStore();
+  const txt = (value || '').trim();
+  if (txt) {
+    if (!store[weekIso]) store[weekIso] = {};
+    store[weekIso][player] = txt;
+  } else if (store[weekIso]) {
+    delete store[weekIso][player];
+    if (Object.keys(store[weekIso]).length === 0) delete store[weekIso];
+  }
+  try { localStorage.setItem('bilan_notes_' + currentOrg, JSON.stringify(store)); } catch(e) {}
+}
+function onBilanNoteChange(el) {
+  if (!el) return;
+  setBilanNote(el.dataset.week, el.dataset.player, el.value);
+}
+
 // Calcule les données du bilan pour la semaine + groupe sélectionnés, triées.
 // Source unique partagée par l'affichage HTML et l'export PDF.
 function computeBilanData() {
@@ -6964,12 +6993,15 @@ function renderWeeklyBilan() {
     '<th style="cursor:pointer; user-select:none;" onclick="setBilanSort(\'pct\')">% validé ' + bilanSortArrow('pct') + '</th>' +
     data.dates.map((d, i) => '<th>' + jours[i] + '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + d.slice(8) + '/' + d.slice(5, 7) + '</span></th>').join('') +
     '<th style="cursor:pointer; user-select:none;" onclick="setBilanSort(\'total\')">Total ' + bilanSortArrow('total') + '</th>' +
+    '<th style="text-align:left; min-width:200px;">Note semaine</th>' +
     '</tr>';
 
   if (data.rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="' + (data.dates.length + 3) + '" style="padding:16px; text-align:center; color:var(--text-dim);">Aucun joueur ciblé par une séance cette semaine.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="' + (data.dates.length + 4) + '" style="padding:16px; text-align:center; color:var(--text-dim);">Aucun joueur ciblé par une séance cette semaine.</td></tr>';
     return;
   }
+
+  const weekIso = toLocalISO(data.monday);
 
   tbody.innerHTML = data.rows.map(r => {
     const cells = r.days.map(day => {
@@ -6978,10 +7010,16 @@ function renderWeeklyBilan() {
     }).join('');
     let pctStyle = 'color:var(--text-dim);';
     if (r.weekTotal > 0) pctStyle = (r.pct === 100) ? 'color:#22c55e; font-weight:700;' : (r.pct >= 50 ? 'color:#eab308; font-weight:700;' : 'color:#ef4444; font-weight:700;');
+    const note = getBilanNote(weekIso, r.player);
+    const noteCell = '<td style="text-align:left;">' +
+      '<input type="text" class="bilan-note-input" data-week="' + escapeHtml(weekIso) + '" data-player="' + escapeHtml(r.player) + '" ' +
+      'onchange="onBilanNoteChange(this)" value="' + escapeHtml(note) + '" placeholder="Bilan rapide…" ' +
+      'style="width:100%; min-width:180px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:12px;" /></td>';
     return '<tr><td style="text-align:left; font-weight:600;">' + escapeHtml(r.player) + '</td>' +
       '<td style="text-align:center; ' + pctStyle + '">' + (r.weekTotal > 0 ? r.pct + '%' : '—') + '</td>' +
       cells +
-      '<td style="text-align:center; font-weight:700;">' + r.weekDone + '/' + r.weekTotal + '</td></tr>';
+      '<td style="text-align:center; font-weight:700;">' + r.weekDone + '/' + r.weekTotal + '</td>' +
+      noteCell + '</tr>';
   }).join('');
 }
 
@@ -6995,12 +7033,14 @@ function exportBilanPDF() {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   const jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
-  const head = [['Joueur', '% validé', ...data.dates.map((d, i) => jours[i] + ' ' + d.slice(8) + '/' + d.slice(5, 7)), 'Total']];
+  const pdfWeekIso = toLocalISO(data.monday);
+  const head = [['Joueur', '% validé', ...data.dates.map((d, i) => jours[i] + ' ' + d.slice(8) + '/' + d.slice(5, 7)), 'Total', 'Note semaine']];
   const body = data.rows.map(r => [
     r.player,
     r.weekTotal > 0 ? r.pct + '%' : '—',
     ...r.days.map(day => day.total === 0 ? '·' : (day.done + '/' + day.total)),
-    r.weekDone + '/' + r.weekTotal
+    r.weekDone + '/' + r.weekTotal,
+    getBilanNote(pdfWeekIso, r.player)
   ]);
 
   doc.setFontSize(14); doc.setTextColor(20);
@@ -7012,7 +7052,10 @@ function exportBilanPDF() {
     head, body, startY: 60,
     styles: { fontSize: 8, halign: 'center', cellPadding: 3 },
     headStyles: { fillColor: [30, 41, 59], textColor: 255 },
-    columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } },
+    columnStyles: {
+      0: { halign: 'left', fontStyle: 'bold' },
+      [data.dates.length + 3]: { halign: 'left', cellWidth: 160 }
+    },
     didParseCell: function (d) {
       if (d.section !== 'body') return;
       const col = d.column.index;
