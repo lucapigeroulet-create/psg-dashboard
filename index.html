@@ -327,6 +327,8 @@
   .cal-cell.multi > div:not(.cal-planned) { border-color: rgba(255,255,255,0.32); }
   /* Petit signe "annotée" (vignette ou note sur la séance) */
   .cal-anno-mark { font-size: 10px; vertical-align: baseline; }
+  /* Signe distinct "remarque individuelle sur ce joueur" */
+  .cal-remark-mark { filter: drop-shadow(0 0 2px var(--accent)); }
   /* Lignes alternées : 1 joueur sur 2 légèrement plus foncé pour distinguer les lignes.
      box-shadow inset = assombrit par-dessus n'importe quel fond (y compris les états colorés). */
   .cal-cell.cal-row-alt { box-shadow: inset 0 0 0 9999px rgba(0,0,0,0.18); }
@@ -6747,9 +6749,13 @@ function renderCalendar() {
         // Séance "live" (saisie séance) avec une fiche → cliquable pour voir les annotations
         const fiche = getSeanceInfo(d, s);
         if (fiche) {
-          const anno = seanceHasAnnotations(fiche);
-          const annoMark = anno ? ' <span class="cal-anno-mark" title="Séance annotée (vignette ou note)">📝</span>' : '';
-          return '<div style="cursor:pointer;' + (anno ? ' font-weight:700;' : '') + '" onclick="openSeanceDetail(\'' + d + '\', \'' + String(s).replace(/'/g, "\\'") + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="' + (anno ? 'Séance annotée — voir le détail' : 'Voir le détail de la séance') + '">' + escapeHtml(s) + annoMark + '</div>';
+          const hasNoteVign = seanceHasNoteOrVignette(fiche);
+          const indivRemark = seanceHasRemarqueJoueur(fiche, p);
+          const anno = hasNoteVign || indivRemark;
+          let marks = '';
+          if (hasNoteVign) marks += ' <span class="cal-anno-mark" title="Séance annotée (vignette ou note)">📝</span>';
+          if (indivRemark) marks += ' <span class="cal-anno-mark cal-remark-mark" title="Remarque individuelle sur ce joueur">👤</span>';
+          return '<div style="cursor:pointer;' + (anno ? ' font-weight:700;' : '') + '" onclick="openSeanceDetail(\'' + d + '\', \'' + String(s).replace(/'/g, "\\'") + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="' + (anno ? 'Séance annotée — voir le détail' : 'Voir le détail de la séance') + '">' + escapeHtml(s) + marks + '</div>';
         }
         return '<div>' + escapeHtml(s) + '</div>';
       }).join('');
@@ -10657,13 +10663,25 @@ const SEANCE_ANNOT_ASPECTS = [
 ];
 function seanceHasAnnotations(info) {
   if (!info) return false;
+  if (seanceHasNoteOrVignette(info)) return true;
+  const r = info.remarques_joueurs || {};
+  if (Object.values(r).some(t => t && String(t).trim())) return true;
+  return false;
+}
+// Note ou vignette sur la séance (annotations « collectives », hors remarques individuelles)
+function seanceHasNoteOrVignette(info) {
+  if (!info) return false;
   const n = info.notes || {};
   if (SEANCE_ANNOT_ASPECTS.some(a => (n[a.noteKey] || '').trim())) return true;
   const v = info.vignettes || {};
   if (SEANCE_ANNOT_ASPECTS.some(a => Array.isArray(v[a.vignKey]) && v[a.vignKey].length)) return true;
-  const r = info.remarques_joueurs || {};
-  if (Object.values(r).some(t => t && String(t).trim())) return true;
   return false;
+}
+// Remarque individuelle saisie pour CE joueur sur cette séance
+function seanceHasRemarqueJoueur(info, joueur) {
+  if (!info) return false;
+  const r = info.remarques_joueurs || {};
+  return !!(r[joueur] && String(r[joueur]).trim());
 }
 function openSeanceDetail(date, nom, joueur) {
   const overlay = document.getElementById('seance-detail-modal');
