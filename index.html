@@ -311,10 +311,25 @@
   .cal-cell.injury { background: #7f1d1d88; border-left: 3px solid #ef4444; }
   .cal-cell.sick { background: #78350f88; border-left: 3px solid #f59e0b; }
   .cal-cell.absent { background: #71341288; border-left: 3px solid #ea580c; }
-  /* Plusieurs séances dans une même cellule : léger cadre autour de chaque séance pour les distinguer.
-     (Les séances planifiées .cal-planned ont déjà leur propre encadré, on ne les double pas.) */
-  .cal-cell.multi > div:not(.cal-planned) { border: 1px solid rgba(255,255,255,0.3); border-radius: 5px; padding: 3px 6px; margin-bottom: 4px; }
-  .cal-cell.multi > div:last-child { margin-bottom: 0; }
+  /* Encadré autour de chaque séance / état du joueur dans la cellule (lecture plus claire).
+     (Les séances planifiées .cal-planned ont déjà leur propre encadré, on ne les double pas.
+      La cellule "nom du joueur" est exclue.) */
+  .cal-cell:not(.player-name) > div:not(.cal-planned) {
+    border: 1px solid rgba(255,255,255,0.22);
+    border-radius: 5px;
+    padding: 3px 6px;
+    margin-bottom: 4px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .cal-cell:not(.player-name) > div:last-child { margin-bottom: 0; }
+  /* Cadre un peu plus marqué quand il y a plusieurs séances empilées */
+  .cal-cell.multi > div:not(.cal-planned) { border-color: rgba(255,255,255,0.32); }
+  /* Petit signe "annotée" (vignette ou note sur la séance) */
+  .cal-anno-mark { font-size: 10px; vertical-align: baseline; }
+  /* Lignes alternées : 1 joueur sur 2 légèrement plus foncé pour distinguer les lignes.
+     box-shadow inset = assombrit par-dessus n'importe quel fond (y compris les états colorés). */
+  .cal-cell.cal-row-alt { box-shadow: inset 0 0 0 9999px rgba(0,0,0,0.18); }
   /* Colonne du jour : encadrée par des lignes verticales (accent) pour repérage rapide */
   .cal-header.cal-today { border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); color: var(--accent-light); }
   .cal-cell.cal-today { border-left: 2px solid var(--accent); border-right: 2px solid var(--accent); }
@@ -6700,8 +6715,9 @@ function renderCalendar() {
 
   players.forEach((p, pi) => {
     const isLastRow = (pi === players.length - 1);
+    const rowAlt = (pi % 2 === 1) ? ' cal-row-alt' : '';
     const info = getJoueurInfo(p);
-    html += '<div class="cal-cell player-name"><div>' + p + '</div><div style="font-size:9px;color:var(--text-dim);">' + info.groupe + '</div></div>';
+    html += '<div class="cal-cell player-name' + rowAlt + '"><div>' + p + '</div><div style="font-size:9px;color:var(--text-dim);">' + info.groupe + '</div></div>';
     dates.forEach(d => {
       const seances = getSeancesJoueur(d, p);
       const cls = getCellStatusClass(seances);
@@ -6732,13 +6748,14 @@ function renderCalendar() {
         const fiche = getSeanceInfo(d, s);
         if (fiche) {
           const anno = seanceHasAnnotations(fiche);
-          return '<div style="cursor:pointer;' + (anno ? ' font-weight:700;' : '') + '" onclick="openSeanceDetail(\'' + d + '\', \'' + String(s).replace(/'/g, "\\'") + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="' + (anno ? 'Séance annotée — voir le détail' : 'Voir le détail de la séance') + '">' + escapeHtml(s) + '</div>';
+          const annoMark = anno ? ' <span class="cal-anno-mark" title="Séance annotée (vignette ou note)">📝</span>' : '';
+          return '<div style="cursor:pointer;' + (anno ? ' font-weight:700;' : '') + '" onclick="openSeanceDetail(\'' + d + '\', \'' + String(s).replace(/'/g, "\\'") + '\', \'' + p.replace(/'/g, "\\'") + '\')" title="' + (anno ? 'Séance annotée — voir le détail' : 'Voir le détail de la séance') + '">' + escapeHtml(s) + annoMark + '</div>';
         }
         return '<div>' + escapeHtml(s) + '</div>';
       }).join('');
       const todayCls = (d === todayIso) ? (' cal-today' + (isLastRow ? ' cal-today-last' : '')) : '';
       const multiCls = (seances.length > 1) ? ' multi' : '';
-      html += '<div class="cal-cell ' + cls + todayCls + multiCls + '">' + (content || '<span style="color:var(--text-dim)">—</span>') + '</div>';
+      html += '<div class="cal-cell ' + cls + todayCls + multiCls + rowAlt + '">' + (content || '<span style="color:var(--text-dim)">—</span>') + '</div>';
     });
   });
   html += '</div>';
