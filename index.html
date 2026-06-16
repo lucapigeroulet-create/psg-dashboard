@@ -8466,6 +8466,16 @@ function renderPlayerDashboard() {
     });
   });
 
+  // + Séances planifiées validées par le joueur (durée prévue duree_min)
+  (state.bdd_seances_plan || []).forEach(sp => {
+    if (!inPeriod(sp.date)) return;
+    if (!seancePlanCibleJoueur(sp, player)) return;
+    if (!seancePlanEstFaite(sp.id, player)) return;
+    const duree = parseFloat(sp.duree_min);
+    if (!isNaN(duree) && duree > 0) tempsEntr += duree;
+    nbSeances++;
+  });
+
   // Charge d'entraînement (sRPE) + groupage hebdo
   const srpeAll = computeSRPE().filter(x => x.joueur === player && inPeriod(x.date));
   const totalSRPE = srpeAll.reduce((s, x) => s + x.sRPE, 0);
