@@ -662,6 +662,7 @@
   .role-médical   { background:#065f46; color:#6ee7b7; }
   .role-direction { background:#4c1d95; color:#ddd6fe; }
   .role-lecteur   { background:#374151; color:#d1d5db; }
+  .role-coach     { background:#0e7490; color:#a5f3fc; }
   .readonly-overlay { opacity: 0.6; pointer-events: none; }
 
   /* Neutraliser le contour de focus natif sur les boutons Hooper */
@@ -1276,18 +1277,6 @@
         <div class="filter-group" id="gps-split-wrap">
           <label>Affichage</label>
           <select id="gps-split-select" onchange="renderGPS()"></select>
-        </div>
-        <div class="filter-group" id="gps-daytype-wrap">
-          <label>Charge de travail — type de jour</label>
-          <select id="gps-daytype-select" onchange="onGPSDayTypeChange()">
-            <option value="">— Non défini —</option>
-            <option value="J">J (match)</option>
-            <option value="J+1">J+1 (récupération)</option>
-            <option value="J+3">J+3</option>
-            <option value="J+4">J+4</option>
-            <option value="J-2">J-2</option>
-            <option value="J-1">J-1</option>
-          </select>
         </div>
         <div class="filter-group" id="gps-week-wrap" style="display:none;">
           <label>Semaine</label>
@@ -3159,8 +3148,13 @@ async function loadProfileAndStart() {
   document.getElementById('data-loading-overlay').style.display = 'flex';
 
   // Mettre à jour l'affichage utilisateur
+  // Comptes "Coach" : staff (mono-org TEGG) affiché avec un badge dédié COACH.
+  const COACH_EMAILS = ['lionel@tegg.fr'];
+  const isCoachAccount = COACH_EMAILS.includes((currentUser.email || '').toLowerCase());
   const userInfo = document.getElementById('user-info');
-  const roleBadge = '<span class="role-badge role-' + currentRole + '">' + currentRole.toUpperCase() + '</span>';
+  const roleBadge = isCoachAccount
+    ? '<span class="role-badge role-coach">COACH</span>'
+    : '<span class="role-badge role-' + currentRole + '">' + currentRole.toUpperCase() + '</span>';
   const displayName = currentUser.email.replace(EMAIL_DOMAIN, '');
   userInfo.innerHTML = '👤 ' + displayName + roleBadge;
 
@@ -8171,85 +8165,6 @@ function gpsDisplayVal(row, metric) {
   return v * (metric.mult || 1);
 }
 
-// ============================================================================
-// CHARGE DE TRAVAIL — référentiel de ratios par jour de microcycle
-// Source : Ravé et al. 2020, Frontiers in Physiology (Table 4, données réelles
-// club UEFA U23) pour Distance totale / HSR / Sprint / Accélérations-Décélérations.
-// Vitesse maximale, Power Plays et Distance/min = estimations de pratique
-// (sourced:false) — À VÉRIFIER avec le staff médical/physique avant usage strict.
-// Mêmes chiffres que l'onglet "Référentiel" du classeur Excel de planification GPS.
-// ============================================================================
-const GPS_WORKLOAD_TARGETS = {
-  distance_km:      { label: 'Distance totale',        sourced: true,  J: 1.00, 'J+1': 0.225, 'J+3': 0.65, 'J+4': 0.75, 'J-2': 0.45, 'J-1': 0.35 },
-  hsr:               { label: 'Distance HSR (+15km/h)', sourced: true,  J: 1.00, 'J+1': 0.08,  'J+3': 0.20, 'J+4': 0.50, 'J-2': 0.20, 'J-1': 0.10 },
-  sprint_dist_m:     { label: 'Distance sprint (+20km/h)', sourced: true, J: 1.00, 'J+1': 0.03, 'J+3': 0.10, 'J+4': 0.30, 'J-2': 0.10, 'J-1': 0.05 },
-  decel_count_high:  { label: 'Accélérations/Décélérations >4 m/s²', sourced: true, J: 1.00, 'J+1': 0.12, 'J+3': 0.90, 'J+4': 0.80, 'J-2': 0.40, 'J-1': 0.30 },
-  top_speed:         { label: 'Vitesse maximale',       sourced: false, J: 1.00, 'J+1': 0.00,  'J+3': 0.90, 'J+4': 0.92, 'J-2': 0.95, 'J-1': 0.90 },
-  power_plays:       { label: 'Power Plays',            sourced: false, J: 1.00, 'J+1': 0.12,  'J+3': 0.90, 'J+4': 0.80, 'J-2': 0.40, 'J-1': 0.30 },
-  dist_per_min:      { label: 'Distance / minute',      sourced: false, J: 1.00, 'J+1': 0.65,  'J+3': 1.05, 'J+4': 1.20, 'J-2': 0.95, 'J-1': 0.80 },
-};
-
-// Charge persistée par séance (clé "date||titre") -> type de jour ('J','J+1',...)
-function loadGPSDayTypeData() {
-  try {
-    const raw = localStorage.getItem('gps_daytype_' + currentOrg);
-    state.bdd_gps_daytype = raw ? JSON.parse(raw) : {};
-  } catch (e) { state.bdd_gps_daytype = {}; }
-}
-function saveGPSDayTypeData() {
-  try { localStorage.setItem('gps_daytype_' + currentOrg, JSON.stringify(state.bdd_gps_daytype || {})); } catch (e) {}
-}
-function getSessionDayType(date, title) {
-  if (!state.bdd_gps_daytype) loadGPSDayTypeData();
-  return (state.bdd_gps_daytype || {})[date + '||' + title] || '';
-}
-function setSessionDayType(date, title, dayType) {
-  if (!state.bdd_gps_daytype) loadGPSDayTypeData();
-  const key = date + '||' + title;
-  if (dayType) state.bdd_gps_daytype[key] = dayType;
-  else delete state.bdd_gps_daytype[key];
-  saveGPSDayTypeData();
-}
-function onGPSDayTypeChange() {
-  const sessionVal = document.getElementById('gps-session-select').value;
-  const sepIdx = sessionVal.indexOf('||');
-  const date = sepIdx >= 0 ? sessionVal.slice(0, sepIdx) : sessionVal;
-  const title = sepIdx >= 0 ? sessionVal.slice(sepIdx + 2) : '';
-  const dayType = document.getElementById('gps-daytype-select').value;
-  setSessionDayType(date, title, dayType);
-  renderGPS();
-}
-
-// Cible (en fraction de la meilleure perf. match) pour une métrique + un type de jour
-function getWorkloadTarget(metricKey, dayType) {
-  const def = GPS_WORKLOAD_TARGETS[metricKey];
-  if (!def || !dayType || !(dayType in def)) return null;
-  return { value: def[dayType], sourced: def.sourced, label: def.label };
-}
-
-// Statut de charge : 'under' (sous la cible), 'on' (dans la cible), 'over' (au-dessus)
-// Tolérance ±15 points de % autour de la cible. Cas particulier cible≈0 (ex. sprint en J+1).
-function workloadStatus(ratio, target) {
-  if (ratio === null || target === null) return null;
-  const t = target.value;
-  if (t <= 0.02) return ratio > 0.08 ? 'over' : 'on';
-  if (ratio > t + 0.15) return 'over';
-  if (ratio < t - 0.15) return 'under';
-  return 'on';
-}
-function workloadStatusColor(status) {
-  if (status === 'over') return '#f87171';
-  if (status === 'under') return '#60a5fa';
-  if (status === 'on') return 'var(--green,#34d399)';
-  return 'var(--text-dim)';
-}
-function workloadStatusLabel(status) {
-  if (status === 'over') return '▲ au-dessus';
-  if (status === 'under') return '▼ en-dessous';
-  if (status === 'on') return '✓ dans la cible';
-  return '—';
-}
-
 // Gestion du filtre joueurs (rapport de séance)
 function gpsTogglePlayer(player) {
   const i = gpsSelectedPlayers.indexOf(player);
@@ -8277,23 +8192,11 @@ function onGPSReportChange() {
   const type = document.getElementById('gps-report-type').value;
   document.getElementById('gps-date-wrap').style.display = (type === 'session') ? '' : 'none';
   document.getElementById('gps-split-wrap').style.display = (type === 'session') ? '' : 'none';
-  document.getElementById('gps-daytype-wrap').style.display = (type === 'session') ? '' : 'none';
   document.getElementById('gps-week-wrap').style.display = (type !== 'session') ? '' : 'none';
   document.getElementById('gps-group-wrap').style.display = (type === 'week-team') ? '' : 'none';
   document.getElementById('gps-player-wrap').style.display = (type === 'week-indiv') ? '' : 'none';
-  if (type === 'session') { populateGPSSplitSelect(); syncGPSDayTypeSelect(); }
+  if (type === 'session') populateGPSSplitSelect();
   renderGPS();
-}
-
-// Synchronise le sélecteur de type de jour avec la valeur stockée pour la séance courante
-function syncGPSDayTypeSelect() {
-  const sessionVal = document.getElementById('gps-session-select').value;
-  const daySel = document.getElementById('gps-daytype-select');
-  if (!sessionVal || !daySel) return;
-  const sepIdx = sessionVal.indexOf('||');
-  const date = sepIdx >= 0 ? sessionVal.slice(0, sepIdx) : sessionVal;
-  const title = sepIdx >= 0 ? sessionVal.slice(sepIdx + 2) : '';
-  daySel.value = getSessionDayType(date, title);
 }
 
 // Remplit le sélecteur de split selon la séance/date sélectionnée
@@ -8331,7 +8234,6 @@ function populateGPSSplitSelect() {
 // Quand on change de séance, on recharge la liste des splits puis on rend
 function onGPSSessionChange() {
   populateGPSSplitSelect();
-  syncGPSDayTypeSelect();
   renderGPS();
 }
 
@@ -8787,18 +8689,6 @@ function getBestMatchRatio(player, metricKey, currentRow) {
   return (curVal / curDur) / (bmVal / bmDur);
 }
 
-// Ratio BRUT (séance totale / meilleure perf. match totale), sans normalisation par durée.
-// C'est ce ratio (et non getBestMatchRatio, normalisé/min) qui se compare au référentiel
-// GPS_WORKLOAD_TARGETS, car les cibles J/J+1/... sont exprimées en % du total du match (Gref).
-function getWorkloadRawRatio(player, metricKey, currentRow) {
-  const bmRow = getBestMatchRow(player);
-  if (!bmRow) return null;
-  const bmVal = gpsVal(bmRow, metricKey);
-  const curVal = gpsVal(currentRow, metricKey);
-  if (!bmVal || bmVal === 0) return null;
-  return curVal / bmVal;
-}
-
 function ratioColor(ratio) {
   if (ratio === null) return 'var(--text-dim)';
   if (ratio >= 0.85) return 'var(--green,#34d399)';
@@ -8987,28 +8877,9 @@ function renderGPSSession() {
   // Vérifier si des ratios best match sont disponibles pour cette séance
   const hasBestMatch = rows.some(r => getBestMatchRow(r.joueur) !== null);
 
-  // Type de jour de microcycle assigné à cette séance (charge de travail)
-  const dayType = getSessionDayType(date, seanceTitle);
-  const wlActive = hasBestMatch && !!dayType;
-
-  if (hasBestMatch) {
-    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:12px;">';
-    html += '<span style="color:var(--text-dim);">Charge de travail :</span>';
-    if (dayType) {
-      html += '<span style="font-weight:700;color:var(--accent-light);">' + escapeHtml(dayType) + '</span>';
-      html += '<span style="color:var(--text-dim);">— les colonnes ci-dessous comparent chaque métrique à sa cible % Gref pour ce type de jour.</span>';
-    } else {
-      html += '<span style="color:var(--text-dim);">non défini — sélectionne un type de jour dans les filtres pour activer les cibles de charge.</span>';
-    }
-    html += '</div>';
-  }
-
   // Tableau par joueur avec barres de % (valeurs en mètres)
   const maxes = {};
   GPS_METRICS.forEach(m => { maxes[m.key] = Math.max.apply(null, rows.map(r => gpsDisplayVal(r, m)).concat([0])); });
-
-  // Compteurs pour la bannière de synthèse (charge au-dessus / dans la cible / en-dessous)
-  const wlCounts = { over: 0, on: 0, under: 0 };
 
   html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th>';
   if (hasBestMatch) {
@@ -9018,14 +8889,7 @@ function renderGPSSession() {
   GPS_METRICS.forEach(m => {
     html += '<th>' + m.label + (m.unit ? '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + m.unit + '</span>' : '') + '</th>';
     if (hasBestMatch && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
-      if (wlActive) {
-        const tgt = getWorkloadTarget(m.key, dayType);
-        const tgtLbl = tgt ? Math.round(tgt.value * 100) + '%' : '—';
-        const flag = tgt && !tgt.sourced ? ' ⚠' : '';
-        html += '<th style="font-size:10px;color:var(--accent-light);white-space:nowrap;" title="Cible ' + dayType + (tgt && !tgt.sourced ? ' (estimée, à vérifier)' : ' (sourcé Ravé et al. 2020)') + '">vs cible ' + tgtLbl + flag + '</th>';
-      } else {
-        html += '<th style="font-size:10px;color:var(--accent-light);white-space:nowrap;">% Best</th>';
-      }
+      html += '<th style="font-size:10px;color:var(--accent-light);white-space:nowrap;">% Best</th>';
     }
   });
   html += '</tr></thead><tbody>';
@@ -9049,33 +8913,15 @@ function renderGPSSession() {
         '<div style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;background:rgba(0,163,255,0.18);"></div>' +
         '<span style="position:relative;">' + (v > 0 ? display : '·') + '</span></td>';
       if (hasBestMatch && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
-        if (wlActive) {
-          const rawRatio = getWorkloadRawRatio(r.joueur, m.key, r);
-          const tgt = getWorkloadTarget(m.key, dayType);
-          const status = workloadStatus(rawRatio, tgt);
-          if (status) wlCounts[status]++;
-          const col = workloadStatusColor(status);
-          const lbl = rawRatio !== null ? Math.round(rawRatio * 100) + '%' : '—';
-          html += '<td style="text-align:center;font-weight:700;color:' + col + ';font-size:11px;" title="' + workloadStatusLabel(status) + '">' + lbl + '</td>';
-        } else {
-          const ratio = getBestMatchRatio(r.joueur, m.key, r);
-          const col = ratioColor(ratio);
-          const lbl = ratio !== null ? ratioLabel(ratio) : '—';
-          html += '<td style="text-align:center;font-weight:700;color:' + col + ';font-size:11px;">' + lbl + '</td>';
-        }
+        const ratio = getBestMatchRatio(r.joueur, m.key, r);
+        const col = ratioColor(ratio);
+        const lbl = ratio !== null ? ratioLabel(ratio) : '—';
+        html += '<td style="text-align:center;font-weight:700;color:' + col + ';font-size:11px;">' + lbl + '</td>';
       }
     });
     html += '</tr>';
   });
   html += '</tbody></table></div>';
-
-  if (wlActive) {
-    html += '<div style="display:flex;gap:14px;margin-top:8px;padding:8px 10px;background:var(--bg-elevated);border-radius:8px;font-size:11.5px;">';
-    html += '<span style="color:#f87171;font-weight:700;">▲ ' + wlCounts.over + '</span> au-dessus de la cible &nbsp;·&nbsp;';
-    html += '<span style="color:var(--green,#34d399);font-weight:700;">✓ ' + wlCounts.on + '</span> dans la cible &nbsp;·&nbsp;';
-    html += '<span style="color:#60a5fa;font-weight:700;">▼ ' + wlCounts.under + '</span> en-dessous de la cible';
-    html += '</div>';
-  }
 
   if (hasBestMatch) {
     html += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;padding:0 2px;">';
@@ -9083,14 +8929,6 @@ function renderGPSSession() {
     html += '⚡ <b style="color:#fbbf24;">Intensité</b> = même calcul normalisé par minute &nbsp;·&nbsp; ';
     html += '<a href="#" onclick="document.querySelector(\'.nav-btn[data-view=best-match]\').click();return false;" style="color:var(--accent-light);">Gérer les références →</a>';
     html += '</div>';
-    if (wlActive) {
-      html += '<div style="font-size:11px;color:var(--text-dim);margin-top:4px;padding:0 2px;">';
-      html += 'Cibles = % de la meilleure performance match (Gref), par type de jour de microcycle. ';
-      html += 'Tolérance ±15 pts autour de la cible. Sourcé : Ravé et al. 2020 (Distance, HSR, Sprint, Accélérations/Décélérations) — ';
-      html += 'Vitesse max, Power Plays et Distance/min sont des <b>estimations à vérifier</b> (⚠), sans étude publiée dédiée. ';
-      html += 'Accélérations/Décélérations utilisent la colonne décélérations comme proxy (donnée accélérations non disponible dans cette séance).';
-      html += '</div>';
-    }
   } else {
     html += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;padding:0 2px;">💡 Configure un meilleur match par joueur pour voir les scores Volume & Intensité. <a href="#" onclick="document.querySelector(\'.nav-btn[data-view=best-match]\').click();return false;" style="color:var(--accent-light);">Configurer →</a></div>';
   }
