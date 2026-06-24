@@ -1722,14 +1722,26 @@
     <div class="card">
       <h2>Affectation des joueurs à une séance</h2>
       <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
-        Sélectionne une date et une séance ou un statut, puis coche les joueurs concernés.
+        Sélectionne une date (ou une plage de dates) et une séance ou un statut, puis coche les joueurs concernés.
         <br>💡 Les séances et statuts s'ajoutent sans s'exclure : un joueur peut être "INJURY" et participer à "REHAB FIELD", ou cumuler "INJURY + SICK".
-        <br>Pour retirer un élément précis, clique sur le badge correspondant dans la colonne "Séances ce jour".
+        <br>🗓️ Mode <b>Plusieurs jours</b> : applique l'état/séance choisi à chaque joueur coché sur tous les jours de la plage (filtrables par jour de la semaine). Idéal pour un statut tenu plusieurs jours (ex. <i>En essai</i>, <i>Blessure</i>).
+        <br>Pour retirer un élément précis sur un jour, clique sur le badge correspondant dans la colonne "Séances ce jour".
       </p>
       <div class="form-row">
         <div>
-          <label>Date</label>
+          <label>Mode</label>
+          <select id="affect-mode" onchange="onAffectModeChange()">
+            <option value="single">Un jour</option>
+            <option value="range">Plusieurs jours</option>
+          </select>
+        </div>
+        <div>
+          <label id="affect-date-label">Date</label>
           <input type="date" id="affect-date" onchange="renderAffectation()" />
+        </div>
+        <div id="affect-date-end-wrap" style="display:none;">
+          <label>Au</label>
+          <input type="date" id="affect-date-end" />
         </div>
         <div>
           <label>Séance / statut à affecter</label>
@@ -1741,6 +1753,16 @@
             <option value="">Tous</option>
           </select>
         </div>
+      </div>
+      <div id="affect-weekdays" style="display:none; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; padding:8px 10px; background:var(--bg-elevated); border-radius:8px;">
+        <span style="font-size:12px; color:var(--text-dim);">Jours appliqués :</span>
+        <label style="font-size:12px;"><input type="checkbox" class="affect-wd" data-wd="1" checked> Lun</label>
+        <label style="font-size:12px;"><input type="checkbox" class="affect-wd" data-wd="2" checked> Mar</label>
+        <label style="font-size:12px;"><input type="checkbox" class="affect-wd" data-wd="3" checked> Mer</label>
+        <label style="font-size:12px;"><input type="checkbox" class="affect-wd" data-wd="4" checked> Jeu</label>
+        <label style="font-size:12px;"><input type="checkbox" class="affect-wd" data-wd="5" checked> Ven</label>
+        <label style="font-size:12px;"><input type="checkbox" class="affect-wd" data-wd="6" checked> Sam</label>
+        <label style="font-size:12px;"><input type="checkbox" class="affect-wd" data-wd="0" checked> Dim</label>
       </div>
       <div style="display:flex; gap:8px; margin-bottom:12px;">
         <button class="btn" onclick="applyAffectation()">✔ Affecter aux joueurs cochés</button>
@@ -10304,12 +10326,24 @@ function renderEntry() {
 // Remplit le sélecteur "Séance / statut à affecter" avec les séances créées pour la date 
 // sélectionnée (par leur nom), suivies des statuts.
 function renderAffectSeanceSelect() {
+  const mode = (document.getElementById('affect-mode') || {}).value || 'single';
   const date = document.getElementById('affect-date').value;
   const sel = document.getElementById('affect-seance');
   const current = sel.value;
   let html = '';
 
-  if (date) {
+  if (mode === 'range') {
+    // Plusieurs jours : pas de séances liées à un jour précis.
+    // On propose les types de séance génériques (réutilisables sur n'importe quel jour) + les statuts.
+    const types = (state.types_seances || [])
+      .filter(t => !STATUTS_NON_ENT.includes(t) && t !== '?')
+      .sort((a, b) => a.localeCompare(b));
+    if (types.length > 0) {
+      html += '<optgroup label="Types de séance">';
+      types.forEach(t => { html += '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>'; });
+      html += '</optgroup>';
+    }
+  } else if (date) {
     const seances = state.bdd_ent2.filter(x => x.date === date).sort((a,b) => (a.nom || '').localeCompare(b.nom || ''));
     if (seances.length > 0) {
       html += '<optgroup label="Séances de ce jour">';
@@ -10986,44 +11020,106 @@ async function removeOneSeance(joueur, seance) {
   toast(seance + ' retiré pour ' + joueur, 'success');
 }
 
+// Bascule entre affectation sur un jour et sur une plage de dates.
+function onAffectModeChange() {
+  const isRange = (document.getElementById('affect-mode') || {}).value === 'range';
+  const endWrap = document.getElementById('affect-date-end-wrap');
+  const wd = document.getElementById('affect-weekdays');
+  const dateLabel = document.getElementById('affect-date-label');
+  if (endWrap) endWrap.style.display = isRange ? '' : 'none';
+  if (wd) wd.style.display = isRange ? 'flex' : 'none';
+  if (dateLabel) dateLabel.textContent = isRange ? 'Du' : 'Date';
+  renderAffectSeanceSelect();
+  renderAffectation();
+}
+
+// Jours de la semaine cochés (valeurs getDay : Dim=0 … Sam=6). Vide = tous.
+function getAffectWeekdays() {
+  const set = new Set();
+  document.querySelectorAll('.affect-wd:checked').forEach(cb => set.add(parseInt(cb.dataset.wd, 10)));
+  return set;
+}
+
+// Liste des dates ISO entre deux bornes (incluses), filtrées par jours de semaine. Plafond de sécurité.
+function datesBetween(fromIso, toIso, weekdays) {
+  let a = fromIso, b = toIso;
+  if (a > b) { const t = a; a = b; b = t; }            // tolère un ordre inversé
+  const [y1, m1, d1] = a.split('-').map(Number);
+  const [y2, m2, d2] = b.split('-').map(Number);
+  const cur = new Date(y1, m1 - 1, d1);
+  const end = new Date(y2, m2 - 1, d2);
+  const out = [];
+  while (cur <= end && out.length < 120) {              // garde-fou : 120 jours max
+    if (!weekdays || weekdays.size === 0 || weekdays.has(cur.getDay())) out.push(toLocalISO(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
+}
+
+// Dates cibles de l'affectation selon le mode (un jour ou plage filtrée).
+function getAffectTargetDates() {
+  const isRange = (document.getElementById('affect-mode') || {}).value === 'range';
+  const from = document.getElementById('affect-date').value;
+  if (!isRange) return from ? [from] : [];
+  const to = (document.getElementById('affect-date-end') || {}).value;
+  if (!from || !to) return [];
+  return datesBetween(from, to, getAffectWeekdays());
+}
+
 async function applyAffectation() {
-  const date = document.getElementById('affect-date').value;
   const seance = document.getElementById('affect-seance').value;
+  const dates = getAffectTargetDates();
   const checked = [...document.querySelectorAll('.affect-check:checked')].map(cb => cb.dataset.player);
   if (checked.length === 0) { toast('Aucun joueur coché', 'error'); return; }
   if (!seance) { toast('Aucune séance/statut sélectionné', 'error'); return; }
+  if (dates.length === 0) { toast('Choisis une date (ou une plage Du/Au valide)', 'error'); return; }
 
   // Liberté totale : ajout simple. Pas de remplacement, pas de retrait d'autres éléments.
-  // Le seul garde-fou : éviter le doublon de la même valeur.
-  for (const p of checked) {
-    const cur = getSeancesJoueur(date, p);
-    if (!cur.includes(seance)) {
-      cur.push(seance);
-      setSeancesJoueur(date, p, cur);
-      await savePlanningToSupabase(date, p, cur);
+  // Le seul garde-fou : éviter le doublon de la même valeur sur un même jour.
+  let nb = 0;
+  for (const d of dates) {
+    for (const p of checked) {
+      const cur = getSeancesJoueur(d, p);
+      if (!cur.includes(seance)) {
+        cur.push(seance);
+        setSeancesJoueur(d, p, cur);
+        await savePlanningToSupabase(d, p, cur);
+        nb++;
+      }
     }
   }
 
   renderAffectation();
   refreshActiveView();
-  toast(checked.length + ' joueur(s) affecté(s) à ' + seance, 'success');
+  const label = STATUTS_NON_ENT.includes(seance) ? getStatutLabel(seance) : seance;
+  const suffix = dates.length > 1 ? (' — ' + checked.length + ' joueur(s) × ' + dates.length + ' jour(s)') : (' — ' + checked.length + ' joueur(s)');
+  toast(nb > 0 ? (label + ' affecté' + suffix) : 'Déjà présent partout — rien à ajouter', nb > 0 ? 'success' : 'info');
 }
 
 async function removeAffectation() {
-  const date = document.getElementById('affect-date').value;
   const seance = document.getElementById('affect-seance').value;
+  const dates = getAffectTargetDates();
   const checked = [...document.querySelectorAll('.affect-check:checked')].map(cb => cb.dataset.player);
   if (checked.length === 0) { toast('Aucun joueur coché', 'error'); return; }
+  if (!seance) { toast('Aucune séance/statut sélectionné', 'error'); return; }
+  if (dates.length === 0) { toast('Choisis une date (ou une plage Du/Au valide)', 'error'); return; }
 
-  checked.forEach(p => {
-    const cur = getSeancesJoueur(date, p);
-    setSeancesJoueur(date, p, cur.filter(s => s !== seance));
-  });
+  for (const d of dates) {
+    for (const p of checked) {
+      const cur = getSeancesJoueur(d, p);
+      if (cur.includes(seance)) {
+        const next = cur.filter(s => s !== seance);
+        setSeancesJoueur(d, p, next);
+        await savePlanningToSupabase(d, p, next);
+      }
+    }
+  }
 
-  await saveState();
   renderAffectation();
   refreshActiveView();
-  toast(seance + ' retiré pour ' + checked.length + ' joueur(s)', 'success');
+  const label = STATUTS_NON_ENT.includes(seance) ? getStatutLabel(seance) : seance;
+  const suffix = dates.length > 1 ? (' — ' + checked.length + ' joueur(s) × ' + dates.length + ' jour(s)') : (' — ' + checked.length + ' joueur(s)');
+  toast(label + ' retiré' + suffix, 'success');
 }
 
 // ============================================================================
