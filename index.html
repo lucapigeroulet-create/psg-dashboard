@@ -10157,8 +10157,8 @@ function renderMatchComposition() {
       const disabled = statut === 'absent' ? 'disabled' : '';
       html += '<td><input type="number" min="0" value="' + val + '" ' + disabled + ' onchange="setMatchTemps(\'' + jEsc + '\', ' + p + ', this.value)" style="width:50px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px;font-size:11px;text-align:center;" /></td>';
     }
-    html += '<td style="text-align:center;font-weight:700;color:var(--accent-light);">' + total + '</td>';
-    // Buts / Passes décisives / Note staff (désactivés si absent)
+    html += '<td class="match-total" data-joueur="' + escapeHtml(j) + '" style="text-align:center;font-weight:700;color:var(--accent-light);">' + total + '</td>';
+    // Buts / Passes décisives (désactivés si absent)
     const dis = statut === 'absent' ? 'disabled' : '';
     const butsVal = (st.buts !== undefined && st.buts !== null) ? st.buts : '';
     const passesVal = (st.passes !== undefined && st.passes !== null) ? st.passes : '';
@@ -10187,7 +10187,23 @@ function setMatchStatut(joueur, statut) {
 function setMatchTemps(joueur, periodeIdx, value) {
   if (!matchCompositionState[joueur]) matchCompositionState[joueur] = { statut: 'titulaire', temps: [] };
   matchCompositionState[joueur].temps[periodeIdx] = value === '' ? null : (parseInt(value) || 0);
-  renderMatchComposition();
+  // Mettre à jour uniquement la cellule Total du joueur — pas de re-render complet,
+  // pour que le tableau ne « remonte » pas et qu'on puisse remplir ligne par ligne.
+  updateMatchTotal(joueur);
+}
+
+// Recalcule et affiche le total de temps de jeu d'un joueur sans reconstruire la table
+function updateMatchTotal(joueur) {
+  const nbP = parseInt(document.getElementById('match-nb-periodes').value) || 2;
+  const st = matchCompositionState[joueur] || { temps: [] };
+  let total = 0;
+  for (let p = 0; p < nbP; p++) {
+    const v = st.temps && st.temps[p];
+    if (v != null && v !== '') total += parseInt(v) || 0;
+  }
+  document.querySelectorAll('#match-composition-container td.match-total').forEach(cell => {
+    if (cell.getAttribute('data-joueur') === joueur) cell.textContent = total;
+  });
 }
 
 // Buts / passes décisives / note staff — pas de re-render (ne change pas le total),
@@ -10487,9 +10503,7 @@ function renderMatchList() {
     const scoreStr = (m.score_psg != null && m.score_adversaire != null)
       ? (m.domicile === false ? (m.score_adversaire + ' - ' + m.score_psg) : (m.score_psg + ' - ' + m.score_adversaire))
       : '—';
-    const matchLabel = m.domicile === false
-      ? escapeHtml(m.adversaire) + ' vs PSG'
-      : 'PSG vs ' + escapeHtml(m.adversaire);
+    const matchLabel = matchLabelStr(m);
     html += '<tr>';
     html += '<td style="text-align:left;">' + formatDateFR(m.date) + (m.heure ? ' ' + m.heure : '') + '</td>';
     html += '<td style="text-align:left;">' + matchLabel + (m.groupe ? ' <span style="font-size:11px;color:var(--text-dim);">(' + escapeHtml(m.groupe) + ')</span>' : '') + '</td>';
@@ -10522,7 +10536,7 @@ function matchResult(m) {
   return 'N';
 }
 function matchLabelStr(m) {
-  const org = currentOrg || 'PSG';
+  const org = m.org || currentOrg || 'PSG';
   return m.domicile === false
     ? escapeHtml(m.adversaire) + ' vs ' + org
     : org + ' vs ' + escapeHtml(m.adversaire);
