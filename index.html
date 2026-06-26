@@ -1879,8 +1879,15 @@
       </p>
       <div id="match-composition-container"></div>
 
+      <!-- Coachs présents (peuvent noter ce match) -->
+      <h3 style="margin-top:18px;">🧑‍🏫 Coachs présents au match</h3>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">
+        Coche les coachs présents : eux seuls pourront noter les joueurs de ce match. Cette sélection est enregistrée avec le match (bouton « Enregistrer le match »).
+      </p>
+      <div id="match-coachs-presents-container"></div>
+
       <!-- Notes des coachs (par coach, sur joueur) -->
-      <h3 style="margin-top:18px;">🧑‍🏫 Notes des coachs</h3>
+      <h3 style="margin-top:18px;">⭐ Notes des coachs</h3>
       <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">
         Chaque coach note les joueurs sur ce match. Choisis un coach pour voir ses notes. Tu ne peux saisir que les notes du coach rattaché à ton compte. La moyenne des coachs est ce que voit le joueur.
       </p>
@@ -6511,13 +6518,25 @@ function renderOverviewMissing() {
   }
 }
 
+// Séances réellement notables d'un joueur pour une date donnée :
+//  - aucune si le joueur est indisponible (essai/blessé/malade/absent/suspendu) — le statut est un état seul
+//  - uniquement les séances dont la fiche existe encore (ignore les références orphelines après suppression)
+function rateableSeancesOf(date, seancesList) {
+  if (!Array.isArray(seancesList)) return [];
+  if (seancesList.some(s => STATUTS_INDISPO.includes(s))) return [];
+  return seancesList.filter(s => !STATUTS_NON_ENT.includes(s) && state.bdd_ent2.some(f => f.date === date && f.nom === s));
+}
+
 // Retourne les joueurs ayant une séance d'entraînement ce jour SANS RPE complet
 function getPlayersMissingRPE(date) {
   const missing = new Set();
 
   // 1) Séances via plannings individuels (bdd_ent)
   state.bdd_ent.filter(e => e.date === date).forEach(e => {
-    const trainingSeances = e.seances.filter(s => !STATUTS_NON_ENT.includes(s));
+    // Joueur indisponible ce jour (essai/blessé/malade/absent/suspendu) → aucune note RPE attendue
+    if (e.seances.some(s => STATUTS_INDISPO.includes(s))) return;
+    // Ne garder que les séances dont la fiche existe encore (ignore les références orphelines après suppression)
+    const trainingSeances = e.seances.filter(s => !STATUTS_NON_ENT.includes(s) && state.bdd_ent2.some(f => f.date === date && f.nom === s));
     if (trainingSeances.length === 0) return;
     const incomplete = trainingSeances.some(s => {
       const detail = getRPEDetailJoueurSeance(date, e.joueur, s);
@@ -6536,6 +6555,7 @@ function getPlayersMissingRPE(date) {
     // Joueurs concernés = ceux qui ont un planning ce jour, OU une déclaration RPE ce jour
     const joueursConcernes = new Set();
     state.bdd_ent.filter(e => e.date === date).forEach(e => {
+      if (e.seances.some(s => STATUTS_INDISPO.includes(s))) return; // indisponible → non concerné
       if (e.seances.some(s => !STATUTS_NON_ENT.includes(s))) joueursConcernes.add(e.joueur);
     });
     state.bdd_rpe.filter(r => r.date === date).forEach(r => joueursConcernes.add(r.joueur));
@@ -6544,8 +6564,10 @@ function getPlayersMissingRPE(date) {
       // Le joueur a-t-il noté chacune des séances du jour qui le concernent ?
       // On regarde son planning ; s'il n'a pas de planning, on prend toutes les séances du jour
       const planning = state.bdd_ent.find(e => e.date === date && e.joueur === joueur);
+      // Joueur indisponible ce jour → aucune note attendue
+      if (planning && planning.seances.some(s => STATUTS_INDISPO.includes(s))) return;
       const sesSeances = planning
-        ? planning.seances.filter(s => !STATUTS_NON_ENT.includes(s))
+        ? planning.seances.filter(s => !STATUTS_NON_ENT.includes(s) && state.bdd_ent2.some(f => f.date === date && f.nom === s))
         : seancesDuJour.map(s => s.nom);
       const incomplete = sesSeances.some(s => {
         const detail = getRPEDetailJoueurSeance(date, joueur, s);
@@ -10083,9 +10105,14 @@ function renderMatchEntry() {
     existSel.value = cur;
   }
 
+  // Nouveau match : par défaut tous les coachs sont présents (on décoche les absents)
+  if (!currentMatchId && (!Array.isArray(matchCoachsPresents) || matchCoachsPresents.length === 0)) {
+    matchCoachsPresents = (state.bdd_coachs || []).map(c => c.id);
+  }
   renderMatchPeriodes();
   renderMatchComposition();
   renderMatchList();
+  renderMatchCoachsPresents();
   renderMatchCoachNotes();
 }
 
@@ -10217,6 +10244,41 @@ function setMatchPasses(joueur, value) {
   matchCompositionState[joueur].passes = value === '' ? null : (parseInt(value) || 0);
 }
 
+// ---------- COACHS PRÉSENTS (qui peut noter ce match) ----------
+let matchCoachsPresents = []; // ids des coachs présents, édité dans le formulaire, sauvé avec le match
+
+// Ids des coachs autorisés à noter un match. coachs_presents NULL = tous présents (rétro-compat).
+function getMatchPresentCoachIds(m) {
+  if (m && Array.isArray(m.coachs_presents)) return m.coachs_presents;
+  return (state.bdd_coachs || []).map(c => c.id);
+}
+
+function renderMatchCoachsPresents() {
+  const cont = document.getElementById('match-coachs-presents-container');
+  if (!cont) return;
+  const coachs = state.bdd_coachs || [];
+  if (!coachs.length) {
+    cont.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px;">Aucun coach configuré. ' +
+      (currentRole === 'admin' ? 'Ajoute-en dans Paramètres → 🧑‍🏫 Coachs.' : 'Demande à l\'admin d\'en ajouter.') + '</div>';
+    return;
+  }
+  cont.innerHTML = '<div style="display:flex; flex-wrap:wrap; gap:8px;">' + coachs.map(c => {
+    const checked = matchCoachsPresents.includes(c.id) ? ' checked' : '';
+    const noAcc = c.account_id ? '' : ' <span style="color:var(--text-dim);font-size:11px;">(sans compte)</span>';
+    return '<label style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:14px; padding:5px 12px; font-size:13px; cursor:pointer;">' +
+      '<input type="checkbox"' + checked + ' onchange="toggleMatchCoachPresent(\'' + c.id + '\', this.checked)" style="cursor:pointer;" />' +
+      escapeHtml(c.nom) + noAcc + '</label>';
+  }).join('') + '</div>';
+}
+
+function toggleMatchCoachPresent(coachId, present) {
+  if (present) {
+    if (!matchCoachsPresents.includes(coachId)) matchCoachsPresents.push(coachId);
+  } else {
+    matchCoachsPresents = matchCoachsPresents.filter(id => id !== coachId);
+  }
+}
+
 // ---------- NOTES DES COACHS (par coach, sur le match en cours) ----------
 let matchCoachSelected = '';
 
@@ -10227,14 +10289,21 @@ function renderMatchCoachNotes() {
     cont.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px;">Enregistre d\'abord le match (bouton ci-dessous), puis recharge-le depuis « Match existant à charger » pour saisir les notes des coachs.</div>';
     return;
   }
-  const coachs = state.bdd_coachs || [];
-  if (!coachs.length) {
+  const allCoachs = state.bdd_coachs || [];
+  if (!allCoachs.length) {
     cont.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px;">Aucun coach configuré. ' +
       (currentRole === 'admin' ? 'Ajoute-en dans Paramètres → 🧑‍🏫 Coachs.' : 'Demande à l\'admin d\'en ajouter (Paramètres → Coachs).') + '</div>';
     return;
   }
   const m = (state.bdd_matchs || []).find(x => x.id === currentMatchId);
   if (!m) { cont.innerHTML = ''; return; }
+  // Seuls les coachs présents au match (enregistrés) peuvent noter
+  const presentIds = getMatchPresentCoachIds(m);
+  const coachs = allCoachs.filter(c => presentIds.includes(c.id));
+  if (!coachs.length) {
+    cont.innerHTML = '<div style="color:var(--text-dim);font-size:12px;padding:8px;">Aucun coach présent sélectionné pour ce match. Coche les coachs présents ci-dessus puis enregistre le match.</div>';
+    return;
+  }
   if (!matchCoachSelected || !coachs.some(c => c.id === matchCoachSelected)) {
     const mine = coachs.find(c => currentUser && c.account_id === currentUser.id);
     matchCoachSelected = mine ? mine.id : coachs[0].id;
@@ -10276,6 +10345,10 @@ async function saveCoachNote(matchId, joueur, coachId, value) {
   const coach = (state.bdd_coachs || []).find(c => c.id === coachId);
   if (!coach || !currentUser || coach.account_id !== currentUser.id) {
     toast('Tu ne peux saisir que les notes de ton propre coach', 'error'); return;
+  }
+  const mtch = (state.bdd_matchs || []).find(x => x.id === matchId);
+  if (mtch && !getMatchPresentCoachIds(mtch).includes(coachId)) {
+    toast('Ce coach n\'est pas marqué présent sur ce match', 'error'); return;
   }
   const note = (value === '' || value == null) ? null : parseFloat(value);
   if (note != null && (isNaN(note) || note < 0 || note > 10)) { toast('Note entre 0 et 10', 'error'); return; }
@@ -10388,7 +10461,8 @@ async function saveMatch() {
     duree_periode: dureeP,
     composition: composition,
     type_match: document.getElementById('match-type').value || null,
-    type_detail: document.getElementById('match-type-detail').value.trim() || null
+    type_detail: document.getElementById('match-type-detail').value.trim() || null,
+    coachs_presents: Array.isArray(matchCoachsPresents) ? matchCoachsPresents.slice() : []
   };
 
   try {
@@ -10450,8 +10524,11 @@ function loadExistingMatch() {
     };
   });
   document.getElementById('match-delete-btn').style.display = '';
+  // Coachs présents : valeur enregistrée, ou tous (rétro-compat si jamais défini)
+  matchCoachsPresents = Array.isArray(m.coachs_presents) ? m.coachs_presents.slice() : (state.bdd_coachs || []).map(c => c.id);
   renderMatchPeriodes();
   renderMatchComposition();
+  renderMatchCoachsPresents();
   renderMatchCoachNotes();
   toast('Match chargé', 'success');
 }
@@ -10468,8 +10545,11 @@ function resetMatchForm() {
   document.getElementById('match-delete-btn').style.display = 'none';
   const detailWrap = document.getElementById('match-type-detail-wrap');
   if (detailWrap) detailWrap.style.display = 'none';
+  // Réinitialisation : nouveau match → tous les coachs présents par défaut
+  matchCoachsPresents = (state.bdd_coachs || []).map(c => c.id);
   renderMatchPeriodes();
   renderMatchComposition();
+  renderMatchCoachsPresents();
   renderMatchCoachNotes();
 }
 
@@ -11666,7 +11746,7 @@ function updateRPEProgress(date, groupFilter) {
   const rows = getRPEPlayersForDate(date, groupFilter);
   let total = 0, done = 0;
   rows.forEach(e => {
-    const seances = e.seances.filter(s => !STATUTS_NON_ENT.includes(s));
+    const seances = rateableSeancesOf(date, e.seances);
     seances.forEach(s => {
       const nbProc = getNbProcedesSeance(date, s);
       total += (nbProc > 1 ? nbProc : 1);
@@ -11749,7 +11829,7 @@ function renderRPETable(date, groupFilter) {
   }
   tbody.innerHTML = rows.map(e => {
     const info = getJoueurInfo(e.joueur);
-    const seances = e.seances.filter(s => !STATUTS_NON_ENT.includes(s));
+    const seances = rateableSeancesOf(date, e.seances);
     if (seances.length === 0) {
       return '<tr><td><b>' + escapeHtml(e.joueur) + '</b></td><td>' + escapeHtml(info.groupe || '') + '</td><td><span style="color:var(--text-dim)">' + e.seances.map(escapeHtml).join(', ') + '</span></td></tr>';
     }
@@ -11865,7 +11945,7 @@ function renderRPECard(date, groupFilter) {
   //  - au moins une séance (hors statut système REST/INJURY/SICK/ABSENT/SUSPENDED), OU
   //  - au moins un match du jour avec un temps de jeu > 0
   const rows = allRows.filter(r => {
-    const seancesNotables = (r.seances || []).filter(s => !STATUTS_NON_ENT.includes(s));
+    const seancesNotables = rateableSeancesOf(date, r.seances);
     if (seancesNotables.length > 0) return true;
     const aJoueMatch = (state.bdd_matchs || []).some(m =>
       m.date === date && (m.composition || []).some(c => c.joueur === r.joueur && (c.total_min || 0) > 0)
@@ -11888,7 +11968,7 @@ function renderRPECard(date, groupFilter) {
 
   const current = rows[rpeCardIndex];
   const info = getJoueurInfo(current.joueur);
-  const seances = current.seances.filter(s => !STATUTS_NON_ENT.includes(s));
+  const seances = rateableSeancesOf(date, current.seances);
   const statuts = current.seances.filter(s => STATUTS_NON_ENT.includes(s));
 
   let html = '<div class="rpe-card">';
@@ -11932,7 +12012,7 @@ function renderRPECard(date, groupFilter) {
   html += '<div class="rpe-card-nav-info">';
   let totalNotes = 0, doneNotes = 0;
   rows.forEach(e => {
-    const ss = e.seances.filter(s => !STATUTS_NON_ENT.includes(s));
+    const ss = rateableSeancesOf(date, e.seances);
     ss.forEach(s => {
       const nbProc = getNbProcedesSeance(date, s);
       const expected = nbProc > 1 ? nbProc : 1;
@@ -11959,7 +12039,7 @@ function renderRPECard(date, groupFilter) {
   // Pills navigation
   html += '<div class="rpe-jump-pills">';
   rows.forEach((e, idx) => {
-    const ss = e.seances.filter(s => !STATUTS_NON_ENT.includes(s));
+    const ss = rateableSeancesOf(date, e.seances);
     const matchsJ = (state.bdd_matchs || []).filter(m => m.date === date && (m.composition||[]).some(c => c.joueur === e.joueur && (c.total_min||0) > 0));
     // Séances toutes notées ?
     const seancesDone = ss.every(s => {
@@ -13880,8 +13960,10 @@ async function renderPlayerOverview() {
     (state.bdd_ent || []).forEach(pl => {
       if (pl.joueur !== currentJoueurNom) return;
       if (pl.date > today || pl.date < cutoff) return; // ni futur, ni trop ancien
+      if ((pl.seances || []).some(s => STATUTS_INDISPO.includes(s))) return;       // indisponible ce jour → rien à noter
       (pl.seances || []).forEach(s => {
         if (STATUTS_NON_ENT.includes(s)) return;                                  // statut, pas une séance
+        if (!state.bdd_ent2.some(f => f.date === pl.date && f.nom === s)) return;   // fiche supprimée → référence orpheline
         if (getRPEJoueurSeance(pl.date, currentJoueurNom, s) !== null) return;      // déjà notée
         if (isSessionWindowClosed(pl.date, s)) return;                             // fenêtre 48 h fermée
         liveANoter.push({ date: pl.date, seance: s });
@@ -13988,7 +14070,12 @@ function renderPlayerRPE() {
 
   // Récupérer les séances de ce joueur pour cette date
   const planning = state.bdd_ent.find(e => e.date === date && e.joueur === currentJoueurNom);
-  const seances = planning ? planning.seances.filter(s => !STATUTS_NON_ENT.includes(s)) : [];
+  // Indisponible ce jour (essai/blessé/malade/absent/suspendu) → aucune séance à noter (statut = état seul)
+  const indispo = planning ? planning.seances.some(s => STATUTS_INDISPO.includes(s)) : false;
+  // Ne garder que les séances dont la fiche existe encore (ignore les orphelines après suppression)
+  const seances = (planning && !indispo)
+    ? planning.seances.filter(s => !STATUTS_NON_ENT.includes(s) && state.bdd_ent2.some(f => f.date === date && f.nom === s))
+    : [];
   const statuts = planning ? planning.seances.filter(s => STATUTS_NON_ENT.includes(s)) : [];
 
   // Matchs de ce jour où le joueur a du temps de jeu
