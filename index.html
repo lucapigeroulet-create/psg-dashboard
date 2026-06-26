@@ -5059,7 +5059,15 @@ async function loadState() {
     if (currentRole === 'admin') {
       try {
         const { data: accs } = await sb.from('profiles').select('id,email,role,org,orgs').in('role', ['admin', 'staff']);
-        state.bdd_accounts = (accs || []).filter(a => a.org === currentOrg || (Array.isArray(a.orgs) && a.orgs.includes(currentOrg)));
+        const list = (accs || []).filter(a => a.org === currentOrg || (Array.isArray(a.orgs) && a.orgs.includes(currentOrg)));
+        // Toujours inclure le compte admin courant : il est considéré comme staff et peut être
+        // défini comme coach pour l'organisation active, même si son profil n'est pas rattaché à cette org.
+        if (currentUser && !list.some(a => a.id === currentUser.id)) {
+          const self = (accs || []).find(a => a.id === currentUser.id)
+            || { id: currentUser.id, email: currentUser.email, role: 'admin', org: currentOrg, orgs: null };
+          list.push(self);
+        }
+        state.bdd_accounts = list;
       } catch(e) { state.bdd_accounts = []; }
     } else { state.bdd_accounts = []; }
 
