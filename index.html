@@ -6486,18 +6486,9 @@ function renderOverviewMissing() {
   if (hooperDateInput && !hooperDateInput.value) hooperDateInput.value = today;
   let hooperRefDate = (hooperDateInput && hooperDateInput.value) ? hooperDateInput.value : today;
 
-  // Joueurs attendus pour le Hooper : ceux ayant une séance/match ce jour (planning),
-  // sinon TOUT l'effectif (le check-in Hooper est quotidien pour tous).
-  let activePlayersToday = state.bdd_ent.filter(e => e.date === hooperRefDate).map(e => e.joueur);
-  (state.bdd_matchs || []).filter(m => m.date === hooperRefDate).forEach(m => {
-    (m.composition || []).filter(c => c.joueur && (c.total_min||0) > 0).forEach(c => {
-      if (!activePlayersToday.includes(c.joueur)) activePlayersToday.push(c.joueur);
-    });
-  });
-  // Si aucun planning/match ce jour, considérer tout l'effectif
-  if (activePlayersToday.length === 0) {
-    activePlayersToday = (state.joueurs || []).map(j => j.nom);
-  }
+  // Le check-in Hooper est quotidien pour TOUT l'effectif (indépendamment des séances/matchs).
+  // Manquants = tous les joueurs de l'effectif qui n'ont pas encore rempli un Hooper valide ce jour.
+  let activePlayersToday = (state.joueurs || []).map(j => j.nom);
 
   const missingHooper = activePlayersToday.filter(joueur => {
     const h = (typeof getHooper === 'function') ? getHooper(hooperRefDate, joueur) : null;
