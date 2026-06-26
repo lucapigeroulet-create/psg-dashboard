@@ -11821,10 +11821,17 @@ function renderMatchRPESection(date, groupFilter) {
 }
 
 function renderRPETable(date, groupFilter) {
-  const rows = getRPEPlayersForDate(date, groupFilter);
+  const allRows = getRPEPlayersForDate(date, groupFilter);
+  // Ne garder que les joueurs ayant réellement une séance à noter.
+  // Exclut les indisponibles (essai/blessé/malade/absent/suspendu) et les séances supprimées/orphelines.
+  // Les matchs sont notés dans leur propre section au-dessus du tableau.
+  const rows = allRows.filter(e => rateableSeancesOf(date, e.seances).length > 0);
   const tbody = document.querySelector('#rpe-entry-table tbody');
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim);padding:20px;">Aucun joueur ce jour.</td></tr>';
+    const msg = allRows.length === 0
+      ? 'Aucun joueur ce jour.'
+      : 'Aucune séance à noter ce jour (' + allRows.length + ' joueur' + (allRows.length > 1 ? 's' : '') + ' sans séance à noter).';
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text-dim);padding:20px;">' + msg + '</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(e => {
