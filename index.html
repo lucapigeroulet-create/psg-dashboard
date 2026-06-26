@@ -6561,14 +6561,15 @@ function getPlayersMissingRPE(date) {
     state.bdd_rpe.filter(r => r.date === date).forEach(r => joueursConcernes.add(r.joueur));
 
     joueursConcernes.forEach(joueur => {
-      // Le joueur a-t-il noté chacune des séances du jour qui le concernent ?
-      // On regarde son planning ; s'il n'a pas de planning, on prend toutes les séances du jour
+      // Le joueur a-t-il noté chacune des séances qui le concernent ?
       const planning = state.bdd_ent.find(e => e.date === date && e.joueur === joueur);
+      // Sans planning, on ne peut pas savoir quelles séances d'équipe ce joueur doit noter.
+      // (ex. un joueur qui a seulement joué/noté un match ne doit PAS être réclamé pour une séance d'équipe
+      //  qui ne le concerne pas — son match est géré séparément ci-dessous.)
+      if (!planning) return;
       // Joueur indisponible ce jour → aucune note attendue
-      if (planning && planning.seances.some(s => STATUTS_INDISPO.includes(s))) return;
-      const sesSeances = planning
-        ? planning.seances.filter(s => !STATUTS_NON_ENT.includes(s) && state.bdd_ent2.some(f => f.date === date && f.nom === s))
-        : seancesDuJour.map(s => s.nom);
+      if (planning.seances.some(s => STATUTS_INDISPO.includes(s))) return;
+      const sesSeances = planning.seances.filter(s => !STATUTS_NON_ENT.includes(s) && state.bdd_ent2.some(f => f.date === date && f.nom === s));
       const incomplete = sesSeances.some(s => {
         const detail = getRPEDetailJoueurSeance(date, joueur, s);
         if (!detail) return true;
