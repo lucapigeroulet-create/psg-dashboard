@@ -13944,6 +13944,10 @@ async function renderPlayerOverview() {
   const isFR = (playerLang() === 'fr');
   const today = toLocalISO(new Date());
 
+  // Org "individuel" : pas de notation de séances → masquer le bandeau "Séances à noter"
+  const rpeCard = document.getElementById('po-rpe-card');
+  if (rpeCard) rpeCard.style.display = (currentOrg === 'individuel') ? 'none' : '';
+
   // ── 1. État de forme du jour ──────────────────────────────────────────────
   const hEl = document.getElementById('po-hooper-content');
   if (hEl) {
