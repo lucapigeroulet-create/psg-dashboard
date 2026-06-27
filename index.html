@@ -4758,6 +4758,12 @@ function applyRoleRestrictions() {
         btn.style.display = 'none'; // Cacher tout le reste
       }
     });
+    // Org "individuel" : interface joueur simplifiée — masquer Noter les séances, Compétition et Mes notes
+    if (currentOrg === 'individuel') {
+      ['player-rpe', 'competition', 'player-history'].forEach(v => {
+        document.querySelectorAll('.nav-btn.player-only[data-view="' + v + '"]').forEach(b => b.style.display = 'none');
+      });
+    }
     if (gestionDropdown) gestionDropdown.style.display = 'none'; // Cacher le menu Gestion
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = 'none'; // Cacher l'export JSON aux joueurs
