@@ -1315,6 +1315,7 @@
                style="width:100%; max-width:400px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:13px;" />
       </div>
       <div id="gps-import-summary"></div>
+      <div id="gps-import-mapping"></div>
       <div id="gps-import-preview"></div>
       <div style="margin-top:12px;">
         <button class="btn" id="gps-import-btn" onclick="doGPSImport()" disabled>▶ Importer dans le dashboard</button>
@@ -4980,7 +4981,8 @@ async function loadState() {
     bdd_best_match: {},
     bdd_medical_notes: [],
     bdd_test_types: [],
-    bdd_test_results: []
+    bdd_test_results: [],
+    bdd_player_aliases: []
   };
   const setLoad = (t) => { document.getElementById('loading-text').textContent = t; };
 
@@ -5046,6 +5048,10 @@ async function loadState() {
     setLoad('Chargement des données GPS...');
     const { data: gps } = await sb.from('gps_data').select('*').eq('org', currentOrg).order('date');
     state.bdd_gps = (gps || []);
+    try {
+      const { data: aliases } = await sb.from('player_aliases').select('*').eq('org', currentOrg);
+      state.bdd_player_aliases = aliases || [];
+    } catch(e) { state.bdd_player_aliases = []; }
 
     setLoad('Chargement des matchs...');
     try {
@@ -7987,6 +7993,140 @@ function gpsCapitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
+// ---- Rapprochement des noms GPS (Catapult) avec les joueurs de l'équipe ----
+let gpsNameResolutions = {}; // clé = nom brut en minuscule -> { raw, status, resolved, suggestion, chosen, remember }
+
+function levenshteinDist(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  const d = [];
+  for (let i = 0; i <= m; i++) d.push([i]);
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      d[i][j] = a[i-1] === b[j-1] ? d[i-1][j-1] : 1 + Math.min(d[i-1][j-1], d[i-1][j], d[i][j-1]);
+    }
+  }
+  return d[m][n];
+}
+
+function gpsStripAccents(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// Trie les mots du nom (insensible à l'ordre) pour matcher "Nom Prénom" et "Prénom Nom"
+function gpsNameTokenKey(s) {
+  return gpsStripAccents(String(s || '').toLowerCase())
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/).filter(Boolean).sort().join(' ');
+}
+
+function gpsNameSimilarity(a, b) {
+  const la = String(a || '').trim().toLowerCase(), lb = String(b || '').trim().toLowerCase();
+  if (!la || !lb) return 0;
+  if (la === lb) return 1;
+  const direct = 1 - levenshteinDist(la, lb) / Math.max(la.length, lb.length);
+  const ta = gpsNameTokenKey(a), tb = gpsNameTokenKey(b);
+  const tokenScore = (ta && tb) ? 1 - levenshteinDist(ta, tb) / Math.max(ta.length, tb.length) : 0;
+  return Math.max(direct, tokenScore);
+}
+
+function gpsAliasLookup(rawName) {
+  const target = String(rawName || '').trim().toLowerCase();
+  if (!target) return null;
+  const hit = (state.bdd_player_aliases || []).find(a => (a.raw_name || '').trim().toLowerCase() === target);
+  return hit ? hit.joueur : null;
+}
+
+function gpsSuggestPlayer(rawName) {
+  const players = getAllPlayers();
+  let best = null, bestScore = 0;
+  players.forEach(p => {
+    const score = gpsNameSimilarity(rawName, p);
+    if (score > bestScore) { bestScore = score; best = p; }
+  });
+  return (best && bestScore >= 0.55) ? { name: best, score: bestScore } : null;
+}
+
+// Résout un nom brut CSV vers un joueur connu : match exact > match sans accents > lien mémorisé > suggestion (à valider)
+function gpsResolvePlayerName(raw) {
+  const rawTrim = String(raw || '').trim();
+  if (!rawTrim) return { raw: rawTrim, status: 'empty', resolved: null, suggestion: null };
+  const players = getAllPlayers();
+  const target = rawTrim.toLowerCase();
+  const exact = players.find(p => p.trim().toLowerCase() === target);
+  if (exact) return { raw: rawTrim, status: 'matched', resolved: exact, suggestion: null };
+  const targetNoAccent = gpsStripAccents(target);
+  const exactNoAccent = players.find(p => gpsStripAccents(p.trim().toLowerCase()) === targetNoAccent);
+  if (exactNoAccent) return { raw: rawTrim, status: 'matched', resolved: exactNoAccent, suggestion: null };
+  const alias = gpsAliasLookup(rawTrim);
+  if (alias) return { raw: rawTrim, status: 'aliased', resolved: alias, suggestion: null };
+  return { raw: rawTrim, status: 'unmatched', resolved: null, suggestion: gpsSuggestPlayer(rawTrim) };
+}
+
+function gpsSetNameResolution(rawKey, value) {
+  const entry = gpsNameResolutions[rawKey];
+  if (!entry) return;
+  entry.chosen = value === '' ? null : value;
+  applyGPSNameResolutions();
+  renderGPSMappingSummary();
+  gpsUpdateImportButtonState();
+}
+
+function gpsSetNameRemember(rawKey, checked) {
+  const entry = gpsNameResolutions[rawKey];
+  if (entry) entry.remember = checked;
+}
+
+function applyGPSNameResolutions() {
+  if (!gpsImportRows) return;
+  gpsImportRows.forEach(r => {
+    const key = String(r._raw_joueur || '').trim().toLowerCase();
+    const entry = gpsNameResolutions[key];
+    if (!entry) return;
+    if (entry.chosen === '__NEW__') r.joueur = gpsCapitalize(entry.raw);
+    else if (entry.chosen) r.joueur = entry.chosen;
+    else r.joueur = gpsCapitalize(entry.raw); // fallback tant que non résolu
+  });
+}
+
+function gpsUpdateImportButtonState() {
+  const btn = document.getElementById('gps-import-btn');
+  if (!btn || !gpsImportRows) return;
+  const allResolved = Object.values(gpsNameResolutions)
+    .filter(e => e.status === 'unmatched')
+    .every(e => !!e.chosen);
+  btn.disabled = !allResolved || gpsImportRows.length === 0;
+}
+
+function renderGPSMappingSummary() {
+  const el = document.getElementById('gps-import-mapping');
+  if (!el) return;
+  const rows = Object.values(gpsNameResolutions).filter(e => e.status === 'unmatched');
+  if (!rows.length) { el.innerHTML = ''; return; }
+  const players = getAllPlayers();
+  let html = '<div style="background:var(--bg-elevated); border:1px solid var(--orange); border-radius:8px; padding:12px; margin-bottom:12px;">' +
+    '<div style="font-size:13px; font-weight:600; margin-bottom:8px;">⚠️ ' + rows.length + ' nom(s) du CSV ne correspondent à aucun joueur de l\'équipe — rattache-les avant d\'importer :</div>';
+  rows.forEach(e => {
+    const key = e.raw.trim().toLowerCase();
+    const selected = e.chosen || '';
+    html += '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:6px 0; border-top:1px solid var(--border);">' +
+      '<span style="min-width:140px; font-size:13px;"><b>' + escapeHtml(e.raw) + '</b></span>' +
+      (e.suggestion ? '<span style="font-size:11px; color:var(--text-dim);">suggestion : ' + escapeHtml(e.suggestion.name) + ' (' + Math.round(e.suggestion.score * 100) + '%)</span>' : '') +
+      '<select onchange="gpsSetNameResolution(\'' + key.replace(/'/g, "\\'") + '\', this.value)" style="background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:12px;">' +
+        '<option value="">— Choisir —</option>' +
+        players.map(p => '<option value="' + escapeHtml(p) + '"' + (selected === p ? ' selected' : '') + '>' + escapeHtml(p) + '</option>').join('') +
+        '<option value="__NEW__"' + (selected === '__NEW__' ? ' selected' : '') + '>🆕 Nouveau joueur (garder « ' + escapeHtml(gpsCapitalize(e.raw)) + ' »)</option>' +
+      '</select>' +
+      (selected && selected !== '__NEW__' ? '<label style="font-size:11px; color:var(--text-dim); display:flex; align-items:center; gap:4px;">' +
+        '<input type="checkbox" checked onchange="gpsSetNameRemember(\'' + key.replace(/'/g, "\\'") + '\', this.checked)"> mémoriser ce lien</label>' : '') +
+    '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
 function handleGPSCSV(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -8026,7 +8166,16 @@ function handleGPSCSV(e) {
         gpsImportLog('❌ Colonnes Date et/ou Player Name introuvables. En-têtes : ' + headers.join(', '), 'err');
         return;
       }
+      gpsNameResolutions = {};
       gpsImportRows = parsed.rows.map(r => {
+        const rawJoueur = cols.player ? r[cols.player] : null;
+        const resolution = rawJoueur ? gpsResolvePlayerName(rawJoueur) : null;
+        if (resolution && resolution.status === 'unmatched') {
+          const key = resolution.raw.trim().toLowerCase();
+          if (!gpsNameResolutions[key]) {
+            gpsNameResolutions[key] = { raw: resolution.raw, status: 'unmatched', suggestion: resolution.suggestion, chosen: null, remember: true };
+          }
+        }
         const durRaw = gpsNum(r[cols.duration]);
         // Catapult exporte la durée en SECONDES → toujours convertir en minutes
         const durMin = durRaw !== null ? Math.round(durRaw / 60) : null;
@@ -8042,7 +8191,8 @@ function handleGPSCSV(e) {
         }
         return {
           date: gpsNormalizeDate(r[cols.date]),
-          joueur: cols.player ? gpsCapitalize(r[cols.player]) : null,
+          joueur: resolution ? (resolution.resolved || gpsCapitalize(resolution.raw)) : null,
+          _raw_joueur: rawJoueur ? String(rawJoueur).trim() : null,
           session_title: cols.session ? r[cols.session] : null,
           split_name: cols.split ? (r[cols.split] || 'all').trim() : 'all',
           duree_min: durMin,
@@ -8090,8 +8240,12 @@ function handleGPSCSV(e) {
       prev += '</tbody></table></div>';
       document.getElementById('gps-import-preview').innerHTML = prev;
 
-      gpsImportLog('✅ ' + gpsImportRows.length + ' ligne(s) prête(s) à importer', 'ok');
-      document.getElementById('gps-import-btn').disabled = false;
+      renderGPSMappingSummary();
+      const nbUnmatched = Object.keys(gpsNameResolutions).length;
+      gpsImportLog(nbUnmatched > 0
+        ? '⚠️ ' + gpsImportRows.length + ' ligne(s) prête(s), mais ' + nbUnmatched + ' nom(s) à rattacher ci-dessus avant import'
+        : '✅ ' + gpsImportRows.length + ' ligne(s) prête(s) à importer', nbUnmatched > 0 ? 'warn' : 'ok');
+      gpsUpdateImportButtonState();
     } catch(err) {
       gpsImportLog('Erreur parsing : ' + err.message, 'err');
     }
@@ -8103,14 +8257,29 @@ async function doGPSImport() {
   if (!gpsImportRows || gpsImportRows.length === 0) { gpsImportLog('Aucune donnée à importer', 'err'); return; }
   if (!sb) { gpsImportLog('Connexion Supabase indisponible — recharge la page', 'err'); return; }
   if (!canWrite()) { gpsImportLog('Tu n\'as pas les droits pour importer (admin/staff requis)', 'err'); return; }
+  const unresolved = Object.values(gpsNameResolutions).filter(en => en.status === 'unmatched' && !en.chosen);
+  if (unresolved.length > 0) { gpsImportLog('❌ Rattache d\'abord tous les noms non reconnus (' + unresolved.length + ' restant(s))', 'err'); return; }
 
   const btn = document.getElementById('gps-import-btn');
   btn.disabled = true;
   btn.textContent = '⏳ Import en cours...';
 
+  // Mémoriser les nouveaux liens nom-brut -> joueur validés pour les prochains imports
+  const toRemember = Object.values(gpsNameResolutions)
+    .filter(en => en.chosen && en.chosen !== '__NEW__' && en.remember)
+    .map(en => ({ org: currentOrg, raw_name: en.raw.trim().toLowerCase(), joueur: en.chosen }));
+  if (toRemember.length > 0) {
+    const { error: aliasErr } = await sb.from('player_aliases').upsert(toRemember, { onConflict: 'org,raw_name', ignoreDuplicates: false });
+    if (!aliasErr) {
+      const { data: aliases } = await sb.from('player_aliases').select('*').eq('org', currentOrg);
+      state.bdd_player_aliases = aliases || [];
+    }
+  }
+
   const seanceLink = document.getElementById('gps-import-seance').value.trim();
   let rows = gpsImportRows.map(r => {
     const copy = Object.assign({}, r);
+    delete copy._raw_joueur;
     copy.seance = seanceLink || r.session_title || null;
     return copy;
   });
@@ -8196,8 +8365,10 @@ async function doGPSImport() {
     const { data: gps } = await sb.from('gps_data').select('*').eq('org', currentOrg).order('date');
     state.bdd_gps = gps || [];
     gpsImportRows = null;
+    gpsNameResolutions = {};
     document.getElementById('gps-import-file').value = '';
     document.getElementById('gps-import-summary').innerHTML = '';
+    document.getElementById('gps-import-mapping').innerHTML = '';
     document.getElementById('gps-import-preview').innerHTML = '';
     document.getElementById('gps-import-btn').disabled = true;
     setTimeout(() => { toggleGPSImport(); renderGPS(); toast('Données GPS importées', 'success'); }, 1500);
