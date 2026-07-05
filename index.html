@@ -9658,6 +9658,31 @@ function gpsResetDistHsrZoom() {
   if (chart && chart.resetZoom) chart.resetZoom();
 }
 
+// Mode de zoom/déplacement : 'xy' (les deux axes ensemble), 'x' (abscisse seule) ou 'y' (ordonnée seule)
+let gpsDistHsrZoomAxis = 'xy';
+
+function gpsUpdateZoomAxisButtons() {
+  ['xy', 'x', 'y'].forEach(a => {
+    const btn = document.getElementById('gps-disthsr-zoomaxis-' + a);
+    if (!btn) return;
+    const active = gpsDistHsrZoomAxis === a;
+    btn.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+    btn.style.background = active ? 'var(--accent)' : 'var(--bg-elevated)';
+    btn.style.color = active ? 'white' : 'var(--text-dim)';
+  });
+}
+
+function gpsSetDistHsrZoomAxis(axis) {
+  gpsDistHsrZoomAxis = axis;
+  gpsUpdateZoomAxisButtons();
+  const chart = charts['gps-dist-hsr-scatter'];
+  if (chart) {
+    chart.options.plugins.zoom.zoom.mode = axis;
+    chart.options.plugins.zoom.pan.mode = axis;
+    chart.update();
+  }
+}
+
 function renderGPSDistHSR() {
   ['cumul', 'match', 'player'].forEach(mode => {
     const btn = document.getElementById('gps-disthsr-mode-' + mode);
@@ -9690,7 +9715,7 @@ function renderGPSDistHSR() {
     rows = rows.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
     title += ' — ' + formatDateFR(date) + (seanceTitle ? ' · ' + escapeHtml(seanceTitle) : '');
     subtitle = 'Chaque point = un joueur ayant joué ce match. Distance et distance de sprint de ce match uniquement.';
-    points = rows.map(r => ({ joueur: r.joueur, distance: gpsVal(r, 'distance_km') * 1000, sprint: gpsVal(r, 'sprint_dist_m') }));
+    points = rows.map(r => ({ joueur: r.joueur, distance: gpsVal(r, 'distance_km') * 1000, sprint: gpsVal(r, 'sprint_dist_m'), duree: gpsVal(r, 'duree_min') }));
   } else if (gpsDistHsrMode === 'player') {
     const player = document.getElementById('gps-player-select').value;
     if (!player) {
@@ -9735,9 +9760,15 @@ function renderGPSDistHSR() {
 
   html += '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">';
   html += '<h2 style="margin:0;">' + title + '</h2>';
-  html += '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="gpsResetDistHsrZoom()">🔍 Réinitialiser le zoom</button>';
+  html += '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">';
+  html += '<span style="font-size:11px; color:var(--text-dim);">Zoom :</span>';
+  html += '<button class="btn btn-secondary" id="gps-disthsr-zoomaxis-xy" onclick="gpsSetDistHsrZoomAxis(\'xy\')" style="padding:4px 10px; font-size:11px;">X + Y</button>';
+  html += '<button class="btn btn-secondary" id="gps-disthsr-zoomaxis-x" onclick="gpsSetDistHsrZoomAxis(\'x\')" style="padding:4px 10px; font-size:11px;">X seule</button>';
+  html += '<button class="btn btn-secondary" id="gps-disthsr-zoomaxis-y" onclick="gpsSetDistHsrZoomAxis(\'y\')" style="padding:4px 10px; font-size:11px;">Y seule</button>';
+  html += '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="gpsResetDistHsrZoom()">🔍 Réinitialiser</button>';
   html += '</div>';
-  html += '<p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">' + subtitle + ' Molette / pincement pour zoomer, glisser pour déplacer la zone visible.</p>';
+  html += '</div>';
+  html += '<p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">' + subtitle + ' Molette / pincement pour zoomer, glisser pour déplacer la zone visible (choisis l\'axe à gauche ci-dessus).</p>';
 
   if (points.length === 0) {
     html += '<div class="empty-state">Aucune donnée GPS pour cette sélection.</div></div>';
@@ -9755,6 +9786,7 @@ function renderGPSDistHSR() {
 
   html += '</div>';
   document.getElementById('gps-content').innerHTML = html;
+  gpsUpdateZoomAxisButtons();
 
   gpsRenderDistHsrChart(points);
 }
@@ -9798,13 +9830,15 @@ async function gpsRenderDistHsrChart(points) {
               if (gpsDistHsrMode === 'cumul') lbl = formatDateFR(p.date) + (p.title ? ' · ' + p.title : '') + ' (' + p.players + ' joueur' + (p.players > 1 ? 's' : '') + ')';
               else if (gpsDistHsrMode === 'match') lbl = p.joueur;
               else lbl = (p.opponent || p.title || '?') + ' — ' + formatDateFR(p.date);
-              return [lbl, 'Distance : ' + Math.round(p.distance) + ' m', 'Sprint : ' + Math.round(p.sprint) + ' m'];
+              const info = [lbl, 'Distance : ' + Math.round(p.distance) + ' m', 'Sprint : ' + Math.round(p.sprint) + ' m'];
+              if (gpsDistHsrMode === 'match' && p.duree) info.push('Temps de jeu : ' + Math.round(p.duree) + ' min');
+              return info;
             }
           }
         },
         zoom: {
-          pan: { enabled: true, mode: 'xy' },
-          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
+          pan: { enabled: true, mode: gpsDistHsrZoomAxis },
+          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: gpsDistHsrZoomAxis }
         }
       },
       scales: {
