@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>StatField — Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
@@ -1273,7 +1274,7 @@
             <option value="session">Rapport de séance (équipe)</option>
             <option value="week-team">Rapport hebdomadaire (équipe)</option>
             <option value="week-indiv">Rapport hebdomadaire (individuel)</option>
-            <option value="distance-hsr">Distance vs Intensité (HSR)</option>
+            <option value="distance-hsr">Distance vs Intensité (Sprint)</option>
           </select>
         </div>
         <div class="filter-group" id="gps-date-wrap">
@@ -9584,6 +9585,26 @@ function gpsLogoLookup(adversaire) {
   return hit ? hit.logo_data_url : null;
 }
 
+// Liste, pour chaque adversaire présent dans la vue, un bouton d'ajout ou de remplacement du logo
+function renderAdversaireLogoManager(opponents) {
+  if (!opponents.length) return '';
+  let html = '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">';
+  html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">🖼️ Logos adversaires — ajoute ou remplace en cas d\'erreur (réutilisé automatiquement pour ce même adversaire) :</div>';
+  html += '<div style="display:flex; flex-wrap:wrap; gap:10px;">';
+  opponents.forEach(opp => {
+    const inputId = 'gps-logo-input-' + opp.replace(/[^a-zA-Z0-9]/g, '_');
+    const logo = gpsLogoLookup(opp);
+    html += '<div style="display:flex; align-items:center; gap:6px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:6px 10px;">' +
+      (logo ? '<img src="' + logo + '" style="width:20px; height:20px; border-radius:4px; object-fit:contain;">' : '') +
+      '<span style="font-size:12px;">' + escapeHtml(opp) + '</span>' +
+      '<label for="' + inputId + '" class="btn btn-secondary" style="padding:3px 8px; font-size:11px; cursor:pointer;">' + (logo ? '✏️ modifier' : '+ logo') + '</label>' +
+      '<input type="file" id="' + inputId + '" accept="image/*" style="display:none;" onchange="handleAdversaireLogoUpload(this, \'' + opp.replace(/'/g, "\\'") + '\')">' +
+      '</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
 // Redimensionne une image uploadée en petit carré (contain-fit, fond transparent) pour un stockage compact
 function gpsResizeImageFile(file, size, cb) {
   const reader = new FileReader();
@@ -9632,6 +9653,11 @@ function gpsSetDistHsrMode(mode) {
   onGPSReportChange();
 }
 
+function gpsResetDistHsrZoom() {
+  const chart = charts['gps-dist-hsr-scatter'];
+  if (chart && chart.resetZoom) chart.resetZoom();
+}
+
 function renderGPSDistHSR() {
   ['cumul', 'match', 'player'].forEach(mode => {
     const btn = document.getElementById('gps-disthsr-mode-' + mode);
@@ -9649,7 +9675,7 @@ function renderGPSDistHSR() {
   let html = '<div class="card">';
   let points = [];
   let subtitle = '';
-  let title = 'Distance vs Intensité (HSR)';
+  let title = 'Distance vs Intensité (Sprint)';
 
   if (gpsDistHsrMode === 'match') {
     const sessionVal = document.getElementById('gps-session-select').value;
@@ -9663,8 +9689,8 @@ function renderGPSDistHSR() {
     const seanceTitle = sepIdx >= 0 ? sessionVal.slice(sepIdx + 2) : '';
     rows = rows.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
     title += ' — ' + formatDateFR(date) + (seanceTitle ? ' · ' + escapeHtml(seanceTitle) : '');
-    subtitle = 'Chaque point = un joueur ayant joué ce match. Distance et HSR de ce match uniquement.';
-    points = rows.map(r => ({ joueur: r.joueur, distance: gpsVal(r, 'distance_km') * 1000, hsr: gpsVal(r, 'hsr') }));
+    subtitle = 'Chaque point = un joueur ayant joué ce match. Distance et distance de sprint de ce match uniquement.';
+    points = rows.map(r => ({ joueur: r.joueur, distance: gpsVal(r, 'distance_km') * 1000, sprint: gpsVal(r, 'sprint_dist_m') }));
   } else if (gpsDistHsrMode === 'player') {
     const player = document.getElementById('gps-player-select').value;
     if (!player) {
@@ -9673,14 +9699,14 @@ function renderGPSDistHSR() {
       return;
     }
     rows = rows.filter(x => x.joueur === player);
-    title = '👤 ' + escapeHtml(player) + ' — Distance vs Intensité (HSR)';
-    subtitle = 'Chaque point = un match de ' + escapeHtml(player) + '. Le logo affiché est celui de l\'adversaire (associe un logo ci-dessous pour les matchs qui n\'en ont pas encore).';
+    title = '👤 ' + escapeHtml(player) + ' — Distance vs Intensité (Sprint)';
+    subtitle = 'Chaque point = un match de ' + escapeHtml(player) + '. Le logo affiché est celui de l\'adversaire.';
     points = rows.map(r => {
       const seanceTitle = r.seance || r.session_title || '';
       const opponent = gpsGuessOpponent(seanceTitle);
       return {
         joueur: r.joueur, date: r.date, title: seanceTitle, opponent,
-        distance: gpsVal(r, 'distance_km') * 1000, hsr: gpsVal(r, 'hsr'),
+        distance: gpsVal(r, 'distance_km') * 1000, sprint: gpsVal(r, 'sprint_dist_m'),
         logo: gpsLogoLookup(opponent)
       };
     });
@@ -9691,21 +9717,27 @@ function renderGPSDistHSR() {
       rows = rows.filter(x => groupPlayers.includes(x.joueur));
     }
     title += group ? ' · ' + escapeHtml(group) : '';
-    subtitle = 'Chaque point = un match. Somme de tous les joueurs sur ce match : distance totale de l\'équipe en abscisse, HSR total de l\'équipe en ordonnée — pour comparer les matchs entre eux.';
+    subtitle = 'Chaque point = un match. Somme de tous les joueurs sur ce match : distance totale de l\'équipe en abscisse, distance de sprint totale de l\'équipe en ordonnée — pour comparer les matchs entre eux. Le logo affiché est celui de l\'adversaire.';
     const byMatch = {};
     rows.forEach(r => {
       const seanceTitle = r.seance || r.session_title || '';
       const key = r.date + '||' + seanceTitle;
-      if (!byMatch[key]) byMatch[key] = { date: r.date, title: seanceTitle, distance: 0, hsr: 0, players: 0 };
+      if (!byMatch[key]) byMatch[key] = { date: r.date, title: seanceTitle, distance: 0, sprint: 0, players: 0 };
       byMatch[key].distance += gpsVal(r, 'distance_km') * 1000;
-      byMatch[key].hsr += gpsVal(r, 'hsr');
+      byMatch[key].sprint += gpsVal(r, 'sprint_dist_m');
       byMatch[key].players++;
     });
-    points = Object.values(byMatch);
+    points = Object.values(byMatch).map(p => {
+      const opponent = gpsGuessOpponent(p.title);
+      return Object.assign(p, { opponent, logo: gpsLogoLookup(opponent) });
+    });
   }
 
-  html += '<h2>' + title + '</h2>';
-  html += '<p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">' + subtitle + '</p>';
+  html += '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">';
+  html += '<h2 style="margin:0;">' + title + '</h2>';
+  html += '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="gpsResetDistHsrZoom()">🔍 Réinitialiser le zoom</button>';
+  html += '</div>';
+  html += '<p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">' + subtitle + ' Molette / pincement pour zoomer, glisser pour déplacer la zone visible.</p>';
 
   if (points.length === 0) {
     html += '<div class="empty-state">Aucune donnée GPS pour cette sélection.</div></div>';
@@ -9715,24 +9747,10 @@ function renderGPSDistHSR() {
 
   html += '<div class="chart-container tall"><canvas id="gps-dist-hsr-scatter"></canvas></div>';
 
-  // Mode "un joueur" : proposer d'associer un logo aux adversaires qui n'en ont pas encore
-  let missingOpponents = [];
-  if (gpsDistHsrMode === 'player') {
-    missingOpponents = uniqueSorted(points.filter(p => p.opponent && !p.logo).map(p => p.opponent));
-    if (missingOpponents.length) {
-      html += '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">';
-      html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">🖼️ Logos manquants (' + missingOpponents.length + ') — une fois associé, le logo est réutilisé automatiquement pour ce même adversaire :</div>';
-      html += '<div style="display:flex; flex-wrap:wrap; gap:10px;">';
-      missingOpponents.forEach(opp => {
-        const inputId = 'gps-logo-input-' + opp.replace(/[^a-zA-Z0-9]/g, '_');
-        html += '<div style="display:flex; align-items:center; gap:6px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:6px 10px;">' +
-          '<span style="font-size:12px;">' + escapeHtml(opp) + '</span>' +
-          '<label for="' + inputId + '" class="btn btn-secondary" style="padding:3px 8px; font-size:11px; cursor:pointer;">+ logo</label>' +
-          '<input type="file" id="' + inputId + '" accept="image/*" style="display:none;" onchange="handleAdversaireLogoUpload(this, \'' + opp.replace(/'/g, "\\'") + '\')">' +
-          '</div>';
-      });
-      html += '</div></div>';
-    }
+  // Modes "un joueur" et "comparer les matchs" : gérer les logos adversaires (ajout / remplacement)
+  if (gpsDistHsrMode === 'player' || gpsDistHsrMode === 'cumul') {
+    const opponents = uniqueSorted(points.filter(p => p.opponent).map(p => p.opponent));
+    html += renderAdversaireLogoManager(opponents);
   }
 
   html += '</div>';
@@ -9752,17 +9770,19 @@ async function gpsRenderDistHsrChart(points) {
   if (!canvas) return;
 
   const axisSuffix = gpsDistHsrMode === 'cumul' ? ' — cumul équipe' : '';
+  // Logos légèrement plus petits en mode "comparer les matchs" (plus de points à l'écran) qu'en mode "un joueur"
+  const logoRadius = gpsDistHsrMode === 'cumul' ? 11 : 14;
   destroyChart('gps-dist-hsr-scatter');
   charts['gps-dist-hsr-scatter'] = new Chart(canvas, {
     type: 'scatter',
     data: {
       datasets: [{
         label: gpsDistHsrMode === 'cumul' ? 'Matchs (cumul équipe)' : (gpsDistHsrMode === 'match' ? 'Joueurs (ce match)' : 'Matchs'),
-        data: points.map(p => ({ x: Math.round(p.distance), y: Math.round(p.hsr) })),
+        data: points.map(p => ({ x: Math.round(p.distance), y: Math.round(p.sprint) })),
         backgroundColor: '#00a3ff',
         pointStyle: points.map((p, i) => logoImgs[i] || 'circle'),
-        pointRadius: points.map((p, i) => logoImgs[i] ? 14 : 5),
-        pointHoverRadius: points.map((p, i) => logoImgs[i] ? 16 : 7)
+        pointRadius: points.map((p, i) => logoImgs[i] ? logoRadius : 5),
+        pointHoverRadius: points.map((p, i) => logoImgs[i] ? logoRadius + 2 : 7)
       }]
     },
     options: {
@@ -9778,14 +9798,18 @@ async function gpsRenderDistHsrChart(points) {
               if (gpsDistHsrMode === 'cumul') lbl = formatDateFR(p.date) + (p.title ? ' · ' + p.title : '') + ' (' + p.players + ' joueur' + (p.players > 1 ? 's' : '') + ')';
               else if (gpsDistHsrMode === 'match') lbl = p.joueur;
               else lbl = (p.opponent || p.title || '?') + ' — ' + formatDateFR(p.date);
-              return [lbl, 'Distance : ' + Math.round(p.distance) + ' m', 'HSR : ' + Math.round(p.hsr) + ' m'];
+              return [lbl, 'Distance : ' + Math.round(p.distance) + ' m', 'Sprint : ' + Math.round(p.sprint) + ' m'];
             }
           }
+        },
+        zoom: {
+          pan: { enabled: true, mode: 'xy' },
+          zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
         }
       },
       scales: {
         x: { type: 'linear', title: { display: true, text: 'Distance (m)' + axisSuffix, color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
-        y: { type: 'linear', title: { display: true, text: 'HSR (m)' + axisSuffix, color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
+        y: { type: 'linear', title: { display: true, text: 'Sprint (m)' + axisSuffix, color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
       }
     }
   });
