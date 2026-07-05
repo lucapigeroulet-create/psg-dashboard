@@ -1273,6 +1273,7 @@
             <option value="session">Rapport de séance (équipe)</option>
             <option value="week-team">Rapport hebdomadaire (équipe)</option>
             <option value="week-indiv">Rapport hebdomadaire (individuel)</option>
+            <option value="distance-hsr">Distance vs Intensité (HSR)</option>
           </select>
         </div>
         <div class="filter-group" id="gps-date-wrap">
@@ -1294,6 +1295,13 @@
         <div class="filter-group" id="gps-player-wrap" style="display:none;">
           <label>Joueur</label>
           <select id="gps-player-select" onchange="renderGPS()"></select>
+        </div>
+        <div class="filter-group" id="gps-disthsr-wrap" style="display:none;">
+          <label>Vue</label>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="btn btn-secondary" id="gps-disthsr-mode-player" onclick="gpsSetDistHsrMode('player')" style="padding:6px 12px; font-size:12px;">👤 Par joueur (cumulé)</button>
+            <button type="button" class="btn btn-secondary" id="gps-disthsr-mode-record" onclick="gpsSetDistHsrMode('record')" style="padding:6px 12px; font-size:12px;">📍 Par enregistrement</button>
+          </div>
         </div>
       </div>
     </div>
@@ -8551,9 +8559,10 @@ function onGPSReportChange() {
   const type = document.getElementById('gps-report-type').value;
   document.getElementById('gps-date-wrap').style.display = (type === 'session') ? '' : 'none';
   document.getElementById('gps-split-wrap').style.display = (type === 'session') ? '' : 'none';
-  document.getElementById('gps-week-wrap').style.display = (type !== 'session') ? '' : 'none';
-  document.getElementById('gps-group-wrap').style.display = (type === 'week-team') ? '' : 'none';
+  document.getElementById('gps-week-wrap').style.display = (type === 'week-team' || type === 'week-indiv') ? '' : 'none';
+  document.getElementById('gps-group-wrap').style.display = (type === 'week-team' || type === 'distance-hsr') ? '' : 'none';
   document.getElementById('gps-player-wrap').style.display = (type === 'week-indiv') ? '' : 'none';
+  document.getElementById('gps-disthsr-wrap').style.display = (type === 'distance-hsr') ? '' : 'none';
   if (type === 'session') populateGPSSplitSelect();
   renderGPS();
 }
@@ -9122,7 +9131,8 @@ function renderGPS() {
   const type = document.getElementById('gps-report-type').value;
   if (type === 'session') renderGPSSession();
   else if (type === 'week-team') renderGPSWeekTeam();
-  else renderGPSWeekIndiv();
+  else if (type === 'week-indiv') renderGPSWeekIndiv();
+  else renderGPSDistHSR();
 }
 
 function getGPSWeeks() {
@@ -9520,6 +9530,109 @@ function renderGPSWeekIndiv() {
     type: 'bar',
     data: { labels: rows.map(r => formatDateFR(r.date)), datasets: [{ label: 'Distance (m)', data: rows.map(r => Math.round(gpsVal(r, 'distance_km') * 1000)), backgroundColor: '#00a3ff', borderRadius: 4 }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }, y: { beginAtZero: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } } } }
+  });
+}
+
+// ===== DISTANCE VS INTENSITÉ (HSR) =====
+let gpsDistHsrMode = 'player'; // 'player' (cumul par joueur) | 'record' (un point par enregistrement)
+
+function gpsSetDistHsrMode(mode) {
+  gpsDistHsrMode = mode;
+  renderGPSDistHSR();
+}
+
+function renderGPSDistHSR() {
+  const modeBtnPlayer = document.getElementById('gps-disthsr-mode-player');
+  const modeBtnRecord = document.getElementById('gps-disthsr-mode-record');
+  [[modeBtnPlayer, 'player'], [modeBtnRecord, 'record']].forEach(([btn, mode]) => {
+    if (!btn) return;
+    const active = gpsDistHsrMode === mode;
+    btn.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+    btn.style.background = active ? 'var(--accent)' : 'var(--bg-elevated)';
+    btn.style.color = active ? 'white' : 'var(--text-dim)';
+  });
+
+  const group = document.getElementById('gps-group-select').value;
+  // Ne garder que l'enregistrement complet ("all") de chaque séance, sinon les splits
+  // (procédés) fausseraient les cumuls en comptant plusieurs fois la même séance.
+  let rows = state.bdd_gps.filter(x => (x.split_name || 'all').toLowerCase() === 'all');
+  if (group) {
+    const groupPlayers = getAllPlayers().filter(p => getJoueurInfo(p).groupe === group);
+    rows = rows.filter(x => groupPlayers.includes(x.joueur));
+  }
+
+  let html = '<div class="card">';
+  html += '<h2>Distance vs Intensité (HSR)' + (group ? ' · ' + escapeHtml(group) : '') + '</h2>';
+  html += '<p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">' +
+    (gpsDistHsrMode === 'player'
+      ? 'Chaque point = un joueur. Cumul de toutes ses séances : distance totale parcourue en abscisse, HSR total en ordonnée.'
+      : 'Chaque point = un enregistrement GPS (une séance d\'un joueur). Distance de la séance en abscisse, HSR de la séance en ordonnée.') +
+    '</p>';
+
+  if (rows.length === 0) {
+    html += '<div class="empty-state">Aucune donnée GPS.</div></div>';
+    document.getElementById('gps-content').innerHTML = html;
+    return;
+  }
+
+  let points;
+  if (gpsDistHsrMode === 'player') {
+    const byPlayer = {};
+    rows.forEach(r => {
+      if (!byPlayer[r.joueur]) byPlayer[r.joueur] = { joueur: r.joueur, distance: 0, hsr: 0, sessions: 0 };
+      byPlayer[r.joueur].distance += gpsVal(r, 'distance_km') * 1000;
+      byPlayer[r.joueur].hsr += gpsVal(r, 'hsr');
+      byPlayer[r.joueur].sessions++;
+    });
+    points = Object.values(byPlayer);
+  } else {
+    points = rows.map(r => ({
+      joueur: r.joueur,
+      date: r.date,
+      distance: gpsVal(r, 'distance_km') * 1000,
+      hsr: gpsVal(r, 'hsr')
+    }));
+  }
+
+  html += '<div class="chart-container tall"><canvas id="gps-dist-hsr-scatter"></canvas></div>';
+  html += '</div>';
+  document.getElementById('gps-content').innerHTML = html;
+
+  const axisSuffix = gpsDistHsrMode === 'player' ? ' — cumul' : '';
+  destroyChart('gps-dist-hsr-scatter');
+  charts['gps-dist-hsr-scatter'] = new Chart(document.getElementById('gps-dist-hsr-scatter'), {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: gpsDistHsrMode === 'player' ? 'Joueurs' : 'Séances',
+        data: points.map(p => ({ x: Math.round(p.distance), y: Math.round(p.hsr) })),
+        backgroundColor: '#00a3ff',
+        pointRadius: 5,
+        pointHoverRadius: 7
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const p = points[ctx.dataIndex];
+              const lbl = gpsDistHsrMode === 'player'
+                ? p.joueur + ' (' + p.sessions + ' séance' + (p.sessions > 1 ? 's' : '') + ')'
+                : p.joueur + ' — ' + formatDateFR(p.date);
+              return [lbl, 'Distance : ' + Math.round(p.distance) + ' m', 'HSR : ' + Math.round(p.hsr) + ' m'];
+            }
+          }
+        }
+      },
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'Distance (m)' + axisSuffix, color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+        y: { type: 'linear', title: { display: true, text: 'HSR (m)' + axisSuffix, color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
+      }
+    }
   });
 }
 
