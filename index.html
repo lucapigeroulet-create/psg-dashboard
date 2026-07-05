@@ -1305,6 +1305,12 @@
             <button type="button" class="btn btn-secondary" id="gps-disthsr-mode-player" onclick="gpsSetDistHsrMode('player')" style="padding:6px 12px; font-size:12px;">👤 Un joueur</button>
           </div>
         </div>
+        <div class="filter-group" id="gps-disthsr-reftime-wrap" style="display:none;">
+          <label>Temps de jeu de comparaison (min)</label>
+          <input type="number" id="gps-disthsr-reftime" min="1" step="1" placeholder="ex : 90"
+                 onchange="renderGPSDistHSR()"
+                 style="width:110px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:13px;">
+        </div>
       </div>
     </div>
 
@@ -8579,6 +8585,7 @@ function onGPSReportChange() {
   document.getElementById('gps-group-wrap').style.display = (type === 'week-team' || (type === 'distance-hsr' && gpsDistHsrMode === 'cumul')) ? '' : 'none';
   document.getElementById('gps-player-wrap').style.display = (type === 'week-indiv' || (type === 'distance-hsr' && gpsDistHsrMode === 'player')) ? '' : 'none';
   document.getElementById('gps-disthsr-wrap').style.display = (type === 'distance-hsr') ? '' : 'none';
+  document.getElementById('gps-disthsr-reftime-wrap').style.display = (type === 'distance-hsr' && (gpsDistHsrMode === 'cumul' || gpsDistHsrMode === 'player')) ? '' : 'none';
   if (type === 'session') populateGPSSplitSelect();
   renderGPS();
 }
@@ -9653,6 +9660,20 @@ function gpsSetDistHsrMode(mode) {
   onGPSReportChange();
 }
 
+// Temps de jeu de référence (min) pour comparer des joueurs/matchs à niveau égal :
+// projette chaque valeur au prorata du temps réellement joué (ex: 100m en 5 min -> 160m projetées sur 8 min)
+function gpsGetDistHsrRefTime() {
+  const el = document.getElementById('gps-disthsr-reftime');
+  if (!el) return null;
+  const v = parseFloat(el.value);
+  return (v && v > 0) ? v : null;
+}
+
+function gpsNormalizeMetric(raw, duree, refTime) {
+  if (!refTime || !duree || duree <= 0) return raw;
+  return (raw / duree) * refTime;
+}
+
 function gpsResetDistHsrZoom() {
   const chart = charts['gps-dist-hsr-scatter'];
   if (chart && chart.resetZoom) chart.resetZoom();
@@ -9726,12 +9747,17 @@ function renderGPSDistHSR() {
     rows = rows.filter(x => x.joueur === player);
     title = '👤 ' + escapeHtml(player) + ' — Distance vs Intensité (Sprint)';
     subtitle = 'Chaque point = un match de ' + escapeHtml(player) + '. Le logo affiché est celui de l\'adversaire.';
+    const refTimePlayer = gpsGetDistHsrRefTime();
+    if (refTimePlayer) subtitle += ' Valeurs projetées sur ' + refTimePlayer + ' min de temps de jeu pour comparer à niveau égal.';
     points = rows.map(r => {
       const seanceTitle = r.seance || r.session_title || '';
       const opponent = gpsGuessOpponent(seanceTitle);
+      const duree = gpsVal(r, 'duree_min');
       return {
         joueur: r.joueur, date: r.date, title: seanceTitle, opponent,
-        distance: gpsVal(r, 'distance_km') * 1000, sprint: gpsVal(r, 'sprint_dist_m'), duree: gpsVal(r, 'duree_min'),
+        distance: gpsNormalizeMetric(gpsVal(r, 'distance_km') * 1000, duree, refTimePlayer),
+        sprint: gpsNormalizeMetric(gpsVal(r, 'sprint_dist_m'), duree, refTimePlayer),
+        duree,
         logo: gpsLogoLookup(opponent)
       };
     });
@@ -9743,13 +9769,16 @@ function renderGPSDistHSR() {
     }
     title += group ? ' · ' + escapeHtml(group) : '';
     subtitle = 'Chaque point = un match. Somme de tous les joueurs sur ce match : distance totale de l\'équipe en abscisse, distance de sprint totale de l\'équipe en ordonnée — pour comparer les matchs entre eux. Le logo affiché est celui de l\'adversaire.';
+    const refTimeCumul = gpsGetDistHsrRefTime();
+    if (refTimeCumul) subtitle += ' Valeurs de chaque joueur projetées sur ' + refTimeCumul + ' min de temps de jeu avant somme, pour comparer à niveau égal.';
     const byMatch = {};
     rows.forEach(r => {
       const seanceTitle = r.seance || r.session_title || '';
       const key = r.date + '||' + seanceTitle;
       if (!byMatch[key]) byMatch[key] = { date: r.date, title: seanceTitle, distance: 0, sprint: 0, players: 0 };
-      byMatch[key].distance += gpsVal(r, 'distance_km') * 1000;
-      byMatch[key].sprint += gpsVal(r, 'sprint_dist_m');
+      const duree = gpsVal(r, 'duree_min');
+      byMatch[key].distance += gpsNormalizeMetric(gpsVal(r, 'distance_km') * 1000, duree, refTimeCumul);
+      byMatch[key].sprint += gpsNormalizeMetric(gpsVal(r, 'sprint_dist_m'), duree, refTimeCumul);
       byMatch[key].players++;
     });
     points = Object.values(byMatch).map(p => {
