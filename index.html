@@ -9731,7 +9731,7 @@ function renderGPSDistHSR() {
       const opponent = gpsGuessOpponent(seanceTitle);
       return {
         joueur: r.joueur, date: r.date, title: seanceTitle, opponent,
-        distance: gpsVal(r, 'distance_km') * 1000, sprint: gpsVal(r, 'sprint_dist_m'),
+        distance: gpsVal(r, 'distance_km') * 1000, sprint: gpsVal(r, 'sprint_dist_m'), duree: gpsVal(r, 'duree_min'),
         logo: gpsLogoLookup(opponent)
       };
     });
@@ -9831,7 +9831,7 @@ async function gpsRenderDistHsrChart(points) {
               else if (gpsDistHsrMode === 'match') lbl = p.joueur;
               else lbl = (p.opponent || p.title || '?') + ' — ' + formatDateFR(p.date);
               const info = [lbl, 'Distance : ' + Math.round(p.distance) + ' m', 'Sprint : ' + Math.round(p.sprint) + ' m'];
-              if (gpsDistHsrMode === 'match' && p.duree) info.push('Temps de jeu : ' + Math.round(p.duree) + ' min');
+              if ((gpsDistHsrMode === 'match' || gpsDistHsrMode === 'player') && p.duree) info.push('Temps de jeu : ' + Math.round(p.duree) + ' min');
               return info;
             }
           }
