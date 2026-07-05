@@ -8001,6 +8001,15 @@ function gpsCapitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
+// Certains exports Catapult numérotent les splits (0 = séance entière, 1/2/3... = périodes)
+// au lieu d'écrire "all" en toutes lettres. On normalise "0" (et vide) vers "all" pour que
+// les rapports qui filtrent sur la séance complète retrouvent bien ces lignes.
+function gpsNormalizeSplitName(v) {
+  const s = String(v === undefined || v === null ? '' : v).trim();
+  if (!s || s === '0') return 'all';
+  return s;
+}
+
 // ---- Rapprochement des noms GPS (Catapult) avec les joueurs de l'équipe ----
 let gpsNameResolutions = {}; // clé = nom brut en minuscule -> { raw, status, resolved, suggestion, chosen, remember }
 
@@ -8223,7 +8232,7 @@ function handleGPSCSV(e) {
           joueur: resolution ? (resolution.resolved || gpsCapitalize(resolution.raw)) : null,
           _raw_joueur: rawJoueur ? String(rawJoueur).trim() : null,
           session_title: cols.session ? r[cols.session] : null,
-          split_name: cols.split ? (r[cols.split] || 'all').trim() : 'all',
+          split_name: cols.split ? gpsNormalizeSplitName(r[cols.split]) : 'all',
           duree_min: durMin,
           distance_km: gpsNum(r[cols.distance]),
           sprint_dist_m: gpsNum(r[cols.sprint]),
