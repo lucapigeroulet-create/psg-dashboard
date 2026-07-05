@@ -8039,14 +8039,35 @@ function gpsAliasLookup(rawName) {
   return hit ? hit.joueur : null;
 }
 
+function gpsWordTokens(s) {
+  return gpsStripAccents(String(s || '').toLowerCase()).replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+}
+
 function gpsSuggestPlayer(rawName) {
   const players = getAllPlayers();
+  const rawTokens = gpsWordTokens(rawName);
+  // Certaines équipes identifient leurs joueurs par le seul prénom : si un mot du nom brut
+  // correspond exactement (et sans ambiguïté) à un joueur de l'effectif, c'est un signal fort.
+  const tokenExact = players.filter(p => rawTokens.includes(gpsStripAccents(p.trim().toLowerCase())));
+  if (tokenExact.length === 1) return { name: tokenExact[0], score: 0.95 };
+
   let best = null, bestScore = 0;
   players.forEach(p => {
-    const score = gpsNameSimilarity(rawName, p);
+    // Similarité globale (chaîne entière + tokens triés), et meilleure similarité mot-à-mot
+    // (rattrape une faute de frappe sur un seul mot, ex. "Kakou" importé vs "Kacou" en base)
+    let score = gpsNameSimilarity(rawName, p);
+    const pTokens = gpsWordTokens(p);
+    rawTokens.forEach(rt => {
+      if (rt.length < 3) return; // évite les faux positifs sur des tokens trop courts
+      pTokens.forEach(pt => {
+        if (pt.length < 3) return;
+        const s = gpsNameSimilarity(rt, pt);
+        if (s > score) score = s;
+      });
+    });
     if (score > bestScore) { bestScore = score; best = p; }
   });
-  return (best && bestScore >= 0.55) ? { name: best, score: bestScore } : null;
+  return (best && bestScore >= 0.6) ? { name: best, score: bestScore } : null;
 }
 
 // Résout un nom brut CSV vers un joueur connu : match exact > match sans accents > lien mémorisé > suggestion (à valider)
