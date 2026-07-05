@@ -1299,7 +1299,7 @@
         <div class="filter-group" id="gps-disthsr-wrap" style="display:none;">
           <label>Vue</label>
           <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button type="button" class="btn btn-secondary" id="gps-disthsr-mode-cumul" onclick="gpsSetDistHsrMode('cumul')" style="padding:6px 12px; font-size:12px;">📊 Cumulé (tous les joueurs)</button>
+            <button type="button" class="btn btn-secondary" id="gps-disthsr-mode-cumul" onclick="gpsSetDistHsrMode('cumul')" style="padding:6px 12px; font-size:12px;">📊 Comparer les matchs (cumul équipe)</button>
             <button type="button" class="btn btn-secondary" id="gps-disthsr-mode-match" onclick="gpsSetDistHsrMode('match')" style="padding:6px 12px; font-size:12px;">⚽ Un match</button>
             <button type="button" class="btn btn-secondary" id="gps-disthsr-mode-player" onclick="gpsSetDistHsrMode('player')" style="padding:6px 12px; font-size:12px;">👤 Un joueur</button>
           </div>
@@ -9691,15 +9691,17 @@ function renderGPSDistHSR() {
       rows = rows.filter(x => groupPlayers.includes(x.joueur));
     }
     title += group ? ' · ' + escapeHtml(group) : '';
-    subtitle = 'Chaque point = un joueur. Cumul de toutes ses séances : distance totale parcourue en abscisse, HSR total en ordonnée.';
-    const byPlayer = {};
+    subtitle = 'Chaque point = un match. Somme de tous les joueurs sur ce match : distance totale de l\'équipe en abscisse, HSR total de l\'équipe en ordonnée — pour comparer les matchs entre eux.';
+    const byMatch = {};
     rows.forEach(r => {
-      if (!byPlayer[r.joueur]) byPlayer[r.joueur] = { joueur: r.joueur, distance: 0, hsr: 0, sessions: 0 };
-      byPlayer[r.joueur].distance += gpsVal(r, 'distance_km') * 1000;
-      byPlayer[r.joueur].hsr += gpsVal(r, 'hsr');
-      byPlayer[r.joueur].sessions++;
+      const seanceTitle = r.seance || r.session_title || '';
+      const key = r.date + '||' + seanceTitle;
+      if (!byMatch[key]) byMatch[key] = { date: r.date, title: seanceTitle, distance: 0, hsr: 0, players: 0 };
+      byMatch[key].distance += gpsVal(r, 'distance_km') * 1000;
+      byMatch[key].hsr += gpsVal(r, 'hsr');
+      byMatch[key].players++;
     });
-    points = Object.values(byPlayer);
+    points = Object.values(byMatch);
   }
 
   html += '<h2>' + title + '</h2>';
@@ -9749,13 +9751,13 @@ async function gpsRenderDistHsrChart(points) {
   const canvas = document.getElementById('gps-dist-hsr-scatter');
   if (!canvas) return;
 
-  const axisSuffix = gpsDistHsrMode === 'cumul' ? ' — cumul' : '';
+  const axisSuffix = gpsDistHsrMode === 'cumul' ? ' — cumul équipe' : '';
   destroyChart('gps-dist-hsr-scatter');
   charts['gps-dist-hsr-scatter'] = new Chart(canvas, {
     type: 'scatter',
     data: {
       datasets: [{
-        label: gpsDistHsrMode === 'cumul' ? 'Joueurs' : (gpsDistHsrMode === 'match' ? 'Joueurs (ce match)' : 'Matchs'),
+        label: gpsDistHsrMode === 'cumul' ? 'Matchs (cumul équipe)' : (gpsDistHsrMode === 'match' ? 'Joueurs (ce match)' : 'Matchs'),
         data: points.map(p => ({ x: Math.round(p.distance), y: Math.round(p.hsr) })),
         backgroundColor: '#00a3ff',
         pointStyle: points.map((p, i) => logoImgs[i] || 'circle'),
@@ -9773,7 +9775,7 @@ async function gpsRenderDistHsrChart(points) {
             label: (ctx) => {
               const p = points[ctx.dataIndex];
               let lbl;
-              if (gpsDistHsrMode === 'cumul') lbl = p.joueur + ' (' + p.sessions + ' séance' + (p.sessions > 1 ? 's' : '') + ')';
+              if (gpsDistHsrMode === 'cumul') lbl = formatDateFR(p.date) + (p.title ? ' · ' + p.title : '') + ' (' + p.players + ' joueur' + (p.players > 1 ? 's' : '') + ')';
               else if (gpsDistHsrMode === 'match') lbl = p.joueur;
               else lbl = (p.opponent || p.title || '?') + ' — ' + formatDateFR(p.date);
               return [lbl, 'Distance : ' + Math.round(p.distance) + ' m', 'HSR : ' + Math.round(p.hsr) + ' m'];
