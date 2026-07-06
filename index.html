@@ -3110,6 +3110,12 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Bandeau "nouvelle version disponible" -->
+<div id="version-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:2000; background:var(--accent); color:white; padding:10px 16px; text-align:center; font-size:13px; box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+  🔄 Une nouvelle version de StatField est disponible.
+  <button onclick="location.reload()" style="background:white; color:var(--accent); border:none; border-radius:6px; padding:4px 12px; font-size:12px; font-weight:700; cursor:pointer; margin-left:8px;">Recharger</button>
+</div>
+
 <script>
 // ============================================================================
 // DONNÉES INITIALES (pré-chargées depuis le fichier Excel)
@@ -3296,6 +3302,7 @@ async function loadProfileAndStart() {
   applyRoleRestrictions();
 
   initAll();
+  startVersionWatcher();
   updateMessagesBadge();
   updateSeancesBadge();
   applyPlayerLanguage();  // Applique la langue lecteur (EN pour PSG, FR pour TEGG)
@@ -15908,6 +15915,39 @@ function initSelectors() {
 function initAll() {
   initSelectors();
   renderOverview();
+}
+
+// ---- Détection de nouvelle version déployée ---------------------------------
+// L'app est un fichier statique unique : Vercel change l'ETag à chaque déploiement,
+// on compare périodiquement pour proposer un rechargement (évite de tourner avec du
+// JS obsolète après un déploiement, ex: fonctionnalité ajoutée mais page jamais rechargée).
+let appVersionEtag = null;
+let versionWatcherStarted = false;
+
+async function fetchCurrentEtag() {
+  try {
+    const res = await fetch('/', { method: 'HEAD', cache: 'no-store' });
+    return res.headers.get('etag');
+  } catch (e) {
+    return null;
+  }
+}
+
+async function checkForNewVersion() {
+  const etag = await fetchCurrentEtag();
+  if (!etag || !appVersionEtag || etag === appVersionEtag) return;
+  const banner = document.getElementById('version-banner');
+  if (banner) banner.style.display = '';
+}
+
+async function startVersionWatcher() {
+  if (versionWatcherStarted) return;
+  versionWatcherStarted = true;
+  appVersionEtag = await fetchCurrentEtag();
+  setInterval(checkForNewVersion, 5 * 60 * 1000); // vérifie toutes les 5 minutes
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForNewVersion();
+  });
 }
 
 // Date change handler pour RPE entry

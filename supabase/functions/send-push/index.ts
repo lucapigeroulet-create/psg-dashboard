@@ -17,23 +17,36 @@ const VAPID_PRIVATE = Deno.env.get("VAPID_PRIVATE_KEY")!;
 
 webpush.setVapidDetails("mailto:contact@statfield.app", VAPID_PUBLIC, VAPID_PRIVATE);
 
+// Appelée directement depuis le navigateur (sb.functions.invoke) : le navigateur envoie
+// d'abord une requête OPTIONS (préflight CORS) qu'il faut honorer, sinon il bloque la
+// vraie requête et supabase-js remonte juste "Failed to send a request to the Edge Function".
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS"
+};
+
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
   try {
     const authHeader = req.headers.get("Authorization") ?? "";
     const userClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: authHeader } }
     });
     const { data: { user } } = await userClient.auth.getUser();
-    if (!user) return new Response("Unauthorized", { status: 401 });
+    if (!user) return new Response("Unauthorized", { status: 401, headers: corsHeaders });
 
     const { data: profile } = await userClient.from("profiles").select("role").eq("id", user.id).single();
     if (!profile || !["admin", "staff"].includes(profile.role)) {
-      return new Response("Forbidden", { status: 403 });
+      return new Response("Forbidden", { status: 403, headers: corsHeaders });
     }
 
     const { org, joueurs, title, body, url } = await req.json();
     if (!org || !Array.isArray(joueurs) || joueurs.length === 0) {
-      return new Response(JSON.stringify({ error: "org et joueurs requis" }), { status: 400 });
+      return new Response(JSON.stringify({ error: "org et joueurs requis" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -42,7 +55,7 @@ Deno.serve(async (req) => {
       .select("*")
       .eq("org", org)
       .in("joueur_nom", joueurs);
-    if (subsErr) return new Response(JSON.stringify({ error: subsErr.message }), { status: 500 });
+    if (subsErr) return new Response(JSON.stringify({ error: subsErr.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     let sent = 0, failed = 0;
     for (const s of subs || []) {
@@ -63,9 +76,9 @@ Deno.serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ sent, failed, total: (subs || []).length }), {
-      headers: { "Content-Type": "application/json" }
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e && e.message || e) }), { status: 500 });
+    return new Response(JSON.stringify({ error: String(e && e.message || e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
