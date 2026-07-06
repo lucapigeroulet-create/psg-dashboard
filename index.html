@@ -2863,8 +2863,16 @@
         <label style="display:block; margin-bottom:6px;">Sélectionne les joueurs</label>
         <div id="msg-cible-players" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
       </div>
+      <div style="margin-bottom:12px;">
+        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+          <input type="checkbox" id="msg-push-notify" checked style="margin:0;"> 🔔 Envoyer aussi en notification push sur le téléphone des joueurs
+        </label>
+      </div>
       <button class="btn" onclick="sendMessage()">📤 Envoyer</button>
     </div>
+
+    <!-- Bandeau notifications push (joueur uniquement) -->
+    <div id="push-banner"></div>
 
     <!-- Liste des messages -->
     <div class="card">
@@ -3149,6 +3157,8 @@ const STORAGE_KEY = 'psg_session_maker_v1';
 const SUPABASE_URL = 'https://zjnlohojgmwhielilyly.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_eMm9mcKI8VEo_-3pgEdWqQ_Z-f16kM4';
 const EMAIL_DOMAIN = '@psg.local'; // suffixe ajouté à l'identifiant pour faire un email Supabase
+// Clé publique VAPID (Web Push) — sans risque à exposer, la clé privée reste côté Edge Function
+const VAPID_PUBLIC_KEY = 'BNqCy_7GSEtuoShX5jaIQV4dIvYUca7ukhM4iDH7_MpDrE_GQwk5tKk2ZE-5_aHGxfLoKwU-OOlHF3aNbkzbp5o';
 
 let sb = null; // client Supabase
 let currentUser = null;
@@ -4547,6 +4557,108 @@ function getMessageReads(messageId) {
   return (state.bdd_message_reads || []).filter(r => r.message_id === messageId);
 }
 
+// ---- Notifications push (Web Push) -----------------------------------------
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+function pushIsIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+
+function pushIsStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+// 'unsupported' | 'ios-needs-install' | 'ready'
+function pushEnvironmentStatus() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
+    if (pushIsIOS() && !pushIsStandalone()) return 'ios-needs-install';
+    return 'unsupported';
+  }
+  return 'ready';
+}
+
+async function getCurrentPushSubscription() {
+  if (pushEnvironmentStatus() !== 'ready') return null;
+  const reg = await navigator.serviceWorker.getRegistration();
+  if (!reg) return null;
+  return await reg.pushManager.getSubscription();
+}
+
+async function enablePushNotifications() {
+  if (pushEnvironmentStatus() !== 'ready') { toast('Notifications non disponibles sur cet appareil', 'error'); return; }
+  if (!currentJoueurNom) { toast('Compte non rattaché à un joueur', 'error'); return; }
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') { toast('Permission refusée', 'error'); return; }
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    const json = sub.toJSON();
+    const { error } = await sb.from('push_subscriptions').upsert({
+      org: currentOrg,
+      user_id: currentUser.id,
+      joueur_nom: currentJoueurNom,
+      endpoint: json.endpoint,
+      keys: json.keys
+    }, { onConflict: 'endpoint' });
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+    toast('🔔 Notifications activées', 'success');
+    renderMessages();
+  } catch (e) {
+    toast('Erreur activation : ' + e.message, 'error');
+  }
+}
+
+async function disablePushNotifications() {
+  try {
+    const sub = await getCurrentPushSubscription();
+    if (sub) {
+      await sb.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+      await sub.unsubscribe();
+    }
+    toast('Notifications désactivées', 'success');
+    renderMessages();
+  } catch (e) {
+    toast('Erreur : ' + e.message, 'error');
+  }
+}
+
+// Affiche l'état des notifications (banner) dans la vue Messages, joueur uniquement
+async function renderPushBanner() {
+  const el = document.getElementById('push-banner');
+  if (!el) return;
+  const status = pushEnvironmentStatus();
+  if (status === 'ios-needs-install') {
+    el.innerHTML = '<div class="card" style="border:1px solid var(--orange); margin-bottom:12px;">' +
+      '<div style="font-size:13px;">📲 Pour recevoir les rappels sur iPhone : appuie sur <b>Partager</b> puis <b>Sur l\'écran d\'accueil</b>, puis rouvre StatField depuis l\'icône ajoutée pour activer les notifications.</div></div>';
+    return;
+  }
+  if (status === 'unsupported') {
+    el.innerHTML = '<div class="card" style="border:1px solid var(--border); margin-bottom:12px;">' +
+      '<div style="font-size:13px; color:var(--text-dim);">🔕 Notifications non disponibles sur ce navigateur/appareil.</div></div>';
+    return;
+  }
+  const sub = await getCurrentPushSubscription();
+  if (sub) {
+    el.innerHTML = '<div class="card" style="border:1px solid var(--green); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">' +
+      '<div style="font-size:13px;">🔔 Notifications activées sur cet appareil</div>' +
+      '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="disablePushNotifications()">Désactiver</button></div>';
+  } else {
+    el.innerHTML = '<div class="card" style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">' +
+      '<div style="font-size:13px;">🔕 Reçois les rappels directement sur ton téléphone</div>' +
+      '<button class="btn" style="padding:4px 12px; font-size:12px;" onclick="enablePushNotifications()">🔔 Activer</button></div>';
+  }
+}
+
 function onMsgCibleChange() {
   const type = document.getElementById('msg-cible-type').value;
   document.getElementById('msg-cible-group-wrap').style.display = (type === 'group') ? '' : 'none';
@@ -4592,6 +4704,7 @@ async function sendMessage() {
   if (error) { toast('Erreur envoi : ' + error.message, 'error'); return; }
   // Ajouter localement
   if (data && data[0]) state.bdd_messages.unshift(data[0]);
+  const pushChecked = document.getElementById('msg-push-notify').checked;
   // Réinitialiser le formulaire
   document.getElementById('msg-titre').value = '';
   document.getElementById('msg-contenu').value = '';
@@ -4599,6 +4712,24 @@ async function sendMessage() {
   onMsgCibleChange();
   toast('Message envoyé', 'success');
   renderMessages();
+  if (pushChecked) sendPushForMessage(row, titre, contenu);
+}
+
+// Envoie le message aussi en notification push (best-effort : n'échoue jamais le message lui-même)
+async function sendPushForMessage(row, titre, contenu) {
+  const targets = getMessageTargets(row);
+  if (!targets.length) return;
+  try {
+    const { data, error } = await sb.functions.invoke('send-push', {
+      body: { org: currentOrg, joueurs: targets, title: titre || 'StatField', body: contenu }
+    });
+    if (error) { toast('Message envoyé, mais notification push échouée : ' + error.message, 'error'); return; }
+    if (data && typeof data.sent === 'number') {
+      toast('🔔 Notification envoyée à ' + data.sent + '/' + data.total + ' joueur(s) abonné(s)', 'success');
+    }
+  } catch (e) {
+    toast('Message envoyé, mais notification push échouée : ' + e.message, 'error');
+  }
 }
 
 async function deleteMessage(id) {
@@ -4630,6 +4761,9 @@ function renderMessages() {
   const composeCard = document.getElementById('messages-compose-card');
   if (composeCard) composeCard.style.display = isStaff ? '' : 'none';
   if (isStaff) onMsgCibleChange();
+
+  const pushBannerEl = document.getElementById('push-banner');
+  if (pushBannerEl) { pushBannerEl.style.display = isStaff ? 'none' : ''; if (!isStaff) renderPushBanner(); }
 
   const listEl = document.getElementById('messages-list');
   const titleEl = document.getElementById('messages-list-title');
