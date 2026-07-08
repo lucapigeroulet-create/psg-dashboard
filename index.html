@@ -8689,7 +8689,7 @@ let gpsSessionSortDir = -1; // -1 = décroissant, 1 = croissant
 // État du contrôle ratio de travail (rapport de séance)
 let gpsSessionRatioWeek = '';
 let gpsSessionRatioDay = '';
-let gpsSessionRatioShow = true;
+let gpsSessionPctMode = 'all'; // 'all' | 'best' | 'ratio' | 'none'
 
 // Indicateurs GPS clés affichés
 const GPS_METRICS = [
@@ -8851,8 +8851,8 @@ function gpsSetRatioDay() {
   gpsSessionRatioDay = document.getElementById('gps-ratio-day').value;
   renderGPSSession();
 }
-function gpsToggleRatioShow() {
-  gpsSessionRatioShow = document.getElementById('gps-ratio-toggle').checked;
+function gpsSetPctMode() {
+  gpsSessionPctMode = document.getElementById('gps-pct-mode').value;
   renderGPSSession();
 }
 // En-tête de colonne cliquable avec indicateur de tri
@@ -9550,8 +9550,12 @@ function renderGPSSession() {
     html += '<option value="' + d + '"' + (gpsSessionRatioDay === d ? ' selected' : '') + '>' + d + '</option>';
   });
   html += '</select></div>';
-  html += '<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);cursor:pointer;padding-bottom:6px;">';
-  html += '<input type="checkbox" id="gps-ratio-toggle" onchange="gpsToggleRatioShow()"' + (gpsSessionRatioShow ? ' checked' : '') + '> Afficher les % dans le tableau</label>';
+  html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:4px;">Pourcentages affichés</label>';
+  html += '<select id="gps-pct-mode" onchange="gpsSetPctMode()" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">';
+  [['all', 'Tout (meilleur match + ratio)'], ['best', 'Meilleur match uniquement'], ['ratio', 'Ratio uniquement'], ['none', 'Aucun']].forEach(opt => {
+    html += '<option value="' + opt[0] + '"' + (gpsSessionPctMode === opt[0] ? ' selected' : '') + '>' + opt[1] + '</option>';
+  });
+  html += '</select></div>';
   html += '</div></div>';
 
   // Filtre poste (cases à cocher)
@@ -9605,20 +9609,21 @@ function renderGPSSession() {
 
   // Vérifier si des ratios best match sont disponibles pour cette séance
   const hasBestMatch = rows.some(r => getBestMatchRow(r.joueur) !== null);
-  const showRatio = hasBestMatch && gpsSessionRatioShow && !!gpsSessionRatioWeek && !!gpsSessionRatioDay;
+  const showBestPct = hasBestMatch && (gpsSessionPctMode === 'all' || gpsSessionPctMode === 'best');
+  const showRatio = hasBestMatch && !!gpsSessionRatioWeek && !!gpsSessionRatioDay && (gpsSessionPctMode === 'all' || gpsSessionPctMode === 'ratio');
 
   // Tableau par joueur avec barres de % (valeurs en mètres)
   const maxes = {};
   GPS_METRICS.forEach(m => { maxes[m.key] = Math.max.apply(null, rows.map(r => gpsDisplayVal(r, m)).concat([0])); });
 
   html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr>' + gpsSortableTh('joueur', 'Joueur', 'text-align:left;');
-  if (hasBestMatch) {
+  if (showBestPct) {
     html += gpsSortableTh('volume', '📦 Volume', 'background:#1d4353;color:#34d399;font-size:10px;white-space:nowrap;');
     html += gpsSortableTh('intensity', '⚡ Intensité', 'background:#354045;color:#fbbf24;font-size:10px;white-space:nowrap;');
   }
   GPS_METRICS.forEach(m => {
     html += gpsSortableTh(m.key, m.label + (m.unit ? '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + m.unit + '</span>' : ''), '');
-    if (hasBestMatch && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
+    if (showBestPct && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
       html += gpsSortableTh('best:' + m.key, '% Best', 'font-size:10px;color:var(--accent-light);white-space:nowrap;');
     }
     if (showRatio) {
@@ -9638,7 +9643,7 @@ function renderGPSSession() {
   });
   rows.forEach(r => {
     html += '<tr><td style="text-align:left;font-weight:600;">' + escapeHtml(r.joueur) + '</td>';
-    if (hasBestMatch) {
+    if (showBestPct) {
       const vol = getVolumeScore(r.joueur, r);
       const inten = getIntensityScore(r.joueur, r);
       html += '<td style="text-align:center;background:rgba(52,211,153,0.08);">' +
@@ -9653,7 +9658,7 @@ function renderGPSSession() {
       html += '<td style="text-align:center;position:relative;">' +
         '<div style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;background:rgba(0,163,255,0.18);"></div>' +
         '<span style="position:relative;">' + (v > 0 ? display : '·') + '</span></td>';
-      if (hasBestMatch && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
+      if (showBestPct && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
         const ratio = getBestMatchRatio(r.joueur, m.key, r);
         const col = ratioColor(ratio);
         const lbl = ratio !== null ? ratioLabel(ratio) : '—';
@@ -9677,13 +9682,13 @@ function renderGPSSession() {
   });
   html += '</tbody></table></div>';
 
-  if (hasBestMatch) {
+  if (showBestPct) {
     html += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;padding:0 2px;">';
     html += '📦 <b style="color:#34d399;">Volume</b> = moyenne (Dist + HSR + Sprint + ΣAcc:Déc) / référence × 100 &nbsp;·&nbsp; ';
     html += '⚡ <b style="color:#fbbf24;">Intensité</b> = même calcul normalisé par minute &nbsp;·&nbsp; ';
     html += '<a href="#" onclick="document.querySelector(\'.nav-btn[data-view=best-match]\').click();return false;" style="color:var(--accent-light);">Gérer les références →</a>';
     html += '</div>';
-  } else {
+  } else if (!hasBestMatch) {
     html += '<div style="font-size:11px;color:var(--text-dim);margin-top:6px;padding:0 2px;">💡 Configure un meilleur match par joueur pour voir les scores Volume & Intensité. <a href="#" onclick="document.querySelector(\'.nav-btn[data-view=best-match]\').click();return false;" style="color:var(--accent-light);">Configurer →</a></div>';
   }
   if (showRatio) {
