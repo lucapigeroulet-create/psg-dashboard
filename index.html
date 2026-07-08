@@ -9621,12 +9621,11 @@ function renderGPSSession() {
     if (hasBestMatch && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
       html += gpsSortableTh('best:' + m.key, '% Best', 'font-size:10px;color:var(--accent-light);white-space:nowrap;');
     }
+    if (showRatio) {
+      const wm = WORK_RATIO_METRICS.find(x => x.key === m.key);
+      if (wm) html += gpsSortableTh('ratio:' + wm.key, wm.shortLabel, 'background:#2d2153;color:#a78bfa;font-size:10px;white-space:nowrap;');
+    }
   });
-  if (showRatio) {
-    WORK_RATIO_METRICS.forEach(m => {
-      html += gpsSortableTh('ratio:' + m.key, m.shortLabel, 'background:#2d2153;color:#a78bfa;font-size:10px;white-space:nowrap;');
-    });
-  }
   html += '</tr></thead><tbody>';
 
   rows.sort((a, b) => {
@@ -9660,19 +9659,20 @@ function renderGPSSession() {
         const lbl = ratio !== null ? ratioLabel(ratio) : '—';
         html += '<td style="text-align:center;font-weight:700;color:' + col + ';font-size:11px;">' + lbl + '</td>';
       }
+      if (showRatio) {
+        const wm = WORK_RATIO_METRICS.find(x => x.key === m.key);
+        if (wm) {
+          const target = getWorkRatioTarget(gpsSessionRatioWeek, gpsSessionRatioDay, wm.key);
+          const actual = getWorkRatioActual(r.joueur, wm.key, r);
+          const st = workRatioStatus(actual, target);
+          const actualPct = actual !== null ? Math.round(actual * 100) + '%' : '—';
+          const targetPct = target !== null ? Math.round(target * 100) + '%' : '—';
+          html += '<td style="text-align:center;background:rgba(167,139,250,0.06);">' +
+            '<b style="color:' + st.color + ';font-size:12px;">' + actualPct + (st.label !== '—' && st.label !== 'OK' ? ' ' + st.label : '') + '</b>' +
+            '<br><span style="font-size:9px;color:var(--text-dim);">cible ' + targetPct + '</span></td>';
+        }
+      }
     });
-    if (showRatio) {
-      WORK_RATIO_METRICS.forEach(m => {
-        const target = getWorkRatioTarget(gpsSessionRatioWeek, gpsSessionRatioDay, m.key);
-        const actual = getWorkRatioActual(r.joueur, m.key, r);
-        const st = workRatioStatus(actual, target);
-        const actualPct = actual !== null ? Math.round(actual * 100) + '%' : '—';
-        const targetPct = target !== null ? Math.round(target * 100) + '%' : '—';
-        html += '<td style="text-align:center;background:rgba(167,139,250,0.06);">' +
-          '<b style="color:' + st.color + ';font-size:12px;">' + actualPct + (st.label !== '—' && st.label !== 'OK' ? ' ' + st.label : '') + '</b>' +
-          '<br><span style="font-size:9px;color:var(--text-dim);">cible ' + targetPct + '</span></td>';
-      });
-    }
     html += '</tr>';
   });
   html += '</tbody></table></div>';
