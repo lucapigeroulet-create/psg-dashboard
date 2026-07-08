@@ -8667,6 +8667,13 @@ async function deleteGPSSession(date, seance) {
 let gpsSelectedPlayers = [];
 let gpsSessionFilterKey = '';
 let gpsSessionChartMetric = 'distance_km';
+// État du filtre poste (rapport de séance)
+let gpsSelectedPostes = [];
+let gpsSessionAllPlayers = [];
+let gpsSessionAllPostes = [];
+// État du tri du tableau (rapport de séance)
+let gpsSessionSortKey = 'distance_km';
+let gpsSessionSortDir = -1; // -1 = décroissant, 1 = croissant
 
 // Indicateurs GPS clés affichés
 const GPS_METRICS = [
@@ -8703,13 +8710,46 @@ function gpsTogglePlayer(player) {
   renderGPSSession();
 }
 function gpsSelectAllPlayers(all) {
-  if (all) {
-    // Re-sélectionner tous les joueurs de la séance courante
-    gpsSessionFilterKey = ''; // force le recalcul de la liste complète
+  gpsSelectedPlayers = all ? gpsSessionAllPlayers.slice() : [];
+  renderGPSSession();
+}
+// Gestion du filtre poste (rapport de séance)
+function gpsTogglePoste(poste) {
+  const i = gpsSelectedPostes.indexOf(poste);
+  if (i >= 0) gpsSelectedPostes.splice(i, 1);
+  else gpsSelectedPostes.push(poste);
+  renderGPSSession();
+}
+function gpsSelectAllPostes(all) {
+  gpsSelectedPostes = all ? gpsSessionAllPostes.slice() : [];
+  renderGPSSession();
+}
+// Tri du tableau (rapport de séance) : clic sur une colonne
+function gpsSortSession(key) {
+  if (gpsSessionSortKey === key) {
+    gpsSessionSortDir = -gpsSessionSortDir;
   } else {
-    gpsSelectedPlayers = [];
+    gpsSessionSortKey = key;
+    gpsSessionSortDir = 1;
   }
   renderGPSSession();
+}
+// Valeur d'une ligne pour une clé de tri donnée
+function gpsSessionSortValue(r, key) {
+  if (key === 'joueur') return (r.joueur || '').toLowerCase();
+  if (key === 'volume') { const v = getVolumeScore(r.joueur, r); return v === null ? -Infinity : v; }
+  if (key === 'intensity') { const v = getIntensityScore(r.joueur, r); return v === null ? -Infinity : v; }
+  if (key.indexOf('best:') === 0) {
+    const ratio = getBestMatchRatio(r.joueur, key.slice(5), r);
+    return ratio === null ? -Infinity : ratio;
+  }
+  const metric = GPS_METRICS.find(m => m.key === key);
+  return metric ? gpsDisplayVal(r, metric) : 0;
+}
+// En-tête de colonne cliquable avec indicateur de tri
+function gpsSortableTh(key, label, extraStyle) {
+  const arrow = gpsSessionSortKey === key ? (gpsSessionSortDir === 1 ? ' ▲' : ' ▼') : '';
+  return '<th onclick="gpsSortSession(\'' + key + '\')" style="cursor:pointer;user-select:none;' + (extraStyle || '') + '" title="Trier">' + label + arrow + '</th>';
 }
 // Changement de métrique du graphique principal
 function gpsChangeChartMetric() {
@@ -9357,14 +9397,21 @@ function renderGPSSession() {
 
   // Liste des joueurs de cette séance
   const allSessionPlayers = uniqueSorted(allRows.map(r => r.joueur));
+  const posteOfPlayer = p => (getJoueurInfo(p).poste || 'Sans poste');
+  const allSessionPostes = uniqueSorted(allSessionPlayers.map(posteOfPlayer));
   // Réinitialiser la sélection si on a changé de séance/split
   const sessionKey = date + '||' + seanceTitle + '||' + selectedSplit;
   if (gpsSessionFilterKey !== sessionKey) {
     gpsSessionFilterKey = sessionKey;
     gpsSelectedPlayers = allSessionPlayers.slice(); // tous sélectionnés par défaut
+    gpsSelectedPostes = allSessionPostes.slice(); // tous les postes sélectionnés par défaut
   }
-  // Appliquer le filtre joueurs
-  const rows = allRows.filter(r => gpsSelectedPlayers.indexOf(r.joueur) >= 0);
+  gpsSessionAllPlayers = allSessionPlayers;
+  gpsSessionAllPostes = allSessionPostes;
+  // Joueurs visibles après filtre poste
+  const postePlayers = allSessionPlayers.filter(p => gpsSelectedPostes.indexOf(posteOfPlayer(p)) >= 0);
+  // Appliquer le filtre joueurs + le filtre poste
+  const rows = allRows.filter(r => gpsSelectedPlayers.indexOf(r.joueur) >= 0 && postePlayers.indexOf(r.joueur) >= 0);
 
   // Moyennes (recalculées sur les joueurs filtrés)
   const n = rows.length || 1;
@@ -9376,15 +9423,33 @@ function renderGPSSession() {
   let html = '<div class="card">';
   html += '<h2>Rapport de séance — ' + formatDateFR(date) + (titles.length ? ' · ' + escapeHtml(titles[0]) : '') + escapeHtml(splitLabel) + '</h2>';
 
+  // Filtre poste (cases à cocher)
+  if (allSessionPostes.length > 1) {
+    html += '<div style="margin-bottom:10px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+    html += '<span style="font-size:12px;color:var(--text-dim);font-weight:600;">Filtrer par poste (' + postePlayers.length + '/' + allSessionPlayers.length + ')</span>';
+    html += '<div><button class="btn btn-secondary" style="padding:2px 10px;font-size:11px;" onclick="gpsSelectAllPostes(true)">Tous</button> ';
+    html += '<button class="btn btn-secondary" style="padding:2px 10px;font-size:11px;" onclick="gpsSelectAllPostes(false)">Aucun</button></div>';
+    html += '</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    allSessionPostes.forEach(poste => {
+      const checked = gpsSelectedPostes.indexOf(poste) >= 0;
+      html += '<button onclick="gpsTogglePoste(\'' + poste.replace(/'/g, "\\'") + '\')" style="padding:4px 12px;border-radius:14px;font-size:12px;cursor:pointer;border:1px solid ' +
+        (checked ? 'var(--accent)' : 'var(--border)') + ';background:' + (checked ? 'var(--accent)' : 'var(--bg-elevated)') + ';color:' + (checked ? 'white' : 'var(--text-dim)') + ';">' +
+        (checked ? '✓ ' : '') + escapeHtml(poste) + '</button>';
+    });
+    html += '</div></div>';
+  }
+
   // Filtre joueurs (cases à cocher)
   html += '<div style="margin-bottom:14px;">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
-  html += '<span style="font-size:12px;color:var(--text-dim);font-weight:600;">Filtrer les joueurs (' + rows.length + '/' + allSessionPlayers.length + ')</span>';
+  html += '<span style="font-size:12px;color:var(--text-dim);font-weight:600;">Filtrer les joueurs (' + rows.length + '/' + postePlayers.length + ')</span>';
   html += '<div><button class="btn btn-secondary" style="padding:2px 10px;font-size:11px;" onclick="gpsSelectAllPlayers(true)">Tout</button> ';
   html += '<button class="btn btn-secondary" style="padding:2px 10px;font-size:11px;" onclick="gpsSelectAllPlayers(false)">Aucun</button></div>';
   html += '</div>';
   html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
-  allSessionPlayers.forEach(p => {
+  postePlayers.forEach(p => {
     const checked = gpsSelectedPlayers.indexOf(p) >= 0;
     html += '<button onclick="gpsTogglePlayer(\'' + p.replace(/'/g, "\\'") + '\')" style="padding:4px 12px;border-radius:14px;font-size:12px;cursor:pointer;border:1px solid ' +
       (checked ? 'var(--accent)' : 'var(--border)') + ';background:' + (checked ? 'var(--accent)' : 'var(--bg-elevated)') + ';color:' + (checked ? 'white' : 'var(--text-dim)') + ';">' +
@@ -9414,20 +9479,27 @@ function renderGPSSession() {
   const maxes = {};
   GPS_METRICS.forEach(m => { maxes[m.key] = Math.max.apply(null, rows.map(r => gpsDisplayVal(r, m)).concat([0])); });
 
-  html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th>';
+  html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr>' + gpsSortableTh('joueur', 'Joueur', 'text-align:left;');
   if (hasBestMatch) {
-    html += '<th style="background:rgba(52,211,153,0.12);color:#34d399;font-size:10px;white-space:nowrap;">📦 Volume</th>';
-    html += '<th style="background:rgba(251,191,36,0.12);color:#fbbf24;font-size:10px;white-space:nowrap;">⚡ Intensité</th>';
+    html += gpsSortableTh('volume', '📦 Volume', 'background:#1d4353;color:#34d399;font-size:10px;white-space:nowrap;');
+    html += gpsSortableTh('intensity', '⚡ Intensité', 'background:#354045;color:#fbbf24;font-size:10px;white-space:nowrap;');
   }
   GPS_METRICS.forEach(m => {
-    html += '<th>' + m.label + (m.unit ? '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + m.unit + '</span>' : '') + '</th>';
+    html += gpsSortableTh(m.key, m.label + (m.unit ? '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + m.unit + '</span>' : ''), '');
     if (hasBestMatch && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
-      html += '<th style="font-size:10px;color:var(--accent-light);white-space:nowrap;">% Best</th>';
+      html += gpsSortableTh('best:' + m.key, '% Best', 'font-size:10px;color:var(--accent-light);white-space:nowrap;');
     }
   });
   html += '</tr></thead><tbody>';
 
-  rows.sort((a, b) => gpsVal(b, 'distance_km') - gpsVal(a, 'distance_km'));
+  rows.sort((a, b) => {
+    const va = gpsSessionSortValue(a, gpsSessionSortKey);
+    const vb = gpsSessionSortValue(b, gpsSessionSortKey);
+    if (typeof va === 'string' || typeof vb === 'string') {
+      return gpsSessionSortDir * String(va).localeCompare(String(vb));
+    }
+    return gpsSessionSortDir * (va - vb);
+  });
   rows.forEach(r => {
     html += '<tr><td style="text-align:left;font-weight:600;">' + escapeHtml(r.joueur) + '</td>';
     if (hasBestMatch) {
