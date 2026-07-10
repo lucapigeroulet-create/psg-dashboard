@@ -8972,6 +8972,113 @@ function getPlayerMaxVmax(player) {
   return rows.reduce((max, r) => Math.max(max, gpsVal(r, 'top_speed')), 0);
 }
 
+// ============================================================================
+// CHARGE HEBDO vs CIBLE (TT périodisation) + CROISEMENT INTERNE/EXTERNE (sRPE)
+// ============================================================================
+let gpsWTRatioWeek = 'WEEK1';
+let gpsWTScatterX = 'distance_km';
+let gpsWTScatterY = 'top_speed';
+let gpsWTHistMetrics = ['distance_km', 'hsr', 'sprint_dist_m'];
+let gpsWTRadarPlayer = '';
+let gpsWTExtMetric = 'distance_km';
+let gpsSessionExtMetric = 'distance_km';
+let gpsWIExtMetric = 'distance_km';
+
+// Métriques proposées comme "charge externe" face au sRPE
+const GPS_EXT_METRICS = [
+  { key: 'distance_km', label: 'Distance (m)', mult: 1000 },
+  { key: 'player_load', label: 'Player Load', mult: 1 },
+  { key: 'hsr', label: 'HSR (m)', mult: 1 }
+];
+
+// Statuts de charge (seuils validés : 85-115% OK, >115 surcharge, 65-85 sous-charge, <65 très bas)
+function chargeStatus(pct) {
+  if (pct === null || pct === undefined || isNaN(pct)) return null;
+  if (pct > 115) return { label: 'Surcharge', color: '#f87171', bg: 'rgba(248,113,113,.16)' };
+  if (pct >= 85) return { label: 'OK', color: '#34d399', bg: 'rgba(52,211,153,.16)' };
+  if (pct >= 65) return { label: 'Sous-charge', color: '#fbbf24', bg: 'rgba(251,191,36,.16)' };
+  return { label: 'Très bas', color: '#60a5fa', bg: 'rgba(96,165,250,.16)' };
+}
+
+// % de la cible hebdo (ligne TT de la semaine de travail) pour un joueur/métrique.
+// agg = cumuls de la semaine du joueur. Vmax : la ligne TT n'est pas cumulable,
+// la cible devient "toucher 95% de sa vmax historique au moins une fois dans la semaine".
+function getWeekTargetPct(player, metricKey, agg, weekVmax, ratioWeek) {
+  if (metricKey === 'top_speed') {
+    const maxV = getPlayerMaxVmax(player);
+    if (!maxV || !weekVmax) return null;
+    return (weekVmax / (maxV * 0.95)) * 100;
+  }
+  const bmRow = getBestMatchRow(player);
+  if (!bmRow) return null;
+  const bmVal = gpsVal(bmRow, metricKey);
+  const ratio = getWorkRatioTarget(ratioWeek, 'TT', metricKey);
+  if (!bmVal || !ratio) return null;
+  return ((agg[metricKey] || 0) / (bmVal * ratio)) * 100;
+}
+
+// sRPE cumulé par joueur sur un ensemble de dates (séances + matchs, via computeSRPE)
+function srpeByPlayerForDates(dates) {
+  const map = {};
+  computeSRPE().forEach(x => {
+    if (!dates.includes(x.date)) return;
+    map[x.joueur] = (map[x.joueur] || 0) + x.sRPE;
+  });
+  return map;
+}
+
+function medianOf(arr) {
+  if (!arr.length) return null;
+  const s = arr.slice().sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+// Plugin scatter : lignes de médiane en pointillé + nom du joueur au-dessus de chaque
+// point + libellés de quadrants (mode interne/externe uniquement)
+function gpsScatterDecorPlugin(medX, medY, quadrants) {
+  return {
+    id: 'gpsScatterDecor',
+    afterDatasetsDraw(chart) {
+      const ctx = chart.ctx, x = chart.scales.x, y = chart.scales.y;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(139,163,193,.45)';
+      ctx.setLineDash([5, 4]);
+      if (medX !== null) { ctx.beginPath(); ctx.moveTo(x.getPixelForValue(medX), y.top); ctx.lineTo(x.getPixelForValue(medX), y.bottom); ctx.stroke(); }
+      if (medY !== null) { ctx.beginPath(); ctx.moveTo(x.left, y.getPixelForValue(medY)); ctx.lineTo(x.right, y.getPixelForValue(medY)); ctx.stroke(); }
+      ctx.setLineDash([]);
+      if (quadrants) {
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#fbbf24'; ctx.fillText('Fatigue ?', x.left + 6, y.top + 12);
+        ctx.fillStyle = '#60a5fa'; ctx.fillText('Sous-sollicité', x.left + 6, y.bottom - 6);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#8ba3c1'; ctx.fillText('Charge lourde', x.right - 6, y.top + 12);
+        ctx.fillStyle = '#34d399'; ctx.fillText('Efficace', x.right - 6, y.bottom - 6);
+      }
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#e8eef6';
+      chart.data.datasets.forEach((ds, di) => {
+        const meta = chart.getDatasetMeta(di);
+        meta.data.forEach((pt, i) => {
+          const raw = ds.data[i];
+          if (raw && raw.label) ctx.fillText(raw.label, pt.x, pt.y - 9);
+        });
+      });
+      ctx.restore();
+    }
+  };
+}
+
+function gpsWTSetRatioWeek() { gpsWTRatioWeek = document.getElementById('gps-wt-ratio-week').value; renderGPSWeekTeam(); }
+function gpsWTSetScatter() { gpsWTScatterX = document.getElementById('gps-wt-sx').value; gpsWTScatterY = document.getElementById('gps-wt-sy').value; renderGPSWeekTeam(); }
+function gpsWTToggleHist(key) { const i = gpsWTHistMetrics.indexOf(key); if (i >= 0) gpsWTHistMetrics.splice(i, 1); else gpsWTHistMetrics.push(key); renderGPSWeekTeam(); }
+function gpsWTSetRadar() { gpsWTRadarPlayer = document.getElementById('gps-wt-radar-player').value; renderGPSWeekTeam(); }
+function gpsWTSetExt() { gpsWTExtMetric = document.getElementById('gps-wt-ext').value; renderGPSWeekTeam(); }
+function gpsSessionSetExt() { gpsSessionExtMetric = document.getElementById('gps-session-ext').value; renderGPSSession(); }
+function gpsWISetExt() { gpsWIExtMetric = document.getElementById('gps-wi-ext').value; renderGPSWeekIndiv(); }
+
 // Importe un CSV Catapult et stocke les métriques du meilleur match par joueur
 function onBestMatchClearCSV(player) {
   if (!state.bdd_best_match) return;
@@ -9734,6 +9841,16 @@ function renderGPSSession() {
   html += '<p style="color:var(--text-dim);font-size:12px;margin-bottom:8px;">Survole une barre pour voir le % de chaque zone dans la distance totale du joueur.</p>';
   html += '<div class="chart-container tall"><canvas id="gps-session-zones"></canvas></div></div>';
 
+  // Graphique : charge interne (sRPE) vs charge externe (GPS) sur la séance
+  html += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+  html += '<h2 style="margin:0;">Charge interne vs externe</h2>';
+  html += '<select id="gps-session-ext" onchange="gpsSessionSetExt()" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">';
+  GPS_EXT_METRICS.forEach(m => { html += '<option value="' + m.key + '"' + (gpsSessionExtMetric === m.key ? ' selected' : '') + '>' + m.label + '</option>'; });
+  html += '</select></div>';
+  html += '<p style="color:var(--text-dim);font-size:11px;margin:0 0 8px;">sRPE du jour (durée × RPE déclaré) vs charge GPS de la séance. En haut à gauche = RPE haute pour peu de volume : fatigue à surveiller. Pointillés = médianes.</p>';
+  html += '<div class="chart-container tall"><canvas id="gps-session-ie"></canvas></div>';
+  html += '<div id="gps-session-ie-note" style="color:var(--text-dim);font-size:11px;margin-top:6px;"></div></div>';
+
   document.getElementById('gps-content').innerHTML = html;
 
   // Graphique métrique au choix
@@ -9785,6 +9902,39 @@ function renderGPSSession() {
   } else {
     document.getElementById('gps-session-zones').getContext('2d').fillText('Pas de données de zones de vitesse', 20, 50);
   }
+
+  // Charge interne vs externe (séance) : sRPE du jour joint par date + joueur
+  // (les titres Catapult ne correspondent pas aux noms de séances du planning)
+  destroyChart('gps-session-ie');
+  (function() {
+    const ext = GPS_EXT_METRICS.find(m => m.key === gpsSessionExtMetric) || GPS_EXT_METRICS[0];
+    const srpeDay = {};
+    computeSRPE().forEach(x => { if (x.date === date) srpeDay[x.joueur] = (srpeDay[x.joueur] || 0) + x.sRPE; });
+    const pts = [];
+    rows.forEach(r => {
+      const extVal = gpsVal(r, ext.key) * ext.mult;
+      const srpe = srpeDay[r.joueur] || 0;
+      if (extVal > 0 && srpe > 0) pts.push({ x: Math.round(extVal), y: Math.round(srpe), label: r.joueur });
+    });
+    const note = document.getElementById('gps-session-ie-note');
+    if (pts.length < 2) {
+      if (note) note.textContent = 'Pas assez de déclarations RPE ce jour-là pour croiser les charges.';
+      return;
+    }
+    if (note && pts.length < rows.length) note.textContent = (rows.length - pts.length) + ' joueur(s) sans RPE ou sans ' + ext.label + ' non affiché(s).';
+    const medX = medianOf(pts.map(p => p.x)), medY = medianOf(pts.map(p => p.y));
+    charts['gps-session-ie'] = new Chart(document.getElementById('gps-session-ie'), {
+      type: 'scatter',
+      data: { datasets: [{ data: pts, pointRadius: 6, pointHoverRadius: 8, backgroundColor: '#00a3ff' }] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.raw.label + ' : ' + ctx.parsed.x + ' · ' + ctx.parsed.y + ' UA' } } },
+        scales: {
+          x: { title: { display: true, text: ext.label, color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+          y: { title: { display: true, text: 'sRPE (UA)', color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
+        } },
+      plugins: [gpsScatterDecorPlugin(medX, medY, true)]
+    });
+  })();
 }
 
 // ===== RAPPORT HEBDO ÉQUIPE =====
@@ -9814,15 +9964,58 @@ function renderGPSWeekTeam() {
   });
   const players = Object.values(byPlayer).sort((a, b) => (b.distance_km || 0) - (a.distance_km || 0));
 
+  const selStyle = 'background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;';
+
   let html = '<div class="card">';
-  html += '<h2>Rapport hebdomadaire équipe — Semaine ' + isoInfo.week + ' (' + formatDateRange(monday) + ')' + (group ? ' · ' + escapeHtml(group) : '') + '</h2>';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
+  html += '<h2 style="margin:0;">Rapport hebdomadaire équipe — Semaine ' + isoInfo.week + ' (' + formatDateRange(monday) + ')' + (group ? ' · ' + escapeHtml(group) : '') + '</h2>';
+  html += '<select id="gps-wt-ratio-week" onchange="gpsWTSetRatioWeek()" style="' + selStyle + '">';
+  WORK_RATIO_WEEKS.forEach(w => { html += '<option value="' + w + '"' + (gpsWTRatioWeek === w ? ' selected' : '') + '>' + w + ' — ' + WORK_RATIO_PHASE[w] + '</option>'; });
+  html += '</select></div>';
   if (players.length === 0) {
     html += '<div class="empty-state">Aucune donnée GPS pour cette semaine.</div></div>';
     document.getElementById('gps-content').innerHTML = html;
     return;
   }
 
+  // % de la cible hebdo par joueur (heatmap + graphiques) : cumul semaine ÷ (best match × ratio TT)
+  const srpeWeek = srpeByPlayerForDates(dates);
+  const heat = players.map(p => {
+    const weekVmax = Math.max.apply(null, rows.filter(r => r.joueur === p.joueur).map(r => gpsVal(r, 'top_speed')).concat([0]));
+    const pcts = {};
+    WORK_RATIO_METRICS.forEach(m => { pcts[m.key] = getWeekTargetPct(p.joueur, m.key, p, weekVmax, gpsWTRatioWeek); });
+    const avail = Object.values(pcts).filter(v => v !== null);
+    const avg = avail.length ? avail.reduce((s, v) => s + v, 0) / avail.length : null;
+    return { joueur: p.joueur, agg: p, weekVmax: weekVmax, srpe: srpeWeek[p.joueur] || 0, pcts: pcts, avg: avg, status: chargeStatus(avg) };
+  }).sort((a, b) => (b.avg === null ? -1e9 : b.avg) - (a.avg === null ? -1e9 : a.avg));
+
+  // ===== Heatmap état de charge =====
+  html += '<h3 style="margin:16px 0 6px;">🔥 État de charge — % de la cible hebdo (' + gpsWTRatioWeek + ' · ' + WORK_RATIO_PHASE[gpsWTRatioWeek] + ')</h3>';
+  html += '<p style="color:var(--text-dim);font-size:11px;margin:0 0 8px;">Cumul de la semaine ÷ cible TT du joueur (basée sur son meilleur match). Vmax : % de sa vitesse record (cible ≥95% touchée au moins une fois). "—" = pas de meilleur match configuré.</p>';
+  html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th>';
+  WORK_RATIO_METRICS.forEach(m => { html += '<th>' + m.label + '</th>'; });
+  html += '<th>Statut</th></tr></thead><tbody>';
+  heat.forEach(h => {
+    html += '<tr><td style="text-align:left;font-weight:600;">' + escapeHtml(h.joueur) + '</td>';
+    WORK_RATIO_METRICS.forEach(m => {
+      const pct = h.pcts[m.key];
+      const st = chargeStatus(pct);
+      html += '<td style="text-align:center;padding:3px 4px;">' + (st
+        ? '<span style="display:block;border-radius:4px;padding:3px 0;background:' + st.bg + ';color:' + st.color + ';">' + Math.round(pct) + '</span>'
+        : '<span style="color:var(--text-dim);">—</span>') + '</td>';
+    });
+    html += '<td style="text-align:center;font-weight:600;color:' + (h.status ? h.status.color : 'var(--text-dim)') + ';">' + (h.status ? h.status.label : '—') + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+  html += '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text-dim);margin-top:8px;">';
+  html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#f87171;vertical-align:-1px;"></span> &gt;115% surcharge</span>';
+  html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#34d399;vertical-align:-1px;"></span> 85–115% dans la cible</span>';
+  html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#fbbf24;vertical-align:-1px;"></span> 65–85% sous-charge</span>';
+  html += '<span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#60a5fa;vertical-align:-1px;"></span> &lt;65% très bas</span>';
+  html += '</div>';
+
   // Tableau cumulé par joueur (Vmax = max et non somme)
+  html += '<h3 style="margin:18px 0 6px;">Cumuls bruts de la semaine</h3>';
   html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Séances</th>';
   GPS_METRICS.forEach(m => { if (m.key !== 'top_speed' && m.key !== 'dist_per_min') html += '<th>' + m.label + '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + (m.key === 'decel_count_high' || m.key === 'power_plays' ? m.unit + ' (cumul)' : m.unit + ' (cumul)') + '</span></th>'; });
   html += '<th>Vmax<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">km/h (max)</span></th>';
@@ -9840,6 +10033,44 @@ function renderGPSWeekTeam() {
     html += '</tr>';
   });
   html += '</tbody></table></div></div>';
+
+  // ===== Nuage de points (2 variables au choix) =====
+  const scatterAxisOpts = GPS_METRICS.map(m => ({ key: m.key, label: m.label + (m.unit ? ' (' + m.unit + ')' : '') })).concat([{ key: 'srpe', label: 'sRPE (UA)' }]);
+  const axisSelect = (id, cur) => '<select id="' + id + '" onchange="gpsWTSetScatter()" style="' + selStyle + '">' +
+    scatterAxisOpts.map(o => '<option value="' + o.key + '"' + (o.key === cur ? ' selected' : '') + '>' + o.label + '</option>').join('') + '</select>';
+  html += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+  html += '<h2 style="margin:0;">Nuage de points — cumuls de la semaine</h2>';
+  html += '<div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--text-dim);">X ' + axisSelect('gps-wt-sx', gpsWTScatterX) + ' Y ' + axisSelect('gps-wt-sy', gpsWTScatterY) + '</div></div>';
+  html += '<p style="color:var(--text-dim);font-size:11px;margin:0 0 8px;">Un point par joueur, couleur = état de charge. Pointillés = médianes de l\'équipe.</p>';
+  html += '<div class="chart-container tall"><canvas id="gps-wt-scatter"></canvas></div></div>';
+
+  // ===== Histogramme % de la cible =====
+  html += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+  html += '<h2 style="margin:0;">Histogramme — % de la cible hebdo</h2>';
+  html += '<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;">';
+  WORK_RATIO_METRICS.filter(m => m.key !== 'top_speed').forEach(m => {
+    html += '<label style="cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" onchange="gpsWTToggleHist(\'' + m.key + '\')"' + (gpsWTHistMetrics.includes(m.key) ? ' checked' : '') + '>' + m.label + '</label>';
+  });
+  html += '</div></div>';
+  html += '<div class="chart-container tall"><canvas id="gps-wt-hist"></canvas></div></div>';
+
+  // ===== Radar + interne/externe =====
+  html += '<div class="grid-2">';
+  html += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+  html += '<h2 style="margin:0;">Profil radar</h2>';
+  html += '<select id="gps-wt-radar-player" onchange="gpsWTSetRadar()" style="' + selStyle + '">';
+  heat.forEach(h => { html += '<option value="' + escapeHtml(h.joueur) + '"' + (h.joueur === gpsWTRadarPlayer ? ' selected' : '') + '>' + escapeHtml(h.joueur) + '</option>'; });
+  html += '</select></div>';
+  html += '<div class="chart-container tall"><canvas id="gps-wt-radar"></canvas></div></div>';
+  html += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+  html += '<h2 style="margin:0;">Interne vs externe</h2>';
+  html += '<select id="gps-wt-ext" onchange="gpsWTSetExt()" style="' + selStyle + '">';
+  GPS_EXT_METRICS.forEach(m => { html += '<option value="' + m.key + '"' + (gpsWTExtMetric === m.key ? ' selected' : '') + '>' + m.label + '</option>'; });
+  html += '</select></div>';
+  html += '<p style="color:var(--text-dim);font-size:11px;margin:0 0 8px;">sRPE hebdo (charge interne) vs GPS (charge externe). En haut à gauche = RPE haute pour peu de volume : fatigue à surveiller.</p>';
+  html += '<div class="chart-container tall"><canvas id="gps-wt-ie"></canvas></div>';
+  html += '<div id="gps-wt-ie-note" style="color:var(--text-dim);font-size:11px;margin-top:6px;"></div></div>';
+  html += '</div>';
 
   // Graphiques
   html += '<div class="card"><h2>Distance hebdomadaire par joueur</h2><div class="chart-container tall"><canvas id="gps-week-dist"></canvas></div></div>';
@@ -9859,6 +10090,102 @@ function renderGPSWeekTeam() {
     data: { labels: players.map(p => p.joueur), datasets: [{ label: 'HSR (m)', data: players.map(p => Math.round(p.hsr || 0)), backgroundColor: '#f97316', borderRadius: 4 }] },
     options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }, y: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } } } }
   });
+
+  // Valeur hebdo d'un joueur pour un axe du nuage de points
+  const wtVal = (h, key) => {
+    if (key === 'srpe') return h.srpe;
+    if (key === 'top_speed') return h.weekVmax;
+    if (key === 'dist_per_min') { const min = h.agg.duree_min || 0; return min > 0 ? (h.agg.distance_km || 0) * 1000 / min : 0; }
+    const m = GPS_METRICS.find(x => x.key === key);
+    return (h.agg[key] || 0) * (m ? (m.mult || 1) : 1);
+  };
+  const axisLabel = key => { const o = scatterAxisOpts.find(a => a.key === key); return o ? o.label : key; };
+
+  // Nuage de points 2 variables
+  destroyChart('gps-wt-scatter');
+  (function() {
+    const pts = heat.map(h => ({ x: +wtVal(h, gpsWTScatterX).toFixed(1), y: +wtVal(h, gpsWTScatterY).toFixed(1), label: h.joueur }));
+    const medX = medianOf(pts.map(p => p.x)), medY = medianOf(pts.map(p => p.y));
+    charts['gps-wt-scatter'] = new Chart(document.getElementById('gps-wt-scatter'), {
+      type: 'scatter',
+      data: { datasets: [{ data: pts, pointRadius: 6, pointHoverRadius: 8, backgroundColor: heat.map(h => h.status ? h.status.color : '#8ba3c1') }] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.raw.label + ' : ' + ctx.parsed.x + ' · ' + ctx.parsed.y } } },
+        scales: {
+          x: { title: { display: true, text: axisLabel(gpsWTScatterX), color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+          y: { title: { display: true, text: axisLabel(gpsWTScatterY), color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
+        } },
+      plugins: [gpsScatterDecorPlugin(medX, medY, false)]
+    });
+  })();
+
+  // Histogramme % de la cible
+  destroyChart('gps-wt-hist');
+  (function() {
+    const HIST_COLORS = { distance_km: '#00a3ff', hsr: '#f97316', sprint_dist_m: '#a78bfa', decel_count_high: '#34d399', power_plays: '#f472b6' };
+    const metrics = WORK_RATIO_METRICS.filter(m => m.key !== 'top_speed' && gpsWTHistMetrics.includes(m.key));
+    const ds = metrics.map(m => ({ label: m.label, data: heat.map(h => h.pcts[m.key] === null ? null : Math.round(h.pcts[m.key])), backgroundColor: HIST_COLORS[m.key] || '#8ba3c1', borderRadius: 3 }));
+    ds.push({ type: 'line', label: 'Cible 100%', data: heat.map(() => 100), borderColor: '#f87171', borderDash: [6, 4], pointRadius: 0, borderWidth: 1.5, fill: false });
+    charts['gps-wt-hist'] = new Chart(document.getElementById('gps-wt-hist'), {
+      type: 'bar',
+      data: { labels: heat.map(h => h.joueur), datasets: ds },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#e8eef6' } }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ' : ' + ctx.parsed.y + '%' } } },
+        scales: {
+          x: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } },
+          y: { beginAtZero: true, title: { display: true, text: '% de la cible hebdo', color: '#8ba3c1' }, ticks: { color: '#8ba3c1', callback: v => v + '%' }, grid: { color: '#1f3a5f' } }
+        } }
+    });
+  })();
+
+  // Radar profil joueur vs cible 100% + moyenne équipe
+  destroyChart('gps-wt-radar');
+  (function() {
+    const player = (gpsWTRadarPlayer && heat.some(h => h.joueur === gpsWTRadarPlayer)) ? gpsWTRadarPlayer : heat[0].joueur;
+    const sel = document.getElementById('gps-wt-radar-player');
+    if (sel) sel.value = player;
+    const h = heat.find(x => x.joueur === player);
+    const labels = WORK_RATIO_METRICS.map(m => m.label);
+    const pVals = WORK_RATIO_METRICS.map(m => h.pcts[m.key] === null ? null : Math.round(h.pcts[m.key]));
+    const avgVals = WORK_RATIO_METRICS.map(m => { const vs = heat.map(x => x.pcts[m.key]).filter(v => v !== null); return vs.length ? Math.round(vs.reduce((s, v) => s + v, 0) / vs.length) : null; });
+    charts['gps-wt-radar'] = new Chart(document.getElementById('gps-wt-radar'), {
+      type: 'radar',
+      data: { labels: labels, datasets: [
+        { label: player, data: pVals, borderColor: '#00a3ff', backgroundColor: 'rgba(0,163,255,.15)', pointBackgroundColor: '#00a3ff', borderWidth: 2 },
+        { label: 'Moyenne équipe', data: avgVals, borderColor: '#8ba3c1', backgroundColor: 'rgba(139,163,193,.06)', pointBackgroundColor: '#8ba3c1', pointRadius: 2, borderWidth: 1 },
+        { label: 'Cible 100%', data: labels.map(() => 100), borderColor: '#34d399', borderDash: [6, 4], pointRadius: 0, backgroundColor: 'transparent', borderWidth: 1.5 }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#e8eef6', font: { size: 11 } } } },
+        scales: { r: { min: 0, suggestedMax: 150, ticks: { color: '#8ba3c1', backdropColor: 'transparent', callback: v => v + '%' }, grid: { color: '#1f3a5f' }, angleLines: { color: '#1f3a5f' }, pointLabels: { color: '#e8eef6', font: { size: 11 } } } } }
+    });
+  })();
+
+  // Interne (sRPE) vs externe (GPS)
+  destroyChart('gps-wt-ie');
+  (function() {
+    const ext = GPS_EXT_METRICS.find(m => m.key === gpsWTExtMetric) || GPS_EXT_METRICS[0];
+    const withRpe = heat.filter(h => h.srpe > 0 && (h.agg[ext.key] || 0) > 0);
+    const note = document.getElementById('gps-wt-ie-note');
+    if (withRpe.length < 2) {
+      if (note) note.textContent = 'Pas assez de déclarations RPE cette semaine pour croiser les charges.';
+      return;
+    }
+    if (note && withRpe.length < heat.length) note.textContent = (heat.length - withRpe.length) + ' joueur(s) sans RPE ou sans ' + ext.label + ' non affiché(s).';
+    const pts = withRpe.map(h => ({ x: Math.round((h.agg[ext.key] || 0) * ext.mult), y: Math.round(h.srpe), label: h.joueur }));
+    const medX = medianOf(pts.map(p => p.x)), medY = medianOf(pts.map(p => p.y));
+    charts['gps-wt-ie'] = new Chart(document.getElementById('gps-wt-ie'), {
+      type: 'scatter',
+      data: { datasets: [{ data: pts, pointRadius: 6, pointHoverRadius: 8, backgroundColor: withRpe.map(h => h.status ? h.status.color : '#8ba3c1') }] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.raw.label + ' : ' + ctx.parsed.x + ' · ' + ctx.parsed.y + ' UA' } } },
+        scales: {
+          x: { title: { display: true, text: ext.label, color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+          y: { title: { display: true, text: 'sRPE (UA)', color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
+        } },
+      plugins: [gpsScatterDecorPlugin(medX, medY, true)]
+    });
+  })();
 }
 
 // ===== RAPPORT HEBDO INDIVIDUEL =====
@@ -9922,6 +10249,15 @@ function renderGPSWeekIndiv() {
   html += '<div class="card"><h2>Distance par séance</h2><div class="chart-container"><canvas id="gps-indiv-daily"></canvas></div></div>';
   html += '</div>';
 
+  // Charge interne vs externe jour par jour
+  html += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+  html += '<h2 style="margin:0;">Charge interne vs externe — jour par jour</h2>';
+  html += '<select id="gps-wi-ext" onchange="gpsWISetExt()" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">';
+  GPS_EXT_METRICS.forEach(m => { html += '<option value="' + m.key + '"' + (gpsWIExtMetric === m.key ? ' selected' : '') + '>' + m.label + '</option>'; });
+  html += '</select></div>';
+  html += '<p style="color:var(--text-dim);font-size:11px;margin:0 0 8px;">Barres = charge externe GPS, courbe = sRPE (charge interne ressentie). Quand la courbe monte alors que les barres baissent, la fatigue s\'accumule.</p>';
+  html += '<div class="chart-container tall"><canvas id="gps-wi-ie"></canvas></div></div>';
+
   document.getElementById('gps-content').innerHTML = html;
 
   // Zones (camembert)
@@ -9944,6 +10280,31 @@ function renderGPSWeekIndiv() {
     data: { labels: rows.map(r => formatDateFR(r.date)), datasets: [{ label: 'Distance (m)', data: rows.map(r => Math.round(gpsVal(r, 'distance_km') * 1000)), backgroundColor: '#00a3ff', borderRadius: 4 }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }, y: { beginAtZero: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } } } }
   });
+
+  // Interne (sRPE, courbe) vs externe (GPS, barres) jour par jour — double axe
+  destroyChart('gps-wi-ie');
+  (function() {
+    const ext = GPS_EXT_METRICS.find(m => m.key === gpsWIExtMetric) || GPS_EXT_METRICS[0];
+    const srpePerDay = {};
+    computeSRPE().forEach(x => { if (x.joueur === player && dates.includes(x.date)) srpePerDay[x.date] = (srpePerDay[x.date] || 0) + x.sRPE; });
+    const extPerDay = dates.map(d => Math.round(rows.filter(r => r.date === d).reduce((s, r) => s + gpsVal(r, ext.key), 0) * ext.mult));
+    const srpeVals = dates.map(d => srpePerDay[d] ? Math.round(srpePerDay[d]) : null);
+    const dayLabels = dates.map(d => formatDateFR(d));
+    charts['gps-wi-ie'] = new Chart(document.getElementById('gps-wi-ie'), {
+      type: 'bar',
+      data: { labels: dayLabels, datasets: [
+        { label: ext.label, data: extPerDay, backgroundColor: 'rgba(0,163,255,.55)', borderRadius: 4, yAxisID: 'y', order: 2 },
+        { type: 'line', label: 'sRPE (UA)', data: srpeVals, borderColor: '#f87171', backgroundColor: '#f87171', pointRadius: 4, borderWidth: 2, spanGaps: true, yAxisID: 'y1', order: 1 }
+      ] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#e8eef6' } } },
+        scales: {
+          x: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } },
+          y: { beginAtZero: true, position: 'left', title: { display: true, text: ext.label, color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+          y1: { beginAtZero: true, position: 'right', title: { display: true, text: 'sRPE (UA)', color: '#f87171' }, ticks: { color: '#f87171' }, grid: { drawOnChartArea: false } }
+        } }
+    });
+  })();
 }
 
 // ===== DISTANCE VS INTENSITÉ (HSR) =====
