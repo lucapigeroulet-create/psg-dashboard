@@ -8771,7 +8771,13 @@ function getWorkRatioTarget(week, day, metricKey) {
   return (v === undefined || v === null || v === 0) ? null : v;
 }
 // Ratio réel du joueur pour cette séance = valeur totale de la séance / valeur totale du meilleur match (pas de normalisation par minute, cohérent avec le tableau de périodisation)
+// Exception Vmax : base = vitesse max sur l'ensemble des données GPS du joueur, pas celle du meilleur match.
 function getWorkRatioActual(player, metricKey, currentRow) {
+  if (metricKey === 'top_speed') {
+    const maxVmax = getPlayerMaxVmax(player);
+    if (!maxVmax) return null;
+    return gpsVal(currentRow, metricKey) / maxVmax;
+  }
   const bmRow = getBestMatchRow(player);
   if (!bmRow) return null;
   const bmVal = gpsVal(bmRow, metricKey);
@@ -8956,6 +8962,14 @@ function getBestMatchRow(player) {
     (r.seance || r.session_title || '') === bm.session_title
   );
   return rows.find(r => (r.split_name || 'all').toLowerCase() === 'all') || rows[0] || null;
+}
+
+// Vmax de référence du joueur = valeur max enregistrée sur l'ensemble de ses données GPS
+// (toutes séances/matchs confondus), pas celle du seul meilleur match : la vitesse max est
+// un plafond physiologique, le meilleur match n'y a pas forcément été atteint.
+function getPlayerMaxVmax(player) {
+  const rows = (state.bdd_gps || []).filter(r => r.joueur === player);
+  return rows.reduce((max, r) => Math.max(max, gpsVal(r, 'top_speed')), 0);
 }
 
 // Importe un CSV Catapult et stocke les métriques du meilleur match par joueur
@@ -9354,16 +9368,18 @@ function renderBestMatch() {
 }
 
 function getBestMatchRatio(player, metricKey, currentRow) {
+  const curVal = gpsVal(currentRow, metricKey);
+  // Vmax : base = vitesse max sur l'ensemble des données GPS du joueur, pas celle du meilleur match.
+  if (metricKey === 'top_speed') {
+    const maxVmax = getPlayerMaxVmax(player);
+    if (!maxVmax) return null;
+    return curVal / maxVmax;
+  }
   const bmRow = getBestMatchRow(player);
   if (!bmRow) return null;
-  const bmVal  = gpsVal(bmRow, metricKey);
-  const curVal = gpsVal(currentRow, metricKey);
+  const bmVal = gpsVal(bmRow, metricKey);
   if (!bmVal || bmVal === 0) return null;
   // Pour les métriques cumulatives : normaliser par durée pour comparer équitablement
-  const isMax = (metricKey === 'top_speed');
-  if (isMax) {
-    return curVal / bmVal;
-  }
   const bmDur  = gpsVal(bmRow, 'duree_min') || 90;
   const curDur = gpsVal(currentRow, 'duree_min') || 90;
   if (!curDur || curDur === 0) return curVal / bmVal;
