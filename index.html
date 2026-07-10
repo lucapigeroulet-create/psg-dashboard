@@ -9079,6 +9079,17 @@ function gpsWTSetExt() { gpsWTExtMetric = document.getElementById('gps-wt-ext').
 function gpsSessionSetExt() { gpsSessionExtMetric = document.getElementById('gps-session-ext').value; renderGPSSession(); }
 function gpsWISetExt() { gpsWIExtMetric = document.getElementById('gps-wi-ext').value; renderGPSWeekIndiv(); }
 
+// Bases de calcul de la charge pour ACWR / monotonie / contrainte (défaut sRPE = méthode Foster)
+const GPS_LOAD_BASES = [
+  { key: 'srpe', label: 'sRPE (UA)' },
+  { key: 'distance_km', label: 'Distance (m)', mult: 1000 },
+  { key: 'hsr', label: 'HSR (m)', mult: 1 }
+];
+let gpsWILoadBase = 'srpe';
+let gpsWIRatioWeek = 'WEEK1';
+function gpsWISetBase() { gpsWILoadBase = document.getElementById('gps-wi-base').value; renderGPSWeekIndiv(); }
+function gpsWISetRatioWeek() { gpsWIRatioWeek = document.getElementById('gps-wi-ratio-week').value; renderGPSWeekIndiv(); }
+
 // Importe un CSV Catapult et stocke les métriques du meilleur match par joueur
 function onBestMatchClearCSV(player) {
   if (!state.bdd_best_match) return;
@@ -10243,6 +10254,109 @@ function renderGPSWeekIndiv() {
   });
   html += '</tbody></table></div></div>';
 
+  // ===== Contrôle de charge : ACWR, monotonie, contrainte + historique 12 semaines =====
+  const selStyle = 'background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;';
+  const srpeAll = computeSRPE();
+  const gpsAllPlayer = state.bdd_gps.filter(r => r.joueur === player && (r.split_name || 'all').toLowerCase() === 'all');
+  const base = GPS_LOAD_BASES.find(b => b.key === gpsWILoadBase) || GPS_LOAD_BASES[0];
+  const loadForDates = ds => base.key === 'srpe'
+    ? srpeAll.filter(x => x.joueur === player && ds.includes(x.date)).reduce((s, x) => s + x.sRPE, 0)
+    : gpsAllPlayer.filter(r => ds.includes(r.date)).reduce((s, r) => s + gpsVal(r, base.key), 0) * (base.mult || 1);
+
+  // 16 semaines de charges : 12 affichées + 4 pour amorcer la charge chronique
+  const NB_WEEKS = 12;
+  const weekList = [];
+  for (let i = NB_WEEKS + 3; i >= 0; i--) {
+    const m = new Date(monday); m.setDate(m.getDate() - 7 * i);
+    weekList.push({ dates: weekDates(m), iso: getISOWeek(toLocalISO(m)) });
+  }
+  weekList.forEach(w => { w.load = loadForDates(w.dates); });
+  // ACWR = charge de la semaine ÷ moyenne des 4 semaines précédentes
+  weekList.forEach((w, i) => {
+    if (i < 4) { w.acwr = null; return; }
+    const chronic = (weekList[i - 1].load + weekList[i - 2].load + weekList[i - 3].load + weekList[i - 4].load) / 4;
+    w.acwr = chronic > 0 ? w.load / chronic : null;
+  });
+  const shownWeeks = weekList.slice(4);
+  const curWeek = shownWeeks[shownWeeks.length - 1];
+  const prevWeek = shownWeeks[shownWeeks.length - 2];
+  const deltaPct = (prevWeek && prevWeek.load > 0) ? Math.round((curWeek.load - prevWeek.load) / prevWeek.load * 100) : null;
+
+  // Monotonie (Foster) : moyenne des charges journalières ÷ écart-type, jours de repos = 0
+  const dayLoads = dates.map(d => loadForDates([d]));
+  const dayMean = dayLoads.reduce((s, v) => s + v, 0) / 7;
+  const daySD = Math.sqrt(dayLoads.reduce((s, v) => s + (v - dayMean) * (v - dayMean), 0) / 7);
+  const monotony = daySD > 0 ? dayMean / daySD : null;
+  const strain = monotony !== null ? curWeek.load * monotony : null;
+
+  const acwrSt = curWeek.acwr === null ? null
+    : curWeek.acwr > 1.5 ? { c: '#f87171', t: 'Risque élevé (>1,5)' }
+    : curWeek.acwr > 1.3 ? { c: '#fbbf24', t: 'Élevé — optimal 0,8–1,3' }
+    : curWeek.acwr >= 0.8 ? { c: '#34d399', t: 'Zone optimale 0,8–1,3' }
+    : { c: '#60a5fa', t: 'Faible (<0,8) — désentraînement' };
+  const monoSt = monotony === null ? null
+    : monotony >= 2 ? { c: '#f87171', t: 'Trop uniforme (≥2)' }
+    : monotony >= 1.5 ? { c: '#fbbf24', t: 'À surveiller' }
+    : { c: '#34d399', t: 'Bon contraste jours durs/légers' };
+  const fmtLoad = v => base.key === 'srpe' ? Math.round(v) + ' UA' : Math.round(v).toLocaleString('fr-FR') + ' m';
+
+  // % de la cible par métrique pour la semaine affichée (cible constante = semaine de travail sélectionnée)
+  const aggWeek = {};
+  WORK_RATIO_METRICS.forEach(m => { if (m.key !== 'top_speed') aggWeek[m.key] = rows.reduce((s, r) => s + gpsVal(r, m.key), 0); });
+  const pctsWeek = {};
+  WORK_RATIO_METRICS.forEach(m => { pctsWeek[m.key] = getWeekTargetPct(player, m.key, aggWeek, vmax, gpsWIRatioWeek); });
+
+  // Historique : % de cible par semaine sur les 12 semaines
+  const histRows = shownWeeks.map(w => {
+    const wRows = gpsAllPlayer.filter(r => w.dates.includes(r.date));
+    const agg = {};
+    WORK_RATIO_METRICS.forEach(m => { if (m.key !== 'top_speed') agg[m.key] = wRows.reduce((s, r) => s + gpsVal(r, m.key), 0); });
+    const wVmax = Math.max.apply(null, wRows.map(r => gpsVal(r, 'top_speed')).concat([0]));
+    const pcts = {};
+    WORK_RATIO_METRICS.forEach(m => { pcts[m.key] = wRows.length ? getWeekTargetPct(player, m.key, agg, wVmax, gpsWIRatioWeek) : null; });
+    return { iso: w.iso, pcts: pcts };
+  });
+
+  html += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+  html += '<h2 style="margin:0;">🎛️ Contrôle de charge</h2><div style="display:flex;gap:8px;">';
+  html += '<select id="gps-wi-base" onchange="gpsWISetBase()" style="' + selStyle + '">';
+  GPS_LOAD_BASES.forEach(b => { html += '<option value="' + b.key + '"' + (b.key === gpsWILoadBase ? ' selected' : '') + '>Base : ' + b.label + '</option>'; });
+  html += '</select><select id="gps-wi-ratio-week" onchange="gpsWISetRatioWeek()" style="' + selStyle + '">';
+  WORK_RATIO_WEEKS.forEach(w => { html += '<option value="' + w + '"' + (w === gpsWIRatioWeek ? ' selected' : '') + '>' + w + ' — ' + WORK_RATIO_PHASE[w] + '</option>'; });
+  html += '</select></div></div>';
+  html += '<div class="stats-grid" style="margin-bottom:14px;">';
+  html += '<div class="stat"><div class="stat-label">Charge hebdo (' + base.label + ')</div><div class="stat-value" style="font-size:20px;">' + fmtLoad(curWeek.load) + '</div>' + (deltaPct !== null ? '<div style="font-size:11px;color:var(--text-dim);">' + (deltaPct >= 0 ? '+' : '') + deltaPct + '% vs sem. précédente</div>' : '') + '</div>';
+  html += '<div class="stat"><div class="stat-label">ACWR</div><div class="stat-value" style="font-size:20px;color:' + (acwrSt ? acwrSt.c : 'var(--text-dim)') + ';">' + (curWeek.acwr !== null ? curWeek.acwr.toFixed(2) : '—') + '</div><div style="font-size:11px;color:' + (acwrSt ? acwrSt.c : 'var(--text-dim)') + ';">' + (acwrSt ? acwrSt.t : 'Historique insuffisant') + '</div></div>';
+  html += '<div class="stat"><div class="stat-label">Monotonie</div><div class="stat-value" style="font-size:20px;color:' + (monoSt ? monoSt.c : 'var(--text-dim)') + ';">' + (monotony !== null ? monotony.toFixed(1) : '—') + '</div><div style="font-size:11px;color:' + (monoSt ? monoSt.c : 'var(--text-dim)') + ';">' + (monoSt ? monoSt.t : 'Pas assez de données') + '</div></div>';
+  html += '<div class="stat"><div class="stat-label">Contrainte</div><div class="stat-value" style="font-size:20px;">' + (strain !== null ? Math.round(strain).toLocaleString('fr-FR') : '—') + '</div><div style="font-size:11px;color:var(--text-dim);">Charge × monotonie</div></div>';
+  html += '</div>';
+  html += '<p style="color:var(--text-dim);font-size:11px;margin:0 0 8px;">ACWR = charge de la semaine ÷ moyenne des 4 semaines précédentes. Zone verte 0,8–1,3 = progression saine. Au-delà de 1,5, le risque de blessure augmente fortement.</p>';
+  html += '<div class="chart-container tall"><canvas id="gps-wi-acwr"></canvas></div></div>';
+
+  html += '<div class="grid-2">';
+  html += '<div class="card"><h2>🎯 % de la cible — semaine en cours</h2>';
+  html += '<p style="color:var(--text-dim);font-size:11px;margin:0 0 8px;">Cible = meilleur match × ratio TT (' + gpsWIRatioWeek + '). Pointillé rouge = 100%.</p>';
+  html += '<div class="chart-container"><canvas id="gps-wi-bullet"></canvas></div></div>';
+  html += '<div class="card"><h2>🗓️ Historique — % de cible par semaine</h2>';
+  html += '<p style="color:var(--text-dim);font-size:11px;margin:0 0 8px;">Cible constante (' + gpsWIRatioWeek + ') appliquée à tout l\'historique. Mêmes couleurs que la heatmap équipe.</p>';
+  html += '<div class="table-wrap"><table style="font-size:11px;"><thead><tr><th style="text-align:left;">Sem.</th>';
+  WORK_RATIO_METRICS.forEach(m => { html += '<th>' + m.label + '</th>'; });
+  html += '</tr></thead><tbody>';
+  histRows.forEach((hr, i) => {
+    const isCur = i === histRows.length - 1;
+    html += '<tr><td style="text-align:left;' + (isCur ? 'font-weight:700;' : 'color:var(--text-dim);') + '">S' + hr.iso.week + '</td>';
+    WORK_RATIO_METRICS.forEach(m => {
+      const pct = hr.pcts[m.key];
+      const st = chargeStatus(pct);
+      html += '<td style="text-align:center;padding:2px 3px;">' + (st
+        ? '<span style="display:block;border-radius:3px;padding:2px 0;background:' + st.bg + ';color:' + st.color + ';">' + Math.round(pct) + '</span>'
+        : '<span style="color:var(--text-dim);">—</span>') + '</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+  html += '</div>';
+
   // Graphique : zones de vitesse cumulées de la semaine (camembert)
   html += '<div class="grid-2">';
   html += '<div class="card"><h2>Répartition des zones de vitesse</h2><div class="chart-container"><canvas id="gps-indiv-zones"></canvas></div></div>';
@@ -10280,6 +10394,72 @@ function renderGPSWeekIndiv() {
     data: { labels: rows.map(r => formatDateFR(r.date)), datasets: [{ label: 'Distance (m)', data: rows.map(r => Math.round(gpsVal(r, 'distance_km') * 1000)), backgroundColor: '#00a3ff', borderRadius: 4 }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }, y: { beginAtZero: true, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } } } }
   });
+
+  // Courbe ACWR 12 semaines avec bande optimale 0,8–1,3 et seuil 1,5
+  destroyChart('gps-wi-acwr');
+  (function() {
+    const labels = shownWeeks.map(w => 'S' + w.iso.week);
+    const vals = shownWeeks.map(w => w.acwr === null ? null : +w.acwr.toFixed(2));
+    const ptColors = shownWeeks.map(w => {
+      const v = w.acwr;
+      return v === null ? '#8ba3c1' : v > 1.5 ? '#f87171' : v > 1.3 ? '#fbbf24' : v >= 0.8 ? '#34d399' : '#60a5fa';
+    });
+    charts['gps-wi-acwr'] = new Chart(document.getElementById('gps-wi-acwr'), {
+      type: 'line',
+      data: { labels: labels, datasets: [{ label: 'ACWR (' + base.label + ')', data: vals, borderColor: '#00a3ff', backgroundColor: '#00a3ff', pointBackgroundColor: ptColors, pointBorderColor: ptColors, pointRadius: 4, pointHoverRadius: 6, borderWidth: 2, spanGaps: true }] },
+      options: { responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#e8eef6' } }, tooltip: { callbacks: { label: ctx => 'ACWR : ' + ctx.parsed.y } } },
+        scales: {
+          x: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } },
+          y: { suggestedMin: 0.4, suggestedMax: 1.6, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
+        } },
+      plugins: [{
+        id: 'acwrBand',
+        beforeDatasetsDraw(chart) {
+          const x = chart.scales.x, y = chart.scales.y, ctx = chart.ctx;
+          ctx.save();
+          ctx.fillStyle = 'rgba(52,211,153,.10)';
+          const yT = y.getPixelForValue(Math.min(1.3, y.max)), yB = y.getPixelForValue(Math.max(0.8, y.min));
+          ctx.fillRect(x.left, yT, x.right - x.left, yB - yT);
+          if (y.max >= 1.5) {
+            ctx.strokeStyle = '#f87171'; ctx.setLineDash([5, 4]);
+            const y15 = y.getPixelForValue(1.5);
+            ctx.beginPath(); ctx.moveTo(x.left, y15); ctx.lineTo(x.right, y15); ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }]
+    });
+  })();
+
+  // Barres horizontales % de la cible par métrique (repère 100%)
+  destroyChart('gps-wi-bullet');
+  (function() {
+    const vals = WORK_RATIO_METRICS.map(m => pctsWeek[m.key] === null ? null : Math.round(pctsWeek[m.key]));
+    const colors = WORK_RATIO_METRICS.map(m => { const st = chargeStatus(pctsWeek[m.key]); return st ? st.color : '#8ba3c1'; });
+    charts['gps-wi-bullet'] = new Chart(document.getElementById('gps-wi-bullet'), {
+      type: 'bar',
+      data: { labels: WORK_RATIO_METRICS.map(m => m.label), datasets: [{ data: vals, backgroundColor: colors, borderRadius: 3 }] },
+      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.x + '% de la cible' } } },
+        scales: {
+          x: { beginAtZero: true, suggestedMax: 130, ticks: { color: '#8ba3c1', callback: v => v + '%' }, grid: { color: '#1f3a5f' } },
+          y: { ticks: { color: '#e8eef6', font: { size: 11 } }, grid: { display: false } }
+        } },
+      plugins: [{
+        id: 'target100',
+        afterDatasetsDraw(chart) {
+          const x = chart.scales.x, y = chart.scales.y, ctx = chart.ctx;
+          if (x.max < 100) return;
+          ctx.save();
+          ctx.strokeStyle = '#f87171'; ctx.setLineDash([5, 4]);
+          const px = x.getPixelForValue(100);
+          ctx.beginPath(); ctx.moveTo(px, y.top); ctx.lineTo(px, y.bottom); ctx.stroke();
+          ctx.restore();
+        }
+      }]
+    });
+  })();
 
   // Interne (sRPE, courbe) vs externe (GPS, barres) jour par jour — double axe
   destroyChart('gps-wi-ie');
