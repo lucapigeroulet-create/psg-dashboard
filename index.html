@@ -296,6 +296,7 @@
   .mj-lb-name { flex:1; font-weight:600; }
   .mj-lb-score { font-weight:800; font-size:16px; }
   .mj-lb-time { color:var(--text-dim); font-size:11px; }
+  .mj-cumul-btn.active-mode { border-color:var(--accent); color:var(--accent); }
   .badge-sick { background: #78350f; color: #fdba74; }
   .badge-absent { background: #713f12; color: #fde047; }
   .badge-game { background: #1e3a8a; color: #93c5fd; }
@@ -747,7 +748,6 @@
   <button class="nav-btn" data-view="rpe">💪 Charge RPE</button>
   <button class="nav-btn" data-view="gps">📡 Données GPS</button>
   <button class="nav-btn" data-view="competition">🏆 Compétition</button>
-  <button class="nav-btn" data-view="minijeux">🎮 Mini-jeux</button>
   <button class="nav-btn staff-only-btn" data-view="testing" id="nav-testing-btn">🧪 Testing</button>
   <div class="nav-dropdown" id="nav-medical-dropdown">
     <button type="button" class="nav-btn nav-dropdown-toggle staff-only-btn" id="nav-medical-toggle" onclick="toggleMedicalMenu(event)">🩺 Médical <span style="font-size:10px;">▾</span></button>
@@ -770,6 +770,7 @@
       <button class="nav-btn" data-view="rpe-entry">⭐ Saisie RPE</button>
       <button class="nav-btn" data-view="best-match">🏆 Meilleur Match</button>
       <button class="nav-btn" data-view="messages">📣 Messages</button>
+      <button class="nav-btn" data-view="minijeux">🎮 Mini-jeux</button>
       <button class="nav-btn" data-view="history">📋 Historique séances</button>
       <button class="nav-btn" data-view="settings">⚙️ Paramètres</button>
     </div>
@@ -2304,9 +2305,29 @@
       <h2 id="minijeu-lb-title">🏆 <span data-en="Today's ranking" data-fr="Classement du jour">Classement du jour</span></h2>
       <div id="minijeu-leaderboard"></div>
     </div>
+    <div class="card">
+      <h2>📊 <span data-en="Overall standings" data-fr="Classement cumulé">Classement cumulé</span></h2>
+      <p class="mj-sub" style="margin-bottom:10px;" data-en="Every day, 🥇 earns 5 pts, 🥈 2 pts, 🥉 1 pt. Challenge your teammates over time!" data-fr="Chaque jour, la 1re place rapporte 🥇 5 pts, la 2e 🥈 2 pts, la 3e 🥉 1 pt. Défie tes coéquipiers dans la durée !">Chaque jour, la 1re place rapporte 🥇 5 pts, la 2e 🥈 2 pts, la 3e 🥉 1 pt.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
+        <button class="btn btn-secondary mj-cumul-btn" data-mode="week" onclick="mjSetCumul('week')" data-en="This week" data-fr="Semaine en cours">Semaine en cours</button>
+        <button class="btn btn-secondary mj-cumul-btn" data-mode="month" onclick="mjSetCumul('month')" data-en="This month" data-fr="Mois en cours">Mois en cours</button>
+        <button class="btn btn-secondary mj-cumul-btn" data-mode="custom" onclick="mjSetCumul('custom')" data-en="Custom range" data-fr="Plage personnalisée">Plage personnalisée</button>
+      </div>
+      <div id="mj-cumul-custom" style="display:none; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
+        <div><label style="display:block; font-size:12px; color:var(--text-dim);" data-en="From" data-fr="Du">Du</label><input type="date" id="mj-cumul-start" onchange="renderMinijeuxCumul()"></div>
+        <div><label style="display:block; font-size:12px; color:var(--text-dim);" data-en="To" data-fr="Au">Au</label><input type="date" id="mj-cumul-end" onchange="renderMinijeuxCumul()"></div>
+      </div>
+      <div class="mj-sub" id="mj-cumul-range" style="margin-bottom:8px;"></div>
+      <div id="minijeu-cumul"></div>
+    </div>
   </div>
 
   <div class="view" id="view-player-overview">
+
+    <!-- Mini-jeu du jour (affiché seulement si pas encore joué) -->
+    <div class="card" id="po-minijeu-card" style="display:none; background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:1px solid var(--accent);">
+      <div id="po-minijeu-content"></div>
+    </div>
 
     <!-- État de forme du jour -->
     <div class="card" id="po-hooper-card">
@@ -5746,7 +5767,9 @@ function handleRealtimeChange(table, payload) {
   // ===== Mini-jeux : rafraîchir le classement en direct =====
   if (table === 'minijeux_scores') {
     if (newRow && newRow.org && newRow.org !== currentOrg) return;
-    if (getCurrentView() === 'minijeux') renderMinijeuxLeaderboard();
+    const v = getCurrentView();
+    if (v === 'minijeux') { renderMinijeuxLeaderboard(); renderMinijeuxCumul(); }
+    if (v === 'player-overview') renderPlayerOverviewMinijeu();
     return;
   }
 
@@ -6404,7 +6427,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (!viewEl) return;
     viewEl.classList.add('active');
     // Gérer l'état visuel du menu déroulant Gestion
-    const gestionViews = ['entry', 'plan', 'match-entry', 'injury-entry', 'rpe-entry', 'history', 'settings'];
+    const gestionViews = ['entry', 'plan', 'match-entry', 'injury-entry', 'rpe-entry', 'messages', 'minijeux', 'history', 'settings'];
     const gestionToggle = document.getElementById('nav-gestion-toggle');
     if (gestionToggle) {
       if (gestionViews.includes(view)) gestionToggle.classList.add('has-active');
@@ -12645,6 +12668,7 @@ const MINIJEUX_CATALOG = [
 
 let minijeuxState = null;
 let mjTimerId = null;
+let mjCumulMode = 'week'; // 'week' | 'month' | 'custom'
 
 function L(obj) { if (obj == null) return ''; if (typeof obj === 'string') return obj; return obj[playerLang()] || obj.fr || obj.en || ''; }
 function mjNormalize(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
@@ -12678,6 +12702,7 @@ async function renderMinijeux() {
     if (btn) btn.addEventListener('click', () => mjStart(jeu));
   }
   renderMinijeuxLeaderboard();
+  mjSetCumul(mjCumulMode); // classement cumulé (semaine/mois/plage)
 }
 
 function mjIntroHTML(jeu, staffPreview) {
@@ -12871,53 +12896,148 @@ async function renderMinijeuxLeaderboard() {
       .order('score', { ascending: false }).order('temps_ms', { ascending: true });
     rows = data || [];
   } catch (e) { rows = []; }
-  const me = mjPlayerId();
-  const roster = (typeof getAllPlayers === 'function') ? getAllPlayers() : [];
-  const rosterSet = {}; roster.forEach(n => { rosterSet[n] = true; });
-  const playedNames = {}; rows.forEach(r => { playedNames[r.joueur] = true; });
-  // Effectif complet : les joueurs qui n'ont pas encore joué apparaissent aussi
-  const notPlayed = roster.filter(n => !playedNames[n]).sort();
-
-  if (!rows.length && !notPlayed.length) {
-    el.innerHTML = '<p style="color:var(--text-dim); font-size:13px;">' + tr('Nobody to rank yet today.', 'Personne à classer aujourd\'hui pour l\'instant.') + '</p>';
+  if (!rows.length) {
+    el.innerHTML = '<p style="color:var(--text-dim); font-size:13px;">' + tr('Nobody has played yet today. Be the first!', 'Personne n\'a encore joué aujourd\'hui. Sois le premier !') + '</p>';
     return;
   }
 
+  const me = mjPlayerId();
+  const roster = (typeof getAllPlayers === 'function') ? getAllPlayers() : [];
+  const rosterSet = {}; roster.forEach(n => { rosterSet[n] = true; });
   const staffTag = ' <span style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-dim);font-size:10px;padding:1px 6px;border-radius:8px;vertical-align:middle;">🧑‍💼 staff</span>';
   const meTag = ' <span style="color:var(--accent);font-size:11px;">(' + tr('you', 'toi') + ')</span>';
   const medals = ['🥇', '🥈', '🥉'];
-  let html = '';
+  // Uniquement les participants du jour (joueurs + staff), triés par score puis temps
+  el.innerHTML = rows.map((r, i) => {
+    const rank = medals[i] || (i + 1);
+    const isMe = (r.joueur === me);
+    const isStaff = !rosterSet[r.joueur]; // pas dans l'effectif → membre du staff
+    const max = r.detail && r.detail.max;
+    return '<div class="mj-lb-row' + (isMe ? ' me' : '') + '">' +
+      '<div class="mj-lb-rank">' + rank + '</div>' +
+      '<div class="mj-lb-name">' + escapeHtml(r.joueur) + (isStaff ? staffTag : '') + (isMe ? meTag : '') + '</div>' +
+      '<div style="text-align:right;">' +
+      '<div class="mj-lb-score">' + r.score + (max ? '<span style="color:var(--text-dim);font-weight:400;font-size:12px;">/' + max + '</span>' : '') + '</div>' +
+      '<div class="mj-lb-time">' + mjFmtTime(r.temps_ms) + '</div>' +
+      '</div></div>';
+  }).join('');
+}
 
-  // Classement (joueurs + staff mélangés, triés par score puis temps)
-  if (rows.length) {
-    html += rows.map((r, i) => {
-      const rank = medals[i] || (i + 1);
-      const isMe = (r.joueur === me);
-      const isStaff = !rosterSet[r.joueur]; // pas dans l'effectif → membre du staff
-      const max = r.detail && r.detail.max;
-      return '<div class="mj-lb-row' + (isMe ? ' me' : '') + '">' +
-        '<div class="mj-lb-rank">' + rank + '</div>' +
-        '<div class="mj-lb-name">' + escapeHtml(r.joueur) + (isStaff ? staffTag : '') + (isMe ? meTag : '') + '</div>' +
-        '<div style="text-align:right;">' +
-        '<div class="mj-lb-score">' + r.score + (max ? '<span style="color:var(--text-dim);font-weight:400;font-size:12px;">/' + max + '</span>' : '') + '</div>' +
-        '<div class="mj-lb-time">' + mjFmtTime(r.temps_ms) + '</div>' +
-        '</div></div>';
-    }).join('');
-  }
+// ---- Classement cumulé (semaine / mois / plage) : barème 5-2-1 par jour ----
+function mjWeekBounds() {
+  const t = new Date(todayYMD() + 'T00:00:00');
+  const dow = (t.getDay() + 6) % 7; // 0 = lundi
+  const mon = new Date(t); mon.setDate(t.getDate() - dow);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  return { start: fmtYMD(mon), end: fmtYMD(sun) };
+}
+function mjMonthBounds() {
+  const t = new Date(todayYMD() + 'T00:00:00');
+  const first = new Date(t.getFullYear(), t.getMonth(), 1);
+  const last = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+  return { start: fmtYMD(first), end: fmtYMD(last) };
+}
 
-  // Reste de l'effectif : pas encore joué aujourd'hui
-  if (notPlayed.length) {
-    html += '<div class="mj-sub" style="margin:14px 0 6px;">' + tr('Not played yet', 'Pas encore joué') + ' (' + notPlayed.length + ')</div>';
-    html += notPlayed.map(n => {
-      const isMe = (n === me);
-      return '<div class="mj-lb-row' + (isMe ? ' me' : '') + '" style="opacity:.55;">' +
-        '<div class="mj-lb-rank" style="font-size:14px;color:var(--text-dim);">–</div>' +
-        '<div class="mj-lb-name">' + escapeHtml(n) + (isMe ? meTag : '') + '</div>' +
-        '<div class="mj-lb-time">' + tr('waiting…', 'en attente…') + '</div>' +
-        '</div>';
-    }).join('');
+function mjSetCumul(mode) {
+  mjCumulMode = mode;
+  document.querySelectorAll('.mj-cumul-btn').forEach(b => b.classList.toggle('active-mode', b.dataset.mode === mode));
+  const custom = document.getElementById('mj-cumul-custom');
+  if (custom) custom.style.display = (mode === 'custom') ? 'flex' : 'none';
+  if (mode === 'custom') {
+    const s = document.getElementById('mj-cumul-start'), e = document.getElementById('mj-cumul-end');
+    const b = mjMonthBounds();
+    if (s && !s.value) s.value = b.start;
+    if (e && !e.value) e.value = b.end;
   }
-  el.innerHTML = html;
+  renderMinijeuxCumul();
+}
+
+// Agrège les points : chaque jour, 1er = 5 pts, 2e = 2 pts, 3e = 1 pt
+function mjComputeStandings(rows) {
+  const byDate = {};
+  rows.forEach(r => { (byDate[r.date] = byDate[r.date] || []).push(r); });
+  const award = [5, 2, 1];
+  const agg = {};
+  Object.keys(byDate).forEach(d => {
+    const day = byDate[d].slice().sort((a, b) => (b.score - a.score) || ((a.temps_ms || 0) - (b.temps_ms || 0)));
+    day.forEach((r, i) => {
+      if (!agg[r.joueur]) agg[r.joueur] = { joueur: r.joueur, points: 0, jours: 0, or: 0, argent: 0, bronze: 0 };
+      agg[r.joueur].jours++;
+      if (i < 3) { agg[r.joueur].points += award[i]; if (i === 0) agg[r.joueur].or++; else if (i === 1) agg[r.joueur].argent++; else agg[r.joueur].bronze++; }
+    });
+  });
+  return Object.keys(agg).map(k => agg[k]).sort((a, b) =>
+    (b.points - a.points) || (b.or - a.or) || (b.argent - a.argent) || a.joueur.localeCompare(b.joueur));
+}
+
+async function renderMinijeuxCumul() {
+  const el = document.getElementById('minijeu-cumul');
+  if (!el) return;
+  const rangeEl = document.getElementById('mj-cumul-range');
+  let start, end;
+  if (mjCumulMode === 'week') { const b = mjWeekBounds(); start = b.start; end = b.end; }
+  else if (mjCumulMode === 'month') { const b = mjMonthBounds(); start = b.start; end = b.end; }
+  else { start = (document.getElementById('mj-cumul-start') || {}).value; end = (document.getElementById('mj-cumul-end') || {}).value; }
+  if (!start || !end) {
+    el.innerHTML = '<p class="mj-sub">' + tr('Pick a start and end date.', 'Choisis une date de début et de fin.') + '</p>';
+    if (rangeEl) rangeEl.textContent = '';
+    return;
+  }
+  if (start > end) { const t = start; start = end; end = t; }
+  if (rangeEl) rangeEl.textContent = tr('Period', 'Période') + ' : ' + formatDateJMA(start) + ' → ' + formatDateJMA(end);
+  let rows = [];
+  try {
+    const { data } = await sb.from('minijeux_scores').select('*')
+      .eq('org', currentOrg).gte('date', start).lte('date', end);
+    rows = data || [];
+  } catch (e) { rows = []; }
+  if (!rows.length) {
+    el.innerHTML = '<p class="mj-sub">' + tr('No game played over this period yet.', 'Aucun jeu joué sur cette période pour l\'instant.') + '</p>';
+    return;
+  }
+  const standings = mjComputeStandings(rows);
+  const me = mjPlayerId();
+  const roster = (typeof getAllPlayers === 'function') ? getAllPlayers() : [];
+  const rosterSet = {}; roster.forEach(n => { rosterSet[n] = true; });
+  const staffTag = ' <span style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-dim);font-size:10px;padding:1px 6px;border-radius:8px;vertical-align:middle;">🧑‍💼 staff</span>';
+  const meTag = ' <span style="color:var(--accent);font-size:11px;">(' + tr('you', 'toi') + ')</span>';
+  const medals = ['🥇', '🥈', '🥉'];
+  el.innerHTML = standings.map((s, i) => {
+    const rank = medals[i] || (i + 1);
+    const isMe = (s.joueur === me);
+    const isStaff = !rosterSet[s.joueur];
+    const detail = '🥇 ' + s.or + ' · 🥈 ' + s.argent + ' · 🥉 ' + s.bronze + ' · ' + s.jours + ' ' + tr('days', 'j');
+    return '<div class="mj-lb-row' + (isMe ? ' me' : '') + '">' +
+      '<div class="mj-lb-rank">' + rank + '</div>' +
+      '<div class="mj-lb-name">' + escapeHtml(s.joueur) + (isStaff ? staffTag : '') + (isMe ? meTag : '') +
+        '<div class="mj-lb-time">' + detail + '</div></div>' +
+      '<div style="text-align:right;"><div class="mj-lb-score" style="color:var(--accent);">' + s.points +
+        ' <span style="font-size:12px;color:var(--text-dim);font-weight:400;">pts</span></div></div>' +
+      '</div>';
+  }).join('');
+}
+
+// Carte "mini-jeu du jour" sur l'accueil joueur — visible seulement si pas encore joué
+async function renderPlayerOverviewMinijeu() {
+  const card = document.getElementById('po-minijeu-card');
+  const content = document.getElementById('po-minijeu-content');
+  if (!card || !content) return;
+  const isFR = (playerLang() === 'fr');
+  let mine = null;
+  try { mine = await mjMyRowToday(); } catch (e) { mine = null; }
+  if (mine) { card.style.display = 'none'; return; } // déjà joué → on masque
+  const jeu = minijeuxDuJour();
+  card.style.display = '';
+  content.innerHTML =
+    '<div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">' +
+      '<div style="font-size:34px; line-height:1;">🎮</div>' +
+      '<div style="flex:1; min-width:180px;">' +
+        '<div style="font-size:16px; font-weight:700; color:var(--accent-light);">' + (isFR ? 'Mini-jeu du jour' : 'Daily mini-game') + '</div>' +
+        '<div style="font-size:13px; color:var(--text); margin-top:2px;">' + escapeHtml(L(jeu.titre)) + '</div>' +
+        '<div style="font-size:12px; color:var(--text-dim); margin-top:2px;">' + (isFR ? 'Tu n\'as pas encore joué aujourd\'hui — tente le classement !' : "You haven't played today — climb the ranking!") + '</div>' +
+      '</div>' +
+      '<button class="btn" onclick="document.querySelector(\'.nav-btn.player-only[data-view=minijeux]\').click()">' + (isFR ? '▶ Jouer' : '▶ Play') + '</button>' +
+    '</div>';
 }
 
 function renderCompetition() {
@@ -16180,6 +16300,9 @@ async function renderPlayerOverview() {
   if (!currentJoueurNom) return;
   const isFR = (playerLang() === 'fr');
   const today = toLocalISO(new Date());
+
+  // Carte mini-jeu du jour (async, s'auto-masque si déjà joué)
+  renderPlayerOverviewMinijeu();
 
   // Org "individuel" : pas de notation de séances → masquer le bandeau "Séances à noter"
   const rpeCard = document.getElementById('po-rpe-card');
