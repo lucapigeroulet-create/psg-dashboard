@@ -13006,7 +13006,7 @@ async function renderMinijeuxCumul() {
     const rank = medals[i] || (i + 1);
     const isMe = (s.joueur === me);
     const isStaff = !rosterSet[s.joueur];
-    const detail = '🥇 ' + s.or + ' · 🥈 ' + s.argent + ' · 🥉 ' + s.bronze + ' · ' + s.jours + ' ' + tr('days', 'j');
+    const detail = '🥇 ' + s.or + ' · 🥈 ' + s.argent + ' · 🥉 ' + s.bronze + ' · 📅 ' + s.jours;
     return '<div class="mj-lb-row' + (isMe ? ' me' : '') + '">' +
       '<div class="mj-lb-rank">' + rank + '</div>' +
       '<div class="mj-lb-name">' + escapeHtml(s.joueur) + (isStaff ? staffTag : '') + (isMe ? meTag : '') +
