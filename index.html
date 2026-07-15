@@ -12871,24 +12871,53 @@ async function renderMinijeuxLeaderboard() {
       .order('score', { ascending: false }).order('temps_ms', { ascending: true });
     rows = data || [];
   } catch (e) { rows = []; }
-  if (!rows.length) {
-    el.innerHTML = '<p style="color:var(--text-dim); font-size:13px;">' + tr('Nobody has played yet today. Be the first!', 'Personne n\'a encore joué aujourd\'hui. Sois le premier !') + '</p>';
+  const me = mjPlayerId();
+  const roster = (typeof getAllPlayers === 'function') ? getAllPlayers() : [];
+  const rosterSet = {}; roster.forEach(n => { rosterSet[n] = true; });
+  const playedNames = {}; rows.forEach(r => { playedNames[r.joueur] = true; });
+  // Effectif complet : les joueurs qui n'ont pas encore joué apparaissent aussi
+  const notPlayed = roster.filter(n => !playedNames[n]).sort();
+
+  if (!rows.length && !notPlayed.length) {
+    el.innerHTML = '<p style="color:var(--text-dim); font-size:13px;">' + tr('Nobody to rank yet today.', 'Personne à classer aujourd\'hui pour l\'instant.') + '</p>';
     return;
   }
-  const me = mjPlayerId();
+
+  const staffTag = ' <span style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-dim);font-size:10px;padding:1px 6px;border-radius:8px;vertical-align:middle;">🧑‍💼 staff</span>';
+  const meTag = ' <span style="color:var(--accent);font-size:11px;">(' + tr('you', 'toi') + ')</span>';
   const medals = ['🥇', '🥈', '🥉'];
-  el.innerHTML = rows.map((r, i) => {
-    const rank = medals[i] || (i + 1);
-    const isMe = (r.joueur === me);
-    const max = r.detail && r.detail.max;
-    return '<div class="mj-lb-row' + (isMe ? ' me' : '') + '">' +
-      '<div class="mj-lb-rank">' + rank + '</div>' +
-      '<div class="mj-lb-name">' + escapeHtml(r.joueur) + (isMe ? ' <span style="color:var(--accent);font-size:11px;">(' + tr('you', 'toi') + ')</span>' : '') + '</div>' +
-      '<div style="text-align:right;">' +
-      '<div class="mj-lb-score">' + r.score + (max ? '<span style="color:var(--text-dim);font-weight:400;font-size:12px;">/' + max + '</span>' : '') + '</div>' +
-      '<div class="mj-lb-time">' + mjFmtTime(r.temps_ms) + '</div>' +
-      '</div></div>';
-  }).join('');
+  let html = '';
+
+  // Classement (joueurs + staff mélangés, triés par score puis temps)
+  if (rows.length) {
+    html += rows.map((r, i) => {
+      const rank = medals[i] || (i + 1);
+      const isMe = (r.joueur === me);
+      const isStaff = !rosterSet[r.joueur]; // pas dans l'effectif → membre du staff
+      const max = r.detail && r.detail.max;
+      return '<div class="mj-lb-row' + (isMe ? ' me' : '') + '">' +
+        '<div class="mj-lb-rank">' + rank + '</div>' +
+        '<div class="mj-lb-name">' + escapeHtml(r.joueur) + (isStaff ? staffTag : '') + (isMe ? meTag : '') + '</div>' +
+        '<div style="text-align:right;">' +
+        '<div class="mj-lb-score">' + r.score + (max ? '<span style="color:var(--text-dim);font-weight:400;font-size:12px;">/' + max + '</span>' : '') + '</div>' +
+        '<div class="mj-lb-time">' + mjFmtTime(r.temps_ms) + '</div>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  // Reste de l'effectif : pas encore joué aujourd'hui
+  if (notPlayed.length) {
+    html += '<div class="mj-sub" style="margin:14px 0 6px;">' + tr('Not played yet', 'Pas encore joué') + ' (' + notPlayed.length + ')</div>';
+    html += notPlayed.map(n => {
+      const isMe = (n === me);
+      return '<div class="mj-lb-row' + (isMe ? ' me' : '') + '" style="opacity:.55;">' +
+        '<div class="mj-lb-rank" style="font-size:14px;color:var(--text-dim);">–</div>' +
+        '<div class="mj-lb-name">' + escapeHtml(n) + (isMe ? meTag : '') + '</div>' +
+        '<div class="mj-lb-time">' + tr('waiting…', 'en attente…') + '</div>' +
+        '</div>';
+    }).join('');
+  }
+  el.innerHTML = html;
 }
 
 function renderCompetition() {
