@@ -6261,6 +6261,13 @@ function getCellStatusClass(seances) {
   return '';
 }
 
+// Format d'affichage jj-mm-aaaa à partir d'une date ISO (aaaa-mm-jj)
+function formatDateJMA(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso || '—';
+  const parts = iso.slice(0, 10).split('-');
+  return parts[2] + '-' + parts[1] + '-' + parts[0];
+}
+
 function formatDateFR(dateStr) {
   const [y, m, d] = dateStr.split('-');
   const dt = new Date(y, m-1, d);
@@ -17295,16 +17302,22 @@ function renderMedicalAvailability() {
     const info = getJoueurInfo(p);
     const s = statuts[p];
     const entries = state.bdd_ent.filter(e => e.joueur === p && e.seances.some(x => STATUTS_INDISPO.includes(x))).sort((a,b) => b.date.localeCompare(a.date));
-    const blessures = (state.bdd_blessures || []).filter(b => b.joueur === p && b.statut !== 'disponible');
+    const blessures = (state.bdd_blessures || []).filter(b => b.joueur === p && b.statut !== 'disponible')
+      .sort((a,b) => (b.date_blessure || '').localeCompare(a.date_blessure || ''));
     // "Depuis" : date de la fiche blessure active si le planning ne dit rien
     const since = entries[0] ? entries[0].date : (blessures[0] ? (blessures[0].date_blessure || '—') : '—');
-    const retour = blessures.length > 0 ? (blessures[0].details && blessures[0].details.date_fin ? blessures[0].details.date_fin : '?') : '—';
+    const retour = blessures.length > 0 ? (blessures[0].details && blessures[0].details.date_fin ? formatDateJMA(blessures[0].details.date_fin) : '?') : '—';
     const statutLabel = { INJURY:'🩹 Blessé', REATHLE:'🏃 Réathlétisation', SICK:'🤒 Malade', ABSENT:'🚫 Absent', SUSPENDED:'⛔ Suspendu', TRIAL:'🧪 En essai', available:'✅ Dispo' }[s] || s;
     const statutColor = { INJURY:'#f87171', REATHLE:'#c084fc', SICK:'#fb923c', ABSENT:'#fbbf24', SUSPENDED:'#a78bfa', TRIAL:'#2dd4bf', available:'var(--green)' }[s] || 'var(--text)';
+    // Ouvre directement le résumé de la fiche la plus récente (modal), au lieu de
+    // renvoyer vers l'onglet Disponibilité (bouton absent de la vue médicale → clic mort)
+    const ficheBtn = blessures.length > 0
+      ? '<button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="openFicheResume(\'' + String(blessures[0].id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')">Voir fiche' + (blessures.length > 1 ? 's (' + blessures.length + ')' : '') + '</button>'
+      : '—';
     return '<tr><td><b>' + escapeHtml(p) + '</b></td><td>' + escapeHtml(info.groupe || '—') + '</td>' +
       '<td style="color:' + statutColor + '; font-weight:600;">' + statutLabel + '</td>' +
-      '<td>' + since + '</td><td>' + retour + '</td>' +
-      '<td>' + (blessures.length > 0 ? '<button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="document.querySelector(\'.nav-btn[data-view=injury]\').click()">Voir fiches (' + blessures.length + ')</button>' : '—') + '</td></tr>';
+      '<td>' + formatDateJMA(since) + '</td><td>' + retour + '</td>' +
+      '<td>' + ficheBtn + '</td></tr>';
   });
   tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:20px;">Aucun joueur</td></tr>';
 
@@ -17314,14 +17327,16 @@ function renderMedicalAvailability() {
   if (!active.length) { activeBox.innerHTML = '<p style="color:var(--text-dim); font-size:13px;">Aucune blessure en cours.</p>'; return; }
   activeBox.innerHTML = active.map(b => {
     const details = b.details || {};
-    return '<div style="border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px; background:var(--bg-elevated);">' +
+    const idAttr = String(b.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    // Carte cliquable : ouvre le résumé complet de la fiche blessure
+    return '<div style="border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px; background:var(--bg-elevated); cursor:pointer;" onclick="openFicheResume(\'' + idAttr + '\')" title="Voir la fiche blessure">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">' +
       '<div><b style="font-size:14px;">' + escapeHtml(b.joueur) + '</b> <span style="color:var(--text-dim); font-size:12px;">— ' + escapeHtml(b.zone || '?') + (b.cote ? ' (' + b.cote + ')' : '') + '</span></div>' +
       '<span style="background:#7f1d1d; color:#fca5a5; font-size:11px; padding:2px 8px; border-radius:6px;">' + escapeHtml(b.categorie || b.zone || 'Blessure') + '</span></div>' +
       '<div style="margin-top:8px; font-size:12px; color:var(--text-dim);">' +
-      '📅 Depuis le <b style="color:var(--text);">' + (b.date_blessure || '?') + '</b>' +
+      '📅 Depuis le <b style="color:var(--text);">' + (b.date_blessure ? formatDateJMA(b.date_blessure) : '?') + '</b>' +
       (b.duree_indispo ? ' · ⏱ ' + escapeHtml(b.duree_indispo) : '') +
-      (details.date_fin ? ' · 🎯 Retour estimé : <b style="color:var(--green);">' + details.date_fin + '</b>' : '') +
+      (details.date_fin ? ' · 🎯 Retour estimé : <b style="color:var(--green);">' + formatDateJMA(details.date_fin) + '</b>' : '') +
       '</div>' +
       (details.description ? '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">' + escapeHtml(details.description) + '</div>' : '') +
       '</div>';
