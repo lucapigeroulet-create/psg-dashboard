@@ -6261,6 +6261,13 @@ function getCellStatusClass(seances) {
   return '';
 }
 
+// Nombre de jours entre aujourd'hui et une date ISO (négatif si la date est passée)
+function joursRestants(iso) {
+  const t = new Date(todayYMD() + 'T00:00:00');
+  const d = new Date(iso.slice(0, 10) + 'T00:00:00');
+  return Math.round((d - t) / 86400000);
+}
+
 // Format d'affichage jj-mm-aaaa à partir d'une date ISO (aaaa-mm-jj)
 function formatDateJMA(iso) {
   if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso || '—';
@@ -17306,7 +17313,22 @@ function renderMedicalAvailability() {
       .sort((a,b) => (b.date_blessure || '').localeCompare(a.date_blessure || ''));
     // "Depuis" : date de la fiche blessure active si le planning ne dit rien
     const since = entries[0] ? entries[0].date : (blessures[0] ? (blessures[0].date_blessure || '—') : '—');
-    const retour = blessures.length > 0 ? (blessures[0].details && blessures[0].details.date_fin ? formatDateJMA(blessures[0].details.date_fin) : '?') : '—';
+    // Retour estimé : "Date de fin réelle" si renseignée, sinon "Fin réathlé.
+    // prévisionnelle" de la fiche — affiché en jours restants avant le retour
+    let retour = '—';
+    if (blessures.length > 0) {
+      const bd = blessures[0].details || {};
+      const cible = bd.date_fin || bd.fin_reathle || '';
+      if (cible) {
+        const nj = joursRestants(cible);
+        const dateTxt = ' <span style="color:var(--text-dim); font-size:11px;">(' + formatDateJMA(cible) + ')</span>';
+        if (nj > 0) retour = '<b>' + nj + ' j restant' + (nj > 1 ? 's' : '') + '</b>' + dateTxt;
+        else if (nj === 0) retour = '<b style="color:var(--green);">Aujourd\'hui</b>' + dateTxt;
+        else retour = '<b style="color:#fb923c;">Dépassé de ' + (-nj) + ' j</b>' + dateTxt;
+      } else {
+        retour = '<span title="Renseigner « Fin réathlé. prévisionnelle » dans la fiche blessure" style="cursor:help;">?</span>';
+      }
+    }
     const statutLabel = { INJURY:'🩹 Blessé', REATHLE:'🏃 Réathlétisation', SICK:'🤒 Malade', ABSENT:'🚫 Absent', SUSPENDED:'⛔ Suspendu', TRIAL:'🧪 En essai', available:'✅ Dispo' }[s] || s;
     const statutColor = { INJURY:'#f87171', REATHLE:'#c084fc', SICK:'#fb923c', ABSENT:'#fbbf24', SUSPENDED:'#a78bfa', TRIAL:'#2dd4bf', available:'var(--green)' }[s] || 'var(--text)';
     // Ouvre directement le résumé de la fiche la plus récente (modal), au lieu de
@@ -17336,7 +17358,13 @@ function renderMedicalAvailability() {
       '<div style="margin-top:8px; font-size:12px; color:var(--text-dim);">' +
       '📅 Depuis le <b style="color:var(--text);">' + (b.date_blessure ? formatDateJMA(b.date_blessure) : '?') + '</b>' +
       (b.duree_indispo ? ' · ⏱ ' + escapeHtml(b.duree_indispo) : '') +
-      (details.date_fin ? ' · 🎯 Retour estimé : <b style="color:var(--green);">' + formatDateJMA(details.date_fin) + '</b>' : '') +
+      (function () {
+        const cible = details.date_fin || details.fin_reathle || '';
+        if (!cible) return '';
+        const nj = joursRestants(cible);
+        const rest = nj > 0 ? nj + ' j restant' + (nj > 1 ? 's' : '') : (nj === 0 ? 'aujourd\'hui' : 'dépassé de ' + (-nj) + ' j');
+        return ' · 🎯 Retour estimé : <b style="color:var(--green);">' + rest + '</b> <span style="font-size:11px;">(' + formatDateJMA(cible) + ')</span>';
+      })() +
       '</div>' +
       (details.description ? '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">' + escapeHtml(details.description) + '</div>' : '') +
       '</div>';
