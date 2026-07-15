@@ -2320,6 +2320,15 @@
       <div class="mj-sub" id="mj-cumul-range" style="margin-bottom:8px;"></div>
       <div id="minijeu-cumul"></div>
     </div>
+    <!-- Gestion des résultats (admin/staff uniquement) -->
+    <div class="card" id="minijeu-admin-card" style="display:none;">
+      <h2>🛠️ Gestion des résultats</h2>
+      <p class="mj-sub" style="margin-bottom:10px;">Corrige un score ou supprime un résultat (org courante : <b id="mj-admin-org"></b>).</p>
+      <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px;">
+        <div><label style="display:block; font-size:12px; color:var(--text-dim);">Jour</label><input type="date" id="mj-admin-date" onchange="renderMinijeuxAdmin()"></div>
+      </div>
+      <div id="minijeu-admin-list"></div>
+    </div>
   </div>
 
   <div class="view" id="view-player-overview">
@@ -12672,7 +12681,12 @@ let mjCumulMode = 'week'; // 'week' | 'month' | 'custom'
 
 function L(obj) { if (obj == null) return ''; if (typeof obj === 'string') return obj; return obj[playerLang()] || obj.fr || obj.en || ''; }
 function mjNormalize(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
-function mjPlayerId() { return currentJoueurNom || (currentUser && currentUser.email ? currentUser.email.split('@')[0] : 'Staff'); }
+function mjPlayerId() {
+  if (currentJoueurNom) return currentJoueurNom; // joueur : nom canonique (déjà en majuscule)
+  // staff/admin : préfixe de l'e-mail, 1re lettre en majuscule (comme les joueurs)
+  const p = (currentUser && currentUser.email) ? currentUser.email.split('@')[0] : 'Staff';
+  return p ? p.charAt(0).toUpperCase() + p.slice(1) : 'Staff';
+}
 function mjFmtTime(ms) { if (ms == null) return ''; const s = Math.round(ms / 1000); return s < 60 ? s + 's' : Math.floor(s / 60) + 'min' + String(s % 60).padStart(2, '0'); }
 function mjDayIndex(dateStr) { const [y, m, d] = dateStr.split('-').map(Number); const days = Math.floor(Date.UTC(y, m - 1, d) / 86400000); return ((days % MINIJEUX_CATALOG.length) + MINIJEUX_CATALOG.length) % MINIJEUX_CATALOG.length; }
 function minijeuxDuJour() { return MINIJEUX_CATALOG[mjDayIndex(todayYMD())]; }
@@ -12703,6 +12717,17 @@ async function renderMinijeux() {
   }
   renderMinijeuxLeaderboard();
   mjSetCumul(mjCumulMode); // classement cumulé (semaine/mois/plage)
+  // Gestion des résultats : admin (toutes org) et staff (son org)
+  const adminCard = document.getElementById('minijeu-admin-card');
+  const canManage = (currentRole === 'admin' || currentRole === 'staff');
+  if (adminCard) {
+    adminCard.style.display = canManage ? '' : 'none';
+    if (canManage) {
+      const dEl = document.getElementById('mj-admin-date');
+      if (dEl && !dEl.value) dEl.value = todayYMD();
+      renderMinijeuxAdmin();
+    }
+  }
 }
 
 function mjIntroHTML(jeu, staffPreview) {
@@ -13038,6 +13063,57 @@ async function renderPlayerOverviewMinijeu() {
       '</div>' +
       '<button class="btn" onclick="document.querySelector(\'.nav-btn.player-only[data-view=minijeux]\').click()">' + (isFR ? '▶ Jouer' : '▶ Play') + '</button>' +
     '</div>';
+}
+
+// ---- Gestion des résultats (admin partout / staff sur son org) ----
+async function renderMinijeuxAdmin() {
+  const list = document.getElementById('minijeu-admin-list');
+  if (!list) return;
+  const orgEl = document.getElementById('mj-admin-org');
+  if (orgEl) orgEl.textContent = currentOrg;
+  const date = (document.getElementById('mj-admin-date') || {}).value || todayYMD();
+  let rows = [];
+  try {
+    const { data } = await sb.from('minijeux_scores').select('*')
+      .eq('org', currentOrg).eq('date', date)
+      .order('score', { ascending: false }).order('temps_ms', { ascending: true });
+    rows = data || [];
+  } catch (e) { rows = []; }
+  if (!rows.length) {
+    list.innerHTML = '<p class="mj-sub">Aucun résultat pour le ' + formatDateJMA(date) + '.</p>';
+    return;
+  }
+  list.innerHTML = rows.map(r => {
+    const max = (r.detail && r.detail.max) || '';
+    const idAttr = "'" + String(r.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+    return '<div class="mj-lb-row">' +
+      '<div class="mj-lb-name">' + escapeHtml(r.joueur) + ' <span style="color:var(--text-dim);font-size:11px;">' + escapeHtml(r.jeu_id) + '</span></div>' +
+      '<div style="text-align:right;min-width:64px;"><div class="mj-lb-score">' + r.score + (max ? '<span style="color:var(--text-dim);font-weight:400;font-size:12px;">/' + max + '</span>' : '') + '</div>' +
+      '<div class="mj-lb-time">' + mjFmtTime(r.temps_ms) + '</div></div>' +
+      '<div style="display:flex;gap:6px;margin-left:10px;">' +
+        '<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" title="Corriger le score" onclick="mjAdminEditScore(' + idAttr + ',' + r.score + ')">✏️</button>' +
+        '<button class="btn btn-danger" style="padding:4px 10px;font-size:12px;" title="Supprimer" onclick="mjAdminDeleteScore(' + idAttr + ')">🗑️</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+async function mjAdminEditScore(id, current) {
+  const saisie = prompt('Nouveau score :', current != null ? String(current) : '');
+  if (saisie === null) return;
+  const n = parseInt(saisie.trim(), 10);
+  if (isNaN(n) || n < 0) { toast('Score invalide', 'error'); return; }
+  const { error } = await sb.from('minijeux_scores').update({ score: n }).eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  toast('Score corrigé', 'success');
+  renderMinijeuxAdmin(); renderMinijeuxLeaderboard(); renderMinijeuxCumul();
+}
+
+async function mjAdminDeleteScore(id) {
+  if (!confirm('Supprimer définitivement ce résultat ?')) return;
+  const { error } = await sb.from('minijeux_scores').delete().eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  toast('Résultat supprimé', 'success');
+  renderMinijeuxAdmin(); renderMinijeuxLeaderboard(); renderMinijeuxCumul();
 }
 
 function renderCompetition() {
