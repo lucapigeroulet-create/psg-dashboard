@@ -12681,12 +12681,17 @@ let mjCumulMode = 'week'; // 'week' | 'month' | 'custom'
 
 function L(obj) { if (obj == null) return ''; if (typeof obj === 'string') return obj; return obj[playerLang()] || obj.fr || obj.en || ''; }
 function mjNormalize(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
+// Noms d'affichage personnalisés (clé = préfixe e-mail en minuscule)
+const MJ_NAME_OVERRIDES = { 'luca.pigeroulet': 'Lucas' };
 function mjPlayerId() {
   if (currentJoueurNom) return currentJoueurNom; // joueur : nom canonique (déjà en majuscule)
+  const raw = (currentUser && currentUser.email) ? currentUser.email.split('@')[0] : 'Staff';
+  if (MJ_NAME_OVERRIDES[raw.toLowerCase()]) return MJ_NAME_OVERRIDES[raw.toLowerCase()];
   // staff/admin : préfixe de l'e-mail, 1re lettre en majuscule (comme les joueurs)
-  const p = (currentUser && currentUser.email) ? currentUser.email.split('@')[0] : 'Staff';
-  return p ? p.charAt(0).toUpperCase() + p.slice(1) : 'Staff';
+  return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : 'Staff';
 }
+// Orgs dans lesquelles enregistrer le score : l'admin compte pour PSG ET TEGG
+function mjSaveOrgs() { return (currentRole === 'admin') ? ['PSG', 'TEGG'] : [currentOrg]; }
 function mjFmtTime(ms) { if (ms == null) return ''; const s = Math.round(ms / 1000); return s < 60 ? s + 's' : Math.floor(s / 60) + 'min' + String(s % 60).padStart(2, '0'); }
 function mjDayIndex(dateStr) { const [y, m, d] = dateStr.split('-').map(Number); const days = Math.floor(Date.UTC(y, m - 1, d) / 86400000); return ((days % MINIJEUX_CATALOG.length) + MINIJEUX_CATALOG.length) % MINIJEUX_CATALOG.length; }
 function minijeuxDuJour() { return MINIJEUX_CATALOG[mjDayIndex(todayYMD())]; }
@@ -12780,13 +12785,23 @@ function mjRenderTop10() {
     '<div class="mj-progressbar"><div id="mj-progress" style="width:100%"></div></div>' +
     '<h2>' + escapeHtml(L(jeu.titre)) + '</h2>' +
     '<div class="mj-sub" id="mj-count">0 / ' + jeu.reponses.length + '</div>' +
-    '<input class="mj-input" id="mj-input" placeholder="' + tr('Type a name…', 'Écris un nom…') + '" autocomplete="off" autocapitalize="off" spellcheck="false">' +
+    '<div style="display:flex; gap:8px; justify-content:center; align-items:center; max-width:400px; margin:0 auto;">' +
+      '<input class="mj-input" id="mj-input" style="margin:0; flex:1;" placeholder="' + tr('Type a name…', 'Écris un nom…') + '" autocomplete="off" autocapitalize="off" spellcheck="false">' +
+      '<button class="btn" id="mj-add-btn" style="padding:11px 18px; font-size:18px;" title="' + tr('Add the name', 'Valider le nom') + '">✓</button>' +
+    '</div>' +
     '<div class="mj-found" id="mj-found"></div>' +
-    '<div style="margin-top:16px;"><button class="btn btn-secondary" id="mj-finish-btn">' + tr('Finish', 'Terminer') + '</button></div>' +
+    // Bouton Terminer volontairement séparé + confirmation, pour éviter les appuis par erreur
+    '<div style="margin-top:30px; border-top:1px solid var(--border); padding-top:14px;"><button class="btn btn-secondary" id="mj-finish-btn" style="font-size:13px;">🏁 ' + tr('Finish the game', 'Terminer le jeu') + '</button></div>' +
     '</div>';
   const input = document.getElementById('mj-input');
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') { mjTop10Check(input.value); input.value = ''; } });
-  document.getElementById('mj-finish-btn').addEventListener('click', () => { mjClearTimer(); mjFinishTop10(); });
+  const submit = () => { mjTop10Check(input.value); input.value = ''; try { input.focus(); } catch (e) {} };
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+  document.getElementById('mj-add-btn').addEventListener('click', submit);
+  document.getElementById('mj-finish-btn').addEventListener('click', () => {
+    if (!minijeuxState) return;
+    const msg = tr('Finish the game now?', 'Terminer le jeu maintenant ?') + ' (' + minijeuxState.found.length + '/' + jeu.reponses.length + ')';
+    if (confirm(msg)) { mjClearTimer(); mjFinishTop10(); }
+  });
   setTimeout(() => { try { input.focus(); } catch (e) {} }, 60);
   mjUpdateTimerUI();
 }
@@ -12874,19 +12889,22 @@ async function mjFinish(score, tempsMs, detail) {
 }
 
 async function mjSaveScore(jeu, score, tempsMs, detail) {
-  try {
-    const { error } = await sb.from('minijeux_scores').insert({
-      org: currentOrg, joueur: mjPlayerId(), date: todayYMD(),
-      jeu_id: jeu.id, score: score, temps_ms: tempsMs, detail: detail
-    });
-    if (error) {
-      const msg = String(error.message || '').toLowerCase();
-      // Doublon = déjà joué aujourd'hui (rejeu staff) : on ignore silencieusement
-      if (!msg.includes('duplicate') && !msg.includes('unique')) {
-        toast(tr('Score not saved', 'Score non enregistré') + ' : ' + error.message, 'error');
+  // Un admin enregistre son score dans PSG et TEGG à la fois
+  for (const org of mjSaveOrgs()) {
+    try {
+      const { error } = await sb.from('minijeux_scores').insert({
+        org: org, joueur: mjPlayerId(), date: todayYMD(),
+        jeu_id: jeu.id, score: score, temps_ms: tempsMs, detail: detail
+      });
+      if (error) {
+        const msg = String(error.message || '').toLowerCase();
+        // Doublon = déjà joué aujourd'hui (rejeu) : on ignore silencieusement
+        if (!msg.includes('duplicate') && !msg.includes('unique')) {
+          toast(tr('Score not saved', 'Score non enregistré') + ' : ' + error.message, 'error');
+        }
       }
-    }
-  } catch (e) { /* réseau : le score reste affiché localement */ }
+    } catch (e) { /* réseau : le score reste affiché localement */ }
+  }
 }
 
 function mjResultHTML(jeu, row, already) {
