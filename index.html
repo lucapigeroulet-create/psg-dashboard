@@ -2883,6 +2883,60 @@
       <button class="btn" onclick="sendMessage()">📤 Envoyer</button>
     </div>
 
+    <!-- Centre de gestion des notifications automatiques (staff uniquement) -->
+    <div class="card" id="notifs-auto-card" style="display:none;">
+      <h2>🔔 Notifications automatiques</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Rappels push envoyés automatiquement sur le téléphone des joueurs abonnés, à l'heure et aux jours choisis.</p>
+      <div id="notifs-auto-list" style="margin-bottom:12px;"></div>
+      <button class="btn btn-secondary" id="notif-form-open-btn" onclick="openNotifForm()">➕ Nouvelle notification</button>
+      <div id="notif-form" style="display:none; margin-top:12px; border-top:1px solid var(--border); padding-top:14px;">
+        <h3 id="notif-form-title" style="margin:0 0 12px;">➕ Nouvelle notification</h3>
+        <input type="hidden" id="notif-edit-id" value="">
+        <div class="form-row">
+          <div style="flex:1;">
+            <label>Titre</label>
+            <input type="text" id="notif-titre" placeholder="Ex: 🧠 État de forme" />
+          </div>
+          <div>
+            <label>Heure d'envoi</label>
+            <select id="notif-heure"></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div style="flex:1;">
+            <label>Texte de la notification</label>
+            <textarea id="notif-contenu" rows="2" placeholder="Ex: Pense à remplir ton état de forme du jour !" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:14px; resize:vertical;"></textarea>
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="display:block; margin-bottom:6px;">Jours d'envoi</label>
+          <div id="notif-jours" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Destinataires</label>
+            <select id="notif-cible-type" onchange="onNotifCibleChange()">
+              <option value="all">Toute l'équipe</option>
+              <option value="group">Un groupe</option>
+              <option value="players">Joueurs sélectionnés</option>
+            </select>
+          </div>
+          <div id="notif-cible-group-wrap" style="display:none;">
+            <label>Groupe</label>
+            <select id="notif-cible-group"></select>
+          </div>
+        </div>
+        <div id="notif-cible-players-wrap" style="display:none; margin-bottom:12px;">
+          <label style="display:block; margin-bottom:6px;">Sélectionne les joueurs</label>
+          <div id="notif-cible-players" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" onclick="saveNotifAuto()">💾 Enregistrer</button>
+          <button class="btn btn-secondary" onclick="closeNotifForm()">Annuler</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Bandeau notifications push (joueur uniquement) -->
     <div id="push-banner"></div>
 
@@ -4678,6 +4732,180 @@ async function renderPushBanner() {
   }
 }
 
+// ---- Centre de gestion des notifications automatiques (staff) ---------------
+// CRUD sur la table notifications_programmees ; l'envoi réel est fait côté serveur
+// par l'Edge Function wellness-reminder-cron, tirée toutes les heures par pg_cron.
+const NOTIF_JOUR_LABELS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+let notifsAutoCache = null;
+
+function notifJoursLabel(jours) {
+  const js = Array.isArray(jours) ? jours : [];
+  if (js.length === 7) return 'Tous les jours';
+  if (js.length === 0) return 'Aucun jour';
+  if (js.length === 5 && [1, 2, 3, 4, 5].every(d => js.includes(d))) return 'Lun–Ven';
+  return [1, 2, 3, 4, 5, 6, 0].filter(d => js.includes(d)).map(d => NOTIF_JOUR_LABELS[d]).join(', ');
+}
+
+function notifCibleLabel(n) {
+  if (n.cible_type === 'group') return 'Groupe ' + (n.cible_groupe || '');
+  if (n.cible_type === 'players') return (Array.isArray(n.cible_joueurs) ? n.cible_joueurs.length : 0) + ' joueur(s)';
+  return "Toute l'équipe";
+}
+
+async function renderNotifsAuto() {
+  const listEl = document.getElementById('notifs-auto-list');
+  if (!listEl) return;
+  if (notifsAutoCache === null) {
+    const { data, error } = await sb.from('notifications_programmees').select('*')
+      .order('heure', { ascending: true }).order('created_at', { ascending: true });
+    if (error) {
+      listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px;">Erreur de chargement : ' + escapeHtml(error.message) + '</div>';
+      return;
+    }
+    notifsAutoCache = data || [];
+  }
+  const notifs = notifsAutoCache;
+  if (notifs.length === 0) {
+    listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:4px 0 8px;">Aucune notification programmée.</div>';
+    return;
+  }
+  listEl.innerHTML = notifs.map(n => {
+    const heureLabel = String(n.heure).padStart(2, '0') + 'h00';
+    return '<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:8px;' + (n.actif ? '' : ' opacity:0.55;') + '">' +
+      '<div style="min-width:200px; flex:1;">' +
+        '<div style="font-weight:600; font-size:14px;">' + escapeHtml(n.titre) + (n.actif ? '' : ' <span style="font-size:11px; color:var(--text-dim);">(en pause)</span>') + '</div>' +
+        '<div style="font-size:12px; color:var(--text-dim); margin-top:2px;">' + escapeHtml(n.contenu) + '</div>' +
+        '<div style="font-size:12px; margin-top:4px;">⏰ ' + heureLabel + ' · 📅 ' + notifJoursLabel(n.jours) + ' · 👥 ' + escapeHtml(notifCibleLabel(n)) + '</div>' +
+      '</div>' +
+      '<div style="display:flex; gap:6px; flex-wrap:wrap;">' +
+        '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="toggleNotifAuto(\'' + n.id + '\', ' + (n.actif ? 'false' : 'true') + ')">' + (n.actif ? '⏸ Pause' : '▶️ Activer') + '</button>' +
+        '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="openNotifForm(\'' + n.id + '\')">✏️ Modifier</button>' +
+        '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="testNotifAuto(\'' + n.id + '\')">📤 Tester</button>' +
+        '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="deleteNotifAuto(\'' + n.id + '\')">🗑</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+function onNotifCibleChange() {
+  const type = document.getElementById('notif-cible-type').value;
+  document.getElementById('notif-cible-group-wrap').style.display = (type === 'group') ? '' : 'none';
+  document.getElementById('notif-cible-players-wrap').style.display = (type === 'players') ? '' : 'none';
+  if (type === 'group') {
+    const sel = document.getElementById('notif-cible-group');
+    sel.innerHTML = (state.groupes || []).map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+  }
+  if (type === 'players') {
+    const wrap = document.getElementById('notif-cible-players');
+    wrap.innerHTML = getAllPlayers().map(p => {
+      const pe = escapeHtml(p);
+      return '<label style="display:inline-flex; align-items:center; gap:4px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:14px; padding:4px 10px; font-size:12px; cursor:pointer;">' +
+        '<input type="checkbox" class="notif-player-cb" value="' + pe + '" style="margin:0;"> ' + pe + '</label>';
+    }).join('');
+  }
+}
+
+function openNotifForm(id) {
+  const n = id ? (notifsAutoCache || []).find(x => x.id === id) : null;
+  document.getElementById('notif-edit-id').value = n ? n.id : '';
+  document.getElementById('notif-titre').value = n ? n.titre : '';
+  document.getElementById('notif-contenu').value = n ? n.contenu : '';
+  document.getElementById('notif-form-title').textContent = n ? '✏️ Modifier la notification' : '➕ Nouvelle notification';
+  const heureSel = document.getElementById('notif-heure');
+  heureSel.innerHTML = Array.from({ length: 24 }, (_, h) => '<option value="' + h + '">' + String(h).padStart(2, '0') + 'h00</option>').join('');
+  heureSel.value = String(n ? n.heure : 8);
+  // Jours affichés lundi en premier (valeurs : 0=dimanche ... 6=samedi)
+  const jours = n ? (Array.isArray(n.jours) ? n.jours : []) : [1, 2, 3, 4, 5, 6, 0];
+  document.getElementById('notif-jours').innerHTML = [1, 2, 3, 4, 5, 6, 0].map(d =>
+    '<label style="display:inline-flex; align-items:center; gap:4px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:14px; padding:4px 10px; font-size:12px; cursor:pointer;">' +
+    '<input type="checkbox" class="notif-jour-cb" value="' + d + '"' + (jours.includes(d) ? ' checked' : '') + ' style="margin:0;"> ' + NOTIF_JOUR_LABELS[d] + '</label>'
+  ).join('');
+  document.getElementById('notif-cible-type').value = n ? n.cible_type : 'all';
+  onNotifCibleChange();
+  if (n && n.cible_type === 'group') document.getElementById('notif-cible-group').value = n.cible_groupe || '';
+  if (n && n.cible_type === 'players') {
+    const set = new Set(Array.isArray(n.cible_joueurs) ? n.cible_joueurs : []);
+    document.querySelectorAll('.notif-player-cb').forEach(cb => { cb.checked = set.has(cb.value); });
+  }
+  document.getElementById('notif-form').style.display = '';
+  const openBtn = document.getElementById('notif-form-open-btn');
+  if (openBtn) openBtn.style.display = 'none';
+}
+
+function closeNotifForm() {
+  document.getElementById('notif-form').style.display = 'none';
+  const openBtn = document.getElementById('notif-form-open-btn');
+  if (openBtn) openBtn.style.display = '';
+}
+
+async function saveNotifAuto() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const editId = document.getElementById('notif-edit-id').value;
+  const titre = document.getElementById('notif-titre').value.trim();
+  const contenu = document.getElementById('notif-contenu').value.trim();
+  if (!titre) { toast('Le titre est vide', 'error'); return; }
+  if (!contenu) { toast('Le texte de la notification est vide', 'error'); return; }
+  const heure = parseInt(document.getElementById('notif-heure').value, 10);
+  const jours = Array.from(document.querySelectorAll('.notif-jour-cb:checked')).map(cb => parseInt(cb.value, 10));
+  if (jours.length === 0) { toast('Sélectionne au moins un jour', 'error'); return; }
+  const cibleType = document.getElementById('notif-cible-type').value;
+  let cibleGroupe = null, cibleJoueurs = [];
+  if (cibleType === 'group') {
+    cibleGroupe = document.getElementById('notif-cible-group').value;
+    if (!cibleGroupe) { toast('Choisis un groupe', 'error'); return; }
+  } else if (cibleType === 'players') {
+    cibleJoueurs = Array.from(document.querySelectorAll('.notif-player-cb:checked')).map(cb => cb.value);
+    if (cibleJoueurs.length === 0) { toast('Sélectionne au moins un joueur', 'error'); return; }
+  }
+  const row = { org: currentOrg, titre, contenu, heure, jours, cible_type: cibleType, cible_groupe: cibleGroupe, cible_joueurs: cibleJoueurs };
+  let error;
+  if (editId) ({ error } = await sb.from('notifications_programmees').update(row).eq('id', editId));
+  else ({ error } = await sb.from('notifications_programmees').insert(row));
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  toast(editId ? 'Notification modifiée' : '🔔 Notification programmée', 'success');
+  closeNotifForm();
+  notifsAutoCache = null;
+  renderNotifsAuto();
+}
+
+async function toggleNotifAuto(id, actif) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const { error } = await sb.from('notifications_programmees').update({ actif }).eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  const n = (notifsAutoCache || []).find(x => x.id === id);
+  if (n) n.actif = actif;
+  toast(actif ? 'Notification réactivée' : 'Notification mise en pause', 'success');
+  renderNotifsAuto();
+}
+
+async function deleteNotifAuto(id) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  if (!confirm('Supprimer cette notification programmée ?')) return;
+  const { error } = await sb.from('notifications_programmees').delete().eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  notifsAutoCache = (notifsAutoCache || []).filter(x => x.id !== id);
+  toast('Notification supprimée', 'success');
+  renderNotifsAuto();
+}
+
+// Envoi test immédiat : réutilise l'Edge Function send-push (même chemin que les messages)
+async function testNotifAuto(id) {
+  const n = (notifsAutoCache || []).find(x => x.id === id);
+  if (!n) return;
+  const targets = getMessageTargets(n);
+  if (!targets.length) { toast('Aucun joueur ciblé', 'error'); return; }
+  try {
+    const { data, error } = await sb.functions.invoke('send-push', {
+      body: { org: currentOrg, joueurs: targets, title: n.titre, body: n.contenu }
+    });
+    if (error) { toast('Envoi test échoué : ' + error.message, 'error'); return; }
+    if (data && typeof data.sent === 'number') {
+      toast('🔔 Test envoyé à ' + data.sent + '/' + data.total + ' joueur(s) abonné(s)', 'success');
+    }
+  } catch (e) {
+    toast('Envoi test échoué : ' + e.message, 'error');
+  }
+}
+
 function onMsgCibleChange() {
   const type = document.getElementById('msg-cible-type').value;
   document.getElementById('msg-cible-group-wrap').style.display = (type === 'group') ? '' : 'none';
@@ -4780,6 +5008,11 @@ function renderMessages() {
   const composeCard = document.getElementById('messages-compose-card');
   if (composeCard) composeCard.style.display = isStaff ? '' : 'none';
   if (isStaff) onMsgCibleChange();
+
+  // Centre de gestion des notifications automatiques : staff seulement
+  const notifsCard = document.getElementById('notifs-auto-card');
+  if (notifsCard) notifsCard.style.display = isStaff ? '' : 'none';
+  if (isStaff) renderNotifsAuto();
 
   const pushBannerEl = document.getElementById('push-banner');
   if (pushBannerEl) { pushBannerEl.style.display = isStaff ? 'none' : ''; if (!isStaff) renderPushBanner(); }
