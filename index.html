@@ -267,6 +267,35 @@
   .badge-rest { background: #374151; color: #d1d5db; }
   .badge-injury { background: #7f1d1d; color: #fca5a5; }
   .badge-reathle { background: #4c1d95; color: #d8b4fe; }
+  /* ---- Mini-jeux ---- */
+  .mj-hero { text-align:center; padding:8px 4px 4px; }
+  .mj-hero .mj-emoji { font-size:44px; line-height:1; }
+  .mj-hero h2 { margin:8px 0 2px; }
+  .mj-sub { color:var(--text-dim); font-size:13px; margin-bottom:14px; }
+  .mj-timer { font-size:34px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:1px; }
+  .mj-timer.low { color:#ef4444; animation:mjpulse 1s infinite; }
+  @keyframes mjpulse { 50% { opacity:.45; } }
+  .mj-progressbar { height:6px; border-radius:4px; background:var(--bg-elevated); overflow:hidden; margin:10px 0 4px; }
+  .mj-progressbar > div { height:100%; background:var(--accent); transition:width .3s linear; }
+  .mj-input { width:100%; max-width:340px; font-size:16px; padding:11px 14px; text-align:center;
+    background:var(--bg-elevated); color:var(--text); border:2px solid var(--border); border-radius:12px; }
+  .mj-input:focus { outline:none; border-color:var(--accent); }
+  .mj-choice { display:block; width:100%; text-align:left; margin:8px 0; padding:13px 16px; font-size:15px;
+    background:var(--bg-elevated); color:var(--text); border:2px solid var(--border); border-radius:12px; cursor:pointer; transition:.12s; }
+  .mj-choice:hover { border-color:var(--accent); }
+  .mj-choice.good { border-color:#22c55e; background:#14322066; }
+  .mj-choice.bad { border-color:#ef4444; background:#7f1d1d66; }
+  .mj-choice:disabled { cursor:default; opacity:.85; }
+  .mj-found { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  .mj-found span { background:#14322088; border:1px solid #22c55e; color:#bbf7d0; border-radius:12px; padding:3px 10px; font-size:13px; }
+  .mj-missed span { background:var(--bg-elevated); border:1px solid var(--border); color:var(--text-dim); border-radius:12px; padding:3px 10px; font-size:13px; }
+  .mj-btn-big { font-size:16px; padding:12px 26px; }
+  .mj-lb-row { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; margin-bottom:6px; background:var(--bg-elevated); border:1px solid var(--border); }
+  .mj-lb-row.me { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .mj-lb-rank { font-size:18px; font-weight:800; min-width:34px; text-align:center; }
+  .mj-lb-name { flex:1; font-weight:600; }
+  .mj-lb-score { font-weight:800; font-size:16px; }
+  .mj-lb-time { color:var(--text-dim); font-size:11px; }
   .badge-sick { background: #78350f; color: #fdba74; }
   .badge-absent { background: #713f12; color: #fde047; }
   .badge-game { background: #1e3a8a; color: #93c5fd; }
@@ -718,6 +747,7 @@
   <button class="nav-btn" data-view="rpe">💪 Charge RPE</button>
   <button class="nav-btn" data-view="gps">📡 Données GPS</button>
   <button class="nav-btn" data-view="competition">🏆 Compétition</button>
+  <button class="nav-btn" data-view="minijeux">🎮 Mini-jeux</button>
   <button class="nav-btn staff-only-btn" data-view="testing" id="nav-testing-btn">🧪 Testing</button>
   <div class="nav-dropdown" id="nav-medical-dropdown">
     <button type="button" class="nav-btn nav-dropdown-toggle staff-only-btn" id="nav-medical-toggle" onclick="toggleMedicalMenu(event)">🩺 Médical <span style="font-size:10px;">▾</span></button>
@@ -751,6 +781,7 @@
   <button class="nav-btn player-only" data-view="player-history" style="display:none;" data-en="📊 My ratings" data-fr="📊 Mes notes">📊 My ratings</button>
   <button class="nav-btn player-only" data-view="player-hooper" style="display:none;" data-en="💚 Daily check-in" data-fr="💚 État de forme">💚 Daily check-in</button>
   <button class="nav-btn player-only" data-view="competition" style="display:none;" data-en="🏆 Competition" data-fr="🏆 Compétition">🏆 Compétition</button>
+  <button class="nav-btn player-only" data-view="minijeux" style="display:none;" data-en="🎮 Mini-games" data-fr="🎮 Mini-jeux">🎮 Mini-jeux</button>
   <button class="nav-btn player-only" data-view="messages" style="display:none;" data-en="📣 Messages" data-fr="📣 Messages">📣 Messages</button>
 </nav>
 
@@ -2264,6 +2295,17 @@
 
 
   <!-- ========== VUE JOUEUR : OVERVIEW ========== -->
+  <!-- ========== MINI-JEUX (jeu quotidien + classement) ========== -->
+  <div class="view" id="view-minijeux">
+    <div class="card" id="minijeu-card">
+      <div id="minijeu-content"></div>
+    </div>
+    <div class="card">
+      <h2 id="minijeu-lb-title">🏆 <span data-en="Today's ranking" data-fr="Classement du jour">Classement du jour</span></h2>
+      <div id="minijeu-leaderboard"></div>
+    </div>
+  </div>
+
   <div class="view" id="view-player-overview">
 
     <!-- État de forme du jour -->
@@ -5685,7 +5727,7 @@ let realtimeChannels = [];
 
 function setupRealtime() {
   if (realtimeChannels.length > 0) return; // déjà configuré
-  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites'];
+  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores'];
 
   tables.forEach(table => {
     const channel = sb.channel('realtime-' + table)
@@ -5700,6 +5742,13 @@ function setupRealtime() {
 
 function handleRealtimeChange(table, payload) {
   const { eventType, new: newRow, old: oldRow } = payload;
+
+  // ===== Mini-jeux : rafraîchir le classement en direct =====
+  if (table === 'minijeux_scores') {
+    if (newRow && newRow.org && newRow.org !== currentOrg) return;
+    if (getCurrentView() === 'minijeux') renderMinijeuxLeaderboard();
+    return;
+  }
 
   // ===== Messagerie =====
   if (table === 'messages') {
@@ -6398,6 +6447,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'medical-notes') renderMedicalNotes();
     else if (view === 'testing') renderTesting();
     else if (view === 'competition') renderCompetition();
+    else if (view === 'minijeux') renderMinijeux();
   });
 });
 
@@ -12519,6 +12569,326 @@ function competitionAggregate(matchs) {
     });
   });
   return agg;
+}
+
+// ============================================================================
+// MINI-JEUX — un jeu par jour (modèle LinkedIn), ~1 min, puis classement du jour
+// ----------------------------------------------------------------------------
+// Le contenu des jeux est STATIQUE (ce tableau) : quasi aucun stockage ni RAM.
+// Seuls les scores partent en base (table minijeux_scores). Le jeu du jour est
+// choisi de façon déterministe d'après la date → tout le monde a le même jeu.
+// Pour ajouter un jeu : pousser un objet dans MINIJEUX_CATALOG (type 'top10' ou
+// 'quiz'). La rotation s'allonge automatiquement.
+// ============================================================================
+const MINIJEUX_CATALOG = [
+  {
+    id: 'wc-winners', type: 'top10', duree: 75,
+    titre: { fr: '🌍 Pays vainqueurs de la Coupe du Monde', en: '🌍 World Cup winning nations' },
+    regle: { fr: 'Cite un maximum de pays ayant gagné la Coupe du Monde (avant 2026).', en: 'Name as many countries as you can that have won the World Cup (before 2026).' },
+    reponses: [
+      { label: { fr: 'Brésil', en: 'Brazil' }, alias: ['bresil', 'brazil'] },
+      { label: { fr: 'Allemagne', en: 'Germany' }, alias: ['allemagne', 'germany', 'rfa', 'west germany'] },
+      { label: { fr: 'Italie', en: 'Italy' }, alias: ['italie', 'italy'] },
+      { label: { fr: 'Argentine', en: 'Argentina' }, alias: ['argentine', 'argentina'] },
+      { label: { fr: 'France', en: 'France' }, alias: ['france'] },
+      { label: { fr: 'Uruguay', en: 'Uruguay' }, alias: ['uruguay'] },
+      { label: { fr: 'Angleterre', en: 'England' }, alias: ['angleterre', 'england'] },
+      { label: { fr: 'Espagne', en: 'Spain' }, alias: ['espagne', 'spain'] }
+    ]
+  },
+  {
+    id: 'euro-winners', type: 'top10', duree: 75,
+    titre: { fr: '🏆 Sélections vainqueures de l\'Euro', en: '🏆 European Championship winners' },
+    regle: { fr: 'Cite les nations ayant remporté le Championnat d\'Europe (avant 2026).', en: 'Name the nations that have won the UEFA Euro (before 2026).' },
+    reponses: [
+      { label: { fr: 'Espagne', en: 'Spain' }, alias: ['espagne', 'spain'] },
+      { label: { fr: 'Allemagne', en: 'Germany' }, alias: ['allemagne', 'germany', 'rfa', 'west germany'] },
+      { label: { fr: 'Italie', en: 'Italy' }, alias: ['italie', 'italy'] },
+      { label: { fr: 'France', en: 'France' }, alias: ['france'] },
+      { label: { fr: 'URSS', en: 'USSR' }, alias: ['urss', 'ussr', 'union sovietique', 'soviet union', 'russie', 'russia'] },
+      { label: { fr: 'Tchécoslovaquie', en: 'Czechoslovakia' }, alias: ['tchecoslovaquie', 'czechoslovakia'] },
+      { label: { fr: 'Pays-Bas', en: 'Netherlands' }, alias: ['pays bas', 'paysbas', 'hollande', 'netherlands', 'holland'] },
+      { label: { fr: 'Danemark', en: 'Denmark' }, alias: ['danemark', 'denmark'] },
+      { label: { fr: 'Grèce', en: 'Greece' }, alias: ['grece', 'greece'] },
+      { label: { fr: 'Portugal', en: 'Portugal' }, alias: ['portugal'] }
+    ]
+  },
+  {
+    id: 'quiz-culture', type: 'quiz', duree: 60,
+    titre: { fr: '⚡ Quiz culture foot', en: '⚡ Football culture quiz' },
+    regle: { fr: '8 questions, une bonne réponse par question. Le plus rapide gagne les égalités.', en: '8 questions, one correct answer each. Fastest wins ties.' },
+    questions: [
+      { q: { fr: 'Combien de joueurs par équipe sur le terrain ?', en: 'How many players per team on the pitch?' }, choix: [{ fr: '9', en: '9' }, { fr: '10', en: '10' }, { fr: '11', en: '11' }, { fr: '12', en: '12' }], bonne: 2 },
+      { q: { fr: 'Quelle équipe a gagné la Coupe du Monde 2018 ?', en: 'Which team won the 2018 World Cup?' }, choix: [{ fr: 'Brésil', en: 'Brazil' }, { fr: 'France', en: 'France' }, { fr: 'Allemagne', en: 'Germany' }, { fr: 'Croatie', en: 'Croatia' }], bonne: 1 },
+      { q: { fr: 'Un carton rouge signifie…', en: 'A red card means…' }, choix: [{ fr: 'Avertissement', en: 'Warning' }, { fr: 'Exclusion', en: 'Sending off' }, { fr: 'Penalty', en: 'Penalty' }, { fr: 'Corner', en: 'Corner' }], bonne: 1 },
+      { q: { fr: 'Combien de points rapporte une victoire en championnat ?', en: 'How many points for a league win?' }, choix: [{ fr: '1', en: '1' }, { fr: '2', en: '2' }, { fr: '3', en: '3' }, { fr: '4', en: '4' }], bonne: 2 },
+      { q: { fr: 'Lionel Messi est surnommé…', en: 'Lionel Messi is nicknamed…' }, choix: [{ fr: 'CR7', en: 'CR7' }, { fr: 'La Pulga', en: 'La Pulga' }, { fr: 'Le Roi', en: 'The King' }, { fr: 'El Matador', en: 'El Matador' }], bonne: 1 },
+      { q: { fr: 'Durée réglementaire d\'un match (hors prolongations) ?', en: 'Regulation match duration (no extra time)?' }, choix: [{ fr: '60 min', en: '60 min' }, { fr: '80 min', en: '80 min' }, { fr: '90 min', en: '90 min' }, { fr: '100 min', en: '100 min' }], bonne: 2 },
+      { q: { fr: 'Le "Clásico" oppose le Real Madrid à…', en: 'El Clásico is Real Madrid versus…' }, choix: [{ fr: 'Atlético', en: 'Atlético' }, { fr: 'Barcelone', en: 'Barcelona' }, { fr: 'Séville', en: 'Sevilla' }, { fr: 'Valence', en: 'Valencia' }], bonne: 1 },
+      { q: { fr: 'Combien de buts dans un triplé (hat-trick) ?', en: 'How many goals in a hat-trick?' }, choix: [{ fr: '2', en: '2' }, { fr: '3', en: '3' }, { fr: '4', en: '4' }, { fr: '5', en: '5' }], bonne: 1 }
+    ]
+  },
+  {
+    id: 'quiz-psg', type: 'quiz', duree: 55,
+    titre: { fr: '🔴🔵 Quiz Paris Saint-Germain', en: '🔴🔵 Paris Saint-Germain quiz' },
+    regle: { fr: '6 questions sur le PSG et les bases du foot.', en: '6 questions on PSG and football basics.' },
+    questions: [
+      { q: { fr: 'Dans quelle ville joue le PSG ?', en: 'In which city does PSG play?' }, choix: [{ fr: 'Lyon', en: 'Lyon' }, { fr: 'Paris', en: 'Paris' }, { fr: 'Marseille', en: 'Marseille' }, { fr: 'Lille', en: 'Lille' }], bonne: 1 },
+      { q: { fr: 'Nom du stade du PSG ?', en: 'PSG\'s stadium name?' }, choix: [{ fr: 'Vélodrome', en: 'Vélodrome' }, { fr: 'Parc des Princes', en: 'Parc des Princes' }, { fr: 'San Siro', en: 'San Siro' }, { fr: 'Camp Nou', en: 'Camp Nou' }], bonne: 1 },
+      { q: { fr: 'Couleurs principales du PSG ?', en: 'PSG\'s main colours?' }, choix: [{ fr: 'Rouge et blanc', en: 'Red & white' }, { fr: 'Rouge et bleu', en: 'Red & blue' }, { fr: 'Vert et blanc', en: 'Green & white' }, { fr: 'Noir et or', en: 'Black & gold' }], bonne: 1 },
+      { q: { fr: 'Le PSG joue dans quel championnat ?', en: 'PSG plays in which league?' }, choix: [{ fr: 'Liga', en: 'Liga' }, { fr: 'Serie A', en: 'Serie A' }, { fr: 'Ligue 1', en: 'Ligue 1' }, { fr: 'Premier League', en: 'Premier League' }], bonne: 2 },
+      { q: { fr: 'Combien de buts dans un doublé ?', en: 'How many goals in a brace?' }, choix: [{ fr: '1', en: '1' }, { fr: '2', en: '2' }, { fr: '3', en: '3' }, { fr: '4', en: '4' }], bonne: 1 },
+      { q: { fr: 'Comment marque-t-on un point au football ?', en: 'How do you score in football?' }, choix: [{ fr: 'Un panier', en: 'A basket' }, { fr: 'Un but', en: 'A goal' }, { fr: 'Un essai', en: 'A try' }, { fr: 'Un ace', en: 'An ace' }], bonne: 1 }
+    ]
+  }
+];
+
+let minijeuxState = null;
+let mjTimerId = null;
+
+function L(obj) { if (obj == null) return ''; if (typeof obj === 'string') return obj; return obj[playerLang()] || obj.fr || obj.en || ''; }
+function mjNormalize(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
+function mjPlayerId() { return currentJoueurNom || (currentUser && currentUser.email ? currentUser.email.split('@')[0] : 'Staff'); }
+function mjFmtTime(ms) { if (ms == null) return ''; const s = Math.round(ms / 1000); return s < 60 ? s + 's' : Math.floor(s / 60) + 'min' + String(s % 60).padStart(2, '0'); }
+function mjDayIndex(dateStr) { const [y, m, d] = dateStr.split('-').map(Number); const days = Math.floor(Date.UTC(y, m - 1, d) / 86400000); return ((days % MINIJEUX_CATALOG.length) + MINIJEUX_CATALOG.length) % MINIJEUX_CATALOG.length; }
+function minijeuxDuJour() { return MINIJEUX_CATALOG[mjDayIndex(todayYMD())]; }
+
+function mjClearTimer() { if (mjTimerId) { clearInterval(mjTimerId); mjTimerId = null; } }
+
+async function mjMyRowToday() {
+  try {
+    const { data } = await sb.from('minijeux_scores').select('*')
+      .eq('org', currentOrg).eq('date', todayYMD()).eq('joueur', mjPlayerId()).limit(1);
+    return data && data[0] ? data[0] : null;
+  } catch (e) { return null; }
+}
+
+async function renderMinijeux() {
+  mjClearTimer();
+  const content = document.getElementById('minijeu-content');
+  if (!content) return;
+  const jeu = minijeuxDuJour();
+  const isPlayer = (currentRole === 'lecteur');
+  const mine = await mjMyRowToday();
+  if (mine && isPlayer) {
+    content.innerHTML = mjResultHTML(jeu, mine, true);
+  } else {
+    content.innerHTML = mjIntroHTML(jeu, !isPlayer);
+    const btn = document.getElementById('mj-play-btn');
+    if (btn) btn.addEventListener('click', () => mjStart(jeu));
+  }
+  renderMinijeuxLeaderboard();
+}
+
+function mjIntroHTML(jeu, staffPreview) {
+  return '<div class="mj-hero">' +
+    '<div class="mj-emoji">🎮</div>' +
+    '<div class="mj-sub" style="margin-bottom:2px;">' + tr('Daily game', 'Jeu du jour') + ' · ' + escapeHtml(formatDateJMA(todayYMD())) + '</div>' +
+    '<h2>' + escapeHtml(L(jeu.titre)) + '</h2>' +
+    '<div class="mj-sub">' + escapeHtml(L(jeu.regle)) + '</div>' +
+    '<div style="margin:12px 0;"><span style="background:var(--bg-elevated);border:1px solid var(--border);padding:4px 12px;border-radius:12px;font-size:13px;">⏱ ' + jeu.duree + 's</span></div>' +
+    '<button class="btn mj-btn-big" id="mj-play-btn">' + tr('Play', 'Jouer') + ' ▶</button>' +
+    (staffPreview ? '<div class="mj-sub" style="margin-top:10px;">' + tr('Staff preview of the daily game.', 'Aperçu staff du jeu du jour.') + '</div>' : '') +
+    '<div class="mj-sub" style="margin-top:12px;">🔁 ' + tr('A new game every day!', 'Un nouveau jeu chaque jour !') + '</div>' +
+    '</div>';
+}
+
+function mjStart(jeu) {
+  mjClearTimer();
+  minijeuxState = { jeu, startTs: Date.now(), found: [], qIndex: 0, correct: 0, remaining: jeu.duree, total: jeu.duree, done: false };
+  if (jeu.type === 'top10') mjRenderTop10();
+  else mjShowQuestion();
+  mjTimerId = setInterval(() => {
+    if (getCurrentView() !== 'minijeux' || !minijeuxState) { mjClearTimer(); return; }
+    minijeuxState.remaining--;
+    mjUpdateTimerUI();
+    if (minijeuxState.remaining <= 0) { mjClearTimer(); mjTimeUp(); }
+  }, 1000);
+  mjUpdateTimerUI();
+}
+
+function mjUpdateTimerUI() {
+  if (!minijeuxState) return;
+  const t = document.getElementById('mj-timer');
+  if (t) { t.textContent = Math.max(0, minijeuxState.remaining) + 's'; t.classList.toggle('low', minijeuxState.remaining <= 10); }
+  const p = document.getElementById('mj-progress');
+  if (p && minijeuxState.total) p.style.width = Math.max(0, minijeuxState.remaining / minijeuxState.total * 100) + '%';
+}
+
+function mjTimeUp() {
+  if (!minijeuxState) return;
+  if (minijeuxState.jeu.type === 'top10') mjFinishTop10();
+  else mjFinishQuiz();
+}
+
+// ---- Jeu type "Top 10" : citer un maximum de bonnes réponses ----
+function mjRenderTop10() {
+  const jeu = minijeuxState.jeu;
+  const c = document.getElementById('minijeu-content');
+  c.innerHTML = '<div class="mj-hero">' +
+    '<div class="mj-timer" id="mj-timer">--</div>' +
+    '<div class="mj-progressbar"><div id="mj-progress" style="width:100%"></div></div>' +
+    '<h2>' + escapeHtml(L(jeu.titre)) + '</h2>' +
+    '<div class="mj-sub" id="mj-count">0 / ' + jeu.reponses.length + '</div>' +
+    '<input class="mj-input" id="mj-input" placeholder="' + tr('Type a name…', 'Écris un nom…') + '" autocomplete="off" autocapitalize="off" spellcheck="false">' +
+    '<div class="mj-found" id="mj-found"></div>' +
+    '<div style="margin-top:16px;"><button class="btn btn-secondary" id="mj-finish-btn">' + tr('Finish', 'Terminer') + '</button></div>' +
+    '</div>';
+  const input = document.getElementById('mj-input');
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { mjTop10Check(input.value); input.value = ''; } });
+  document.getElementById('mj-finish-btn').addEventListener('click', () => { mjClearTimer(); mjFinishTop10(); });
+  setTimeout(() => { try { input.focus(); } catch (e) {} }, 60);
+  mjUpdateTimerUI();
+}
+
+function mjTop10Check(val) {
+  const n = mjNormalize(val);
+  if (!n || !minijeuxState) return;
+  const jeu = minijeuxState.jeu;
+  const idx = jeu.reponses.findIndex((r, i) => !minijeuxState.found.includes(i) &&
+    (mjNormalize(L(r.label)) === n || r.alias.some(a => mjNormalize(a) === n)));
+  if (idx >= 0) {
+    minijeuxState.found.push(idx);
+    const foundEl = document.getElementById('mj-found');
+    if (foundEl) foundEl.innerHTML = minijeuxState.found.map(i => '<span>' + escapeHtml(L(jeu.reponses[i].label)) + '</span>').join('');
+    const cnt = document.getElementById('mj-count');
+    if (cnt) cnt.textContent = minijeuxState.found.length + ' / ' + jeu.reponses.length;
+    if (minijeuxState.found.length === jeu.reponses.length) { mjClearTimer(); mjFinishTop10(); }
+  }
+}
+
+function mjFinishTop10() {
+  if (!minijeuxState) return;
+  const jeu = minijeuxState.jeu;
+  const tempsMs = Date.now() - minijeuxState.startTs;
+  mjFinish(minijeuxState.found.length, tempsMs, { max: jeu.reponses.length, type: 'top10', found: minijeuxState.found.slice() });
+}
+
+// ---- Jeu type "Quiz" : questions à choix multiple, une bonne réponse ----
+function mjShowQuestion() {
+  const jeu = minijeuxState.jeu;
+  const i = minijeuxState.qIndex;
+  const q = jeu.questions[i];
+  const c = document.getElementById('minijeu-content');
+  c.innerHTML = '<div class="mj-hero" style="text-align:left;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">' +
+    '<div class="mj-sub" style="margin:0;">Question ' + (i + 1) + '/' + jeu.questions.length + '</div>' +
+    '<div class="mj-timer low" id="mj-timer" style="font-size:22px;">--</div></div>' +
+    '<div class="mj-progressbar"><div id="mj-progress" style="width:100%"></div></div>' +
+    '<h2 style="text-align:center;margin:14px 0 16px;">' + escapeHtml(L(q.q)) + '</h2>' +
+    '<div id="mj-choices"></div></div>';
+  const box = document.getElementById('mj-choices');
+  q.choix.forEach((ch, idx) => {
+    const b = document.createElement('button');
+    b.className = 'mj-choice';
+    b.textContent = L(ch);
+    b.addEventListener('click', () => mjQuizAnswer(idx));
+    box.appendChild(b);
+  });
+  mjUpdateTimerUI();
+}
+
+function mjQuizAnswer(idx) {
+  if (!minijeuxState) return;
+  const jeu = minijeuxState.jeu;
+  const q = jeu.questions[minijeuxState.qIndex];
+  const btns = Array.prototype.slice.call(document.querySelectorAll('#mj-choices .mj-choice'));
+  btns.forEach(b => b.disabled = true);
+  if (idx === q.bonne) { btns[idx].classList.add('good'); minijeuxState.correct++; }
+  else { btns[idx].classList.add('bad'); if (btns[q.bonne]) btns[q.bonne].classList.add('good'); }
+  setTimeout(() => {
+    if (!minijeuxState) return;
+    minijeuxState.qIndex++;
+    if (minijeuxState.qIndex >= jeu.questions.length) { mjClearTimer(); mjFinishQuiz(); }
+    else mjShowQuestion();
+  }, 800);
+}
+
+function mjFinishQuiz() {
+  if (!minijeuxState) return;
+  const jeu = minijeuxState.jeu;
+  const tempsMs = Date.now() - minijeuxState.startTs;
+  mjFinish(minijeuxState.correct, tempsMs, { max: jeu.questions.length, type: 'quiz' });
+}
+
+async function mjFinish(score, tempsMs, detail) {
+  if (!minijeuxState || minijeuxState.done) return;
+  minijeuxState.done = true;
+  mjClearTimer();
+  const jeu = minijeuxState.jeu;
+  const rowLike = { score: score, temps_ms: tempsMs, detail: detail, joueur: mjPlayerId() };
+  const content = document.getElementById('minijeu-content');
+  if (content) content.innerHTML = mjResultHTML(jeu, rowLike, false);
+  await mjSaveScore(jeu, score, tempsMs, detail);
+  renderMinijeuxLeaderboard();
+}
+
+async function mjSaveScore(jeu, score, tempsMs, detail) {
+  try {
+    const { error } = await sb.from('minijeux_scores').insert({
+      org: currentOrg, joueur: mjPlayerId(), date: todayYMD(),
+      jeu_id: jeu.id, score: score, temps_ms: tempsMs, detail: detail
+    });
+    if (error) {
+      const msg = String(error.message || '').toLowerCase();
+      // Doublon = déjà joué aujourd'hui (rejeu staff) : on ignore silencieusement
+      if (!msg.includes('duplicate') && !msg.includes('unique')) {
+        toast(tr('Score not saved', 'Score non enregistré') + ' : ' + error.message, 'error');
+      }
+    }
+  } catch (e) { /* réseau : le score reste affiché localement */ }
+}
+
+function mjResultHTML(jeu, row, already) {
+  const detail = row.detail || {};
+  const max = detail.max || (jeu.type === 'top10' ? jeu.reponses.length : (jeu.questions ? jeu.questions.length : 0));
+  let answersHtml = '';
+  if (jeu.type === 'top10') {
+    const foundSet = {};
+    (detail.found || []).forEach(i => { foundSet[i] = true; });
+    const foundChips = jeu.reponses.map((r, i) => foundSet[i] ? '<span>' + escapeHtml(L(r.label)) + '</span>' : '').join('');
+    const missedChips = jeu.reponses.map((r, i) => foundSet[i] ? '' : '<span>' + escapeHtml(L(r.label)) + '</span>').join('');
+    if (foundChips.trim()) answersHtml += '<div class="mj-found" style="justify-content:center;">' + foundChips + '</div>';
+    if (missedChips.trim()) answersHtml += '<div class="mj-sub" style="margin-top:12px;">' + tr('Missed', 'Non trouvés') + '</div><div class="mj-missed" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;">' + missedChips + '</div>';
+  }
+  return '<div class="mj-hero">' +
+    '<div class="mj-emoji">' + (already ? '📅' : '🎉') + '</div>' +
+    '<h2>' + (already ? tr('Already played today', 'Déjà joué aujourd\'hui') : tr('Well played!', 'Bien joué !')) + '</h2>' +
+    '<div class="mj-timer" style="color:var(--accent);">' + row.score + (max ? ' <span style="color:var(--text-dim);font-size:20px;">/ ' + max + '</span>' : '') + '</div>' +
+    '<div class="mj-sub">' + escapeHtml(L(jeu.titre)) + (row.temps_ms != null ? ' · ' + mjFmtTime(row.temps_ms) : '') + '</div>' +
+    answersHtml +
+    '<div class="mj-sub" style="margin-top:16px;">🔁 ' + tr('Come back tomorrow for a new game!', 'Reviens demain pour un nouveau jeu !') + '</div>' +
+    '</div>';
+}
+
+async function renderMinijeuxLeaderboard() {
+  const el = document.getElementById('minijeu-leaderboard');
+  if (!el) return;
+  let rows = [];
+  try {
+    const { data } = await sb.from('minijeux_scores').select('*')
+      .eq('org', currentOrg).eq('date', todayYMD())
+      .order('score', { ascending: false }).order('temps_ms', { ascending: true });
+    rows = data || [];
+  } catch (e) { rows = []; }
+  if (!rows.length) {
+    el.innerHTML = '<p style="color:var(--text-dim); font-size:13px;">' + tr('Nobody has played yet today. Be the first!', 'Personne n\'a encore joué aujourd\'hui. Sois le premier !') + '</p>';
+    return;
+  }
+  const me = mjPlayerId();
+  const medals = ['🥇', '🥈', '🥉'];
+  el.innerHTML = rows.map((r, i) => {
+    const rank = medals[i] || (i + 1);
+    const isMe = (r.joueur === me);
+    const max = r.detail && r.detail.max;
+    return '<div class="mj-lb-row' + (isMe ? ' me' : '') + '">' +
+      '<div class="mj-lb-rank">' + rank + '</div>' +
+      '<div class="mj-lb-name">' + escapeHtml(r.joueur) + (isMe ? ' <span style="color:var(--accent);font-size:11px;">(' + tr('you', 'toi') + ')</span>' : '') + '</div>' +
+      '<div style="text-align:right;">' +
+      '<div class="mj-lb-score">' + r.score + (max ? '<span style="color:var(--text-dim);font-weight:400;font-size:12px;">/' + max + '</span>' : '') + '</div>' +
+      '<div class="mj-lb-time">' + mjFmtTime(r.temps_ms) + '</div>' +
+      '</div></div>';
+  }).join('');
 }
 
 function renderCompetition() {
