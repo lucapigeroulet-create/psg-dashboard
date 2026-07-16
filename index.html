@@ -9038,6 +9038,106 @@ let gpsSessionSortDir = -1; // -1 = décroissant, 1 = croissant
 let gpsSessionRatioWeek = '';
 let gpsSessionRatioDay = '';
 let gpsSessionPctMode = 'all'; // 'all' | 'best' | 'ratio' | 'none'
+// Triage "joueurs à surveiller" : seuil d'écart-type au-delà duquel un joueur est hors moyenne
+let gpsTriageThr = 1; // 0.8 | 1 | 1.5
+function gpsSetTriageThr(v) { gpsTriageThr = parseFloat(v); renderGPSSession(); }
+// Métriques de charge suivies dans le triage (valeur en unité d'affichage)
+const GPS_TRIAGE_METRICS = [
+  { key: 'distance_km', label: 'Distance', unit: 'm', dec: 0, mult: 1000 },
+  { key: 'hsr', label: 'HSR', unit: 'm', dec: 0, mult: 1 },
+  { key: 'sprint_dist_m', label: 'Sprint', unit: 'm', dec: 0, mult: 1 },
+  { key: 'top_speed', label: 'Vmax', unit: 'km/h', dec: 1, mult: 1 },
+  { key: 'decel_count_high', label: 'Décél', unit: 'nb', dec: 0, mult: 1 },
+  { key: 'power_plays', label: 'Power Plays', unit: 'nb', dec: 0, mult: 1 }
+];
+// Couleur d'écart : ambre/rouge = moins que l'équipe, bleu/cyan = plus. Neutre si dans la bande.
+function gpsDevColor(zv, alpha) {
+  const az = Math.abs(zv);
+  if (az < gpsTriageThr) return 'transparent';
+  const t = Math.min((az - gpsTriageThr) / (2.2 - gpsTriageThr), 1);
+  const a = 0.28 + 0.52 * t + (alpha || 0);
+  const strong = az >= Math.max(gpsTriageThr + 0.9, 2);
+  const rgb = zv < 0 ? (strong ? '248,113,113' : '251,146,60') : (strong ? '56,182,255' : '0,144,232');
+  return 'rgba(' + rgb + ',' + a + ')';
+}
+function gpsDevInk(zv) { return zv < 0 ? 'var(--orange)' : 'var(--accent-light)'; }
+
+// Bloc "Joueurs à surveiller" (triage par écart à la moyenne d'équipe) pour le rapport de séance.
+// rows = lignes déjà filtrées (poste + joueurs). Retourne du HTML (chaîne).
+function gpsSessionTriageHTML(rows) {
+  if (!rows || rows.length < 4) return ''; // pas assez de joueurs pour une "moyenne d'équipe"
+  const val = (r, m) => gpsVal(r, m.key) * m.mult;
+  const stats = {};
+  GPS_TRIAGE_METRICS.forEach(m => {
+    const xs = rows.map(r => val(r, m));
+    const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+    const varc = xs.reduce((a, b) => a + (b - mean) * (b - mean), 0) / xs.length;
+    stats[m.key] = { mean: mean, sd: Math.sqrt(varc) || 0 };
+  });
+  const zOf = (r, m) => { const s = stats[m.key]; return s.sd ? (val(r, m) - s.mean) / s.sd : 0; };
+  const dOf = (r, m) => { const s = stats[m.key]; return s.mean ? (val(r, m) - s.mean) / s.mean * 100 : 0; };
+  const fmt = (v, dec) => dec ? v.toFixed(dec) : Math.round(v).toLocaleString('fr-FR');
+
+  const scored = rows.map(r => ({
+    r: r,
+    maxz: Math.max.apply(null, GPS_TRIAGE_METRICS.map(m => Math.abs(zOf(r, m)))),
+    flags: GPS_TRIAGE_METRICS.filter(m => Math.abs(zOf(r, m)) >= gpsTriageThr)
+  }));
+  const watch = scored.filter(s => s.flags.length).sort((a, b) => b.maxz - a.maxz);
+  const calm = scored.filter(s => !s.flags.length).map(s => s.r.joueur);
+
+  let h = '<div class="card" style="background:var(--bg-elevated);margin-bottom:16px;">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;">';
+  h += '<h3 style="margin:0;font-size:15px;">🎯 Joueurs à surveiller <span style="color:var(--text-dim);font-weight:400;font-size:12px;">— écarts à la moyenne d\'équipe</span></h3>';
+  h += '<div style="display:inline-flex;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;overflow:hidden;">';
+  [['0.8', '± 0,8σ'], ['1', '± 1σ'], ['1.5', '± 1,5σ']].forEach(o => {
+    const on = Math.abs(gpsTriageThr - parseFloat(o[0])) < 0.001;
+    h += '<button onclick="gpsSetTriageThr(' + o[0] + ')" style="border:0;cursor:pointer;padding:5px 11px;font-size:12px;background:' + (on ? 'var(--accent)' : 'transparent') + ';color:' + (on ? '#fff' : 'var(--text-dim)') + ';">' + o[1] + '</button>';
+  });
+  h += '</div></div>';
+  h += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Ambre/rouge = <b style="color:var(--orange);">moins</b> que l\'équipe · bleu = <b style="color:var(--accent-light);">plus</b> que l\'équipe. σ = écart-type de l\'équipe sur cette séance.</div>';
+
+  if (!watch.length) {
+    h += '<div style="color:var(--green);font-size:13px;">✅ Toute la sélection est dans la moyenne d\'équipe à ce seuil.</div></div>';
+    return h;
+  }
+
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px;">';
+  watch.forEach(function (s) {
+    const p = s.r, sev2 = s.maxz >= Math.max(gpsTriageThr + 0.9, 2);
+    const worst = s.flags.slice().sort((a, b) => Math.abs(zOf(p, b)) - Math.abs(zOf(p, a)));
+    const summary = worst.map(m => m.label + ' ' + (dOf(p, m) > 0 ? '+' : '') + Math.round(dOf(p, m)) + '%').join(' · ');
+    h += '<div style="background:var(--bg-card);border:1px solid var(--border);border-left:4px solid ' + (sev2 ? 'var(--red)' : 'var(--accent)') + ';border-radius:10px;padding:12px;">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:3px;">';
+    h += '<span style="font-weight:700;font-size:14px;">' + escapeHtml(p.joueur) + '</span>';
+    h += '<span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:' + (sev2 ? 'rgba(248,113,113,.16)' : 'rgba(0,144,232,.16)') + ';color:' + (sev2 ? 'var(--red)' : 'var(--accent-light)') + ';">' + (sev2 ? '⚠ écart fort' : 'à surveiller') + '</span></div>';
+    h += '<div style="font-size:11.5px;color:var(--text-dim);margin-bottom:10px;">' + escapeHtml(summary) + '</div>';
+    h += '<div style="display:grid;gap:6px;">';
+    worst.forEach(function (m) {
+      const zv = zOf(p, m), half = Math.min(Math.abs(zv) / 2.6, 1) * 50, col = gpsDevColor(zv, 0.2);
+      const fill = zv < 0
+        ? 'right:50%;width:' + half + '%;background:' + col + ';border-radius:3px 0 0 3px;'
+        : 'left:50%;width:' + half + '%;background:' + col + ';border-radius:0 3px 3px 0;';
+      h += '<div style="display:grid;grid-template-columns:60px 1fr 46px;align-items:center;gap:8px;font-size:11px;">';
+      h += '<span style="color:var(--text-dim);">' + m.label + '</span>';
+      h += '<div style="position:relative;height:12px;background:var(--bg-elevated);border-radius:3px;overflow:hidden;">';
+      h += '<div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--text-dim);opacity:.55;"></div>';
+      h += '<div style="position:absolute;top:0;bottom:0;' + fill + '"></div></div>';
+      h += '<span style="text-align:right;font-weight:700;color:' + gpsDevInk(zv) + ';">' + (dOf(p, m) > 0 ? '+' : '') + Math.round(dOf(p, m)) + '%</span></div>';
+    });
+    h += '</div></div>';
+  });
+  h += '</div>';
+  if (calm.length) {
+    h += '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">';
+    h += '<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">Dans la moyenne — ' + calm.length + ' joueur' + (calm.length > 1 ? 's' : '') + '</div>';
+    h += '<div style="display:flex;flex-wrap:wrap;gap:5px;">';
+    calm.forEach(n => { h += '<span style="font-size:12px;padding:3px 10px;border-radius:999px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-dim);">' + escapeHtml(n) + '</span>'; });
+    h += '</div></div>';
+  }
+  h += '</div>';
+  return h;
+}
 
 // Indicateurs GPS clés affichés
 const GPS_METRICS = [
@@ -10110,6 +10210,9 @@ function renderGPSSession() {
   html += '<div class="stat"><div class="stat-label">Sprint moyen</div><div class="stat-value" style="font-size:20px;">' + Math.round(avgSprint) + ' m</div></div>';
   html += '<div class="stat"><div class="stat-label">Vmax moyenne</div><div class="stat-value" style="font-size:20px;">' + avgVmax.toFixed(1) + '</div></div>';
   html += '</div>';
+
+  // Triage "joueurs à surveiller" : repère d'un coup d'œil qui sort de la moyenne d'équipe
+  html += gpsSessionTriageHTML(rows);
 
   // Vérifier si des ratios best match sont disponibles pour cette séance
   const hasBestMatch = rows.some(r => getBestMatchRow(r.joueur) !== null);
