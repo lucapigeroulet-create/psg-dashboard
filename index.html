@@ -12606,11 +12606,11 @@ function competitionAggregate(matchs) {
 // ============================================================================
 // MINI-JEUX — un jeu par jour (modèle LinkedIn), ~1 min, puis classement du jour
 // ----------------------------------------------------------------------------
-// Le contenu des jeux est STATIQUE (ce tableau) : quasi aucun stockage ni RAM.
-// Seuls les scores partent en base (table minijeux_scores). Le jeu du jour est
-// choisi de façon déterministe d'après la date → tout le monde a le même jeu.
-// Pour ajouter un jeu : pousser un objet dans MINIJEUX_CATALOG (type 'top10' ou
-// 'quiz'). La rotation s'allonge automatiquement.
+// ⚠️ ANCIEN catalogue : seuls les 2 jeux top10 ('wc-winners', 'euro-winners')
+// sont encore utilisés (repris dans MJ_TOP10S plus bas). Les 2 quiz basiques
+// sont RETIRÉS de la rotation (trop faciles). Le système saison (banque de
+// questions + planning) est défini juste après ce tableau — c'est LÀ qu'on
+// ajoute du contenu désormais (MJ_D, mjCuratedQs, MJ_TOP10S).
 // ============================================================================
 const MINIJEUX_CATALOG = [
   {
@@ -12675,6 +12675,674 @@ const MINIJEUX_CATALOG = [
   }
 ];
 
+// ============================================================================
+// MINI-JEUX SAISON — banque de questions générée depuis des palmarès vérifiés
+// ----------------------------------------------------------------------------
+// Remplace la petite rotation de 4 jeux : le jeu du jour est désormais tiré
+// d'un planning déterministe (même jeu pour tous) mêlant :
+//   - des QUIZ (7 questions/jour) tirés d'une banque de ~500 questions générées
+//     depuis les palmarès ci-dessous (faits AVANT 2026 uniquement — ne jamais
+//     inventer : vérifier chaque ligne ajoutée) + questions culture rédigées
+//   - des jeux de CITATION type Sporcle (MJ_TOP10S), 2 jours/semaine
+// Ajouter du contenu : compléter un palmarès MJ_D, MJ_CURATED ou MJ_TOP10S.
+// Les 2 anciens jeux "quiz-culture"/"quiz-psg" de MINIJEUX_CATALOG sont retirés
+// de la rotation (trop faciles) ; les 2 top10 historiques sont réutilisés.
+// ============================================================================
+// MJ-PURE-BEGIN (bloc pur, extractible pour tests node)
+// PRNG déterministe (mulberry32) : mêmes tirages pour tous les clients
+function mjRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function mjShuffled(arr, seed) {
+  const a = arr.slice(), r = mjRng(seed);
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+  return a;
+}
+// Traductions FR→EN des noms utilisés dans les palmarès (identité si absent)
+const MJ_EN = {
+  'Argentine': 'Argentina', 'Italie': 'Italy', 'Tchécoslovaquie': 'Czechoslovakia', 'Hongrie': 'Hungary',
+  'Brésil': 'Brazil', 'RFA': 'West Germany', 'Suisse': 'Switzerland', 'Suède': 'Sweden', 'Chili': 'Chile',
+  'Angleterre': 'England', 'Mexique': 'Mexico', 'Pays-Bas': 'Netherlands', 'Espagne': 'Spain',
+  'États-Unis': 'United States', 'Corée du Sud et Japon': 'South Korea & Japan', 'Corée du Sud': 'South Korea',
+  'Japon': 'Japan', 'Allemagne': 'Germany', 'Afrique du Sud': 'South Africa', 'Russie': 'Russia',
+  'URSS': 'USSR', 'Yougoslavie': 'Yugoslavia', 'Belgique': 'Belgium', 'Danemark': 'Denmark',
+  'Rép. tchèque': 'Czech Republic', 'Grèce': 'Greece', 'Croatie': 'Croatia', 'Pologne': 'Poland',
+  'Algérie': 'Algeria', 'Côte d\'Ivoire': 'Ivory Coast', 'Égypte': 'Egypt', 'Cameroun': 'Cameroon',
+  'Tunisie': 'Tunisia', 'Zambie': 'Zambia', 'Sénégal': 'Senegal', 'Colombie': 'Colombia', 'Norvège': 'Norway',
+  'Barcelone': 'Barcelona', 'Milan AC': 'AC Milan', 'Étoile Rouge de Belgrade': 'Red Star Belgrade',
+  'Hambourg': 'Hamburg SV', 'Steaua Bucarest': 'Steaua Bucharest', 'Valence CF': 'Valencia CF',
+  'Séville FC': 'Sevilla FC', 'Werder Brême': 'Werder Bremen', 'Deportivo La Corogne': 'Deportivo La Coruña',
+  'Naples': 'Napoli', 'Eintracht Francfort': 'Eintracht Frankfurt'
+};
+function mjEn(s) { return MJ_EN[s] || s; }
+// ---- Palmarès vérifiés (faits avant 2026) ----------------------------------
+const MJ_D = {
+  // Coupe du Monde : [année, vainqueur, finaliste battu, pays hôte]
+  cdm: [
+    [1930, 'Uruguay', 'Argentine', 'Uruguay'], [1934, 'Italie', 'Tchécoslovaquie', 'Italie'],
+    [1938, 'Italie', 'Hongrie', 'France'], [1950, 'Uruguay', 'Brésil', 'Brésil'],
+    [1954, 'RFA', 'Hongrie', 'Suisse'], [1958, 'Brésil', 'Suède', 'Suède'],
+    [1962, 'Brésil', 'Tchécoslovaquie', 'Chili'], [1966, 'Angleterre', 'RFA', 'Angleterre'],
+    [1970, 'Brésil', 'Italie', 'Mexique'], [1974, 'RFA', 'Pays-Bas', 'RFA'],
+    [1978, 'Argentine', 'Pays-Bas', 'Argentine'], [1982, 'Italie', 'RFA', 'Espagne'],
+    [1986, 'Argentine', 'RFA', 'Mexique'], [1990, 'RFA', 'Argentine', 'Italie'],
+    [1994, 'Brésil', 'Italie', 'États-Unis'], [1998, 'France', 'Brésil', 'France'],
+    [2002, 'Brésil', 'Allemagne', 'Corée du Sud et Japon'], [2006, 'Italie', 'France', 'Allemagne'],
+    [2010, 'Espagne', 'Pays-Bas', 'Afrique du Sud'], [2014, 'Allemagne', 'Argentine', 'Brésil'],
+    [2018, 'France', 'Croatie', 'Russie'], [2022, 'Argentine', 'France', 'Qatar']
+  ],
+  // Meilleur buteur d'une Coupe du Monde (éditions à lauréat unique)
+  cdmButeurs: [
+    [1958, 'Just Fontaine'], [1966, 'Eusébio'], [1970, 'Gerd Müller'], [1974, 'Grzegorz Lato'],
+    [1978, 'Mario Kempes'], [1982, 'Paolo Rossi'], [1986, 'Gary Lineker'], [1990, 'Salvatore Schillaci'],
+    [1998, 'Davor Šuker'], [2002, 'Ronaldo'], [2006, 'Miroslav Klose'], [2010, 'Thomas Müller'],
+    [2014, 'James Rodríguez'], [2018, 'Harry Kane'], [2022, 'Kylian Mbappé']
+  ],
+  // Euro : [année, vainqueur, finaliste battu]
+  euro: [
+    [1960, 'URSS', 'Yougoslavie'], [1964, 'Espagne', 'URSS'], [1968, 'Italie', 'Yougoslavie'],
+    [1972, 'RFA', 'URSS'], [1976, 'Tchécoslovaquie', 'RFA'], [1980, 'RFA', 'Belgique'],
+    [1984, 'France', 'Espagne'], [1988, 'Pays-Bas', 'URSS'], [1992, 'Danemark', 'Allemagne'],
+    [1996, 'Allemagne', 'Rép. tchèque'], [2000, 'France', 'Italie'], [2004, 'Grèce', 'Portugal'],
+    [2008, 'Espagne', 'Allemagne'], [2012, 'Espagne', 'Italie'], [2016, 'Portugal', 'France'],
+    [2021, 'Italie', 'Angleterre'], [2024, 'Espagne', 'Angleterre']
+  ],
+  // Coupe d'Europe des clubs champions / Ligue des champions : [année, vainqueur]
+  ldc: [
+    [1956, 'Real Madrid'], [1957, 'Real Madrid'], [1958, 'Real Madrid'], [1959, 'Real Madrid'], [1960, 'Real Madrid'],
+    [1961, 'Benfica'], [1962, 'Benfica'], [1963, 'Milan AC'], [1964, 'Inter Milan'], [1965, 'Inter Milan'],
+    [1966, 'Real Madrid'], [1967, 'Celtic'], [1968, 'Manchester United'], [1969, 'Milan AC'], [1970, 'Feyenoord'],
+    [1971, 'Ajax'], [1972, 'Ajax'], [1973, 'Ajax'], [1974, 'Bayern Munich'], [1975, 'Bayern Munich'],
+    [1976, 'Bayern Munich'], [1977, 'Liverpool'], [1978, 'Liverpool'], [1979, 'Nottingham Forest'],
+    [1980, 'Nottingham Forest'], [1981, 'Liverpool'], [1982, 'Aston Villa'], [1983, 'Hambourg'],
+    [1984, 'Liverpool'], [1985, 'Juventus'], [1986, 'Steaua Bucarest'], [1987, 'Porto'], [1988, 'PSV Eindhoven'],
+    [1989, 'Milan AC'], [1990, 'Milan AC'], [1991, 'Étoile Rouge de Belgrade'], [1992, 'Barcelone'],
+    [1993, 'Marseille'], [1994, 'Milan AC'], [1995, 'Ajax'], [1996, 'Juventus'], [1997, 'Borussia Dortmund'],
+    [1998, 'Real Madrid'], [1999, 'Manchester United'], [2000, 'Real Madrid'], [2001, 'Bayern Munich'],
+    [2002, 'Real Madrid'], [2003, 'Milan AC'], [2004, 'Porto'], [2005, 'Liverpool'], [2006, 'Barcelone'],
+    [2007, 'Milan AC'], [2008, 'Manchester United'], [2009, 'Barcelone'], [2010, 'Inter Milan'],
+    [2011, 'Barcelone'], [2012, 'Chelsea'], [2013, 'Bayern Munich'], [2014, 'Real Madrid'], [2015, 'Barcelone'],
+    [2016, 'Real Madrid'], [2017, 'Real Madrid'], [2018, 'Real Madrid'], [2019, 'Liverpool'],
+    [2020, 'Bayern Munich'], [2021, 'Chelsea'], [2022, 'Real Madrid'], [2023, 'Manchester City'],
+    [2024, 'Real Madrid'], [2025, 'PSG']
+  ],
+  // Finaliste battu de la Ligue des champions (ère moderne)
+  ldcFin: [
+    [1993, 'Milan AC'], [1994, 'Barcelone'], [1995, 'Milan AC'], [1996, 'Ajax'], [1997, 'Juventus'],
+    [1998, 'Juventus'], [1999, 'Bayern Munich'], [2000, 'Valence CF'], [2001, 'Valence CF'],
+    [2002, 'Bayer Leverkusen'], [2003, 'Juventus'], [2004, 'Monaco'], [2005, 'Milan AC'], [2006, 'Arsenal'],
+    [2007, 'Liverpool'], [2008, 'Chelsea'], [2009, 'Manchester United'], [2010, 'Bayern Munich'],
+    [2011, 'Manchester United'], [2012, 'Bayern Munich'], [2013, 'Borussia Dortmund'], [2014, 'Atlético Madrid'],
+    [2015, 'Juventus'], [2016, 'Atlético Madrid'], [2017, 'Juventus'], [2018, 'Liverpool'], [2019, 'Tottenham'],
+    [2020, 'PSG'], [2021, 'Manchester City'], [2022, 'Liverpool'], [2023, 'Inter Milan'],
+    [2024, 'Borussia Dortmund'], [2025, 'Inter Milan']
+  ],
+  // Ballon d'Or : [année, lauréat] (pas de trophée en 2020)
+  bdo: [
+    [1956, 'Stanley Matthews'], [1957, 'Alfredo Di Stéfano'], [1958, 'Raymond Kopa'], [1959, 'Alfredo Di Stéfano'],
+    [1960, 'Luis Suárez'], [1961, 'Omar Sívori'], [1962, 'Josef Masopust'], [1963, 'Lev Yachine'],
+    [1964, 'Denis Law'], [1965, 'Eusébio'], [1966, 'Bobby Charlton'], [1967, 'Flórián Albert'],
+    [1968, 'George Best'], [1969, 'Gianni Rivera'], [1970, 'Gerd Müller'], [1971, 'Johan Cruyff'],
+    [1972, 'Franz Beckenbauer'], [1973, 'Johan Cruyff'], [1974, 'Johan Cruyff'], [1975, 'Oleg Blokhine'],
+    [1976, 'Franz Beckenbauer'], [1977, 'Allan Simonsen'], [1978, 'Kevin Keegan'], [1979, 'Kevin Keegan'],
+    [1980, 'Karl-Heinz Rummenigge'], [1981, 'Karl-Heinz Rummenigge'], [1982, 'Paolo Rossi'],
+    [1983, 'Michel Platini'], [1984, 'Michel Platini'], [1985, 'Michel Platini'], [1986, 'Igor Belanov'],
+    [1987, 'Ruud Gullit'], [1988, 'Marco van Basten'], [1989, 'Marco van Basten'], [1990, 'Lothar Matthäus'],
+    [1991, 'Jean-Pierre Papin'], [1992, 'Marco van Basten'], [1993, 'Roberto Baggio'], [1994, 'Hristo Stoichkov'],
+    [1995, 'George Weah'], [1996, 'Matthias Sammer'], [1997, 'Ronaldo'], [1998, 'Zinédine Zidane'],
+    [1999, 'Rivaldo'], [2000, 'Luís Figo'], [2001, 'Michael Owen'], [2002, 'Ronaldo'], [2003, 'Pavel Nedvěd'],
+    [2004, 'Andriy Shevchenko'], [2005, 'Ronaldinho'], [2006, 'Fabio Cannavaro'], [2007, 'Kaká'],
+    [2008, 'Cristiano Ronaldo'], [2009, 'Lionel Messi'], [2010, 'Lionel Messi'], [2011, 'Lionel Messi'],
+    [2012, 'Lionel Messi'], [2013, 'Cristiano Ronaldo'], [2014, 'Cristiano Ronaldo'], [2015, 'Lionel Messi'],
+    [2016, 'Cristiano Ronaldo'], [2017, 'Cristiano Ronaldo'], [2018, 'Luka Modrić'], [2019, 'Lionel Messi'],
+    [2021, 'Lionel Messi'], [2022, 'Karim Benzema'], [2023, 'Lionel Messi'], [2024, 'Rodri'],
+    [2025, 'Ousmane Dembélé']
+  ],
+  // Champions nationaux : [année de fin de saison, club]
+  l1: [
+    [1994, 'PSG'], [1995, 'Nantes'], [1996, 'Auxerre'], [1997, 'Monaco'], [1998, 'Lens'], [1999, 'Bordeaux'],
+    [2000, 'Monaco'], [2001, 'Nantes'], [2002, 'Lyon'], [2003, 'Lyon'], [2004, 'Lyon'], [2005, 'Lyon'],
+    [2006, 'Lyon'], [2007, 'Lyon'], [2008, 'Lyon'], [2009, 'Bordeaux'], [2010, 'Marseille'], [2011, 'Lille'],
+    [2012, 'Montpellier'], [2013, 'PSG'], [2014, 'PSG'], [2015, 'PSG'], [2016, 'PSG'], [2017, 'Monaco'],
+    [2018, 'PSG'], [2019, 'PSG'], [2020, 'PSG'], [2021, 'Lille'], [2022, 'PSG'], [2023, 'PSG'],
+    [2024, 'PSG'], [2025, 'PSG']
+  ],
+  pl: [
+    [1993, 'Manchester United'], [1994, 'Manchester United'], [1995, 'Blackburn Rovers'], [1996, 'Manchester United'],
+    [1997, 'Manchester United'], [1998, 'Arsenal'], [1999, 'Manchester United'], [2000, 'Manchester United'],
+    [2001, 'Manchester United'], [2002, 'Arsenal'], [2003, 'Manchester United'], [2004, 'Arsenal'],
+    [2005, 'Chelsea'], [2006, 'Chelsea'], [2007, 'Manchester United'], [2008, 'Manchester United'],
+    [2009, 'Manchester United'], [2010, 'Chelsea'], [2011, 'Manchester United'], [2012, 'Manchester City'],
+    [2013, 'Manchester United'], [2014, 'Manchester City'], [2015, 'Chelsea'], [2016, 'Leicester City'],
+    [2017, 'Chelsea'], [2018, 'Manchester City'], [2019, 'Manchester City'], [2020, 'Liverpool'],
+    [2021, 'Manchester City'], [2022, 'Manchester City'], [2023, 'Manchester City'], [2024, 'Manchester City'],
+    [2025, 'Liverpool']
+  ],
+  liga: [
+    [2000, 'Deportivo La Corogne'], [2001, 'Real Madrid'], [2002, 'Valence CF'], [2003, 'Real Madrid'],
+    [2004, 'Valence CF'], [2005, 'Barcelone'], [2006, 'Barcelone'], [2007, 'Real Madrid'], [2008, 'Real Madrid'],
+    [2009, 'Barcelone'], [2010, 'Barcelone'], [2011, 'Barcelone'], [2012, 'Real Madrid'], [2013, 'Barcelone'],
+    [2014, 'Atlético Madrid'], [2015, 'Barcelone'], [2016, 'Barcelone'], [2017, 'Real Madrid'],
+    [2018, 'Barcelone'], [2019, 'Barcelone'], [2020, 'Real Madrid'], [2021, 'Atlético Madrid'],
+    [2022, 'Real Madrid'], [2023, 'Barcelone'], [2024, 'Real Madrid'], [2025, 'Barcelone']
+  ],
+  seriea: [
+    [2000, 'Lazio'], [2001, 'Roma'], [2002, 'Juventus'], [2003, 'Juventus'], [2004, 'Milan AC'],
+    [2007, 'Inter Milan'], [2008, 'Inter Milan'], [2009, 'Inter Milan'], [2010, 'Inter Milan'],
+    [2011, 'Milan AC'], [2012, 'Juventus'], [2013, 'Juventus'], [2014, 'Juventus'], [2015, 'Juventus'],
+    [2016, 'Juventus'], [2017, 'Juventus'], [2018, 'Juventus'], [2019, 'Juventus'], [2020, 'Juventus'],
+    [2021, 'Inter Milan'], [2022, 'Milan AC'], [2023, 'Naples'], [2024, 'Inter Milan'], [2025, 'Naples']
+  ],
+  buli: [
+    [2000, 'Bayern Munich'], [2001, 'Bayern Munich'], [2002, 'Borussia Dortmund'], [2003, 'Bayern Munich'],
+    [2004, 'Werder Brême'], [2005, 'Bayern Munich'], [2006, 'Bayern Munich'], [2007, 'Stuttgart'],
+    [2008, 'Bayern Munich'], [2009, 'Wolfsburg'], [2010, 'Bayern Munich'], [2011, 'Borussia Dortmund'],
+    [2012, 'Borussia Dortmund'], [2013, 'Bayern Munich'], [2014, 'Bayern Munich'], [2015, 'Bayern Munich'],
+    [2016, 'Bayern Munich'], [2017, 'Bayern Munich'], [2018, 'Bayern Munich'], [2019, 'Bayern Munich'],
+    [2020, 'Bayern Munich'], [2021, 'Bayern Munich'], [2022, 'Bayern Munich'], [2023, 'Bayern Munich'],
+    [2024, 'Bayer Leverkusen'], [2025, 'Bayern Munich']
+  ],
+  can: [
+    [1990, 'Algérie'], [1992, 'Côte d\'Ivoire'], [1994, 'Nigeria'], [1996, 'Afrique du Sud'], [1998, 'Égypte'],
+    [2000, 'Cameroun'], [2002, 'Cameroun'], [2004, 'Tunisie'], [2006, 'Égypte'], [2008, 'Égypte'],
+    [2010, 'Égypte'], [2012, 'Zambie'], [2013, 'Nigeria'], [2015, 'Côte d\'Ivoire'], [2017, 'Cameroun'],
+    [2019, 'Algérie'], [2022, 'Sénégal'], [2024, 'Côte d\'Ivoire']
+  ],
+  copa: [
+    [1991, 'Argentine'], [1993, 'Argentine'], [1995, 'Uruguay'], [1997, 'Brésil'], [1999, 'Brésil'],
+    [2001, 'Colombie'], [2004, 'Brésil'], [2007, 'Brésil'], [2011, 'Uruguay'], [2015, 'Chili'],
+    [2016, 'Chili'], [2019, 'Brésil'], [2021, 'Argentine'], [2024, 'Argentine']
+  ]
+};
+// ---- Générateur de questions "palmarès" -------------------------------------
+// rows = [[année, ...]], col = colonne de la bonne réponse, poolCols = colonnes
+// alimentant les mauvaises réponses (fenêtre d'années ±win pour rester plausible)
+function mjMakeYearQs(rows, col, tfr, ten, poolCols, win, seedBase) {
+  const out = [];
+  rows.forEach(r => {
+    const y = r[0], correct = r[col];
+    if (!correct) return;
+    let pool = [];
+    rows.forEach(r2 => {
+      if (Math.abs(r2[0] - y) <= win) poolCols.forEach(c => { if (r2[c] && r2[c] !== correct) pool.push(r2[c]); });
+    });
+    pool = pool.filter((v, i) => pool.indexOf(v) === i);
+    if (pool.length < 3) {
+      pool = [];
+      rows.forEach(r2 => poolCols.forEach(c => { if (r2[c] && r2[c] !== correct) pool.push(r2[c]); }));
+      pool = pool.filter((v, i) => pool.indexOf(v) === i);
+    }
+    const rng = mjRng(seedBase * 100003 + y);
+    const opts = [correct];
+    const p = pool.slice();
+    while (opts.length < 4 && p.length) opts.push(p.splice(Math.floor(rng() * p.length), 1)[0]);
+    for (let i = opts.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = opts[i]; opts[i] = opts[j]; opts[j] = t; }
+    out.push({
+      q: { fr: tfr.replace('{y}', y), en: ten.replace('{y}', y) },
+      choix: opts.map(o => ({ fr: o, en: mjEn(o) })),
+      bonne: opts.indexOf(correct)
+    });
+  });
+  return out;
+}
+// ---- Questions culture rédigées (2-5★) --------------------------------------
+// CQ(seed, question fr, question en, BONNE réponse, [3 mauvaises]) : la bonne
+// réponse est TOUJOURS le 4e argument, l'ordre affiché est mélangé par le seed.
+// Options : chaîne (traduite via MJ_EN) ou paire [fr, en].
+function CQ(seed, qfr, qen, correct, wrongs) {
+  const toOpt = o => Array.isArray(o) ? { fr: o[0], en: o[1] } : { fr: o, en: mjEn(o) };
+  const opts = mjShuffled([correct].concat(wrongs), seed * 7 + 13);
+  return { q: { fr: qfr, en: qen }, choix: opts.map(toOpt), bonne: opts.indexOf(correct) };
+}
+function mjCuratedQs() {
+  let s = 0; const N = () => ++s;
+  return [
+    CQ(N(), 'Combien de Coupes du Monde pour le Brésil ?', 'How many World Cups has Brazil won?', '5', ['3', '4', '6']),
+    CQ(N(), 'Combien de Ligues des champions pour le Real Madrid (avant 2026) ?', 'How many Champions League titles for Real Madrid (before 2026)?', '15', ['11', '13', '16']),
+    CQ(N(), 'Combien de Ballons d\'Or pour Lionel Messi ?', 'How many Ballons d\'Or for Lionel Messi?', '8', ['6', '7', '9']),
+    CQ(N(), 'Combien de Ballons d\'Or pour Cristiano Ronaldo ?', 'How many Ballons d\'Or for Cristiano Ronaldo?', '5', ['4', '6', '7']),
+    CQ(N(), 'Qui est le meilleur buteur de l\'histoire de la Coupe du Monde ?', 'Who is the all-time World Cup top scorer?', 'Miroslav Klose', ['Pelé', 'Ronaldo', 'Gerd Müller']),
+    CQ(N(), 'Combien de buts pour Just Fontaine lors de la Coupe du Monde 1958 (record) ?', 'How many goals did Just Fontaine score at the 1958 World Cup (record)?', '13', ['9', '11', '15']),
+    CQ(N(), 'Qui est le seul joueur champion du monde à trois reprises ?', 'Who is the only player to win three World Cups?', 'Pelé', ['Diego Maradona', 'Cafu', 'Ronaldo']),
+    CQ(N(), 'Qui a marqué un triplé en finale de la Coupe du Monde 2022 ?', 'Who scored a hat-trick in the 2022 World Cup final?', 'Kylian Mbappé', ['Lionel Messi', 'Ángel Di María', 'Julián Álvarez']),
+    CQ(N(), 'Quel joueur italien était impliqué dans l\'expulsion de Zidane en finale 2006 ?', 'Which Italian player was involved in Zidane\'s red card in the 2006 final?', 'Marco Materazzi', ['Fabio Cannavaro', 'Gennaro Gattuso', 'Francesco Totti']),
+    CQ(N(), 'La « Main de Dieu » de Maradona (1986) a été marquée contre…', 'Maradona\'s "Hand of God" (1986) was scored against…', 'Angleterre', ['Brésil', 'Italie', 'Belgique']),
+    CQ(N(), 'Dans quel club Kylian Mbappé a-t-il débuté en professionnel ?', 'At which club did Kylian Mbappé turn professional?', 'Monaco', ['PSG', 'Rennes', 'Caen']),
+    CQ(N(), 'En quelle année le Paris Saint-Germain a-t-il été fondé ?', 'In which year was Paris Saint-Germain founded?', '1970', ['1950', '1965', '1975']),
+    CQ(N(), 'Quel trophée européen le PSG a-t-il remporté en 1996 ?', 'Which European trophy did PSG win in 1996?', ['Coupe des Coupes', 'Cup Winners\' Cup'], [['Coupe des clubs champions', 'European Cup'], ['Coupe UEFA', 'UEFA Cup'], ['Supercoupe d\'Europe', 'European Super Cup']]),
+    CQ(N(), 'Qui le PSG a-t-il battu en finale de la Ligue des champions 2025 ?', 'Who did PSG beat in the 2025 Champions League final?', 'Inter Milan', ['Real Madrid', 'Arsenal', 'Bayern Munich']),
+    CQ(N(), 'Sur quel score le PSG a-t-il gagné la finale de la Ligue des champions 2025 ?', 'What was the score of PSG\'s 2025 Champions League final win?', '5-0', ['2-0', '3-1', '4-2']),
+    CQ(N(), 'Qui a perdu la finale de la Ligue des champions 2020 contre le Bayern ?', 'Who lost the 2020 Champions League final to Bayern?', 'PSG', ['Lyon', 'Manchester City', 'Atalanta']),
+    CQ(N(), 'Qui est le meilleur buteur de l\'histoire du PSG ?', 'Who is PSG\'s all-time top scorer?', 'Kylian Mbappé', ['Edinson Cavani', 'Zlatan Ibrahimović', 'Pauleta']),
+    CQ(N(), 'Combien de buts Kylian Mbappé a-t-il marqués au PSG (record du club) ?', 'How many goals did Kylian Mbappé score for PSG (club record)?', '256', ['201', '222', '301']),
+    CQ(N(), 'Dans quel club jouait George Weah quand il a reçu le Ballon d\'Or 1995 ?', 'At which club was George Weah when he won the 1995 Ballon d\'Or?', 'Milan AC', ['PSG', 'Monaco', 'Chelsea']),
+    CQ(N(), 'Quel gardien est le seul à avoir remporté le Ballon d\'Or ?', 'Which goalkeeper is the only one to win the Ballon d\'Or?', 'Lev Yachine', ['Gianluigi Buffon', 'Iker Casillas', 'Manuel Neuer']),
+    CQ(N(), 'Dans quel stade joue le Real Madrid ?', 'What is Real Madrid\'s stadium?', 'Santiago Bernabéu', ['Camp Nou', 'Metropolitano', 'San Siro']),
+    CQ(N(), 'Dans quel stade joue Liverpool ?', 'What is Liverpool\'s stadium?', 'Anfield', ['Old Trafford', 'Stamford Bridge', 'Etihad Stadium']),
+    CQ(N(), 'Quelle équipe a réalisé la « Remontada » 6-1 contre le PSG en 2017 ?', 'Which team completed the 6-1 "Remontada" against PSG in 2017?', 'Barcelone', ['Real Madrid', 'Manchester United', 'Juventus']),
+    CQ(N(), 'Istanbul 2005 : Liverpool renverse 3-3 (t.a.b.) quelle équipe en finale de C1 ?', 'Istanbul 2005: Liverpool came back to 3-3 (pens) against which team?', 'Milan AC', ['Juventus', 'Inter Milan', 'Real Madrid']),
+    CQ(N(), 'En quelle année Leicester a-t-il été champion d\'Angleterre ?', 'In which year was Leicester Premier League champion?', '2016', ['2014', '2015', '2017']),
+    CQ(N(), 'Qui est le meilleur buteur de l\'histoire de la Ligue des champions ?', 'Who is the all-time Champions League top scorer?', 'Cristiano Ronaldo', ['Lionel Messi', 'Robert Lewandowski', 'Karim Benzema']),
+    CQ(N(), 'Qui est le meilleur buteur de l\'histoire en sélection nationale (avant 2026) ?', 'Who is the all-time top scorer in international football (before 2026)?', 'Cristiano Ronaldo', ['Lionel Messi', 'Ali Daei', 'Pelé']),
+    CQ(N(), 'Combien de nations différentes ont remporté la Coupe du Monde (avant 2026) ?', 'How many different nations have won the World Cup (before 2026)?', '8', ['6', '7', '9']),
+    CQ(N(), 'Quelle nation a remporté deux Coupes du Monde consécutives dans les années 1930 ?', 'Which nation won two consecutive World Cups in the 1930s?', 'Italie', ['Uruguay', 'Argentine', 'Hongrie']),
+    CQ(N(), 'Le « Maracanazo » (1950) : le Brésil battu chez lui par…', 'The "Maracanazo" (1950): Brazil beaten at home by…', 'Uruguay', ['Argentine', 'Italie', 'Chili']),
+    CQ(N(), 'Qui a marqué le but en or de la finale de l\'Euro 2000 ?', 'Who scored the golden goal in the Euro 2000 final?', 'David Trezeguet', ['Zinédine Zidane', 'Thierry Henry', 'Sylvain Wiltord']),
+    CQ(N(), 'Qui a marqué le but victorieux de la finale de la Coupe du Monde 2014 ?', 'Who scored the winning goal in the 2014 World Cup final?', 'Mario Götze', ['Thomas Müller', 'Miroslav Klose', 'Mesut Özil']),
+    CQ(N(), 'Quel est le transfert le plus cher de l\'histoire (222 M€, 2017) ?', 'What is the most expensive transfer in history (€222m, 2017)?', 'Neymar', ['Kylian Mbappé', 'Philippe Coutinho', 'Ousmane Dembélé']),
+    CQ(N(), 'De quel club Neymar est-il arrivé au PSG en 2017 ?', 'From which club did Neymar join PSG in 2017?', 'Barcelone', ['Santos', 'Real Madrid', 'Chelsea']),
+    CQ(N(), 'Combien de titres de champion de France pour le PSG (avant 2026) ?', 'How many French league titles for PSG (before 2026)?', '13', ['10', '11', '15']),
+    CQ(N(), 'Quel club détient le record de titres de champion de France ?', 'Which club holds the record for French league titles?', 'PSG', ['Marseille', 'Saint-Étienne', 'Nantes']),
+    CQ(N(), 'Zlatan Ibrahimović n\'a JAMAIS joué pour…', 'Zlatan Ibrahimović NEVER played for…', 'Arsenal', ['Juventus', 'Barcelone', 'Milan AC']),
+    CQ(N(), 'Dans quel club européen Lionel Messi a-t-il joué en dernier avant l\'Inter Miami ?', 'Which European club did Lionel Messi last play for before Inter Miami?', 'PSG', ['Barcelone', 'Manchester City', 'Newell\'s Old Boys']),
+    CQ(N(), 'Quel pays a organisé ET remporté l\'Euro 1984 ?', 'Which country hosted AND won Euro 1984?', 'France', ['Espagne', 'RFA', 'Italie']),
+    CQ(N(), 'Qui était le capitaine de la France championne du monde 1998 ?', 'Who captained France to the 1998 World Cup?', 'Didier Deschamps', ['Zinédine Zidane', 'Marcel Desailly', 'Laurent Blanc']),
+    CQ(N(), 'Qui était le sélectionneur de la France championne du monde 2018 ?', 'Who coached France to the 2018 World Cup?', 'Didier Deschamps', ['Laurent Blanc', 'Raymond Domenech', 'Aimé Jacquet']),
+    CQ(N(), 'La Croatie a joué sa première finale de Coupe du Monde en…', 'Croatia played its first World Cup final in…', '2018', ['1998', '2014', '2022']),
+    CQ(N(), 'En 2022, le Maroc est devenu le premier pays africain à…', 'In 2022, Morocco became the first African country to…', ['atteindre les demi-finales de la CdM', 'reach a World Cup semi-final'], [['gagner un match de CdM', 'win a World Cup match'], ['atteindre les quarts de finale', 'reach the quarter-finals'], ['jouer une finale de CdM', 'play a World Cup final']]),
+    CQ(N(), 'Qui a remporté la Coupe du Monde des clubs 2025 (nouveau format) ?', 'Who won the 2025 Club World Cup (new format)?', 'Chelsea', ['PSG', 'Real Madrid', 'Manchester City']),
+    CQ(N(), 'Quelle équipe a remporté la Ligue Europa 2025 ?', 'Which team won the 2025 Europa League?', 'Tottenham', ['Manchester United', 'Roma', 'Séville FC']),
+    CQ(N(), 'Quel club a remporté la Bundesliga 2024 sans perdre un seul match ?', 'Which club won the 2024 Bundesliga unbeaten?', 'Bayer Leverkusen', ['Bayern Munich', 'Borussia Dortmund', 'RB Leipzig']),
+    CQ(N(), 'Qui a remporté le premier Ballon d\'Or féminin (2018) ?', 'Who won the first women\'s Ballon d\'Or (2018)?', 'Ada Hegerberg', ['Megan Rapinoe', 'Alexia Putellas', 'Marta']),
+    CQ(N(), 'Qui a remporté la Coupe du Monde féminine 2023 ?', 'Who won the 2023 Women\'s World Cup?', 'Espagne', ['Angleterre', 'États-Unis', 'Allemagne']),
+    CQ(N(), 'Quel pays compte le plus de Coupes du Monde féminines ?', 'Which country has won the most Women\'s World Cups?', 'États-Unis', ['Allemagne', 'Norvège', 'Japon']),
+    CQ(N(), 'Combien de joueurs français ont remporté le Ballon d\'Or (avant 2026) ?', 'How many French players have won the Ballon d\'Or (before 2026)?', '6', ['4', '5', '7']),
+    CQ(N(), 'Combien de Ballons d\'Or pour Michel Platini ?', 'How many Ballons d\'Or for Michel Platini?', '3', ['1', '2', '4']),
+    CQ(N(), 'Quel était le score de la finale de la Coupe du Monde 2018 France-Croatie ?', 'What was the score of the 2018 World Cup final France-Croatia?', '4-2', ['3-1', '2-0', '3-2']),
+    CQ(N(), 'Qui a marqué contre son camp en finale de la Coupe du Monde 2018 ?', 'Who scored an own goal in the 2018 World Cup final?', 'Mario Mandžukić', ['Ivan Perišić', 'Domagoj Vida', 'Dejan Lovren']),
+    CQ(N(), 'Combien d\'Euros pour l\'Espagne (record, avant 2026) ?', 'How many Euros has Spain won (record, before 2026)?', '4', ['2', '3', '5']),
+    CQ(N(), 'Quel grand trophée Gianluigi Buffon n\'a-t-il jamais remporté ?', 'Which major trophy did Gianluigi Buffon never win?', ['La Ligue des champions', 'The Champions League'], [['La Coupe du Monde', 'The World Cup'], ['La Serie A', 'Serie A'], ['La Coupe UEFA', 'The UEFA Cup']]),
+    CQ(N(), 'Qui détient le record de sélections avec l\'équipe de France ?', 'Who holds the record for France caps?', 'Hugo Lloris', ['Lilian Thuram', 'Thierry Henry', 'Olivier Giroud']),
+    CQ(N(), 'Le derby « Old Firm » oppose le Celtic à…', 'The "Old Firm" derby is Celtic versus…', 'Rangers', ['Aberdeen', 'Hearts', 'Hibernian']),
+    CQ(N(), 'Dans quelle ville se joue le « derby della Madonnina » ?', 'In which city is the "derby della Madonnina" played?', 'Milan', ['Turin', 'Rome', 'Naples']),
+    CQ(N(), 'Boca Juniors et River Plate se disputent le « Superclásico » de quel pays ?', 'Boca Juniors vs River Plate is the "Superclásico" of which country?', 'Argentine', ['Brésil', 'Uruguay', 'Colombie']),
+    CQ(N(), 'Quel club joue à « La Bombonera » ?', 'Which club plays at "La Bombonera"?', 'Boca Juniors', ['River Plate', 'Racing Club', 'Peñarol']),
+    CQ(N(), 'Pelé a passé l\'essentiel de sa carrière dans quel club ?', 'At which club did Pelé spend most of his career?', 'Santos', ['Flamengo', 'Corinthians', 'New York Cosmos']),
+    CQ(N(), 'Johan Cruyff est une légende de quel club néerlandais ?', 'Johan Cruyff is a legend of which Dutch club?', 'Ajax', ['PSV Eindhoven', 'Feyenoord', 'AZ Alkmaar']),
+    CQ(N(), 'La « Panenka » doit son nom à un joueur de quelle nation (Euro 1976) ?', 'The "Panenka" is named after a player from which nation (Euro 1976)?', 'Tchécoslovaquie', ['Hongrie', 'Pologne', 'URSS']),
+    CQ(N(), 'Éric Cantona est une légende de quel club anglais ?', 'Éric Cantona is a legend of which English club?', 'Manchester United', ['Leeds United', 'Liverpool', 'Arsenal']),
+    CQ(N(), 'Thierry Henry est le meilleur buteur de l\'histoire de quel club ?', 'Thierry Henry is the all-time top scorer of which club?', 'Arsenal', ['Monaco', 'Barcelone', 'Juventus']),
+    CQ(N(), 'José Mourinho a remporté la Ligue des champions avec Porto (2004) et…', 'José Mourinho won the Champions League with Porto (2004) and…', 'Inter Milan', ['Chelsea', 'Real Madrid', 'Manchester United']),
+    CQ(N(), 'Diego Maradona a offert deux titres de champion d\'Italie à quel club ?', 'Diego Maradona won two Serie A titles with which club?', 'Naples', ['Milan AC', 'Juventus', 'Roma']),
+    CQ(N(), 'Après sa carrière, George Weah (Ballon d\'Or 1995) est devenu…', 'After football, George Weah (1995 Ballon d\'Or) became…', ['Président du Liberia', 'President of Liberia'], [['Entraîneur du Milan AC', 'AC Milan manager'], ['Président de la FIFA', 'FIFA president'], ['Ministre au Ghana', 'Minister in Ghana']]),
+    CQ(N(), 'Qui est surnommé « El Pibe de Oro » ?', 'Who is nicknamed "El Pibe de Oro"?', 'Diego Maradona', ['Lionel Messi', 'Alfredo Di Stéfano', 'Carlos Tevez']),
+    CQ(N(), 'Quel est le plus grand stade d\'Europe en capacité ?', 'What is Europe\'s largest stadium by capacity?', 'Camp Nou', ['Wembley', 'Santiago Bernabéu', 'Signal Iduna Park']),
+    CQ(N(), 'Combien de clubs en Ligue 1 depuis la saison 2023-24 ?', 'How many clubs in Ligue 1 since 2023-24?', '18', ['16', '20', '22']),
+    CQ(N(), 'Un « triplé parfait », c\'est trois buts marqués…', 'A "perfect hat-trick" is three goals scored…', ['pied gauche, pied droit et de la tête', 'left foot, right foot and header'], [['sur trois penaltys', 'from three penalties'], ['en première mi-temps', 'in the first half'], ['en trois minutes', 'within three minutes']]),
+    CQ(N(), 'La règle du but à l\'extérieur en coupe d\'Europe a été supprimée en…', 'The away-goals rule in Europe was abolished in…', '2021', ['2017', '2019', '2023']),
+    CQ(N(), 'Ronaldinho a joué au PSG sur quelle période ?', 'When did Ronaldinho play for PSG?', '2001-2003', ['1999-2001', '2003-2005', '2005-2007']),
+    CQ(N(), 'David Beckham a terminé sa carrière dans quel club (2013) ?', 'At which club did David Beckham end his career (2013)?', 'PSG', ['LA Galaxy', 'Milan AC', 'Manchester United']),
+    CQ(N(), 'Le tout premier but de l\'histoire de la Coupe du Monde (1930) a été marqué par…', 'The first ever World Cup goal (1930) was scored by…', ['Lucien Laurent (France)', 'Lucien Laurent (France)'], [['Guillermo Stábile (Argentine)', 'Guillermo Stábile (Argentina)'], ['Héctor Castro (Uruguay)', 'Héctor Castro (Uruguay)'], ['Bert Patenaude (États-Unis)', 'Bert Patenaude (United States)']])
+  ];
+}
+// ---- Jeux de citation (type Sporcle) ----------------------------------------
+// TA(fr, en, 'alias1|alias2') : les deux langues + variantes sont acceptées à la saisie
+function TA(fr, en, extra) {
+  return { label: { fr: fr, en: en || fr }, alias: [fr, en || fr].concat(extra ? extra.split('|') : []) };
+}
+const MJ_TOP10S = [
+  MINIJEUX_CATALOG.find(g => g.id === 'wc-winners'),
+  MINIJEUX_CATALOG.find(g => g.id === 'euro-winners'),
+  {
+    id: 'ldc-clubs-90', type: 'top10', duree: 90,
+    titre: { fr: '⚽ Clubs vainqueurs de la Ligue des champions depuis 1990', en: '⚽ Champions League winning clubs since 1990' },
+    regle: { fr: 'Cite les 16 clubs ayant remporté la C1/Ligue des champions de 1990 à 2025.', en: 'Name the 16 clubs that won the European Cup/Champions League from 1990 to 2025.' },
+    reponses: [
+      TA('Milan AC', 'AC Milan', 'milan|ac milan'), TA('Étoile Rouge de Belgrade', 'Red Star Belgrade', 'etoile rouge|red star|crvena zvezda'),
+      TA('Barcelone', 'Barcelona', 'barca|fc barcelone|fc barcelona'), TA('Marseille', 'Marseille', 'om|olympique de marseille'),
+      TA('Ajax', 'Ajax', 'ajax amsterdam'), TA('Juventus', 'Juventus', 'juve|juventus turin'),
+      TA('Borussia Dortmund', 'Borussia Dortmund', 'dortmund|bvb'), TA('Real Madrid', 'Real Madrid', 'real'),
+      TA('Manchester United', 'Manchester United', 'man united|man utd|manchester utd'), TA('Bayern Munich', 'Bayern Munich', 'bayern|bayern munchen'),
+      TA('Porto', 'Porto', 'fc porto'), TA('Liverpool', 'Liverpool', 'lfc'),
+      TA('Inter Milan', 'Inter Milan', 'inter'), TA('Chelsea', 'Chelsea', 'chelsea fc'),
+      TA('Manchester City', 'Manchester City', 'man city|city'), TA('PSG', 'PSG', 'paris|paris saint germain|paris sg')
+    ]
+  },
+  {
+    id: 'l1-champions-94', type: 'top10', duree: 90,
+    titre: { fr: '🇫🇷 Clubs champions de France depuis 1994', en: '🇫🇷 French champions since 1994' },
+    regle: { fr: 'Cite les 10 clubs sacrés champions de France entre 1994 et 2025.', en: 'Name the 10 clubs crowned French champions between 1994 and 2025.' },
+    reponses: [
+      TA('PSG', 'PSG', 'paris|paris saint germain|paris sg'), TA('Nantes', 'Nantes', 'fc nantes'),
+      TA('Auxerre', 'Auxerre', 'aj auxerre|aja'), TA('Monaco', 'Monaco', 'as monaco'),
+      TA('Lens', 'Lens', 'rc lens'), TA('Bordeaux', 'Bordeaux', 'girondins|girondins de bordeaux'),
+      TA('Lyon', 'Lyon', 'ol|olympique lyonnais'), TA('Marseille', 'Marseille', 'om|olympique de marseille'),
+      TA('Lille', 'Lille', 'losc'), TA('Montpellier', 'Montpellier', 'mhsc')
+    ]
+  },
+  {
+    id: 'pl-champions-93', type: 'top10', duree: 75,
+    titre: { fr: '🏴 Clubs champions d\'Angleterre depuis 1993', en: '🏴 Premier League champions since 1993' },
+    regle: { fr: 'Cite les 7 clubs champions d\'Angleterre à l\'ère Premier League (1993-2025).', en: 'Name the 7 Premier League champions (1993-2025).' },
+    reponses: [
+      TA('Manchester United', 'Manchester United', 'man united|man utd|manchester utd'), TA('Blackburn Rovers', 'Blackburn Rovers', 'blackburn'),
+      TA('Arsenal', 'Arsenal', 'gunners'), TA('Chelsea', 'Chelsea', 'chelsea fc'),
+      TA('Manchester City', 'Manchester City', 'man city|city'), TA('Leicester City', 'Leicester City', 'leicester'),
+      TA('Liverpool', 'Liverpool', 'lfc')
+    ]
+  },
+  {
+    id: 'buli-champions-00', type: 'top10', duree: 75,
+    titre: { fr: '🇩🇪 Clubs champions d\'Allemagne depuis 2000', en: '🇩🇪 German champions since 2000' },
+    regle: { fr: 'Cite les 6 clubs champions d\'Allemagne entre 2000 et 2025.', en: 'Name the 6 German champions between 2000 and 2025.' },
+    reponses: [
+      TA('Bayern Munich', 'Bayern Munich', 'bayern|bayern munchen'), TA('Borussia Dortmund', 'Borussia Dortmund', 'dortmund|bvb'),
+      TA('Werder Brême', 'Werder Bremen', 'werder|breme|bremen'), TA('Stuttgart', 'Stuttgart', 'vfb stuttgart|vfb'),
+      TA('Wolfsburg', 'Wolfsburg', 'vfl wolfsburg'), TA('Bayer Leverkusen', 'Bayer Leverkusen', 'leverkusen|bayer')
+    ]
+  },
+  {
+    id: 'seriea-champions-00', type: 'top10', duree: 75,
+    titre: { fr: '🇮🇹 Clubs champions d\'Italie depuis 2000', en: '🇮🇹 Italian champions since 2000' },
+    regle: { fr: 'Cite les 6 clubs champions d\'Italie entre 2000 et 2025.', en: 'Name the 6 Italian champions between 2000 and 2025.' },
+    reponses: [
+      TA('Lazio', 'Lazio', 'lazio rome|ss lazio'), TA('Roma', 'Roma', 'as roma|rome'),
+      TA('Juventus', 'Juventus', 'juve|juventus turin'), TA('Milan AC', 'AC Milan', 'milan|ac milan'),
+      TA('Inter Milan', 'Inter Milan', 'inter'), TA('Naples', 'Napoli', 'napoli|ssc napoli')
+    ]
+  },
+  {
+    id: 'liga-champions-00', type: 'top10', duree: 75,
+    titre: { fr: '🇪🇸 Clubs champions d\'Espagne depuis 2000', en: '🇪🇸 Spanish champions since 2000' },
+    regle: { fr: 'Cite les 5 clubs champions d\'Espagne entre 2000 et 2025.', en: 'Name the 5 Spanish champions between 2000 and 2025.' },
+    reponses: [
+      TA('Deportivo La Corogne', 'Deportivo La Coruña', 'deportivo|depor|la corogne'), TA('Real Madrid', 'Real Madrid', 'real'),
+      TA('Valence CF', 'Valencia CF', 'valence|valencia'), TA('Barcelone', 'Barcelona', 'barca|fc barcelone|fc barcelona'),
+      TA('Atlético Madrid', 'Atlético Madrid', 'atletico|atletico de madrid')
+    ]
+  },
+  {
+    id: 'bdo-francais', type: 'top10', duree: 75,
+    titre: { fr: '🎖️ Les Ballons d\'Or français', en: '🎖️ French Ballon d\'Or winners' },
+    regle: { fr: 'Cite les 6 joueurs français ayant remporté le Ballon d\'Or (avant 2026).', en: 'Name the 6 French players who won the Ballon d\'Or (before 2026).' },
+    reponses: [
+      TA('Raymond Kopa', 'Raymond Kopa', 'kopa'), TA('Michel Platini', 'Michel Platini', 'platini'),
+      TA('Jean-Pierre Papin', 'Jean-Pierre Papin', 'papin|jpp'), TA('Zinédine Zidane', 'Zinédine Zidane', 'zidane|zizou'),
+      TA('Karim Benzema', 'Karim Benzema', 'benzema'), TA('Ousmane Dembélé', 'Ousmane Dembélé', 'dembele')
+    ]
+  },
+  {
+    id: 'cdm-hotes', type: 'top10', duree: 90,
+    titre: { fr: '🌍 Pays hôtes de la Coupe du Monde', en: '🌍 World Cup host countries' },
+    regle: { fr: 'Cite les 18 pays ayant accueilli (ou co-accueilli) une Coupe du Monde de 1930 à 2022.', en: 'Name the 18 countries that hosted (or co-hosted) a World Cup from 1930 to 2022.' },
+    reponses: [
+      TA('Uruguay'), TA('Italie', 'Italy'), TA('France'), TA('Brésil', 'Brazil', 'bresil'),
+      TA('Suisse', 'Switzerland'), TA('Suède', 'Sweden', 'suede'), TA('Chili', 'Chile'),
+      TA('Angleterre', 'England'), TA('Mexique', 'Mexico'), TA('Allemagne', 'Germany', 'rfa|allemagne de l ouest|west germany'),
+      TA('Argentine', 'Argentina'), TA('Espagne', 'Spain'), TA('États-Unis', 'United States', 'usa|etats unis|america'),
+      TA('Corée du Sud', 'South Korea', 'coree|coree du sud|korea'), TA('Japon', 'Japan'),
+      TA('Afrique du Sud', 'South Africa'), TA('Russie', 'Russia'), TA('Qatar')
+    ]
+  },
+  {
+    id: 'can-vainqueurs-90', type: 'top10', duree: 90,
+    titre: { fr: '🌍 Vainqueurs de la CAN depuis 1990', en: '🌍 AFCON winners since 1990' },
+    regle: { fr: 'Cite les 9 nations ayant remporté la Coupe d\'Afrique des nations entre 1990 et 2024.', en: 'Name the 9 nations that won the Africa Cup of Nations between 1990 and 2024.' },
+    reponses: [
+      TA('Algérie', 'Algeria', 'algerie'), TA('Côte d\'Ivoire', 'Ivory Coast', 'cote d ivoire|cote divoire'),
+      TA('Nigeria', 'Nigeria'), TA('Afrique du Sud', 'South Africa'), TA('Égypte', 'Egypt', 'egypte'),
+      TA('Cameroun', 'Cameroon'), TA('Tunisie', 'Tunisia'), TA('Zambie', 'Zambia'), TA('Sénégal', 'Senegal', 'senegal')
+    ]
+  },
+  {
+    id: 'fr-100-selections', type: 'top10', duree: 90,
+    titre: { fr: '🇫🇷 Les joueurs aux 100 sélections et plus en équipe de France', en: '🇫🇷 France players with 100+ caps' },
+    regle: { fr: 'Cite les 9 joueurs comptant au moins 100 sélections avec les Bleus (avant 2026).', en: 'Name the 9 players with 100+ caps for France (before 2026).' },
+    reponses: [
+      TA('Hugo Lloris', 'Hugo Lloris', 'lloris'), TA('Lilian Thuram', 'Lilian Thuram', 'thuram'),
+      TA('Antoine Griezmann', 'Antoine Griezmann', 'griezmann|grizou'), TA('Olivier Giroud', 'Olivier Giroud', 'giroud'),
+      TA('Thierry Henry', 'Thierry Henry', 'henry|titi'), TA('Marcel Desailly', 'Marcel Desailly', 'desailly'),
+      TA('Zinédine Zidane', 'Zinédine Zidane', 'zidane|zizou'), TA('Patrick Vieira', 'Patrick Vieira', 'vieira'),
+      TA('Didier Deschamps', 'Didier Deschamps', 'deschamps|dd')
+    ]
+  },
+  {
+    id: 'cdm-buteurs-11plus', type: 'top10', duree: 90,
+    titre: { fr: '🥅 Meilleurs buteurs de l\'histoire de la Coupe du Monde (11 buts et +)', en: '🥅 All-time World Cup top scorers (11+ goals)' },
+    regle: { fr: 'Cite les 9 joueurs ayant marqué 11 buts ou plus en Coupe du Monde (avant 2026).', en: 'Name the 9 players with 11+ World Cup goals (before 2026).' },
+    reponses: [
+      TA('Miroslav Klose', 'Miroslav Klose', 'klose'), TA('Ronaldo', 'Ronaldo', 'ronaldo nazario|r9'),
+      TA('Gerd Müller', 'Gerd Müller', 'muller|gerd muller'), TA('Just Fontaine', 'Just Fontaine', 'fontaine'),
+      TA('Lionel Messi', 'Lionel Messi', 'messi'), TA('Pelé', 'Pelé', 'pele'),
+      TA('Kylian Mbappé', 'Kylian Mbappé', 'mbappe'), TA('Sándor Kocsis', 'Sándor Kocsis', 'kocsis'),
+      TA('Jürgen Klinsmann', 'Jürgen Klinsmann', 'klinsmann')
+    ]
+  },
+  {
+    id: 'ldc-3-et-plus', type: 'top10', duree: 90,
+    titre: { fr: '🏆 Clubs comptant 3 Ligues des champions ou plus', en: '🏆 Clubs with 3+ European Cups' },
+    regle: { fr: 'Cite les 8 clubs ayant remporté au moins 3 fois la C1/Ligue des champions (avant 2026).', en: 'Name the 8 clubs with at least 3 European Cup/Champions League titles (before 2026).' },
+    reponses: [
+      TA('Real Madrid', 'Real Madrid', 'real'), TA('Milan AC', 'AC Milan', 'milan|ac milan'),
+      TA('Bayern Munich', 'Bayern Munich', 'bayern|bayern munchen'), TA('Liverpool', 'Liverpool', 'lfc'),
+      TA('Barcelone', 'Barcelona', 'barca|fc barcelone|fc barcelona'), TA('Ajax', 'Ajax', 'ajax amsterdam'),
+      TA('Inter Milan', 'Inter Milan', 'inter'), TA('Manchester United', 'Manchester United', 'man united|man utd|manchester utd')
+    ]
+  },
+  {
+    id: 'cdm-finalistes-maudits', type: 'top10', duree: 75,
+    titre: { fr: '💔 Finalistes de la Coupe du Monde jamais sacrés', en: '💔 World Cup finalists that never won' },
+    regle: { fr: 'Cite les 5 nations ayant perdu au moins une finale de CdM sans jamais la gagner (avant 2026).', en: 'Name the 5 nations that lost a World Cup final but never won one (before 2026).' },
+    reponses: [
+      TA('Pays-Bas', 'Netherlands', 'hollande|holland'), TA('Hongrie', 'Hungary', 'hongrie'),
+      TA('Tchécoslovaquie', 'Czechoslovakia', 'tchecoslovaquie'), TA('Suède', 'Sweden', 'suede'),
+      TA('Croatie', 'Croatia', 'croatie')
+    ]
+  },
+  {
+    id: 'zlatan-clubs', type: 'top10', duree: 90,
+    titre: { fr: '🦁 Les clubs de la carrière de Zlatan Ibrahimović', en: '🦁 Zlatan Ibrahimović\'s career clubs' },
+    regle: { fr: 'Cite les 9 clubs où Zlatan a joué en professionnel.', en: 'Name the 9 clubs Zlatan played for.' },
+    reponses: [
+      TA('Malmö', 'Malmö', 'malmo|malmo ff'), TA('Ajax', 'Ajax', 'ajax amsterdam'),
+      TA('Juventus', 'Juventus', 'juve|juventus turin'), TA('Inter Milan', 'Inter Milan', 'inter'),
+      TA('Barcelone', 'Barcelona', 'barca|fc barcelone|fc barcelona'), TA('Milan AC', 'AC Milan', 'milan|ac milan'),
+      TA('PSG', 'PSG', 'paris|paris saint germain|paris sg'), TA('Manchester United', 'Manchester United', 'man united|man utd|manchester utd'),
+      TA('LA Galaxy', 'LA Galaxy', 'galaxy|los angeles galaxy')
+    ]
+  },
+  {
+    id: 'psg-buteurs-hist', type: 'top10', duree: 90,
+    titre: { fr: '🔴🔵 Meilleurs buteurs de l\'histoire du PSG (100 buts et +)', en: '🔴🔵 PSG all-time top scorers (100+ goals)' },
+    regle: { fr: 'Cite les 6 joueurs ayant marqué 100 buts ou plus avec le PSG (avant 2026).', en: 'Name the 6 players with 100+ goals for PSG (before 2026).' },
+    reponses: [
+      TA('Kylian Mbappé', 'Kylian Mbappé', 'mbappe'), TA('Edinson Cavani', 'Edinson Cavani', 'cavani'),
+      TA('Zlatan Ibrahimović', 'Zlatan Ibrahimović', 'zlatan|ibrahimovic|ibra'), TA('Neymar', 'Neymar', 'neymar jr'),
+      TA('Pauleta', 'Pauleta', 'pedro pauleta'), TA('Dominique Rocheteau', 'Dominique Rocheteau', 'rocheteau')
+    ]
+  },
+  {
+    id: 'xi-france-2018', type: 'top10', duree: 90,
+    titre: { fr: '⭐⭐ Le XI de départ des Bleus en finale 2018', en: '⭐⭐ France\'s starting XI in the 2018 final' },
+    regle: { fr: 'Cite les 11 titulaires de la France en finale de la Coupe du Monde 2018.', en: 'Name France\'s 11 starters in the 2018 World Cup final.' },
+    reponses: [
+      TA('Hugo Lloris', 'Hugo Lloris', 'lloris'), TA('Benjamin Pavard', 'Benjamin Pavard', 'pavard'),
+      TA('Raphaël Varane', 'Raphaël Varane', 'varane'), TA('Samuel Umtiti', 'Samuel Umtiti', 'umtiti'),
+      TA('Lucas Hernandez', 'Lucas Hernandez', 'hernandez'), TA('N\'Golo Kanté', 'N\'Golo Kanté', 'kante|ngolo kante'),
+      TA('Paul Pogba', 'Paul Pogba', 'pogba'), TA('Blaise Matuidi', 'Blaise Matuidi', 'matuidi'),
+      TA('Kylian Mbappé', 'Kylian Mbappé', 'mbappe'), TA('Antoine Griezmann', 'Antoine Griezmann', 'griezmann|grizou'),
+      TA('Olivier Giroud', 'Olivier Giroud', 'giroud')
+    ]
+  },
+  {
+    id: 'xi-france-1998', type: 'top10', duree: 90,
+    titre: { fr: '⭐ Le XI de départ des Bleus en finale 1998', en: '⭐ France\'s starting XI in the 1998 final' },
+    regle: { fr: 'Cite les 11 titulaires de la France en finale de la Coupe du Monde 1998.', en: 'Name France\'s 11 starters in the 1998 World Cup final.' },
+    reponses: [
+      TA('Fabien Barthez', 'Fabien Barthez', 'barthez'), TA('Lilian Thuram', 'Lilian Thuram', 'thuram'),
+      TA('Frank Leboeuf', 'Frank Leboeuf', 'leboeuf'), TA('Marcel Desailly', 'Marcel Desailly', 'desailly'),
+      TA('Bixente Lizarazu', 'Bixente Lizarazu', 'lizarazu'), TA('Christian Karembeu', 'Christian Karembeu', 'karembeu'),
+      TA('Didier Deschamps', 'Didier Deschamps', 'deschamps|dd'), TA('Emmanuel Petit', 'Emmanuel Petit', 'petit'),
+      TA('Youri Djorkaeff', 'Youri Djorkaeff', 'djorkaeff'), TA('Zinédine Zidane', 'Zinédine Zidane', 'zidane|zizou'),
+      TA('Stéphane Guivarc\'h', 'Stéphane Guivarc\'h', 'guivarch|guivarc h')
+    ]
+  },
+  {
+    id: 'fr-buteurs-cdm2018', type: 'top10', duree: 75,
+    titre: { fr: '🥅 Les buteurs français de la Coupe du Monde 2018', en: '🥅 France\'s scorers at the 2018 World Cup' },
+    regle: { fr: 'Cite les 6 joueurs français ayant marqué durant la CdM 2018 (hors c.s.c.).', en: 'Name the 6 French players who scored at the 2018 World Cup (own goals excluded).' },
+    reponses: [
+      TA('Antoine Griezmann', 'Antoine Griezmann', 'griezmann|grizou'), TA('Kylian Mbappé', 'Kylian Mbappé', 'mbappe'),
+      TA('Paul Pogba', 'Paul Pogba', 'pogba'), TA('Benjamin Pavard', 'Benjamin Pavard', 'pavard'),
+      TA('Samuel Umtiti', 'Samuel Umtiti', 'umtiti'), TA('Raphaël Varane', 'Raphaël Varane', 'varane')
+    ]
+  },
+  {
+    id: 'capitaines-cdm-90', type: 'top10', duree: 90,
+    titre: { fr: '©️ Capitaines ayant soulevé la Coupe du Monde depuis 1990', en: '©️ Captains who lifted the World Cup since 1990' },
+    regle: { fr: 'Cite les 9 capitaines champions du monde de 1990 à 2022.', en: 'Name the 9 World Cup-winning captains from 1990 to 2022.' },
+    reponses: [
+      TA('Lothar Matthäus', 'Lothar Matthäus', 'matthaus'), TA('Dunga', 'Dunga'),
+      TA('Didier Deschamps', 'Didier Deschamps', 'deschamps|dd'), TA('Cafu', 'Cafu'),
+      TA('Fabio Cannavaro', 'Fabio Cannavaro', 'cannavaro'), TA('Iker Casillas', 'Iker Casillas', 'casillas'),
+      TA('Philipp Lahm', 'Philipp Lahm', 'lahm'), TA('Hugo Lloris', 'Hugo Lloris', 'lloris'),
+      TA('Lionel Messi', 'Lionel Messi', 'messi')
+    ]
+  },
+  {
+    id: 'coachs-cdm-90', type: 'top10', duree: 90,
+    titre: { fr: '📋 Sélectionneurs champions du monde depuis 1990', en: '📋 World Cup-winning coaches since 1990' },
+    regle: { fr: 'Cite les 9 sélectionneurs champions du monde de 1990 à 2022.', en: 'Name the 9 World Cup-winning coaches from 1990 to 2022.' },
+    reponses: [
+      TA('Franz Beckenbauer', 'Franz Beckenbauer', 'beckenbauer'), TA('Carlos Alberto Parreira', 'Carlos Alberto Parreira', 'parreira'),
+      TA('Aimé Jacquet', 'Aimé Jacquet', 'jacquet'), TA('Luiz Felipe Scolari', 'Luiz Felipe Scolari', 'scolari|felipao'),
+      TA('Marcello Lippi', 'Marcello Lippi', 'lippi'), TA('Vicente del Bosque', 'Vicente del Bosque', 'del bosque'),
+      TA('Joachim Löw', 'Joachim Löw', 'low|loew'), TA('Didier Deschamps', 'Didier Deschamps', 'deschamps|dd'),
+      TA('Lionel Scaloni', 'Lionel Scaloni', 'scaloni')
+    ]
+  },
+  {
+    id: 'el-vainqueurs-2010', type: 'top10', duree: 90,
+    titre: { fr: '🥈 Clubs vainqueurs de la Ligue Europa depuis 2010', en: '🥈 Europa League winners since 2010' },
+    regle: { fr: 'Cite les 9 clubs ayant remporté la Ligue Europa entre 2010 et 2025.', en: 'Name the 9 clubs that won the Europa League between 2010 and 2025.' },
+    reponses: [
+      TA('Atlético Madrid', 'Atlético Madrid', 'atletico|atletico de madrid'), TA('Porto', 'Porto', 'fc porto'),
+      TA('Chelsea', 'Chelsea', 'chelsea fc'), TA('Séville FC', 'Sevilla FC', 'seville|sevilla|fc seville'),
+      TA('Manchester United', 'Manchester United', 'man united|man utd|manchester utd'), TA('Villarreal', 'Villarreal', 'villareal'),
+      TA('Eintracht Francfort', 'Eintracht Frankfurt', 'francfort|frankfurt|eintracht'), TA('Atalanta', 'Atalanta', 'atalanta bergame'),
+      TA('Tottenham', 'Tottenham', 'spurs|tottenham hotspur')
+    ]
+  },
+  {
+    id: 'ldc-2016-2025', type: 'top10', duree: 75,
+    titre: { fr: '🏆 Vainqueurs de la Ligue des champions de 2016 à 2025', en: '🏆 Champions League winners 2016-2025' },
+    regle: { fr: 'Cite les 6 clubs ayant remporté la Ligue des champions entre 2016 et 2025.', en: 'Name the 6 clubs that won the Champions League between 2016 and 2025.' },
+    reponses: [
+      TA('Real Madrid', 'Real Madrid', 'real'), TA('Liverpool', 'Liverpool', 'lfc'),
+      TA('Bayern Munich', 'Bayern Munich', 'bayern|bayern munchen'), TA('Chelsea', 'Chelsea', 'chelsea fc'),
+      TA('Manchester City', 'Manchester City', 'man city|city'), TA('PSG', 'PSG', 'paris|paris saint germain|paris sg')
+    ]
+  },
+  {
+    id: 'cdmf-vainqueurs', type: 'top10', duree: 75,
+    titre: { fr: '🏆 Pays vainqueurs de la Coupe du Monde féminine', en: '🏆 Women\'s World Cup winning nations' },
+    regle: { fr: 'Cite les 5 nations ayant remporté la Coupe du Monde féminine (1991-2023).', en: 'Name the 5 nations that won the Women\'s World Cup (1991-2023).' },
+    reponses: [
+      TA('États-Unis', 'United States', 'usa|etats unis|america'), TA('Allemagne', 'Germany'),
+      TA('Norvège', 'Norway', 'norvege'), TA('Japon', 'Japan'), TA('Espagne', 'Spain')
+    ]
+  },
+  {
+    id: 'psg-buteurs-ldc25', type: 'top10', duree: 60,
+    titre: { fr: '🔴🔵 Les buteurs du PSG en finale de la Ligue des champions 2025', en: '🔴🔵 PSG\'s scorers in the 2025 Champions League final' },
+    regle: { fr: 'Cite les 4 buteurs parisiens de la finale 2025 contre l\'Inter (5-0).', en: 'Name the 4 PSG scorers in the 2025 final against Inter (5-0).' },
+    reponses: [
+      TA('Achraf Hakimi', 'Achraf Hakimi', 'hakimi'), TA('Désiré Doué', 'Désiré Doué', 'doue|desire doue'),
+      TA('Khvicha Kvaratskhelia', 'Khvicha Kvaratskhelia', 'kvaratskhelia|kvara'), TA('Senny Mayulu', 'Senny Mayulu', 'mayulu')
+    ]
+  },
+  {
+    id: 'copa-vainqueurs-91', type: 'top10', duree: 75,
+    titre: { fr: '🌎 Vainqueurs de la Copa América depuis 1991', en: '🌎 Copa América winners since 1991' },
+    regle: { fr: 'Cite les 5 nations ayant remporté la Copa América entre 1991 et 2024.', en: 'Name the 5 nations that won the Copa América between 1991 and 2024.' },
+    reponses: [
+      TA('Argentine', 'Argentina'), TA('Uruguay'), TA('Brésil', 'Brazil', 'bresil'),
+      TA('Colombie', 'Colombia'), TA('Chili', 'Chile')
+    ]
+  },
+  {
+    id: 'fr-finalistes-europe', type: 'top10', duree: 90,
+    titre: { fr: '🇫🇷 Clubs français ayant joué une finale européenne', en: '🇫🇷 French clubs that played a European final' },
+    regle: { fr: 'Cite les 7 clubs français ayant disputé une finale de coupe d\'Europe masculine (avant 2026).', en: 'Name the 7 French clubs that played a men\'s European final (before 2026).' },
+    reponses: [
+      TA('Reims', 'Reims', 'stade de reims'), TA('Saint-Étienne', 'Saint-Étienne', 'saint etienne|asse|st etienne'),
+      TA('Bastia', 'Bastia', 'sc bastia'), TA('Monaco', 'Monaco', 'as monaco'),
+      TA('Marseille', 'Marseille', 'om|olympique de marseille'), TA('PSG', 'PSG', 'paris|paris saint germain|paris sg'),
+      TA('Bordeaux', 'Bordeaux', 'girondins|girondins de bordeaux')
+    ]
+  }
+];
+// ---- Banque de questions (construite une fois, ~500 questions) --------------
+let __mjBank = null;
+function mjGetBank() {
+  if (__mjBank) return __mjBank;
+  const B = [];
+  const add = qs => qs.forEach(q => B.push(q));
+  add(mjMakeYearQs(MJ_D.cdm, 1, 'Qui a remporté la Coupe du Monde {y} ?', 'Who won the {y} FIFA World Cup?', [1, 2], 16, 1));
+  add(mjMakeYearQs(MJ_D.cdm, 2, 'Quelle équipe a perdu la finale de la Coupe du Monde {y} ?', 'Who lost the {y} World Cup final?', [1, 2], 16, 2));
+  add(mjMakeYearQs(MJ_D.cdm, 3, 'Quel pays a accueilli la Coupe du Monde {y} ?', 'Which country hosted the {y} World Cup?', [3], 24, 3));
+  add(mjMakeYearQs(MJ_D.cdmButeurs, 1, 'Qui a terminé meilleur buteur de la Coupe du Monde {y} ?', 'Who was the top scorer at the {y} World Cup?', [1], 20, 4));
+  add(mjMakeYearQs(MJ_D.euro, 1, 'Qui a remporté l\'Euro {y} ?', 'Who won Euro {y}?', [1, 2], 16, 5));
+  add(mjMakeYearQs(MJ_D.euro, 2, 'Quelle équipe a perdu la finale de l\'Euro {y} ?', 'Who lost the Euro {y} final?', [1, 2], 16, 6));
+  add(mjMakeYearQs(MJ_D.ldc.filter(r => r[0] < 1993), 1, 'Quel club a remporté la Coupe d\'Europe des clubs champions {y} ?', 'Who won the {y} European Cup?', [1], 16, 7));
+  add(mjMakeYearQs(MJ_D.ldc.filter(r => r[0] >= 1993), 1, 'Quel club a remporté la Ligue des champions {y} ?', 'Who won the {y} Champions League?', [1], 16, 8));
+  add(mjMakeYearQs(MJ_D.ldcFin, 1, 'Quel club a perdu la finale de la Ligue des champions {y} ?', 'Who lost the {y} Champions League final?', [1], 16, 9));
+  add(mjMakeYearQs(MJ_D.bdo, 1, 'Qui a remporté le Ballon d\'Or {y} ?', 'Who won the {y} Ballon d\'Or?', [1], 12, 10));
+  add(mjMakeYearQs(MJ_D.l1, 1, 'Quel club a été champion de France en {y} ?', 'Who won the French title in {y}?', [1], 14, 11));
+  add(mjMakeYearQs(MJ_D.pl, 1, 'Quel club a été champion d\'Angleterre en {y} ?', 'Who won the English title in {y}?', [1], 14, 12));
+  add(mjMakeYearQs(MJ_D.liga, 1, 'Quel club a été champion d\'Espagne en {y} ?', 'Who won the Spanish title in {y}?', [1], 14, 13));
+  add(mjMakeYearQs(MJ_D.seriea, 1, 'Quel club a été champion d\'Italie en {y} ?', 'Who won the Italian title in {y}?', [1], 14, 14));
+  add(mjMakeYearQs(MJ_D.buli, 1, 'Quel club a été champion d\'Allemagne en {y} ?', 'Who won the German title in {y}?', [1], 14, 15));
+  add(mjMakeYearQs(MJ_D.can, 1, 'Qui a remporté la Coupe d\'Afrique des nations {y} ?', 'Who won the {y} Africa Cup of Nations?', [1], 16, 16));
+  add(mjMakeYearQs(MJ_D.copa, 1, 'Qui a remporté la Copa América {y} ?', 'Who won the {y} Copa América?', [1], 16, 17));
+  add(mjCuratedQs());
+  __mjBank = B;
+  return B;
+}
+// ---- Planning déterministe : 5 jours de quiz + 2 jours de citation / semaine -
+function mjEpochDay(dateStr) {
+  const p = dateStr.split('-').map(Number);
+  return Math.floor(Date.UTC(p[0], p[1] - 1, p[2]) / 86400000);
+}
+const MJ_QUIZ_PAR_JOUR = 7;
+function mjGameForDate(dateStr) {
+  const D = mjEpochDay(dateStr), week = Math.floor(D / 7), rem = ((D % 7) + 7) % 7;
+  // 2 jours de citation par semaine (rem 2 et 5), 5 jours de quiz
+  if (rem === 2 || rem === 5) {
+    const t = week * 2 + (rem === 5 ? 1 : 0);
+    return MJ_TOP10S[((t % MJ_TOP10S.length) + MJ_TOP10S.length) % MJ_TOP10S.length];
+  }
+  const avant = { 0: 0, 1: 1, 2: 2, 3: 2, 4: 3, 5: 4, 6: 4 };
+  const qIdx = week * 5 + avant[rem];
+  const bank = mjGetBank();
+  // Un "cycle" épuise toute la banque sans jamais répéter une question. Le cycle
+  // suivant reprend le MÊME ordre mélangé mais tourné d'un pas fixe (65, premier
+  // avec la taille de la banque et non multiple de 7) : une question ne revient
+  // qu'après ~3 mois, et jamais dans la même combinaison de 7.
+  const per = Math.floor(bank.length / MJ_QUIZ_PAR_JOUR) * MJ_QUIZ_PAR_JOUR;
+  const parCycle = per / MJ_QUIZ_PAR_JOUR;
+  const cycle = Math.floor(qIdx / parCycle);
+  const pos = ((qIdx % parCycle) + parCycle) % parCycle;
+  if (!mjGameForDate.__ordre) mjGameForDate.__ordre = mjShuffled(bank.map((_, i) => i), 987654);
+  const ordre = mjGameForDate.__ordre;
+  const off = ((cycle * 65) % per + per) % per;
+  const qs = [];
+  for (let k = 0; k < MJ_QUIZ_PAR_JOUR; k++) qs.push(bank[ordre[(pos * MJ_QUIZ_PAR_JOUR + k + off) % per]]);
+  return {
+    id: 'quiz-' + qIdx, type: 'quiz', duree: 75,
+    titre: { fr: '⚡ Quiz du jour', en: '⚡ Daily quiz' },
+    regle: { fr: qs.length + ' questions, une seule bonne réponse par question. Le plus rapide gagne les égalités.', en: qs.length + ' questions, one correct answer each. Fastest wins ties.' },
+    questions: qs
+  };
+}
+// MJ-PURE-END
+
 let minijeuxState = null;
 let mjTimerId = null;
 let mjCumulMode = 'week'; // 'week' | 'month' | 'custom'
@@ -12693,8 +13361,7 @@ function mjPlayerId() {
 // Orgs dans lesquelles enregistrer le score : l'admin compte pour PSG ET TEGG
 function mjSaveOrgs() { return (currentRole === 'admin') ? ['PSG', 'TEGG'] : [currentOrg]; }
 function mjFmtTime(ms) { if (ms == null) return ''; const s = Math.round(ms / 1000); return s < 60 ? s + 's' : Math.floor(s / 60) + 'min' + String(s % 60).padStart(2, '0'); }
-function mjDayIndex(dateStr) { const [y, m, d] = dateStr.split('-').map(Number); const days = Math.floor(Date.UTC(y, m - 1, d) / 86400000); return ((days % MINIJEUX_CATALOG.length) + MINIJEUX_CATALOG.length) % MINIJEUX_CATALOG.length; }
-function minijeuxDuJour() { return MINIJEUX_CATALOG[mjDayIndex(todayYMD())]; }
+function minijeuxDuJour() { return mjGameForDate(todayYMD()); }
 
 function mjClearTimer() { if (mjTimerId) { clearInterval(mjTimerId); mjTimerId = null; } }
 
