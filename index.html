@@ -2285,9 +2285,9 @@
     <!-- Onglet RATIOS DE TRAVAIL (périodisation) -->
     <div id="settings-ratios" class="settings-pane" style="display:none;">
       <div class="card">
-        <h2>Ratios de travail — périodisation sur 4 semaines</h2>
+        <h2>Ratios de travail — périodisation</h2>
         <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
-          Ratio cible pour chaque jour d'entraînement, exprimé en % du meilleur match de référence du joueur (Distance, HSR, Sprint, Vmax, Décélérations, Power Plays). Consultatif — utilisé dans <b>Données GPS → Rapport de séance</b> pour vérifier si un joueur est dans le bon ratio selon la semaine et le jour sélectionnés.
+          Ratio cible pour chaque jour d'entraînement, exprimé en % du meilleur match de référence du joueur (Distance, HSR, Sprint, Vmax, Décélérations, Power Plays). Utilisé dans <b>Données GPS → Rapport de séance</b> pour vérifier si un joueur est dans le bon ratio selon la semaine et le jour sélectionnés. <b>Le tableau est modifiable</b> : ajuste les valeurs, renomme les phases, ajoute ou supprime des semaines, puis « 💾 Enregistrer » — la configuration est propre à chaque organisation.
         </p>
         <div id="ratios-settings-content"></div>
       </div>
@@ -5595,6 +5595,12 @@ async function loadState() {
       const { data: bls } = await sb.from('blessures').select('*').eq('org', currentOrg).order('date_blessure', { ascending: false });
       state.bdd_blessures = bls || [];
     } catch(e) { state.bdd_blessures = []; }
+
+    // Ratios de travail personnalisés (Paramètres) — défauts si aucune ligne
+    try {
+      const { data: wrc } = await sb.from('work_ratios_config').select('config').eq('org', currentOrg).limit(1);
+      applyWorkRatiosConfig(wrc && wrc[0] ? wrc[0].config : null);
+    } catch(e) { applyWorkRatiosConfig(null); }
 
     setLoad('Chargement des notes médicales...');
     try {
@@ -9055,11 +9061,15 @@ const GPS_ZONES = [
 ];
 
 // ============================================================================
-// RATIOS DE TRAVAIL — périodisation sur 4 semaines (ratio cible = fraction du
-// meilleur match de référence du joueur). Source : fichier "ratio travail.xlsx".
+// RATIOS DE TRAVAIL — périodisation (ratio cible = fraction du meilleur match
+// de référence du joueur). Valeurs par défaut : fichier "ratio travail.xlsx".
+// Depuis 2026-07 : modifiables dans Paramètres → Ratios de travail, persistés
+// par org dans la table Supabase work_ratios_config (une ligne = toute la
+// config). Les variables ci-dessous sont donc des `let` écrasées au chargement
+// par applyWorkRatiosConfig() ; sans ligne en base, on garde les défauts.
 // ============================================================================
-const WORK_RATIO_WEEKS = ['WEEK1', 'WEEK2', 'WEEK3', 'WEEK4'];
-const WORK_RATIO_PHASE = { WEEK1: 'MAINTIEN', WEEK2: 'CHARGE', WEEK3: 'CHARGE ++', WEEK4: 'DÉCHARGE' };
+let WORK_RATIO_WEEKS = ['WEEK1', 'WEEK2', 'WEEK3', 'WEEK4'];
+let WORK_RATIO_PHASE = { WEEK1: 'MAINTIEN', WEEK2: 'CHARGE', WEEK3: 'CHARGE ++', WEEK4: 'DÉCHARGE' };
 const WORK_RATIO_DAYS = ['J+2/J+1', 'J-4', 'J-3', 'J-2', 'J-1', 'MATCH', 'TT'];
 const WORK_RATIO_METRICS = [
   { key: 'distance_km', label: 'Distance', shortLabel: 'Dist %' },
@@ -9069,7 +9079,7 @@ const WORK_RATIO_METRICS = [
   { key: 'decel_count_high', label: 'Décél', shortLabel: 'Déc %' },
   { key: 'power_plays', label: 'Power Plays', shortLabel: 'PP %' }
 ];
-const WORK_RATIOS = {
+let WORK_RATIOS = {
   WEEK1: {
     'J+2/J+1': { distance_km: 0.2, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.7, decel_count_high: 0.2, power_plays: 0.2 },
     'J-4':     { distance_km: 0.6, hsr: 0.5, sprint_dist_m: 0.4, top_speed: 0.8, decel_count_high: 0.4, power_plays: 0.4 },
@@ -9107,6 +9117,24 @@ const WORK_RATIOS = {
     'TT':      { distance_km: 2.7, hsr: 2, sprint_dist_m: 1.6, top_speed: 0, decel_count_high: 2.1, power_plays: 2.1 }
   }
 };
+// Instantané des valeurs par défaut (pour le bouton "Réinitialiser")
+const WORK_RATIO_DEFAULTS = {
+  weeks: WORK_RATIO_WEEKS.slice(),
+  phases: JSON.parse(JSON.stringify(WORK_RATIO_PHASE)),
+  ratios: JSON.parse(JSON.stringify(WORK_RATIOS))
+};
+// Applique une config personnalisée (ou les défauts si null/invalide) et
+// resynchronise les sélecteurs de semaine des vues GPS si leur semaine a disparu.
+function applyWorkRatiosConfig(cfg) {
+  const valid = cfg && Array.isArray(cfg.weeks) && cfg.weeks.length > 0 && cfg.phases && cfg.ratios;
+  const src = valid ? cfg : WORK_RATIO_DEFAULTS;
+  WORK_RATIO_WEEKS = src.weeks.slice();
+  WORK_RATIO_PHASE = JSON.parse(JSON.stringify(src.phases));
+  WORK_RATIOS = JSON.parse(JSON.stringify(src.ratios));
+  if (WORK_RATIO_WEEKS.indexOf(gpsWTRatioWeek) === -1) gpsWTRatioWeek = WORK_RATIO_WEEKS[0];
+  if (WORK_RATIO_WEEKS.indexOf(gpsWIRatioWeek) === -1) gpsWIRatioWeek = WORK_RATIO_WEEKS[0];
+  if (gpsSessionRatioWeek && WORK_RATIO_WEEKS.indexOf(gpsSessionRatioWeek) === -1) gpsSessionRatioWeek = '';
+}
 // Valeur cible (fraction du meilleur match) pour semaine+jour+métrique donnés. null/0 = non applicable (ex: Vmax en TT).
 function getWorkRatioTarget(week, day, metricKey) {
   const v = WORK_RATIOS[week] && WORK_RATIOS[week][day] && WORK_RATIOS[week][day][metricKey];
@@ -17635,28 +17663,133 @@ function renderSettings() {
   else if (currentSettingsTab === 'ratios') renderRatiosSettings();
 }
 // ---------- RATIOS DE TRAVAIL (référence, lecture seule) ----------
+// Tableau ÉDITABLE : chaque cellule est un champ % ; phases renommables ;
+// semaines ajoutables/supprimables. Persisté par org via work_ratios_config.
 function renderRatiosSettings() {
   const cont = document.getElementById('ratios-settings-content');
   if (!cont) return;
+  const editable = canWrite();
   let html = '';
   WORK_RATIO_WEEKS.forEach(week => {
-    html += '<div style="margin-bottom:18px;">';
-    html += '<h3 style="margin:0 0 8px;font-size:14px;">' + week + ' <span style="color:var(--text-dim);font-weight:normal;font-size:12px;">(' + WORK_RATIO_PHASE[week] + ')</span></h3>';
+    html += '<div style="margin-bottom:18px;" data-ratio-week="' + week + '">';
+    html += '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 8px;">' +
+      '<h3 style="margin:0;font-size:14px;">' + week + '</h3>' +
+      (editable
+        ? '<input type="text" id="ratio-phase-' + week + '" maxlength="30" value="' + escapeHtml(WORK_RATIO_PHASE[week] || '') + '" placeholder="Nom de la phase" style="width:170px; font-size:12px; padding:4px 8px;" title="Nom de la phase (ex: CHARGE, DÉCHARGE)">'
+        : '<span style="color:var(--text-dim);font-size:12px;">(' + escapeHtml(WORK_RATIO_PHASE[week] || '') + ')</span>') +
+      (editable && WORK_RATIO_WEEKS.length > 1
+        ? '<button class="btn btn-danger" style="padding:3px 10px; font-size:11px;" onclick="deleteRatioWeek(\'' + week + '\')" title="Supprimer cette semaine">🗑 Supprimer</button>'
+        : '') +
+      '</div>';
     html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Jour</th>';
     WORK_RATIO_METRICS.forEach(m => { html += '<th>' + m.label + '</th>'; });
     html += '</tr></thead><tbody>';
     WORK_RATIO_DAYS.forEach(day => {
       html += '<tr><td style="text-align:left;font-weight:600;">' + escapeHtml(day) + '</td>';
       WORK_RATIO_METRICS.forEach(m => {
-        const v = WORK_RATIOS[week][day][m.key];
-        html += '<td style="text-align:center;">' + (v ? (Math.round(v * 100) + '%') : '<span style="color:var(--text-dim);">—</span>') + '</td>';
+        const v = (WORK_RATIOS[week] && WORK_RATIOS[week][day]) ? WORK_RATIOS[week][day][m.key] : 0;
+        if (editable) {
+          html += '<td style="text-align:center; padding:3px;"><input type="number" class="ratio-cell" data-week="' + week + '" data-day="' + escapeHtml(day) + '" data-metric="' + m.key + '" min="0" max="999" step="5" value="' + (v ? Math.round(v * 100) : '') + '" placeholder="—" style="width:62px; text-align:center; font-size:12px; padding:4px 2px;"></td>';
+        } else {
+          html += '<td style="text-align:center;">' + (v ? (Math.round(v * 100) + '%') : '<span style="color:var(--text-dim);">—</span>') + '</td>';
+        }
       });
       html += '</tr>';
     });
     html += '</tbody></table></div></div>';
   });
+  if (editable) {
+    html += '<div style="display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 6px;">' +
+      '<button class="btn" onclick="saveRatiosSettings()">💾 Enregistrer les ratios</button>' +
+      '<button class="btn btn-secondary" onclick="addRatioWeek()">➕ Ajouter une semaine</button>' +
+      '<button class="btn btn-secondary" onclick="resetRatiosSettings()">↺ Réinitialiser (défauts)</button>' +
+      '</div>' +
+      '<p style="color:var(--text-dim);font-size:11px;">Valeurs en % du meilleur match de référence (ex: 60 = 60 %). Case vide = non applicable. Les modifications ne s\'appliquent aux vues GPS qu\'après « 💾 Enregistrer ».</p>';
+  }
   html += '<p style="color:var(--text-dim);font-size:11px;margin-top:4px;">Ratio = valeur du jour ÷ meilleur match de référence du joueur. "TT" = total de la semaine (non utilisé dans le contrôle par séance). "—" = non applicable (ex: Vmax n\'est pas cumulable sur la semaine).</p>';
   cont.innerHTML = html;
+}
+
+// Reporte les valeurs saisies dans le formulaire vers les variables globales
+function collectRatiosFromInputs() {
+  document.querySelectorAll('#ratios-settings-content .ratio-cell').forEach(inp => {
+    const w = inp.dataset.week, d = inp.dataset.day, k = inp.dataset.metric;
+    if (!WORK_RATIOS[w]) WORK_RATIOS[w] = {};
+    if (!WORK_RATIOS[w][d]) WORK_RATIOS[w][d] = {};
+    const raw = String(inp.value || '').trim();
+    const n = raw === '' ? 0 : parseFloat(raw);
+    WORK_RATIOS[w][d][k] = (isNaN(n) || n <= 0) ? 0 : (n / 100);
+  });
+  WORK_RATIO_WEEKS.forEach(w => {
+    const el = document.getElementById('ratio-phase-' + w);
+    if (el) WORK_RATIO_PHASE[w] = el.value.trim() || WORK_RATIO_PHASE[w] || '';
+  });
+}
+
+async function saveRatiosSettings() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  collectRatiosFromInputs();
+  const cfg = {
+    weeks: WORK_RATIO_WEEKS.slice(),
+    phases: JSON.parse(JSON.stringify(WORK_RATIO_PHASE)),
+    ratios: JSON.parse(JSON.stringify(WORK_RATIOS))
+  };
+  try {
+    const { error } = await sb.from('work_ratios_config').upsert(
+      { org: currentOrg, config: cfg, updated_at: new Date().toISOString() }, { onConflict: 'org' });
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); return; }
+  applyWorkRatiosConfig(cfg);
+  toast('💾 Ratios enregistrés — appliqués aux vues GPS', 'success');
+  renderRatiosSettings();
+}
+
+// Ajoute une semaine (copie de la dernière comme point de départ)
+function addRatioWeek() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  collectRatiosFromInputs(); // ne pas perdre les saisies en cours
+  const last = WORK_RATIO_WEEKS[WORK_RATIO_WEEKS.length - 1];
+  const nw = 'WEEK' + (WORK_RATIO_WEEKS.length + 1);
+  WORK_RATIO_WEEKS.push(nw);
+  WORK_RATIO_PHASE[nw] = 'NOUVELLE PHASE';
+  WORK_RATIOS[nw] = JSON.parse(JSON.stringify(WORK_RATIOS[last] || {}));
+  renderRatiosSettings();
+  toast(nw + ' ajoutée (copie de ' + last + ') — ajuste puis 💾 Enregistrer', 'success');
+}
+
+// Supprime une semaine puis renumérote WEEK1..N (il en faut au moins une)
+function deleteRatioWeek(week) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  if (WORK_RATIO_WEEKS.length <= 1) { toast('Il faut garder au moins une semaine', 'error'); return; }
+  if (!confirm('Supprimer ' + week + ' (' + (WORK_RATIO_PHASE[week] || '') + ') ?')) return;
+  collectRatiosFromInputs();
+  const restants = WORK_RATIO_WEEKS.filter(w => w !== week);
+  const phases = {}, ratios = {};
+  restants.forEach((w, i) => {
+    const nw = 'WEEK' + (i + 1);
+    phases[nw] = WORK_RATIO_PHASE[w];
+    ratios[nw] = WORK_RATIOS[w];
+  });
+  WORK_RATIO_WEEKS = restants.map((w, i) => 'WEEK' + (i + 1));
+  WORK_RATIO_PHASE = phases;
+  WORK_RATIOS = ratios;
+  if (WORK_RATIO_WEEKS.indexOf(gpsWTRatioWeek) === -1) gpsWTRatioWeek = WORK_RATIO_WEEKS[0];
+  if (WORK_RATIO_WEEKS.indexOf(gpsWIRatioWeek) === -1) gpsWIRatioWeek = WORK_RATIO_WEEKS[0];
+  if (gpsSessionRatioWeek && WORK_RATIO_WEEKS.indexOf(gpsSessionRatioWeek) === -1) gpsSessionRatioWeek = '';
+  renderRatiosSettings();
+  toast(week + ' supprimée — pense à 💾 Enregistrer', 'success');
+}
+
+async function resetRatiosSettings() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  if (!confirm('Revenir aux ratios par défaut (4 semaines d\'origine) ? La configuration personnalisée de ' + currentOrg + ' sera supprimée.')) return;
+  try {
+    const { error } = await sb.from('work_ratios_config').delete().eq('org', currentOrg);
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); return; }
+  applyWorkRatiosConfig(null);
+  renderRatiosSettings();
+  toast('↺ Ratios réinitialisés aux valeurs par défaut', 'success');
 }
 
 // ---------- BIBLIOTHÈQUE DE VIGNETTES (par aspect) ----------
