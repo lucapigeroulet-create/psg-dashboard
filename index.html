@@ -9041,6 +9041,9 @@ let gpsSessionPctMode = 'all'; // 'all' | 'best' | 'ratio' | 'none'
 // Triage "joueurs à surveiller" : seuil d'écart-type au-delà duquel un joueur est hors moyenne
 let gpsTriageThr = 1; // 0.8 | 1 | 1.5
 function gpsSetTriageThr(v) { gpsTriageThr = parseFloat(v); renderGPSSession(); }
+// Vue active du détail par joueur dans le rapport de séance
+let gpsSessionView = 'triage'; // 'triage' | 'heatmap' | 'plots' | 'table'
+function gpsSetSessionView(v) { gpsSessionView = v; renderGPSSession(); }
 // Métriques de charge suivies dans le triage (valeur en unité d'affichage)
 const GPS_TRIAGE_METRICS = [
   { key: 'distance_km', label: 'Distance', unit: 'm', dec: 0, mult: 1000 },
@@ -9135,6 +9138,102 @@ function gpsSessionTriageHTML(rows) {
     calm.forEach(n => { h += '<span style="font-size:12px;padding:3px 10px;border-radius:999px;background:var(--bg-card);border:1px solid var(--border);color:var(--text-dim);">' + escapeHtml(n) + '</span>'; });
     h += '</div></div>';
   }
+  h += '</div>';
+  return h;
+}
+
+// Statistiques d'écart (moyenne, écart-type, z, %) par métrique sur les lignes fournies
+function gpsComputeDev(rows) {
+  const val = (r, m) => gpsVal(r, m.key) * m.mult;
+  const stats = {};
+  GPS_TRIAGE_METRICS.forEach(m => {
+    const xs = rows.map(r => val(r, m));
+    const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+    const varc = xs.reduce((a, b) => a + (b - mean) * (b - mean), 0) / xs.length;
+    stats[m.key] = { mean: mean, sd: Math.sqrt(varc) || 0 };
+  });
+  return {
+    stats: stats, val: val,
+    z: (r, m) => { const s = stats[m.key]; return s.sd ? (val(r, m) - s.mean) / s.sd : 0; },
+    dpct: (r, m) => { const s = stats[m.key]; return s.mean ? (val(r, m) - s.mean) / s.mean * 100 : 0; }
+  };
+}
+const gpsDevFmt = (v, dec) => dec ? v.toFixed(dec) : Math.round(v).toLocaleString('fr-FR');
+
+// Onglets de bascule du détail par joueur
+function gpsSessionViewTabsHTML() {
+  const tabs = [['triage', '🎯 À surveiller'], ['heatmap', '🔥 Carte de chaleur'], ['plots', '📍 Positionnement'], ['table', '📋 Tableau détaillé']];
+  let h = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 14px;">';
+  tabs.forEach(t => {
+    const on = gpsSessionView === t[0];
+    h += '<button onclick="gpsSetSessionView(\'' + t[0] + '\')" style="border:1px solid ' + (on ? 'var(--accent)' : 'var(--border)') +
+      ';background:' + (on ? 'var(--accent)' : 'var(--bg-elevated)') + ';color:' + (on ? '#fff' : 'var(--text-dim)') +
+      ';border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">' + t[1] + '</button>';
+  });
+  return h + '</div>';
+}
+
+// Vue "Carte de chaleur" : tableau joueurs × métriques teinté par l'écart à la moyenne
+function gpsSessionHeatmapHTML(rows) {
+  if (rows.length < 3) return gpsSessionTriageHTML(rows);
+  const D = gpsComputeDev(rows);
+  const maxz = p => Math.max.apply(null, GPS_TRIAGE_METRICS.map(m => Math.abs(D.z(p, m))));
+  const ordered = rows.slice().sort((a, b) => maxz(b) - maxz(a));
+  let h = '<div class="table-wrap"><table style="font-size:12px;border-collapse:collapse;width:100%;min-width:640px;"><thead><tr>';
+  h += '<th style="text-align:left;padding:8px 10px;color:var(--text-dim);font-size:11px;border-bottom:1px solid var(--border);">Joueur</th>';
+  GPS_TRIAGE_METRICS.forEach(m => h += '<th style="text-align:center;padding:8px 6px;color:var(--text-dim);font-size:11px;border-bottom:1px solid var(--border);">' + m.label + '<br><span style="font-weight:400;">' + m.unit + '</span></th>');
+  h += '<th style="text-align:left;padding:8px 10px;color:var(--text-dim);font-size:11px;border-bottom:1px solid var(--border);">Signaux</th></tr></thead><tbody>';
+  ordered.forEach(p => {
+    const flagged = GPS_TRIAGE_METRICS.filter(m => Math.abs(D.z(p, m)) >= gpsTriageThr);
+    h += '<tr><td style="text-align:left;padding:7px 10px;font-weight:600;white-space:nowrap;border-bottom:1px solid var(--border);' + (flagged.length ? '' : 'opacity:.55;') + '">' + escapeHtml(p.joueur) + '</td>';
+    GPS_TRIAGE_METRICS.forEach(m => {
+      const zv = D.z(p, m), out = Math.abs(zv) >= gpsTriageThr;
+      h += '<td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--border);background:' + gpsDevColor(zv) + ';color:' + (out ? '#fff' : 'var(--text)') + ';">' +
+        '<div style="font-weight:700;">' + gpsDevFmt(D.val(p, m), m.dec) + '</div>' +
+        (out ? '<div style="font-size:10px;opacity:.85;">' + (D.dpct(p, m) > 0 ? '+' : '') + Math.round(D.dpct(p, m)) + '%</div>' : '') + '</td>';
+    });
+    h += '<td style="text-align:left;padding:5px 10px;border-bottom:1px solid var(--border);">';
+    if (flagged.length) {
+      flagged.sort((a, b) => Math.abs(D.z(p, b)) - Math.abs(D.z(p, a))).forEach(m => {
+        const zv = D.z(p, m);
+        h += '<span style="display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:999px;margin:1px 3px 1px 0;background:' + gpsDevColor(zv, 0.05) + ';color:#fff;white-space:nowrap;">' + (zv > 0 ? '▲' : '▼') + ' ' + m.label + '</span>';
+      });
+    } else h += '<span style="font-size:10.5px;color:var(--text-dim);">✓ dans la moyenne</span>';
+    h += '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<div style="font-size:11px;color:var(--text-dim);margin-top:8px;">Couleur = écart à la moyenne d\'équipe (<span style="color:var(--orange);">ambre = moins</span>, <span style="color:var(--accent-light);">bleu = plus</span>), intensité = ampleur. Lignes triées du plus atypique au plus régulier.</div>';
+  return h;
+}
+
+// Vue "Positionnement" : une réglette par métrique, moyenne au centre, joueurs en points
+function gpsSessionPlotsHTML(rows) {
+  if (rows.length < 4) return '<div style="color:var(--text-dim);font-size:13px;padding:8px 2px;">Pas assez de joueurs pour situer les écarts (minimum 4).</div>';
+  const D = gpsComputeDev(rows);
+  const SCALE = 2.6, pos = zv => 50 + Math.max(-SCALE, Math.min(SCALE, zv)) / SCALE * 45;
+  let h = '<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:4px 16px 14px;overflow:hidden;">';
+  GPS_TRIAGE_METRICS.forEach((m, mi) => {
+    const s = D.stats[m.key], bandL = pos(-gpsTriageThr), bandR = pos(gpsTriageThr);
+    h += '<div style="padding:14px 0;' + (mi ? 'border-top:1px solid var(--border);' : '') + '">';
+    h += '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:16px;"><span style="font-weight:700;">' + m.label + ' <span style="color:var(--text-dim);font-weight:400;">' + m.unit + '</span></span><span style="color:var(--text-dim);">moyenne ' + gpsDevFmt(s.mean, m.dec) + '</span></div>';
+    h += '<div style="position:relative;height:32px;">';
+    h += '<div style="position:absolute;top:6px;bottom:6px;left:' + bandL + '%;right:' + (100 - bandR) + '%;background:rgba(0,144,232,.10);border-left:1px dashed var(--border);border-right:1px dashed var(--border);border-radius:4px;"></div>';
+    h += '<div style="position:absolute;left:0;right:0;top:50%;height:1px;background:var(--border);"></div>';
+    h += '<div style="position:absolute;top:2px;bottom:2px;left:50%;width:2px;background:var(--text-dim);border-radius:2px;"></div>';
+    const sorted = rows.slice().sort((a, b) => Math.abs(D.z(a, m)) - Math.abs(D.z(b, m)));
+    let lastX = -99, lift = 0;
+    sorted.forEach(p => {
+      const zv = D.z(p, m), x = pos(zv), out = Math.abs(zv) >= gpsTriageThr, nm = p.joueur.split(' ')[0];
+      if (!out) {
+        h += '<div title="' + escapeHtml(p.joueur + ' · ' + gpsDevFmt(D.val(p, m), m.dec)) + '" style="position:absolute;top:50%;left:' + x + '%;width:7px;height:7px;border-radius:50%;transform:translate(-50%,-50%);background:var(--text-dim);opacity:.5;"></div>';
+      } else {
+        if (x - lastX < 9) { lift = lift ? 0 : 1; } else { lift = 0; } lastX = x;
+        h += '<div title="' + escapeHtml(p.joueur + ' · ' + gpsDevFmt(D.val(p, m), m.dec) + ' (' + (D.dpct(p, m) > 0 ? '+' : '') + Math.round(D.dpct(p, m)) + '%)') + '" style="position:absolute;top:50%;left:' + x + '%;width:11px;height:11px;border-radius:50%;transform:translate(-50%,-50%);background:' + gpsDevColor(zv, 0.15) + ';border:1.5px solid var(--bg-card);">' +
+          '<span style="position:absolute;top:' + (lift ? '-15px' : '-1px') + ';left:50%;transform:translate(-50%,-100%);font-size:10px;font-weight:700;white-space:nowrap;color:' + gpsDevInk(zv) + ';">' + escapeHtml(nm) + '</span></div>';
+      }
+    });
+    h += '</div></div>';
+  });
   h += '</div>';
   return h;
 }
@@ -10136,32 +10235,6 @@ function renderGPSSession() {
   let html = '<div class="card">';
   html += '<h2>Rapport de séance — ' + formatDateFR(date) + (titles.length ? ' · ' + escapeHtml(titles[0]) : '') + escapeHtml(splitLabel) + '</h2>';
 
-  // Contrôle ratio de travail (périodisation) — cf. Paramètres > Ratios de travail
-  html += '<div style="margin-bottom:14px;padding:10px 12px;background:var(--bg-elevated);border-radius:8px;border:1px solid var(--border);">';
-  html += '<div style="font-size:12px;color:var(--text-dim);font-weight:600;margin-bottom:8px;">📐 Vérifier le ratio de travail (périodisation)</div>';
-  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">';
-  html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:4px;">Semaine</label>';
-  html += '<select id="gps-ratio-week" onchange="gpsSetRatioWeek()" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">';
-  html += '<option value="">—</option>';
-  WORK_RATIO_WEEKS.forEach(w => {
-    html += '<option value="' + w + '"' + (gpsSessionRatioWeek === w ? ' selected' : '') + '>' + w + ' (' + WORK_RATIO_PHASE[w] + ')</option>';
-  });
-  html += '</select></div>';
-  html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:4px;">Jour</label>';
-  html += '<select id="gps-ratio-day" onchange="gpsSetRatioDay()" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">';
-  html += '<option value="">—</option>';
-  WORK_RATIO_DAYS.filter(d => d !== 'TT').forEach(d => {
-    html += '<option value="' + d + '"' + (gpsSessionRatioDay === d ? ' selected' : '') + '>' + d + '</option>';
-  });
-  html += '</select></div>';
-  html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:4px;">Pourcentages affichés</label>';
-  html += '<select id="gps-pct-mode" onchange="gpsSetPctMode()" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">';
-  [['all', 'Tout (meilleur match + ratio)'], ['best', 'Meilleur match uniquement'], ['ratio', 'Ratio uniquement'], ['none', 'Aucun']].forEach(opt => {
-    html += '<option value="' + opt[0] + '"' + (gpsSessionPctMode === opt[0] ? ' selected' : '') + '>' + opt[1] + '</option>';
-  });
-  html += '</select></div>';
-  html += '</div></div>';
-
   // Filtre poste (cases à cocher)
   if (allSessionPostes.length > 1) {
     html += '<div style="margin-bottom:10px;">';
@@ -10211,8 +10284,39 @@ function renderGPSSession() {
   html += '<div class="stat"><div class="stat-label">Vmax moyenne</div><div class="stat-value" style="font-size:20px;">' + avgVmax.toFixed(1) + '</div></div>';
   html += '</div>';
 
-  // Triage "joueurs à surveiller" : repère d'un coup d'œil qui sort de la moyenne d'équipe
-  html += gpsSessionTriageHTML(rows);
+  // Sélecteur de vue du détail par joueur (Triage / Carte de chaleur / Positionnement / Tableau)
+  html += gpsSessionViewTabsHTML();
+  if (gpsSessionView === 'triage') html += gpsSessionTriageHTML(rows);
+  else if (gpsSessionView === 'heatmap') html += gpsSessionHeatmapHTML(rows);
+  else if (gpsSessionView === 'plots') html += gpsSessionPlotsHTML(rows);
+
+  // ===== Vue "Tableau détaillé" (valeurs + % meilleur match + ratio de travail) =====
+  if (gpsSessionView === 'table') {
+  // Contrôle ratio de travail (périodisation) — cf. Paramètres > Ratios de travail
+  html += '<div style="margin-bottom:14px;padding:10px 12px;background:var(--bg-elevated);border-radius:8px;border:1px solid var(--border);">';
+  html += '<div style="font-size:12px;color:var(--text-dim);font-weight:600;margin-bottom:8px;">📐 Vérifier le ratio de travail (périodisation)</div>';
+  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;">';
+  html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:4px;">Semaine</label>';
+  html += '<select id="gps-ratio-week" onchange="gpsSetRatioWeek()" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">';
+  html += '<option value="">—</option>';
+  WORK_RATIO_WEEKS.forEach(w => {
+    html += '<option value="' + w + '"' + (gpsSessionRatioWeek === w ? ' selected' : '') + '>' + w + ' (' + WORK_RATIO_PHASE[w] + ')</option>';
+  });
+  html += '</select></div>';
+  html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:4px;">Jour</label>';
+  html += '<select id="gps-ratio-day" onchange="gpsSetRatioDay()" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">';
+  html += '<option value="">—</option>';
+  WORK_RATIO_DAYS.filter(d => d !== 'TT').forEach(d => {
+    html += '<option value="' + d + '"' + (gpsSessionRatioDay === d ? ' selected' : '') + '>' + d + '</option>';
+  });
+  html += '</select></div>';
+  html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:4px;">Pourcentages affichés</label>';
+  html += '<select id="gps-pct-mode" onchange="gpsSetPctMode()" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">';
+  [['all', 'Tout (meilleur match + ratio)'], ['best', 'Meilleur match uniquement'], ['ratio', 'Ratio uniquement'], ['none', 'Aucun']].forEach(opt => {
+    html += '<option value="' + opt[0] + '"' + (gpsSessionPctMode === opt[0] ? ' selected' : '') + '>' + opt[1] + '</option>';
+  });
+  html += '</select></div>';
+  html += '</div></div>';
 
   // Vérifier si des ratios best match sont disponibles pour cette séance
   const hasBestMatch = rows.some(r => getBestMatchRow(r.joueur) !== null);
@@ -10305,6 +10409,7 @@ function renderGPSSession() {
     html += '<a href="#" onclick="document.querySelector(\'.nav-btn[data-view=settings]\').click();switchSettingsTab(\'ratios\');return false;" style="color:var(--accent-light);">Voir le tableau complet →</a>';
     html += '</div>';
   }
+  } // fin vue "Tableau détaillé"
   html += '</div>';
 
   // Graphique : métrique au choix par joueur
