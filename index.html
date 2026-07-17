@@ -10380,8 +10380,10 @@ function renderGPSSession() {
       const v = gpsDisplayVal(r, m);
       const pct = pctOfMax(v, maxes[m.key]);
       const display = m.dec === 0 ? Math.round(v) : v.toFixed(m.dec);
+      // Saturation proportionnelle à la valeur : pâle pour les petites, vive pour les hautes
+      const alpha = (0.1 + 0.36 * (pct / 100)).toFixed(3);
       html += '<td style="text-align:center;position:relative;">' +
-        '<div style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;background:rgba(' + gpsMetricRgb(m.key) + ',0.22);"></div>' +
+        '<div style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;background:rgba(' + gpsMetricRgb(m.key) + ',' + alpha + ');"></div>' +
         '<span style="position:relative;">' + (v > 0 ? display : '·') + '</span></td>';
       if (showBestPct && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
         const ratio = getBestMatchRatio(r.joueur, m.key, r);
