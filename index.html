@@ -6547,6 +6547,8 @@ function renderOverview() {
   Object.keys(matchPlayersByDay).forEach(d => { statusByDay[d]['MATCH'] = matchPlayersByDay[d].size; });
 
   state.bdd_ent.forEach(e => {
+    // Ignorer les jours hors fenêtre (ex : plannings futurs, exclus car dates bornées à aujourd'hui)
+    if (!statusByDay[e.date]) return;
     // Si le joueur a joué un match ce jour, il est déjà compté en MATCH
     if (matchPlayersByDay[e.date] && matchPlayersByDay[e.date].has(e.joueur)) return;
     const s = e.seances;
