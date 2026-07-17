@@ -14660,6 +14660,102 @@ function seanceHasRemarqueJoueur(info, joueur) {
   const r = info.remarques_joueurs || {};
   return !!(r[joueur] && String(r[joueur]).trim());
 }
+// sRPE (charge) d'un joueur pour une séance donnée, calculé comme computeSRPE :
+//  - mode unique   : durée_totale × RPE
+//  - mode procédé  : Σ(durée_procédé × RPE_procédé), RPE moyen pondéré par la durée
+// Renvoie null si aucune notation exploitable, sinon { rpe, sRPE, mode }.
+function srpeForJoueurSeance(date, joueur, seance) {
+  const info = getSeanceInfo(date, seance);
+  if (!info) return null;
+  const detail = getRPEDetailJoueurSeance(date, joueur, seance);
+  if (!detail) return null;
+  if (detail.mode === 'unique') {
+    if (detail.value === null || isNaN(detail.value)) return null;
+    const duree = info.duree_totale || 0;
+    return { rpe: detail.value, sRPE: duree > 0 ? duree * detail.value : null, mode: 'unique' };
+  }
+  const procedes = (info.procedes || []).filter(p => p && (p.temps || p.type || p.zone || p.rpe));
+  let sRPE = 0, sumDuree = 0, sumWeighted = 0, nbValid = 0, anyRpe = false;
+  detail.values.forEach((rpe, i) => {
+    if (rpe === null || isNaN(rpe)) return;
+    anyRpe = true;
+    if (i >= procedes.length) return;
+    const pd = procedes[i].temps;
+    if (pd === null || pd === undefined || pd === '' || isNaN(parseFloat(pd))) return;
+    const d = parseFloat(pd);
+    sRPE += d * rpe; sumDuree += d; sumWeighted += d * rpe; nbValid++;
+  });
+  if (!anyRpe) return null;
+  const rpeMoyen = getRPEJoueurSeance(date, joueur, seance);
+  return { rpe: rpeMoyen, sRPE: nbValid > 0 && sumDuree > 0 ? sumWeighted : null, mode: 'procede' };
+}
+
+// Tableau récapitulatif des RPE déclarés par les joueurs pour cette séance.
+function seanceRPETableHtml(date, nom, joueurSelectionne) {
+  // Joueurs attendus : ceux qui ont fait cette séance (bdd_ent) ce jour-là
+  const attendus = new Set(
+    state.bdd_ent.filter(e => e.date === date && Array.isArray(e.seances) && e.seances.includes(nom))
+      .map(e => e.joueur)
+  );
+  // + tout joueur ayant déclaré un RPE pour cette séance (sécurité)
+  state.bdd_rpe.forEach(r => {
+    if (r.date === date && Array.isArray(r.rpe) && r.rpe.some(x => x.seance === nom)) attendus.add(r.joueur);
+  });
+  if (attendus.size === 0) return '';
+
+  const rows = [];
+  let sumRpe = 0, nbRpe = 0, sumCharge = 0, nbCharge = 0;
+  const enAttente = [];
+  attendus.forEach(j => {
+    const s = srpeForJoueurSeance(date, j, nom);
+    if (!s || s.rpe === null || s.rpe === undefined || isNaN(s.rpe)) { enAttente.push(j); return; }
+    sumRpe += s.rpe; nbRpe++;
+    if (s.sRPE !== null && !isNaN(s.sRPE)) { sumCharge += s.sRPE; nbCharge++; }
+    rows.push({ joueur: j, rpe: s.rpe, sRPE: s.sRPE });
+  });
+  rows.sort((a, b) => (b.rpe - a.rpe) || a.joueur.localeCompare(b.joueur));
+  enAttente.sort();
+
+  const fmtRpe = v => (Math.round(v * 10) / 10).toString().replace('.', ',');
+  const moyRpe = nbRpe ? fmtRpe(sumRpe / nbRpe) : '—';
+  const moyCharge = nbCharge ? Math.round(sumCharge / nbCharge) : null;
+
+  let html = '<div style="margin-bottom:14px;">';
+  html += '<h3 style="margin:0 0 6px;">🟢 RPE des joueurs</h3>';
+  html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">' +
+    nbRpe + ' déclaré' + (nbRpe > 1 ? 's' : '') + ' sur ' + attendus.size +
+    ' · RPE moyen <b style="color:var(--text);">' + moyRpe + '</b>' +
+    (moyCharge !== null ? ' · Charge moy. <b style="color:var(--text);">' + moyCharge + '</b>' : '') + '</div>';
+
+  if (rows.length) {
+    html += '<div class="table-wrap" style="max-height:340px;"><table style="width:100%; font-size:13px; border-collapse:collapse;">' +
+      '<thead><tr style="text-align:left; color:var(--text-dim); font-size:11px;">' +
+      '<th style="padding:4px 8px;">Joueur</th>' +
+      '<th style="padding:4px 8px; text-align:center;">RPE</th>' +
+      '<th style="padding:4px 8px; text-align:right;">Charge (sRPE)</th></tr></thead><tbody>';
+    html += rows.map(r => {
+      const hl = (r.joueur === joueurSelectionne);
+      const chargeCell = (r.sRPE !== null && !isNaN(r.sRPE))
+        ? '<span style="display:inline-block; min-width:44px; text-align:center; padding:1px 8px; border-radius:10px; color:#fff; font-weight:700; background:' + srpeLoadColor(r.sRPE) + ';">' + Math.round(r.sRPE) + '</span>'
+        : '<span style="color:var(--text-dim);">—</span>';
+      return '<tr style="border-top:1px solid var(--border);' + (hl ? ' background:rgba(99,102,241,0.12);' : '') + '">' +
+        '<td style="padding:5px 8px;' + (hl ? ' font-weight:700; color:var(--accent-light);' : '') + '">' + escapeHtml(r.joueur) + (hl ? ' ◄' : '') + '</td>' +
+        '<td style="padding:5px 8px; text-align:center; font-weight:700;">' + fmtRpe(r.rpe) + '</td>' +
+        '<td style="padding:5px 8px; text-align:right;">' + chargeCell + '</td></tr>';
+    }).join('');
+    html += '</tbody></table></div>';
+  } else {
+    html += '<div style="font-size:13px; color:var(--text-dim);">Aucun RPE déclaré pour l\'instant.</div>';
+  }
+
+  if (enAttente.length) {
+    html += '<div style="font-size:11px; color:var(--text-dim); margin-top:8px;">⏳ En attente (' + enAttente.length + ') : ' +
+      enAttente.map(escapeHtml).join(', ') + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
 function openSeanceDetail(date, nom, joueur) {
   const overlay = document.getElementById('seance-detail-modal');
   const titleEl = document.getElementById('seance-detail-title');
@@ -14675,6 +14771,9 @@ function openSeanceDetail(date, nom, joueur) {
     html += '<div style="color:var(--text-dim);">Aucune fiche détaillée pour cette séance.</div>';
     contentEl.innerHTML = html; overlay.style.display = 'flex'; return;
   }
+
+  // Tableau récapitulatif des RPE déclarés par les joueurs (info principale demandée)
+  html += seanceRPETableHtml(date, nom, joueur);
 
   const notes = info.notes || {};
   const vign = info.vignettes || {};
