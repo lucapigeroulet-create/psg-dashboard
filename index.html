@@ -6291,6 +6291,26 @@ function getAllDates() {
   return uniqueSorted(all);
 }
 
+// Dates jusqu'à aujourd'hui inclus (exclut les séances planifiées dans le futur).
+// Utilisé par les rapports/charges pour ne pas afficher de colonnes vides au-delà du jour.
+function getDatesUpToToday() {
+  const today = toLocalISO(new Date());
+  return getAllDates().filter(d => d <= today);
+}
+function capDatesToToday(dates) {
+  const today = toLocalISO(new Date());
+  return dates.filter(d => d <= today);
+}
+// Semaine à afficher par défaut dans un rapport hebdo : la semaine en cours,
+// ou la plus récente semaine passée si la semaine en cours n'a pas de données.
+// `weeks` est trié du plus récent au plus ancien (mondayIso desc).
+function defaultReportWeekIso(weeks) {
+  if (!weeks || weeks.length === 0) return '';
+  const curMonday = toLocalISO(getMondayOf(toLocalISO(new Date())));
+  const past = weeks.filter(w => w.mondayIso <= curMonday);
+  return (past[0] || weeks[weeks.length - 1]).mondayIso;
+}
+
 function getAllPlayers() {
   // Exclure les joueurs archivés (même s'ils ont des plannings passés dans bdd_ent)
   const archived = new Set((state.joueurs_archived || []).map(j => j.nom));
@@ -6508,7 +6528,8 @@ function renderOverview() {
   document.getElementById('stat-gps').textContent = state.bdd_gps.length;
   document.getElementById('stat-rpe').textContent = state.bdd_rpe.reduce((acc, r) => acc + (r.rpe ? r.rpe.length : 0), 0);
 
-  const dates = getAllDates();
+  // Rapports quotidiens : on s'arrête au jour, pas aux séances planifiées à venir
+  const dates = getDatesUpToToday();
 
   // ===== Activité quotidienne (extraite en fonction pour le filtre dates) =====
   renderOverviewActivity();
@@ -6588,8 +6609,8 @@ function renderOverview() {
     playerSel.innerHTML = getAllPlayers().map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
     playerSel.dataset.org = currentOrg;
   }
-  // Bornes par défaut des intervalles de dates (charges + activité)
-  const allDates = getAllDates();
+  // Bornes par défaut des intervalles de dates (charges + activité) : bornées à aujourd'hui
+  const allDates = getDatesUpToToday();
   ['overview-charge-from', 'overview-charge-to', 'overview-activity-from', 'overview-activity-to'].forEach(id => {
     const el = document.getElementById(id);
     if (el && allDates.length > 0 && !el.value) { el.min = allDates[0]; el.max = allDates[allDates.length-1]; }
@@ -6736,7 +6757,7 @@ function openSeancePlanForConfirmation(spId, joueur) {
 }
 
 function renderOverviewActivity() {
-  let dates = getAllDates();
+  let dates = getDatesUpToToday();
   const fromVal = document.getElementById('overview-activity-from') ? document.getElementById('overview-activity-from').value : '';
   const toVal = document.getElementById('overview-activity-to') ? document.getElementById('overview-activity-to').value : '';
   if (fromVal) dates = dates.filter(d => d >= fromVal);
@@ -6866,7 +6887,8 @@ function resetOverviewActivityDates() {
 // Graphique des charges quotidiennes selon le filtre + intervalle de dates
 function renderOverviewCharges() {
   const scope = document.getElementById('overview-charge-scope').value;
-  let dates = getAllDates();
+  // Ne pas afficher au-delà d'aujourd'hui (on s'arrête au jour, pas aux séances planifiées)
+  let dates = getDatesUpToToday();
 
   // Filtre intervalle de dates
   const fromVal = document.getElementById('overview-charge-from').value;
@@ -6945,8 +6967,8 @@ function renderOverviewTodaySummary() {
   if (!container) return;
   const today = toLocalISO(new Date());
   const srpeData = computeSRPE().filter(x => x.date === today);
-  const dates = getAllDates();
-  // Si pas de données aujourd'hui, prendre le dernier jour avec données
+  const dates = getDatesUpToToday();
+  // Si pas de données aujourd'hui, prendre le dernier jour avec données (jusqu'à aujourd'hui)
   let refDate = today;
   if (srpeData.length === 0 && dates.length > 0) {
     refDate = dates[dates.length - 1];
@@ -6983,7 +7005,7 @@ function toggleOverviewRPEShowAll() {
 
 function renderOverviewMissing() {
   const today = toLocalISO(new Date());
-  const dates = getAllDates();
+  const dates = getDatesUpToToday();
 
   // Date de référence pour les RPE = celle du sélecteur, sinon aujourd'hui/dernier jour
   const rpeDateInput = document.getElementById('overview-rpe-date');
@@ -7628,7 +7650,7 @@ function computeBilanData() {
   const weeks = getPlannedWeeks();
   if (weeks.length === 0) return { weeks, empty: true };
 
-  const mondayIso = (weekSel && weekSel.value) || weeks[0].mondayIso;
+  const mondayIso = (weekSel && weekSel.value) || defaultReportWeekIso(weeks);
   const monday = getMondayOf(mondayIso);
   const dates = weekDates(monday);
   const groupFilter = groupSel ? groupSel.value : '';
@@ -7714,7 +7736,7 @@ function renderWeeklyBilan() {
     tbody.innerHTML = '<tr><td style="padding:16px; text-align:center; color:var(--text-dim);">Aucune séance planifiée.</td></tr>';
     return;
   }
-  if (!weekSel.value) weekSel.value = weeks[0].mondayIso;
+  if (!weekSel.value) weekSel.value = defaultReportWeekIso(weeks);
 
   const data = computeBilanData();
   const jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -8049,7 +8071,7 @@ function renderRPE() {
     ).join('');
     weekSel.dataset.count = String(weeks.length);
   }
-  if (!weekSel.value && weeks.length > 0) weekSel.value = weeks[0].mondayIso;
+  if (!weekSel.value && weeks.length > 0) weekSel.value = defaultReportWeekIso(weeks);
 
   // Remplir le filtre type
   // On reconstruit quand l'organisation change (sinon le filtre garde les types
@@ -11654,8 +11676,8 @@ function renderInjury() {
         '<td style="text-align:center;">' + (p.fiches > 0 ? '<b>' + p.fiches + '</b>' : '<span style="color:var(--text-dim);">—</span>') + '</td></tr>'
       ).join('');
 
-  // ---- Évolution quotidienne (graphe historique, filtré groupe + période) ----
-  const dates = getAllDates().filter(inRange);
+  // ---- Évolution quotidienne (graphe historique, filtré groupe + période, borné à aujourd'hui) ----
+  const dates = capDatesToToday(getAllDates().filter(inRange));
   const counts = dates.map(d => {
     const rows = state.bdd_ent.filter(e => e.date === d && inGroup(e.joueur));
     let dispo = 0, partiel = 0, indispo = 0;
