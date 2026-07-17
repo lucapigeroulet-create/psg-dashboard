@@ -9238,6 +9238,20 @@ function gpsSessionPlotsHTML(rows) {
   return h;
 }
 
+// Couleur propre à chaque métrique (rgb) — barres et en-têtes du tableau détaillé
+const GPS_METRIC_COLORS = {
+  duree_min: '148,163,184',        // ardoise
+  distance_km: '0,163,255',        // bleu
+  dist_per_min: '34,211,238',      // cyan
+  hsr: '251,191,36',               // ambre
+  sprint_dist_m: '248,113,113',    // corail
+  top_speed: '52,211,153',         // vert
+  decel_count_high: '167,139,250', // violet
+  power_plays: '45,212,191',       // turquoise
+  player_load: '251,146,60'        // orange
+};
+function gpsMetricRgb(key) { return GPS_METRIC_COLORS[key] || '0,163,255'; }
+
 // Indicateurs GPS clés affichés
 const GPS_METRICS = [
   { key: 'duree_min', label: 'Minutes', unit: 'min', dec: 0, mult: 1 },
@@ -10333,7 +10347,7 @@ function renderGPSSession() {
     html += gpsSortableTh('intensity', '⚡ Intensité', 'background:#354045;color:#fbbf24;font-size:10px;white-space:nowrap;');
   }
   GPS_METRICS.forEach(m => {
-    html += gpsSortableTh(m.key, m.label + (m.unit ? '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + m.unit + '</span>' : ''), '');
+    html += gpsSortableTh(m.key, m.label + (m.unit ? '<br><span style="font-weight:normal;font-size:10px;color:var(--text-dim);">' + m.unit + '</span>' : ''), 'border-bottom:2px solid rgba(' + gpsMetricRgb(m.key) + ',0.85);');
     if (showBestPct && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
       html += gpsSortableTh('best:' + m.key, '% Best', 'font-size:10px;color:var(--accent-light);white-space:nowrap;');
     }
@@ -10367,7 +10381,7 @@ function renderGPSSession() {
       const pct = pctOfMax(v, maxes[m.key]);
       const display = m.dec === 0 ? Math.round(v) : v.toFixed(m.dec);
       html += '<td style="text-align:center;position:relative;">' +
-        '<div style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;background:rgba(0,163,255,0.18);"></div>' +
+        '<div style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;background:rgba(' + gpsMetricRgb(m.key) + ',0.22);"></div>' +
         '<span style="position:relative;">' + (v > 0 ? display : '·') + '</span></td>';
       if (showBestPct && m.key !== 'duree_min' && m.key !== 'dist_per_min') {
         const ratio = getBestMatchRatio(r.joueur, m.key, r);
