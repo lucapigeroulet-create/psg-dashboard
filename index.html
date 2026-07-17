@@ -7721,7 +7721,9 @@ function renderWeeklyBilan() {
     weekSel.innerHTML = weeks.map(w =>
       '<option value="' + w.mondayIso + '">Semaine ' + w.week + ' (' + w.year + ') — ' + formatDateRange(w.monday) + '</option>'
     ).join('');
-    if (cur && weeks.some(w => w.mondayIso === cur)) weekSel.value = cur;
+    // Après innerHTML, le <select> se cale sur la 1re option (semaine planifiée la plus récente,
+    // potentiellement future). On force la semaine en cours (ou la sélection précédente si valide).
+    weekSel.value = (cur && weeks.some(w => w.mondayIso === cur)) ? cur : defaultReportWeekIso(weeks);
     weekSel.dataset.org = currentOrg;
     weekSel.dataset.count = String(weeks.length);
   }
@@ -8068,10 +8070,14 @@ function renderRPE() {
   const weekSel = document.getElementById('rpe-week-select');
   const weeks = getAvailableWeeks();
   if (weekSel.options.length === 0 || weekSel.dataset.count !== String(weeks.length)) {
+    const cur = weekSel.value;
     weekSel.innerHTML = weeks.map(w =>
       '<option value="' + w.mondayIso + '">Semaine ' + w.week + ' (' + w.year + ') — ' + formatDateRange(w.monday) + '</option>'
     ).join('');
     weekSel.dataset.count = String(weeks.length);
+    // Après innerHTML, le <select> se cale d'office sur la 1re option (semaine la plus récente,
+    // potentiellement future). On force la semaine en cours (ou la sélection précédente si valide).
+    weekSel.value = (cur && weeks.some(w => w.mondayIso === cur)) ? cur : defaultReportWeekIso(weeks);
   }
   if (!weekSel.value && weeks.length > 0) weekSel.value = defaultReportWeekIso(weeks);
 
