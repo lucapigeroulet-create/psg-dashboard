@@ -5469,7 +5469,7 @@ async function loadState() {
   try {
     setLoad('Chargement des joueurs...');
     const { data: joueurs } = await sb.from('joueurs').select('*').eq('org', currentOrg).order('nom');
-    const allJoueurs = (joueurs || []).map(j => ({ nom: j.nom, groupe: j.groupe, poste: j.poste, numero: j.numero, archived: !!j.archived }));
+    const allJoueurs = (joueurs || []).map(j => ({ nom: j.nom, groupe: j.groupe, poste: j.poste, numero: j.numero, photo: j.photo || null, archived: !!j.archived }));
     // L'effectif actif (state.joueurs) exclut les joueurs archivés → ils disparaissent
     // automatiquement des sélecteurs, compositions, Hooper, etc. Données conservées en base.
     state.joueurs = allJoueurs.filter(j => !j.archived);
@@ -5702,15 +5702,22 @@ async function saveRPEToSupabase(date, joueur, rpeArray) {
 
 async function saveJoueurToSupabase(joueur, oldNom) {
   if (!canWrite()) { toast('Lecture seule', 'error'); return false; }
+  // Sur renommage, l'ancienne ligne est supprimée : on récupère sa photo pour la conserver
+  let photoAConserver = null;
   if (oldNom && oldNom !== joueur.nom) {
+    const old = state.joueurs.find(x => x.nom === oldNom) || (state.joueurs_archived || []).find(x => x.nom === oldNom);
+    photoAConserver = joueur.photo ?? (old && old.photo) ?? null;
     const { error: e1 } = await sb.from('joueurs').delete().eq('nom', oldNom);
     if (e1) { toast('Erreur : ' + e1.message, 'error'); return false; }
   }
-  const { error } = await sb.from('joueurs').upsert({
+  const payload = {
     nom: joueur.nom, groupe: joueur.groupe || null,
     poste: joueur.poste || null, numero: joueur.numero || null,
     org: currentOrg
-  }, { onConflict: 'nom' });
+  };
+  // N'inclure `photo` que lors d'un renommage (sinon on écraserait la photo existante par null)
+  if (photoAConserver) payload.photo = photoAConserver;
+  const { error } = await sb.from('joueurs').upsert(payload, { onConflict: 'nom' });
   if (error) { toast('Erreur joueur : ' + error.message, 'error'); return false; }
   return true;
 }
@@ -5892,7 +5899,7 @@ function handleRealtimeChange(table, payload) {
       state.joueurs = state.joueurs.filter(j => j.nom !== oldRow.nom);
     } else {
       const idx = state.joueurs.findIndex(j => j.nom === newRow.nom);
-      const obj = { nom: newRow.nom, groupe: newRow.groupe, poste: newRow.poste, numero: newRow.numero };
+      const obj = { nom: newRow.nom, groupe: newRow.groupe, poste: newRow.poste, numero: newRow.numero, photo: newRow.photo || null };
       if (idx >= 0) state.joueurs[idx] = obj;
       else state.joueurs.push(obj);
     }
@@ -9844,6 +9851,81 @@ function onBestMatchSelect(player, key) {
 // ============================================================================
 // TABLEAU DE BORD JOUEUR (vue individuelle consolidée)
 // ============================================================================
+// Encadré photo + identité du joueur, en tête du tableau de bord.
+// Le staff (canWrite) peut téléverser ou retirer la photo ; les autres rôles la voient seulement.
+function joueurPhotoBoxHtml(nom) {
+  const info = getJoueurInfo(nom);
+  const nomEsc = escapeHtml(nom).replace(/'/g, "\\'");
+  const meta = [info.poste, info.groupe, (info.numero != null && info.numero !== '' ? '#' + info.numero : '')]
+    .filter(x => x && x !== '?').map(escapeHtml).join(' · ');
+  const photo = info.photo || '';
+  const avatar = photo
+    ? '<img src="' + photo + '" alt="' + escapeHtml(nom) + '" style="width:96px; height:96px; border-radius:12px; object-fit:cover; border:1px solid var(--border);">'
+    : '<div style="width:96px; height:96px; border-radius:12px; background:var(--bg-elevated); border:1px dashed var(--border); display:flex; align-items:center; justify-content:center; font-size:38px; color:var(--text-dim);">👤</div>';
+
+  let actions = '';
+  if (canWrite()) {
+    actions = '<div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">' +
+      '<label style="cursor:pointer; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:13px; color:var(--text);">' +
+        '📷 ' + (photo ? 'Changer' : 'Ajouter une photo') +
+        '<input type="file" accept="image/*" style="display:none;" onchange="onJoueurPhotoSelected(this, \'' + nomEsc + '\')">' +
+      '</label>' +
+      (photo ? '<button onclick="removeJoueurPhoto(\'' + nomEsc + '\')" style="cursor:pointer; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:13px; color:var(--text-dim);">🗑️ Retirer</button>' : '') +
+      '</div>';
+  }
+
+  return '<div class="card"><div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">' +
+    avatar +
+    '<div style="flex:1; min-width:180px;">' +
+      '<div style="font-size:20px; font-weight:700;">' + escapeHtml(nom) + '</div>' +
+      (meta ? '<div style="font-size:13px; color:var(--text-dim); margin-top:2px;">' + meta + '</div>' : '') +
+      actions +
+    '</div>' +
+  '</div></div>';
+}
+
+// Sélection d'un fichier image : redimensionne (max 320px) et enregistre en JPEG base64.
+function onJoueurPhotoSelected(input, nom) {
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const max = 320;
+      let w = img.width, h = img.height;
+      const scale = Math.min(1, max / Math.max(w, h));
+      w = Math.round(w * scale); h = Math.round(h * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      saveJoueurPhoto(nom, dataUrl);
+    };
+    img.onerror = () => toast('Image illisible', 'error');
+    img.src = e.target.result;
+  };
+  reader.onerror = () => toast('Lecture du fichier impossible', 'error');
+  reader.readAsDataURL(file);
+}
+
+function removeJoueurPhoto(nom) {
+  if (!confirm('Retirer la photo de ' + nom + ' ?')) return;
+  saveJoueurPhoto(nom, null);
+}
+
+async function saveJoueurPhoto(nom, photo) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const { error } = await sb.from('joueurs').update({ photo }).eq('nom', nom).eq('org', currentOrg);
+  if (error) { toast('Erreur photo : ' + error.message, 'error'); return; }
+  const j = state.joueurs.find(x => x.nom === nom);
+  if (j) j.photo = photo || null;
+  toast(photo ? 'Photo enregistrée' : 'Photo retirée', 'success');
+  renderPlayerDashboard();
+}
+
 function renderPlayerDashboard() {
   const sel = document.getElementById('joueur-dash-select');
   const kpiEl = document.getElementById('joueur-dash-kpis');
@@ -9929,7 +10011,8 @@ function renderPlayerDashboard() {
   const fmtBm = bm
     ? ((bm.distance_km != null ? (Math.round((parseFloat(bm.distance_km) || 0) * 1000) + ' m') : '—') + (bm.top_speed != null ? ' · ' + (parseFloat(bm.top_speed) || 0).toFixed(1) + ' km/h' : ''))
     : '—';
-  kpiEl.innerHTML = '<div class="card"><div style="display:flex; gap:12px; flex-wrap:wrap;">' +
+  kpiEl.innerHTML = joueurPhotoBoxHtml(player) +
+    '<div class="card"><div style="display:flex; gap:12px; flex-wrap:wrap;">' +
     card('⏱️', 'Temps de jeu', tempsJeu + ' min', matchsJoueur.length + ' match(s)') +
     card('🏃', "Temps d'entraînement", tempsEntr + ' min', nbSeances + ' séance(s)') +
     card('💪', "Charge d'entraînement", Math.round(totalSRPE) + ' UA', 'Moy. ' + avgWeek + ' UA/sem.') +
