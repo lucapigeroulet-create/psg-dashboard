@@ -15308,7 +15308,8 @@ function getRPEPlayersForDate(date, groupFilter) {
 
 function renderRPEEntry() {
   const dateInput = document.getElementById('rpe-entry-date');
-  if (!dateInput.value) dateInput.value = getAllDates().slice(-1)[0] || new Date().toISOString().slice(0,10);
+  // Par défaut : aujourd'hui (et non la dernière séance planifiée dans le futur)
+  if (!dateInput.value) dateInput.value = toLocalISO(new Date());
 
   fillSelect('rpe-entry-group', getAllGroups(), true);
   const date = dateInput.value;
