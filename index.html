@@ -9020,18 +9020,23 @@ function renderGPSHistory() {
     return;
   }
 
-  let html = '<p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Séances GPS actuellement en base. Supprime une séance entière si tu l\'as importée en double.</p>';
+  let html = '<p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Séances GPS actuellement en base. « Modifier » corrige la durée d\'un découpage à la source (pour tous les joueurs) et recalcule le m/min. Supprime une séance entière si tu l\'as importée en double.</p>';
   html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Date</th><th style="text-align:left;">Séance</th><th>Joueurs</th><th>Splits</th><th>Lignes</th><th></th></tr></thead><tbody>';
   list.forEach(s => {
     const splitsArr = Array.from(s.splits);
     const splitLabel = splitsArr.length === 1 && splitsArr[0] === 'all' ? 'séance entière' : splitsArr.length + ' (dont procédés)';
+    const seanceEsc = s.seance.replace(/'/g, "\\'");
+    const editBtn = canWrite()
+      ? '<button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="openGpsSessionEdit(\'' + s.date + '\', \'' + seanceEsc + '\')">✏️ Modifier</button> '
+      : '';
     html += '<tr>' +
       '<td style="text-align:left;">' + formatDateFR(s.date) + '</td>' +
       '<td style="text-align:left;">' + escapeHtml(s.seance) + '</td>' +
       '<td style="text-align:center;">' + s.players.size + '</td>' +
       '<td style="text-align:center;">' + splitLabel + '</td>' +
       '<td style="text-align:center;">' + s.rows + '</td>' +
-      '<td style="text-align:center;"><button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;color:var(--red);" onclick="deleteGPSSession(\'' + s.date + '\', \'' + s.seance.replace(/'/g, "\\'") + '\')">🗑 Supprimer</button></td>' +
+      '<td style="text-align:center;white-space:nowrap;">' + editBtn +
+        '<button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;color:var(--red);" onclick="deleteGPSSession(\'' + s.date + '\', \'' + seanceEsc + '\')">🗑 Supprimer</button></td>' +
       '</tr>';
   });
   html += '</tbody></table></div>';
@@ -9054,6 +9059,124 @@ async function deleteGPSSession(date, seance) {
   } catch(e) {
     toast('Erreur suppression : ' + e.message, 'error');
   }
+}
+
+// ── Correction de la durée d'une séance GPS à la source (par découpage/split) ──
+// Le découpage à l'import produit parfois une durée erronée. On corrige ici la durée
+// d'un split pour TOUS les joueurs concernés, et on recalcule le m/min (distance/durée)
+// individuellement pour chacun.
+let gpsSessionEditData = null;
+function openGpsSessionEdit(date, seance) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const rows = state.bdd_gps.filter(g => g.date === date && (g.seance || g.session_title || '') === seance);
+  if (rows.length === 0) { toast('Séance GPS introuvable', 'error'); return; }
+
+  const splitsMap = {};
+  rows.forEach(r => {
+    const sp = r.split_name || 'all';
+    (splitsMap[sp] = splitsMap[sp] || []).push(r);
+  });
+  const splitKeys = Object.keys(splitsMap).sort((a, b) =>
+    a.toLowerCase() === 'all' ? -1 : b.toLowerCase() === 'all' ? 1 : a.localeCompare(b));
+  gpsSessionEditData = { date, seance, splits: splitKeys.map(sp => ({ split: sp, rows: splitsMap[sp] })) };
+
+  let ov = document.getElementById('gps-session-edit-modal');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'gps-session-edit-modal';
+    ov.style.cssText = 'display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; padding:20px;';
+    ov.addEventListener('click', (e) => { if (e.target === ov) closeGpsSessionEdit(); });
+    document.body.appendChild(ov);
+  }
+
+  let inner =
+    '<div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:560px; width:100%; max-height:85vh; overflow-y:auto;">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
+        '<h3 style="margin:0; color:var(--accent-light); font-size:16px;">✏️ Corriger la durée de séance</h3>' +
+        '<button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="closeGpsSessionEdit()">✕</button>' +
+      '</div>' +
+      '<div style="font-size:12px; color:var(--text-dim); margin-bottom:14px;">' +
+        formatDateFR(date) + ' · ' + escapeHtml(seance) +
+        ' — corrige la durée d\'un découpage : elle s\'applique à tous les joueurs, et le m/min est recalculé.' +
+      '</div>' +
+      '<div class="table-wrap"><table style="width:100%; font-size:13px;"><thead><tr style="text-align:left; color:var(--text-dim); font-size:11px;">' +
+        '<th style="padding:4px 8px;">Découpage</th><th style="padding:4px 8px; text-align:center;">Joueurs</th>' +
+        '<th style="padding:4px 8px; text-align:center;">Durée actuelle</th><th style="padding:4px 8px; text-align:center;">Nouvelle durée (min)</th></tr></thead><tbody>';
+
+  gpsSessionEditData.splits.forEach((entry, i) => {
+    const durs = [...new Set(entry.rows.map(r => (r.duree_min === null || r.duree_min === undefined || r.duree_min === '') ? null : parseFloat(r.duree_min)))];
+    const uniform = durs.length === 1 && durs[0] !== null;
+    const curLabel = uniform ? (durs[0] + ' min') : (durs.length === 1 ? '—' : 'varié');
+    const curVal = uniform ? durs[0] : '';
+    const label = entry.split.toLowerCase() === 'all' ? 'Séance entière' : entry.split;
+    inner +=
+      '<tr style="border-top:1px solid var(--border);">' +
+        '<td style="padding:6px 8px; font-weight:600;">' + escapeHtml(label) + '</td>' +
+        '<td style="padding:6px 8px; text-align:center;">' + entry.rows.length + '</td>' +
+        '<td style="padding:6px 8px; text-align:center; color:var(--text-dim);">' + curLabel + '</td>' +
+        '<td style="padding:6px 8px; text-align:center;">' +
+          '<input type="number" id="gps-se-dur-' + i + '" min="1" step="1" value="' + curVal + '" ' +
+          'style="width:90px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:14px; text-align:center;"></td>' +
+      '</tr>';
+  });
+
+  inner +=
+      '</tbody></table></div>' +
+      '<div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">' +
+        '<button type="button" class="btn btn-secondary" onclick="closeGpsSessionEdit()">Annuler</button>' +
+        '<button type="button" class="btn" onclick="saveGpsSessionEdit()">💾 Enregistrer</button>' +
+      '</div>' +
+    '</div>';
+  ov.innerHTML = inner;
+  ov.style.display = 'flex';
+}
+function closeGpsSessionEdit() {
+  const ov = document.getElementById('gps-session-edit-modal');
+  if (ov) ov.style.display = 'none';
+  gpsSessionEditData = null;
+}
+async function saveGpsSessionEdit() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  if (!gpsSessionEditData) return;
+
+  // Construire la liste des lignes à mettre à jour (uniquement là où la durée change)
+  const updates = [];
+  let invalid = false;
+  gpsSessionEditData.splits.forEach((entry, i) => {
+    const inp = document.getElementById('gps-se-dur-' + i);
+    if (!inp || inp.value === '') return; // laissé vide = pas de changement
+    const val = parseFloat(inp.value);
+    if (!(val > 0)) { invalid = true; return; }
+    entry.rows.forEach(r => {
+      const cur = (r.duree_min === null || r.duree_min === undefined || r.duree_min === '') ? null : parseFloat(r.duree_min);
+      if (cur === val) return; // déjà à la bonne valeur
+      const distKm = parseFloat(r.distance_km) || 0;
+      updates.push({ id: r.id, duree_min: val, dist_per_min: distKm > 0 ? (distKm * 1000 / val) : null, ref: r });
+    });
+  });
+  if (invalid) { toast('Durée invalide (doit être > 0)', 'error'); return; }
+  if (updates.length === 0) { toast('Aucune modification', 'info'); closeGpsSessionEdit(); return; }
+
+  const results = await Promise.all(updates.map(u =>
+    sb.from('gps_data').update({ duree_min: u.duree_min, dist_per_min: u.dist_per_min }).eq('id', u.id)
+  ));
+  const failed = results.filter(r => r && r.error).length;
+  // Appliquer localement les lignes réussies
+  results.forEach((res, idx) => {
+    if (res && res.error) return;
+    const u = updates[idx];
+    u.ref.duree_min = u.duree_min;
+    u.ref.dist_per_min = u.dist_per_min;
+  });
+
+  if (failed > 0) {
+    toast(failed + ' ligne(s) en erreur sur ' + updates.length, 'error');
+  } else {
+    toast(updates.length + ' ligne(s) corrigée(s) · m/min recalculé', 'success');
+  }
+  closeGpsSessionEdit();
+  renderGPSHistory();
+  renderGPS();
 }
 
 // ============================================================================
@@ -10315,84 +10438,6 @@ function pctOfMax(val, max) {
 }
 
 // ===== RAPPORT DE SÉANCE (équipe, 1 date) =====
-// ── Correction de la durée d'une ligne GPS (recalcule le m/min = distance / durée) ──
-// Utile quand le découpage à l'import a produit une durée de séance erronée.
-let gpsEditId = null;
-function openGpsDurationEdit(id) {
-  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
-  const r = state.bdd_gps.find(x => x.id === id);
-  if (!r) { toast('Ligne GPS introuvable', 'error'); return; }
-  gpsEditId = id;
-  let ov = document.getElementById('gps-edit-modal');
-  if (!ov) {
-    ov = document.createElement('div');
-    ov.id = 'gps-edit-modal';
-    ov.style.cssText = 'display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; padding:20px;';
-    ov.addEventListener('click', (e) => { if (e.target === ov) closeGpsEdit(); });
-    document.body.appendChild(ov);
-  }
-  const splitRaw = r.split_name || 'all';
-  const splitLabel = (splitRaw.toLowerCase() === 'all') ? 'Séance entière' : splitRaw;
-  const seance = r.seance || r.session_title || '';
-  const distKm = parseFloat(r.distance_km) || 0;
-  const dur = (r.duree_min === null || r.duree_min === undefined) ? '' : r.duree_min;
-  ov.innerHTML =
-    '<div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:440px; width:100%;">' +
-      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
-        '<h3 style="margin:0; color:var(--accent-light); font-size:16px;">✏️ Corriger la durée de séance</h3>' +
-        '<button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="closeGpsEdit()">✕</button>' +
-      '</div>' +
-      '<div style="font-size:12px; color:var(--text-dim); margin-bottom:16px;">' +
-        escapeHtml(r.joueur) + ' · ' + formatDateFR(r.date) + (seance ? ' · ' + escapeHtml(seance) : '') + ' · ' + escapeHtml(splitLabel) +
-      '</div>' +
-      '<div style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">' +
-        '<div><label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;">Durée (min)</label>' +
-          '<input type="number" id="gps-edit-duree" min="1" step="1" value="' + dur + '" oninput="gpsEditPreview()" ' +
-          'style="width:110px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:15px;"></div>' +
-        '<div style="font-size:12px; color:var(--text-dim);">Distance<br><b style="color:var(--text); font-size:14px;">' + distKm.toFixed(2) + ' km</b></div>' +
-        '<div style="font-size:12px; color:var(--text-dim);">Distance / min<br><b id="gps-edit-dpm" style="color:var(--accent-light); font-size:15px;">—</b></div>' +
-      '</div>' +
-      '<div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">' +
-        '<button type="button" class="btn btn-secondary" onclick="closeGpsEdit()">Annuler</button>' +
-        '<button type="button" class="btn" onclick="saveGpsDurationEdit()">💾 Enregistrer</button>' +
-      '</div>' +
-    '</div>';
-  ov.style.display = 'flex';
-  gpsEditPreview();
-  const inp = document.getElementById('gps-edit-duree');
-  if (inp) { inp.focus(); inp.select(); }
-}
-function gpsEditPreview() {
-  const r = state.bdd_gps.find(x => x.id === gpsEditId);
-  const el = document.getElementById('gps-edit-dpm');
-  if (!r || !el) return;
-  const d = parseFloat(document.getElementById('gps-edit-duree').value);
-  const distKm = parseFloat(r.distance_km) || 0;
-  el.textContent = (d > 0) ? ((distKm * 1000 / d).toFixed(1) + ' m/min') : '—';
-}
-function closeGpsEdit() {
-  const ov = document.getElementById('gps-edit-modal');
-  if (ov) ov.style.display = 'none';
-  gpsEditId = null;
-}
-async function saveGpsDurationEdit() {
-  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
-  const r = state.bdd_gps.find(x => x.id === gpsEditId);
-  if (!r) { toast('Ligne GPS introuvable', 'error'); return; }
-  const d = parseFloat(document.getElementById('gps-edit-duree').value);
-  if (!(d > 0)) { toast('Durée invalide (doit être > 0)', 'error'); return; }
-  const distKm = parseFloat(r.distance_km) || 0;
-  const dpm = d > 0 ? (distKm * 1000 / d) : null;
-  const { error } = await sb.from('gps_data').update({ duree_min: d, dist_per_min: dpm }).eq('id', gpsEditId);
-  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
-  // Mise à jour locale immédiate (les autres métriques par minute se recalculent au re-rendu)
-  r.duree_min = d;
-  r.dist_per_min = dpm;
-  toast('Durée corrigée · m/min recalculé', 'success');
-  closeGpsEdit();
-  renderGPSSession();
-}
-
 function renderGPSSession() {
   const sessionVal = document.getElementById('gps-session-select').value;
   if (!sessionVal) { document.getElementById('gps-content').innerHTML = ''; return; }
@@ -10558,10 +10603,7 @@ function renderGPSSession() {
     return gpsSessionSortDir * (va - vb);
   });
   rows.forEach(r => {
-    const editBtn = (canWrite() && r.id != null)
-      ? ' <button onclick="openGpsDurationEdit(' + r.id + ')" title="Corriger la durée de séance (recalcule le m/min)" style="border:none;background:none;cursor:pointer;font-size:12px;opacity:.55;padding:0 2px;">✏️</button>'
-      : '';
-    html += '<tr><td style="text-align:left;font-weight:600;">' + escapeHtml(r.joueur) + editBtn + '</td>';
+    html += '<tr><td style="text-align:left;font-weight:600;">' + escapeHtml(r.joueur) + '</td>';
     if (showBestPct) {
       const vol = getVolumeScore(r.joueur, r);
       const inten = getIntensityScore(r.joueur, r);
