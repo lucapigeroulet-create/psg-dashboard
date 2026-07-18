@@ -19276,22 +19276,32 @@ function renderMedicalOverview() {
   populateMedicalFilters();
   // KPIs globaux
   const allPlayers = getAllPlayers();
+  const today = todayYMD();
   const statuts = {};
   allPlayers.forEach(p => {
     const last = state.bdd_ent.filter(e => e.joueur === p).sort((a,b) => b.date.localeCompare(a.date))[0];
-    statuts[p] = last ? (last.seances.find(x => STATUTS_INDISPO.includes(x)) || 'available') : 'available';
+    let s = last ? (last.seances.find(x => STATUTS_INDISPO.includes(x)) || 'available') : 'available';
+    // Les fiches blessure font foi (cohérent avec l'onglet Disponibilités) :
+    // blessé en cours → INJURY, phase de réathlétisation → REATHLE.
+    const bl = getBlessureStatusForDay(p, today);
+    if (bl === 'INJURY') s = 'INJURY';
+    else if (bl === 'REATHLE' && (s === 'available' || s === 'INJURY')) s = 'REATHLE';
+    statuts[p] = s;
   });
-  const injured  = allPlayers.filter(p => statuts[p] === 'INJURY').length;
+  // « Blessés » = blessures actives (en cours + réathlétisation), pour coller à la liste ci-dessous
+  const injured  = allPlayers.filter(p => statuts[p] === 'INJURY' || statuts[p] === 'REATHLE').length;
   const sick     = allPlayers.filter(p => statuts[p] === 'SICK').length;
   const absent   = allPlayers.filter(p => ['ABSENT','SUSPENDED'].includes(statuts[p])).length;
-  const available = allPlayers.length - injured - sick - absent;
+  const trial    = allPlayers.filter(p => statuts[p] === 'TRIAL').length;
+  const available = allPlayers.length - injured - sick - absent - trial;
   const kpiEl = document.getElementById('med-overview-kpis');
   if (kpiEl) kpiEl.innerHTML = [
     { label:'Effectif total', val: allPlayers.length },
     { label:'Disponibles', val: available, color:'var(--green)' },
     { label:'Blessés', val: injured, color:'#f87171' },
     { label:'Malades', val: sick, color:'#fb923c' },
-    { label:'Absents/Susp.', val: absent, color:'#fbbf24' }
+    { label:'Absents/Susp.', val: absent, color:'#fbbf24' },
+    { label:'En essai', val: trial, color:'#14b8a6' }
   ].map(k => '<div class="stat"><div class="stat-label">' + k.label + '</div><div class="stat-value"' + (k.color ? ' style="color:' + k.color + ';"' : '') + '>' + k.val + '</div></div>').join('');
 
   // Blessures actives
