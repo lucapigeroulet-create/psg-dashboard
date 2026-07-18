@@ -6419,6 +6419,14 @@ function formatDateFR(dateStr) {
   return jours[dt.getDay()] + ' ' + d + '/' + m;
 }
 
+// Format numérique jj-mm-aaaa (ex : 08-05-2026) à partir d'une date ISO yyyy-mm-dd.
+function formatDateDMY(dateStr) {
+  if (!dateStr) return '';
+  const [y, m, d] = String(dateStr).split('-');
+  if (!y || !m || !d) return dateStr;
+  return d + '-' + m + '-' + y;
+}
+
 // ============================================================================
 // NAVIGATION
 // ============================================================================
@@ -17026,7 +17034,7 @@ function renderStaffHooperAlertsTable(watch) {
       '<td>' + escapeHtml(info.groupe || '') + '</td>' +
       '<td><b style="color:' + interpretHooper(parseFloat(w.avg)).color + ';">' + w.avg + '</b></td>' +
       '<td>' + detailItem(w.sleep) + ' ' + detailItem(w.fatigue) + ' ' + detailItem(w.stress) + ' ' + detailItem(w.soreness) + '</td>' +
-      '<td style="font-size:11px;">' + formatDateFR(w.lastDate) + '</td>' +
+      '<td style="font-size:11px;">' + formatDateDMY(w.lastDate) + '</td>' +
       '</tr>';
   }).join('');
 }
@@ -19484,7 +19492,7 @@ function renderMedicalHooper() {
     return '<tr style="' + (isAlert ? 'background:rgba(248,113,113,0.07);' : '') + '">' +
       '<td><b>' + escapeHtml(p) + '</b>' + (isAlert ? ' 🚨' : '') + '</td>' +
       '<td>' + escapeHtml(getJoueurInfo(p).groupe || '—') + '</td>' +
-      '<td>' + last.date + '</td>' +
+      '<td>' + formatDateDMY(last.date) + '</td>' +
       '<td style="text-align:center;">' + fmt(last.sleep_quality) + '</td>' +
       '<td style="text-align:center;">' + fmt(last.fatigue) + '</td>' +
       '<td style="text-align:center;">' + fmt(last.stress) + '</td>' +
@@ -19517,7 +19525,7 @@ function renderMedicalHooper() {
     const last = entries[0];
     return '<div style="border:1px solid #7f1d1d; border-radius:10px; padding:12px; margin-bottom:8px; background:rgba(248,113,113,0.07); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">' +
       '<div><b>' + escapeHtml(p) + '</b> <span style="color:var(--text-dim); font-size:12px;">— ' + escapeHtml(getJoueurInfo(p).groupe || '') + '</span>' +
-      '<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">Dernière saisie : ' + last.date + ' · Sommeil: ' + (last.sleep_quality||'?') + ' · Fatigue: ' + (last.fatigue||'?') + ' · Stress: ' + (last.stress||'?') + ' · Courbatures: ' + (last.muscle_soreness||'?') + '</div></div>' +
+      '<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">Dernière saisie : ' + formatDateDMY(last.date) + ' · Sommeil: ' + (last.sleep_quality||'?') + ' · Fatigue: ' + (last.fatigue||'?') + ' · Stress: ' + (last.stress||'?') + ' · Courbatures: ' + (last.muscle_soreness||'?') + '</div></div>' +
       '<div style="font-size:22px; font-weight:800; color:#f87171;">' + avg + '</div></div>';
   }).join('');
 }
