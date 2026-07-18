@@ -1133,9 +1133,9 @@
         <button class="btn btn-secondary" style="padding:6px 14px; font-size:12px;" onclick="exportBilanPDF()">⬇ Export PDF</button>
       </div>
       <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
-        Pour la semaine choisie : pourcentage de séances planifiées validées par joueur, avec le détail jour par jour
-        (<b>validées / planifiées</b>). Vert = tout validé, orange = partiel, bleu = à faire, rouge = non validé depuis plus de 48 h.
-        <br>Le <b>% validé</b> ne tient compte que des séances <b>déjà validées</b> ou <b>échues (&gt; 48 h)</b> : les séances non validées de moins de 48 h (bleu) sont exclues du ratio. La colonne <b>Total</b>, elle, affiche toutes les séances planifiées.
+        Pour la semaine choisie : pourcentage de séances validées par joueur, avec le détail jour par jour
+        (<b>faites / prévues</b>). Inclut les <b>séances planifiées (autonomie)</b> et les <b>séances live 🟢</b> (entraînements réels, toujours comptées comme faites). Vert = tout validé, orange = partiel, bleu = à faire, rouge = non validé depuis plus de 48 h.
+        <br>Le <b>% validé</b> ne tient compte que des séances <b>déjà faites</b> ou <b>échues (&gt; 48 h)</b> : les séances planifiées non validées de moins de 48 h (bleu) sont exclues du ratio. La colonne <b>Total</b>, elle, affiche toutes les séances (planifiées + live).
         <br>💡 Clique sur les en-têtes <b>Joueur</b>, <b>% validé</b> ou <b>Total</b> pour trier le tableau.
       </p>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; align-items:flex-end;">
@@ -7568,16 +7568,35 @@ function renderThemesGrid() {
 }
 
 // Semaines (lundi ISO) qui contiennent au moins une séance planifiée, récentes d'abord
+// Séances "live" (entraînements réels du planning) faites par un joueur un jour donné.
+// Ce sont les entrées de bdd_ent qui ne sont ni un statut (repos/blessure…), ni une séance
+// planifiée '📋', ni un match '⚽'. Elles comptent comme faites (elles ont eu lieu).
+function getLiveTrainingSeances(date, joueur) {
+  const e = (state.bdd_ent || []).find(x => x.date === date && x.joueur === joueur);
+  if (!e || !Array.isArray(e.seances)) return [];
+  return e.seances.filter(s => typeof s === 'string'
+    && s.indexOf('📋') !== 0 && s.indexOf('⚽') !== 0
+    && !STATUTS_NON_ENT.includes(s));
+}
+
+// Semaines à afficher dans le bilan : celles qui ont des séances planifiées OU des séances live.
 function getPlannedWeeks() {
   const map = {};
-  (state.bdd_seances_plan || []).forEach(sp => {
-    if (!sp.date) return;
-    const monday = getMondayOf(sp.date);
+  const addDate = (dateStr) => {
+    if (!dateStr) return;
+    const monday = getMondayOf(dateStr);
     const key = toLocalISO(monday);
     if (!map[key]) {
-      const iso = getISOWeek(sp.date);
+      const iso = getISOWeek(dateStr);
       map[key] = { mondayIso: key, monday, week: iso.week, year: iso.year };
     }
+  };
+  (state.bdd_seances_plan || []).forEach(sp => addDate(sp.date));
+  // Inclure aussi les semaines avec des séances live (entraînements réels)
+  (state.bdd_ent || []).forEach(e => {
+    const hasLive = Array.isArray(e.seances) && e.seances.some(s => typeof s === 'string'
+      && s.indexOf('📋') !== 0 && s.indexOf('⚽') !== 0 && !STATUTS_NON_ENT.includes(s));
+    if (hasLive) addDate(e.date);
   });
   return Object.values(map).sort((a, b) => b.mondayIso.localeCompare(a.mondayIso));
 }
@@ -7661,27 +7680,38 @@ function computeBilanData() {
 
   let players = getAllPlayers();
   if (groupFilter) players = players.filter(p => getJoueurInfo(p).groupe === groupFilter);
-  players = players.filter(p => weekSeances.some(sp => seancePlanCibleJoueur(sp, p)));
+  // Un joueur apparaît s'il est ciblé par une séance planifiée OU s'il a une séance live cette semaine
+  players = players.filter(p =>
+    weekSeances.some(sp => seancePlanCibleJoueur(sp, p)) ||
+    dates.some(d => getLiveTrainingSeances(d, p).length > 0)
+  );
 
   const rows = players.map(p => {
     let weekDone = 0, weekTotal = 0, weekRatioBase = 0;
     const days = dates.map(d => {
+      // Séances planifiées (autonomie) ciblant ce joueur ce jour
       const daySeances = weekSeances.filter(sp => sp.date === d && seancePlanCibleJoueur(sp, p));
-      const total = daySeances.length;
+      // Séances live (entraînements réels) faites ce jour — toujours comptées comme faites
+      const live = getLiveTrainingSeances(d, p);
+      const liveCount = live.length;
+      const totalPlan = daySeances.length;
+      const total = totalPlan + liveCount;
       if (total === 0) return { total: 0, done: 0, status: 'none', titre: '' };
-      const done = daySeances.filter(sp => seancePlanEstFaite(sp.id, p)).length;
+      const donePlan = daySeances.filter(sp => seancePlanEstFaite(sp.id, p)).length;
+      const done = donePlan + liveCount;
       const overdue = seancePlanEnRetard48h(d);
       weekDone += done; weekTotal += total;
-      // Dénominateur du ratio : on ne compte une séance non validée que si elle est
-      // échue depuis plus de 48 h (= ratée). Les séances non validées de moins de 48 h
-      // (à venir / pas encore dues) sont exclues du calcul du %.
-      weekRatioBase += overdue ? total : done;
+      // Dénominateur du ratio : une séance planifiée non validée n'y entre que si elle est
+      // échue depuis plus de 48 h (= ratée) ; les séances live comptent toujours (déjà faites).
+      weekRatioBase += (overdue ? totalPlan : donePlan) + liveCount;
       let status;
       if (done === total) status = 'done';
       else if (done > 0)  status = 'partial';
       else if (overdue)   status = 'overdue';
       else status = 'todo';
-      const titre = daySeances.map(sp => (seancePlanEstFaite(sp.id, p) ? '✅ ' : '⏳ ') + (sp.type || 'Séance')).join(' • ');
+      const titreParts = daySeances.map(sp => (seancePlanEstFaite(sp.id, p) ? '✅ ' : '⏳ ') + (sp.type || 'Séance'));
+      live.forEach(s => titreParts.push('🟢 ' + s + ' (live)'));
+      const titre = titreParts.join(' • ');
       return { total, done, status, titre };
     });
     const pct = weekRatioBase > 0 ? Math.round(100 * weekDone / weekRatioBase) : null;
