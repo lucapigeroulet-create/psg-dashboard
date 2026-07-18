@@ -10400,11 +10400,9 @@ function getBestMatchRatio(player, metricKey, currentRow) {
   if (!bmRow) return null;
   const bmVal = gpsVal(bmRow, metricKey);
   if (!bmVal || bmVal === 0) return null;
-  // Pour les métriques cumulatives : normaliser par durée pour comparer équitablement
-  const bmDur  = gpsVal(bmRow, 'duree_min') || 90;
-  const curDur = gpsVal(currentRow, 'duree_min') || 90;
-  if (!curDur || curDur === 0) return curVal / bmVal;
-  return (curVal / curDur) / (bmVal / bmDur);
+  // Volume brut : valeur de la séance ÷ valeur du meilleur match (sans normaliser par la durée).
+  // Ex : Deco 08/05 = 3969 m ÷ 11738 m = 34 %. (L'intensité par minute reste dans la colonne ⚡ Intensité.)
+  return curVal / bmVal;
 }
 
 function ratioColor(ratio) {
