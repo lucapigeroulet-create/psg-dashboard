@@ -19303,7 +19303,7 @@ function renderMedicalOverview() {
       const d = b.details || {};
       return '<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-radius:8px; background:var(--bg-elevated); margin-bottom:6px; flex-wrap:wrap; gap:6px;">' +
         '<div><b>' + escapeHtml(b.joueur) + '</b> <span style="color:var(--text-dim); font-size:11px;">— ' + escapeHtml(b.zone||'?') + (b.cote?' ('+b.cote+')':'') + '</span></div>' +
-        '<div style="font-size:11px; color:var(--text-dim);">' + (b.date_blessure||'') + (d.date_fin ? ' → <b style="color:var(--green);">'+d.date_fin+'</b>' : '') + '</div>' +
+        '<div style="font-size:11px; color:var(--text-dim);">' + formatDateDMY(b.date_blessure) + (d.date_fin ? ' → <b style="color:var(--green);">'+formatDateDMY(d.date_fin)+'</b>' : '') + '</div>' +
         '</div>';
     }).join('');
   }
@@ -19342,7 +19342,7 @@ function renderMedicalOverview() {
       return '<div style="border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:8px; background:var(--bg-elevated);">' +
         '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
         '<div><b>' + escapeHtml(n.joueur) + '</b> <span style="font-size:11px; color:var(--accent-light); background:var(--bg-card); border:1px solid var(--border); border-radius:4px; padding:1px 6px;">' + label + '</span></div>' +
-        '<span style="font-size:11px; color:var(--text-dim);">📅 ' + n.date + '</span></div>' +
+        '<span style="font-size:11px; color:var(--text-dim);">📅 ' + formatDateDMY(n.date) + '</span></div>' +
         '<div style="font-size:12px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml((n.contenu||'').substring(0,120)) + (n.contenu && n.contenu.length > 120 ? '…' : '') + '</div>' +
         (n.restrictions ? '<div style="margin-top:4px; font-size:11px; color:#fbbf24;">⚠️ ' + escapeHtml(n.restrictions.substring(0,80)) + (n.restrictions.length>80?'…':'') + '</div>' : '') +
         '</div>';
