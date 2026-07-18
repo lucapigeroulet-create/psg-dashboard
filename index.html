@@ -1312,6 +1312,15 @@
             <option value="distance-hsr">Distance vs Intensité (Sprint)</option>
           </select>
         </div>
+        <div class="filter-group" id="gps-cat-wrap">
+          <label>Type</label>
+          <select id="gps-cat-filter" onchange="renderGPS()">
+            <option value="">Tous</option>
+            <option value="seance">🟢 Séances</option>
+            <option value="match">⚽ Matchs</option>
+            <option value="individuel">👤 Séances individuelles</option>
+          </select>
+        </div>
         <div class="filter-group" id="gps-date-wrap">
           <label>Séance / Date</label>
           <select id="gps-session-select" onchange="onGPSSessionChange()"></select>
@@ -1360,10 +1369,21 @@
       </p>
       <input type="file" id="gps-import-file" accept=".csv,text/csv" onchange="handleGPSCSV(event)"
              style="color:var(--text); margin-bottom:12px; font-size:13px;" />
-      <div style="margin-bottom:12px;">
-        <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:4px;">Rattacher à une séance du dashboard (optionnel)</label>
-        <input type="text" id="gps-import-seance" placeholder="Laisser vide = utiliser le titre Catapult du CSV"
-               style="width:100%; max-width:400px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:13px;" />
+      <div style="margin-bottom:12px; display:flex; gap:16px; flex-wrap:wrap;">
+        <div>
+          <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:4px;">Rattacher à une séance du dashboard (optionnel)</label>
+          <input type="text" id="gps-import-seance" placeholder="Laisser vide = utiliser le titre Catapult du CSV"
+                 style="width:100%; min-width:280px; max-width:400px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:13px;" />
+        </div>
+        <div>
+          <label style="display:block; color:var(--text-dim); font-size:12px; margin-bottom:4px;">Type d'enregistrement</label>
+          <select id="gps-import-categorie"
+                  style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:13px;">
+            <option value="seance">🟢 Séance</option>
+            <option value="match">⚽ Match</option>
+            <option value="individuel">👤 Séance individuelle</option>
+          </select>
+        </div>
       </div>
       <div id="gps-import-summary"></div>
       <div id="gps-import-mapping"></div>
@@ -8896,10 +8916,13 @@ async function doGPSImport() {
   }
 
   const seanceLink = document.getElementById('gps-import-seance').value.trim();
+  const catSel = document.getElementById('gps-import-categorie');
+  const categorie = (catSel && catSel.value) || 'seance';
   let rows = gpsImportRows.map(r => {
     const copy = Object.assign({}, r);
     delete copy._raw_joueur;
     copy.seance = seanceLink || r.session_title || null;
+    copy.categorie = categorie;
     return copy;
   });
 
@@ -9038,9 +9061,10 @@ function renderGPSHistory() {
   const sessions = {};
   state.bdd_gps.forEach(g => {
     const key = g.date + '||' + (g.seance || g.session_title || '');
-    if (!sessions[key]) sessions[key] = { date: g.date, seance: g.seance || g.session_title || '—', players: new Set(), splits: new Set(), rows: 0 };
+    if (!sessions[key]) sessions[key] = { date: g.date, seance: g.seance || g.session_title || '—', players: new Set(), splits: new Set(), rows: 0, cats: new Set() };
     sessions[key].players.add(g.joueur);
     sessions[key].splits.add(g.split_name || 'all');
+    sessions[key].cats.add(gpsCategorie(g));
     sessions[key].rows++;
   });
   const list = Object.values(sessions).sort((a, b) => b.date.localeCompare(a.date));
@@ -9051,10 +9075,13 @@ function renderGPSHistory() {
   }
 
   let html = '<p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Séances GPS actuellement en base. « Modifier » corrige la durée d\'un découpage à la source (pour tous les joueurs) et recalcule le m/min. Supprime une séance entière si tu l\'as importée en double.</p>';
-  html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Date</th><th style="text-align:left;">Séance</th><th>Joueurs</th><th>Splits</th><th>Lignes</th><th></th></tr></thead><tbody>';
+  const CAT_LABEL = { seance: '🟢 Séance', match: '⚽ Match', individuel: '👤 Individuel' };
+  html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Date</th><th style="text-align:left;">Séance</th><th>Type</th><th>Joueurs</th><th>Splits</th><th>Lignes</th><th></th></tr></thead><tbody>';
   list.forEach(s => {
     const splitsArr = Array.from(s.splits);
     const splitLabel = splitsArr.length === 1 && splitsArr[0] === 'all' ? 'séance entière' : splitsArr.length + ' (dont procédés)';
+    const catsArr = Array.from(s.cats);
+    const catLabel = catsArr.length === 1 ? (CAT_LABEL[catsArr[0]] || catsArr[0]) : 'mixte';
     const seanceEsc = s.seance.replace(/'/g, "\\'");
     const editBtn = canWrite()
       ? '<button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="openGpsSessionEdit(\'' + s.date + '\', \'' + seanceEsc + '\')">✏️ Modifier</button> '
@@ -9062,6 +9089,7 @@ function renderGPSHistory() {
     html += '<tr>' +
       '<td style="text-align:left;">' + formatDateFR(s.date) + '</td>' +
       '<td style="text-align:left;">' + escapeHtml(s.seance) + '</td>' +
+      '<td style="text-align:center;white-space:nowrap;">' + catLabel + '</td>' +
       '<td style="text-align:center;">' + s.players.size + '</td>' +
       '<td style="text-align:center;">' + splitLabel + '</td>' +
       '<td style="text-align:center;">' + s.rows + '</td>' +
@@ -9119,15 +9147,25 @@ function openGpsSessionEdit(date, seance) {
     document.body.appendChild(ov);
   }
 
+  // Catégorie courante de la séance (uniforme après import ; défaut = séance pour le legacy)
+  const curCat = gpsCategorie(rows[0]);
+  const catOpt = (val, label) => '<option value="' + val + '"' + (curCat === val ? ' selected' : '') + '>' + label + '</option>';
+
   let inner =
     '<div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:560px; width:100%; max-height:85vh; overflow-y:auto;">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
-        '<h3 style="margin:0; color:var(--accent-light); font-size:16px;">✏️ Corriger la durée de séance</h3>' +
+        '<h3 style="margin:0; color:var(--accent-light); font-size:16px;">✏️ Modifier la séance GPS</h3>' +
         '<button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="closeGpsSessionEdit()">✕</button>' +
       '</div>' +
       '<div style="font-size:12px; color:var(--text-dim); margin-bottom:14px;">' +
         formatDateFR(date) + ' · ' + escapeHtml(seance) +
-        ' — corrige la durée d\'un découpage : elle s\'applique à tous les joueurs, et le m/min est recalculé.' +
+        ' — corrige le type et la durée d\'un découpage : la durée s\'applique à tous les joueurs, et le m/min est recalculé.' +
+      '</div>' +
+      '<div style="margin-bottom:16px;">' +
+        '<label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;">Type d\'enregistrement</label>' +
+        '<select id="gps-se-cat" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:14px;">' +
+          catOpt('seance', '🟢 Séance') + catOpt('match', '⚽ Match') + catOpt('individuel', '👤 Séance individuelle') +
+        '</select>' +
       '</div>' +
       '<div class="table-wrap"><table style="width:100%; font-size:13px;"><thead><tr style="text-align:left; color:var(--text-dim); font-size:11px;">' +
         '<th style="padding:4px 8px;">Découpage</th><th style="padding:4px 8px; text-align:center;">Joueurs</th>' +
@@ -9169,40 +9207,56 @@ async function saveGpsSessionEdit() {
   if (!canWrite()) { toast('Lecture seule', 'error'); return; }
   if (!gpsSessionEditData) return;
 
-  // Construire la liste des lignes à mettre à jour (uniquement là où la durée change)
-  const updates = [];
+  const allRows = gpsSessionEditData.splits.reduce((acc, e) => acc.concat(e.rows), []);
+  const catSel = document.getElementById('gps-se-cat');
+  const newCat = (catSel && catSel.value) || 'seance';
+  const catChanged = allRows.length > 0 && newCat !== gpsCategorie(allRows[0]);
+
+  // Regrouper les modifications par ligne (durée/​m-min + catégorie)
+  const payloads = {}; // id -> { patch, ref }
   let invalid = false;
   gpsSessionEditData.splits.forEach((entry, i) => {
     const inp = document.getElementById('gps-se-dur-' + i);
-    if (!inp || inp.value === '') return; // laissé vide = pas de changement
+    if (!inp || inp.value === '') return; // laissé vide = durée inchangée
     const val = parseFloat(inp.value);
     if (!(val > 0)) { invalid = true; return; }
     entry.rows.forEach(r => {
       const cur = (r.duree_min === null || r.duree_min === undefined || r.duree_min === '') ? null : parseFloat(r.duree_min);
       if (cur === val) return; // déjà à la bonne valeur
       const distKm = parseFloat(r.distance_km) || 0;
-      updates.push({ id: r.id, duree_min: val, dist_per_min: distKm > 0 ? (distKm * 1000 / val) : null, ref: r });
+      payloads[r.id] = payloads[r.id] || { patch: {}, ref: r };
+      payloads[r.id].patch.duree_min = val;
+      payloads[r.id].patch.dist_per_min = distKm > 0 ? (distKm * 1000 / val) : null;
     });
   });
   if (invalid) { toast('Durée invalide (doit être > 0)', 'error'); return; }
-  if (updates.length === 0) { toast('Aucune modification', 'info'); closeGpsSessionEdit(); return; }
 
-  const results = await Promise.all(updates.map(u =>
-    sb.from('gps_data').update({ duree_min: u.duree_min, dist_per_min: u.dist_per_min }).eq('id', u.id)
+  if (catChanged) {
+    allRows.forEach(r => {
+      payloads[r.id] = payloads[r.id] || { patch: {}, ref: r };
+      payloads[r.id].patch.categorie = newCat;
+    });
+  }
+
+  const entries = Object.values(payloads);
+  if (entries.length === 0) { toast('Aucune modification', 'info'); closeGpsSessionEdit(); return; }
+
+  const results = await Promise.all(entries.map(o =>
+    sb.from('gps_data').update(o.patch).eq('id', o.ref.id)
   ));
-  const failed = results.filter(r => r && r.error).length;
-  // Appliquer localement les lignes réussies
+  let failed = 0;
   results.forEach((res, idx) => {
-    if (res && res.error) return;
-    const u = updates[idx];
-    u.ref.duree_min = u.duree_min;
-    u.ref.dist_per_min = u.dist_per_min;
+    if (res && res.error) { failed++; return; }
+    Object.assign(entries[idx].ref, entries[idx].patch);
   });
 
   if (failed > 0) {
-    toast(failed + ' ligne(s) en erreur sur ' + updates.length, 'error');
+    toast(failed + ' ligne(s) en erreur sur ' + entries.length, 'error');
   } else {
-    toast(updates.length + ' ligne(s) corrigée(s) · m/min recalculé', 'success');
+    const bits = [];
+    if (Object.values(payloads).some(o => o.patch.duree_min !== undefined)) bits.push('durée · m/min recalculé');
+    if (catChanged) bits.push('type');
+    toast('Séance mise à jour (' + bits.join(', ') + ')', 'success');
   }
   closeGpsSessionEdit();
   renderGPSHistory();
@@ -10365,6 +10419,19 @@ function ratioLabel(ratio) {
   return Math.round(ratio * 100) + '%';
 }
 
+// Catégorie normalisée d'une ligne GPS ('seance' | 'match' | 'individuel').
+// Les anciennes lignes sans catégorie sont traitées comme des séances.
+function gpsCategorie(r) {
+  const c = (r && r.categorie ? String(r.categorie) : '').toLowerCase();
+  return (c === 'match' || c === 'individuel') ? c : 'seance';
+}
+// Lignes GPS filtrées par le sélecteur de type de l'analyse (vide = toutes).
+function gpsAnalysisRows() {
+  const f = (document.getElementById('gps-cat-filter') || {}).value || '';
+  const all = state.bdd_gps || [];
+  return f ? all.filter(r => gpsCategorie(r) === f) : all;
+}
+
 function renderGPS() {
   // Vue direction sportive : masquer les outils de gestion GPS
   if (currentRole === 'direction') {
@@ -10381,20 +10448,23 @@ function renderGPS() {
 
   // Remplir les sélecteurs (une fois)
   const sessionSel = document.getElementById('gps-session-select');
+  const catFilterVal = (document.getElementById('gps-cat-filter') || {}).value || '';
   // Une entrée par séance distincte = date + titre (gère plusieurs séances le même jour)
   const sessionKeys = {};
-  state.bdd_gps.forEach(x => {
+  gpsAnalysisRows().forEach(x => {
     const title = x.seance || x.session_title || '';
     const key = x.date + '||' + title;
     if (!sessionKeys[key]) sessionKeys[key] = { date: x.date, title: title };
   });
   const sessionList = Object.values(sessionKeys).sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title));
-  if (sessionSel && sessionSel.dataset.count !== String(sessionList.length)) {
+  // Reconstruire la liste quand le nombre de séances OU le filtre de type change
+  if (sessionSel && (sessionSel.dataset.count !== String(sessionList.length) || sessionSel.dataset.cat !== catFilterVal)) {
     sessionSel.innerHTML = sessionList.map(s => {
       const lbl = formatDateFR(s.date) + (s.title ? ' — ' + s.title : '');
       return '<option value="' + s.date + '||' + escapeHtml(s.title) + '">' + escapeHtml(lbl) + '</option>';
     }).join('');
     sessionSel.dataset.count = String(sessionList.length);
+    sessionSel.dataset.cat = catFilterVal;
   }
   // Peupler le sélecteur de splits pour la séance courante
   if (document.getElementById('gps-report-type').value === 'session') {
@@ -10403,9 +10473,10 @@ function renderGPS() {
 
   const weekSel = document.getElementById('gps-week-select');
   const gpsWeeks = getGPSWeeks();
-  if (weekSel && weekSel.dataset.count !== String(gpsWeeks.length)) {
+  if (weekSel && (weekSel.dataset.count !== String(gpsWeeks.length) || weekSel.dataset.cat !== catFilterVal)) {
     weekSel.innerHTML = gpsWeeks.map(w => '<option value="' + w.mondayIso + '">Semaine ' + w.week + ' (' + w.year + ') — ' + formatDateRange(w.monday) + '</option>').join('');
     weekSel.dataset.count = String(gpsWeeks.length);
+    weekSel.dataset.cat = catFilterVal;
   }
 
   const groupSel = document.getElementById('gps-group-select');
@@ -10433,7 +10504,7 @@ function renderGPS() {
 
 function getGPSWeeks() {
   const mondays = {};
-  uniqueSorted(state.bdd_gps.map(x => x.date)).forEach(dateStr => {
+  uniqueSorted(gpsAnalysisRows().map(x => x.date)).forEach(dateStr => {
     const monday = getMondayOf(dateStr);
     const key = toLocalISO(monday);
     if (!mondays[key]) {
@@ -10819,7 +10890,7 @@ function renderGPSWeekTeam() {
 
   // IMPORTANT : ne garder que l'enregistrement complet ("all") de chaque séance,
   // sinon les splits (procédés) seraient additionnés en double avec la séance entière.
-  let rows = state.bdd_gps.filter(x => dates.includes(x.date) && (x.split_name || 'all').toLowerCase() === 'all');
+  let rows = gpsAnalysisRows().filter(x => dates.includes(x.date) && (x.split_name || 'all').toLowerCase() === 'all');
   if (group) {
     const players = getAllPlayers().filter(p => getJoueurInfo(p).groupe === group);
     rows = rows.filter(x => players.includes(x.joueur));
@@ -11070,7 +11141,7 @@ function renderGPSWeekIndiv() {
   const info = getJoueurInfo(player);
 
   // Ne garder que l'enregistrement complet ("all") pour éviter le double-comptage avec les splits
-  const rows = state.bdd_gps.filter(x => x.joueur === player && dates.includes(x.date) && (x.split_name || 'all').toLowerCase() === 'all');
+  const rows = gpsAnalysisRows().filter(x => x.joueur === player && dates.includes(x.date) && (x.split_name || 'all').toLowerCase() === 'all');
 
   let html = '<div class="card">';
   html += '<h2>👤 ' + escapeHtml(player) + ' <span style="font-size:13px;color:var(--text-dim);font-weight:normal;">— ' + escapeHtml(info.groupe || '') + '</span></h2>';
@@ -11117,7 +11188,7 @@ function renderGPSWeekIndiv() {
   // ===== Contrôle de charge : ACWR, monotonie, contrainte + historique 12 semaines =====
   const selStyle = 'background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;';
   const srpeAll = computeSRPE();
-  const gpsAllPlayer = state.bdd_gps.filter(r => r.joueur === player && (r.split_name || 'all').toLowerCase() === 'all');
+  const gpsAllPlayer = gpsAnalysisRows().filter(r => r.joueur === player && (r.split_name || 'all').toLowerCase() === 'all');
   const base = GPS_LOAD_BASES.find(b => b.key === gpsWILoadBase) || GPS_LOAD_BASES[0];
   const loadForDates = ds => base.key === 'srpe'
     ? srpeAll.filter(x => x.joueur === player && ds.includes(x.date)).reduce((s, x) => s + x.sRPE, 0)
