@@ -765,6 +765,7 @@
     <div class="nav-dropdown-menu" id="nav-gestion-menu">
       <button class="nav-btn" data-view="entry">✏️ Saisie séance</button>
       <button class="nav-btn" data-view="plan">📋 Planifier une séance</button>
+      <button class="nav-btn" data-view="planification">🗓️ Planification saison</button>
       <button class="nav-btn" data-view="match-entry">⚽ Saisie match</button>
       <button class="nav-btn" data-view="injury-entry">🩹 Saisie blessures</button>
       <button class="nav-btn" data-view="rpe-entry">⭐ Saisie RPE</button>
@@ -2043,6 +2044,9 @@
   </div>
   <!-- ========== PLANIFIER UNE SÉANCE (le formulaire y est déplacé par relocateSeancePanels) ========== -->
   <div class="view" id="view-plan"></div>
+
+  <!-- ========== PLANIFICATION SAISON (macrocycle, staff) ========== -->
+  <div class="view" id="view-planification"></div>
 
   <!-- ========== HISTORIQUE DES SÉANCES ========== -->
   <div class="view" id="view-history">
@@ -6497,7 +6501,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (!viewEl) return;
     viewEl.classList.add('active');
     // Gérer l'état visuel du menu déroulant Gestion
-    const gestionViews = ['entry', 'plan', 'match-entry', 'injury-entry', 'rpe-entry', 'messages', 'minijeux', 'history', 'settings'];
+    const gestionViews = ['entry', 'plan', 'planification', 'match-entry', 'injury-entry', 'rpe-entry', 'messages', 'minijeux', 'history', 'settings'];
     const gestionToggle = document.getElementById('nav-gestion-toggle');
     if (gestionToggle) {
       if (gestionViews.includes(view)) gestionToggle.classList.add('has-active');
@@ -6523,6 +6527,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'injury') renderInjury();
     else if (view === 'entry') renderEntry();
     else if (view === 'plan') renderPlanView();
+    else if (view === 'planification') renderPlanification();
     else if (view === 'match-entry') renderMatchEntry();
     else if (view === 'injury-entry') renderInjuryEntry();
     else if (view === 'rpe-entry') renderRPEEntry();
@@ -7348,6 +7353,326 @@ function renderPlanView() {
   if (spDate && !spDate.value) spDate.value = toLocalISO(new Date());
   const cibleWrap = document.getElementById('sp-cible-players');
   if (cibleWrap && cibleWrap.children.length === 0) onSpCibleChange();
+}
+
+// ============================================================================
+// PLANIFICATION SAISON — macrocycle éditable (vision globale : séances, charge,
+// intensité, volume, contenus athlétiques). Source : table Supabase "planification".
+// ============================================================================
+const PLANIF_CTX = { org: 'TEGG', categorie: '1ere PS', saison: '2026-2027' };
+let planifRows = [];
+
+// Barres 0→5 : charge (volume/intensité) + contenus athlétiques, chacune sa couleur.
+const PLANIF_BARS = [
+  { key: 'volume',    label: 'Volume',                        color: '#38b6ff', sec: 'charge' },
+  { key: 'intensite', label: 'Intensité',                     color: '#fb7185', sec: 'charge' },
+  { key: 'explo',     label: 'Explo + Réactivité',            color: '#fbbf24', sec: 'athle' },
+  { key: 'submax',    label: 'Submax (HSR / RSA)',            color: '#fb923c', sec: 'athle' },
+  { key: 'vitesse',   label: 'Vitesse + Appui',               color: '#f87171', sec: 'athle' },
+  { key: 'chgt',      label: 'Chgt direction / Coordination', color: '#a78bfa', sec: 'athle' },
+  { key: 'vma',       label: 'VMA / Récup',                   color: '#34d399', sec: 'athle' },
+];
+const PLANIF_TEXTS = [
+  { key: 'obj_ce',  label: 'Objectif collectif' },
+  { key: 'obj_ci',  label: 'Objectif individuel' },
+  { key: 'test',    label: 'Test' },
+  { key: 'theme1',  label: 'Thème principal' },
+  { key: 'theme2',  label: 'Thème secondaire' },
+];
+
+function planifCharge(r) { return (r.volume || 0) + (r.intensite || 0); } // = TOTAL de l'Excel
+function planifChargeColor(c) {
+  if (c <= 0) return 'var(--text-dim)';
+  if (c <= 2) return '#60a5fa';
+  if (c <= 4) return '#38bdf8';
+  if (c <= 6) return '#34d399';
+  if (c <= 8) return '#fb923c';
+  return '#f87171';
+}
+// Phase de saison déduite de l'événement (pour colorer l'entête).
+function planifPhase(r) {
+  const e = (r.evenement || '').toUpperCase();
+  if (e.includes('PPR')) return { label: 'PPR', color: '#64748b' };
+  if (e.includes('REPRISE') || (r.semaine_num != null && r.semaine_num < 0)) return { label: 'Prépa', color: '#0ea5e9' };
+  if (e.includes('TRÊVE') || e.includes('TREVE')) return { label: 'Trêve', color: '#475569' };
+  return null;
+}
+function planifIsMatch(r) {
+  if (r.nb_matchs && r.nb_matchs > 0) return true;
+  const e = (r.evenement || '').toUpperCase();
+  return /(^|\s)J\d/.test(e) || e.includes('CDF');
+}
+
+async function renderPlanification() {
+  const view = document.getElementById('view-planification');
+  if (!view) return;
+  if (currentRole !== 'admin' && currentRole !== 'staff') {
+    view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Accès réservé au staff.</p></div>';
+    return;
+  }
+  planifInjectStyle();
+  view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Chargement de la planification…</p></div>';
+  const { data, error } = await sb.from('planification').select('*')
+    .eq('org', PLANIF_CTX.org).eq('categorie', PLANIF_CTX.categorie).eq('saison', PLANIF_CTX.saison)
+    .order('ordre', { ascending: true });
+  if (error) {
+    view.innerHTML = '<div class="card"><p style="color:var(--red);">Erreur de chargement : ' + escapeHtml(error.message) + '</p></div>';
+    return;
+  }
+  planifRows = data || [];
+  drawPlanification();
+}
+
+function drawPlanification() {
+  const view = document.getElementById('view-planification');
+  const rows = planifRows;
+  if (!rows.length) {
+    view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Aucune semaine planifiée pour ' + escapeHtml(PLANIF_CTX.categorie) + ' — ' + escapeHtml(PLANIF_CTX.saison) + '.</p></div>';
+    return;
+  }
+
+  // ---- Carte 1 : vue d'ensemble de la saison (courbe volume/intensité) -------
+  const overview =
+    '<div class="card pf-overview">' +
+      '<div class="pf-head">' +
+        '<div><h2 style="margin:0;">🗓️ Planification saison</h2>' +
+        '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">' + escapeHtml(PLANIF_CTX.org) + ' · ' + escapeHtml(PLANIF_CTX.categorie) + ' · ' + escapeHtml(PLANIF_CTX.saison) + ' — vision globale des séances, de la charge et des contenus athlétiques.</p></div>' +
+        '<button class="pf-btn" onclick="renderPlanification()">↻ Rafraîchir</button>' +
+      '</div>' +
+      planifCurveSVG(rows) +
+      planifLegend() +
+    '</div>';
+
+  // ---- Carte 2 : grille macrocycle éditable ----------------------------------
+  const grid = '<div class="card"><div class="pf-scroll">' + planifTable(rows) + '</div>' +
+    '<p style="margin:10px 4px 0; color:var(--text-dim); font-size:12px;">Clique une barre pour régler le niveau (0→5). Les objectifs, tests et thèmes sont éditables directement. Tout est sauvegardé automatiquement.</p></div>';
+
+  view.innerHTML = overview + grid;
+  planifWire(view);
+}
+
+// Courbe de périodisation : Volume (aires) + Intensité (ligne) sur toute la saison.
+function planifCurveSVG(rows) {
+  const W = 1000, H = 210, padL = 34, padR = 12, padT = 14, padB = 34;
+  const n = rows.length;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const x = i => padL + (n <= 1 ? iw / 2 : (i * iw) / (n - 1));
+  const y = v => padT + ih - (v / 5) * ih;
+  let bars = '', vLine = '', iLine = '', xlab = '', matchDots = '';
+  const bw = Math.max(3, (iw / n) * 0.6);
+  rows.forEach((r, i) => {
+    const cx = x(i);
+    // Volume en barres douces
+    const vh = ((r.volume || 0) / 5) * ih;
+    bars += '<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + (padT + ih - vh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + vh.toFixed(1) + '" rx="1.5" fill="#38b6ff" opacity="0.32"/>';
+    const p = (i === 0 ? 'M' : 'L') + cx.toFixed(1) + ',' + y(r.intensite || 0).toFixed(1) + ' ';
+    iLine += p;
+    vLine += (i === 0 ? 'M' : 'L') + cx.toFixed(1) + ',' + y(r.volume || 0).toFixed(1) + ' ';
+    if (planifIsMatch(r)) matchDots += '<circle cx="' + cx.toFixed(1) + '" cy="' + (H - padB + 10) + '" r="2.4" fill="var(--red)"/>';
+    if (i % 3 === 0 || i === n - 1) xlab += '<text x="' + cx.toFixed(1) + '" y="' + (H - padB + 24) + '" text-anchor="middle" font-size="9" fill="var(--text-dim)">' + escapeHtml(r.semaine_cal || '') + '</text>';
+  });
+  let gy = '';
+  for (let v = 0; v <= 5; v++) {
+    const yy = y(v);
+    gy += '<line x1="' + padL + '" y1="' + yy.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + yy.toFixed(1) + '" stroke="var(--border)" stroke-width="0.6" opacity="0.6"/>';
+    gy += '<text x="' + (padL - 6) + '" y="' + (yy + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="var(--text-dim)">' + v + '</text>';
+  }
+  return '<svg class="pf-curve" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Courbe volume et intensité sur la saison">' +
+    gy + bars +
+    '<path d="' + vLine + '" fill="none" stroke="#38b6ff" stroke-width="2" stroke-linejoin="round"/>' +
+    '<path d="' + iLine + '" fill="none" stroke="#fb7185" stroke-width="2" stroke-linejoin="round"/>' +
+    matchDots + xlab +
+    '</svg>';
+}
+
+function planifLegend() {
+  let s = '<div class="pf-legend">';
+  s += '<span class="pf-lg"><i style="background:#38b6ff"></i>Volume</span>';
+  s += '<span class="pf-lg"><i style="background:#fb7185"></i>Intensité</span>';
+  s += '<span class="pf-lg"><i style="background:var(--red);border-radius:50%"></i>Match / compétition</span>';
+  s += '<span class="pf-lg-sep"></span>';
+  PLANIF_BARS.filter(b => b.sec === 'athle').forEach(b => {
+    s += '<span class="pf-lg"><i style="background:' + b.color + '"></i>' + escapeHtml(b.label) + '</span>';
+  });
+  return s + '</div>';
+}
+
+// Grille : lignes = métriques, colonnes = semaines. 1re colonne figée.
+function planifTable(rows) {
+  const cell = (html, cls) => '<td class="' + (cls || '') + '">' + html + '</td>';
+  const lbl = (txt, cls) => '<th class="pf-lbl ' + (cls || '') + '" scope="row">' + txt + '</th>';
+
+  // Entête : date + semaine calendaire + n° semaine + événement
+  let thead = '<tr class="pf-hrow"><th class="pf-lbl pf-corner"></th>';
+  rows.forEach(r => {
+    const ph = planifPhase(r);
+    const d = r.date_debut ? r.date_debut.slice(8, 10) + '/' + r.date_debut.slice(5, 7) : '';
+    const cls = 'pf-wcol' + (planifIsMatch(r) ? ' pf-match' : '');
+    thead += '<th class="' + cls + '">' +
+      (ph ? '<span class="pf-phase" style="background:' + ph.color + '">' + escapeHtml(ph.label) + '</span>' : '') +
+      '<div class="pf-scal">' + escapeHtml(r.semaine_cal || '') + '</div>' +
+      '<div class="pf-date">' + escapeHtml(d) + '</div>' +
+      '</th>';
+  });
+  thead += '</tr>';
+
+  let body = '';
+  // Événement (éditable)
+  body += '<tr>' + lbl('Événement') + rows.map(r =>
+    cell('<input class="pf-txt pf-ev" data-id="' + r.id + '" data-field="evenement" value="' + escapeHtml(r.evenement || '') + '" title="' + escapeHtml(r.evenement || '') + '">')
+  ).join('') + '</tr>';
+
+  // Séances : entraînements + matchs (éditable numérique)
+  body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl" colspan="' + (rows.length + 1) + '">SÉANCES</th></tr>';
+  body += '<tr>' + lbl('Entraînements') + rows.map(r =>
+    cell('<input class="pf-num" type="number" min="0" max="14" data-id="' + r.id + '" data-field="nb_entrainements" value="' + (r.nb_entrainements != null ? r.nb_entrainements : '') + '">')
+  ).join('') + '</tr>';
+  body += '<tr>' + lbl('Matchs') + rows.map(r =>
+    cell('<input class="pf-num" type="number" min="0" max="7" data-id="' + r.id + '" data-field="nb_matchs" value="' + (r.nb_matchs != null ? r.nb_matchs : '') + '">')
+  ).join('') + '</tr>';
+
+  // Charge : volume + intensité + charge totale
+  body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl" colspan="' + (rows.length + 1) + '">CHARGE</th></tr>';
+  PLANIF_BARS.filter(b => b.sec === 'charge').forEach(b => {
+    body += '<tr>' + lbl(b.label) + rows.map(r => cell(planifBarHTML(r, b), 'pf-barcell')).join('') + '</tr>';
+  });
+  body += '<tr>' + lbl('<b>Charge (V+I)</b>') + rows.map(r => {
+    const c = planifCharge(r);
+    return '<td class="pf-charge" id="pf-charge-' + r.id + '"><span style="color:' + planifChargeColor(c) + '">' + c + '</span></td>';
+  }).join('') + '</tr>';
+
+  // Contenus athlétiques
+  body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl" colspan="' + (rows.length + 1) + '">CONTENUS ATHLÉTIQUES</th></tr>';
+  PLANIF_BARS.filter(b => b.sec === 'athle').forEach(b => {
+    body += '<tr>' + lbl('<span class="pf-dot" style="background:' + b.color + '"></span>' + b.label) + rows.map(r => cell(planifBarHTML(r, b), 'pf-barcell')).join('') + '</tr>';
+  });
+
+  // Objectifs / tests / thèmes (éditable texte)
+  body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl" colspan="' + (rows.length + 1) + '">OBJECTIFS & THÈMES</th></tr>';
+  PLANIF_TEXTS.forEach(t => {
+    body += '<tr>' + lbl(t.label) + rows.map(r =>
+      cell('<textarea class="pf-txt pf-ta" rows="1" data-id="' + r.id + '" data-field="' + t.key + '" title="' + escapeHtml(r[t.key] || '') + '">' + escapeHtml(r[t.key] || '') + '</textarea>')
+    ).join('') + '</tr>';
+  });
+
+  return '<table class="pf-table"><thead>' + thead + '</thead><tbody>' + body + '</tbody></table>';
+}
+
+// Barre verticale 0→5 (staircase). Cliquer un segment règle le niveau.
+function planifBarHTML(r, b) {
+  const v = r[b.key] || 0;
+  let segs = '';
+  for (let lvl = 5; lvl >= 1; lvl--) {
+    const on = lvl <= v;
+    segs += '<span class="pf-seg' + (on ? ' on' : '') + '" data-id="' + r.id + '" data-field="' + b.key + '" data-level="' + lvl + '" style="' + (on ? 'background:' + b.color + ';' : '') + '"></span>';
+  }
+  return '<div class="pf-bar" data-field="' + b.key + '" data-color="' + b.color + '" title="' + escapeHtml(b.label) + ' : ' + v + '/5">' + segs + '</div>';
+}
+
+function planifWire(view) {
+  // Barres : clic segment
+  view.querySelectorAll('.pf-seg').forEach(seg => {
+    seg.addEventListener('click', () => {
+      const id = seg.dataset.id, field = seg.dataset.field, lvl = parseInt(seg.dataset.level, 10);
+      const row = planifRows.find(r => String(r.id) === String(id));
+      if (!row) return;
+      const cur = row[field] || 0;
+      const next = (lvl === cur) ? lvl - 1 : lvl; // recliquer le sommet décrémente → permet 0
+      row[field] = next;
+      // Rafraîchir la barre sans reconstruire toute la grille
+      const bar = seg.closest('.pf-bar');
+      const color = bar.dataset.color;
+      bar.querySelectorAll('.pf-seg').forEach(s => {
+        const sl = parseInt(s.dataset.level, 10);
+        if (sl <= next) { s.classList.add('on'); s.style.background = color; }
+        else { s.classList.remove('on'); s.style.background = ''; }
+      });
+      bar.setAttribute('title', bar.getAttribute('title').replace(/: \d\/5/, ': ' + next + '/5'));
+      // Mettre à jour la charge (V+I) si concerné
+      if (field === 'volume' || field === 'intensite') {
+        const ce = document.getElementById('pf-charge-' + id);
+        if (ce) { const c = planifCharge(row); ce.innerHTML = '<span style="color:' + planifChargeColor(c) + '">' + c + '</span>'; }
+      }
+      planifSave(id, field, next, bar);
+    });
+  });
+  // Champs numériques
+  view.querySelectorAll('.pf-num').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const id = inp.dataset.id, field = inp.dataset.field;
+      const row = planifRows.find(r => String(r.id) === String(id));
+      const val = inp.value === '' ? null : parseInt(inp.value, 10);
+      if (row) row[field] = val;
+      planifSave(id, field, val, inp);
+    });
+  });
+  // Champs texte / zones de texte
+  view.querySelectorAll('.pf-txt').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const id = inp.dataset.id, field = inp.dataset.field;
+      const row = planifRows.find(r => String(r.id) === String(id));
+      const val = inp.value.trim() === '' ? null : inp.value.trim();
+      if (row) row[field] = val;
+      inp.setAttribute('title', val || '');
+      planifSave(id, field, val, inp);
+    });
+  });
+}
+
+async function planifSave(id, field, value, el) {
+  const { error } = await sb.from('planification')
+    .update({ [field]: value, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) {
+    toast('Sauvegarde impossible : ' + error.message, 'error');
+    if (el) { el.classList.add('pf-err'); setTimeout(() => el.classList.remove('pf-err'), 1200); }
+  } else if (el) {
+    el.classList.add('pf-saved'); setTimeout(() => el.classList.remove('pf-saved'), 600);
+  }
+}
+
+function planifInjectStyle() {
+  if (document.getElementById('planif-style')) return;
+  const css = `
+  #view-planification .pf-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+  #view-planification .pf-btn{background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-size:13px;cursor:pointer;}
+  #view-planification .pf-btn:hover{border-color:var(--accent);color:var(--accent-light);}
+  #view-planification .pf-curve{width:100%;height:210px;display:block;}
+  #view-planification .pf-legend{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-top:10px;font-size:12px;color:var(--text-dim);}
+  #view-planification .pf-lg{display:inline-flex;align-items:center;gap:6px;}
+  #view-planification .pf-lg i{width:12px;height:12px;border-radius:3px;display:inline-block;}
+  #view-planification .pf-lg-sep{flex-basis:100%;height:0;}
+  #view-planification .pf-scroll{overflow-x:auto;overflow-y:hidden;}
+  #view-planification table.pf-table{border-collapse:separate;border-spacing:0;font-size:12px;}
+  #view-planification .pf-table th,#view-planification .pf-table td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
+  #view-planification .pf-lbl{position:sticky;left:0;z-index:3;background:var(--bg-elevated);text-align:left;padding:5px 10px;white-space:nowrap;color:var(--text);font-weight:500;min-width:190px;max-width:190px;box-shadow:2px 0 4px rgba(0,0,0,.25);}
+  #view-planification .pf-corner{z-index:5;top:0;position:sticky;}
+  #view-planification thead .pf-wcol{position:sticky;top:0;z-index:2;background:var(--bg-card);padding:4px 2px;text-align:center;min-width:46px;max-width:46px;vertical-align:bottom;}
+  #view-planification thead .pf-wcol.pf-match{background:linear-gradient(180deg,rgba(248,113,113,.16),var(--bg-card));}
+  #view-planification .pf-phase{display:block;font-size:8px;color:#fff;border-radius:3px;padding:1px 0;margin-bottom:2px;line-height:1.3;}
+  #view-planification .pf-scal{font-weight:700;color:var(--text);font-size:11px;}
+  #view-planification .pf-date{color:var(--text-dim);font-size:9px;}
+  #view-planification .pf-sub .pf-secttl{position:sticky;left:0;background:var(--primary);color:var(--accent-light);text-transform:uppercase;letter-spacing:.06em;font-size:10px;font-weight:700;padding:5px 10px;text-align:left;z-index:3;}
+  #view-planification .pf-dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle;}
+  #view-planification td{text-align:center;padding:2px;background:var(--bg-card);}
+  #view-planification td.pf-barcell{padding:3px 2px;}
+  #view-planification .pf-bar{display:flex;flex-direction:column;gap:1px;width:22px;margin:0 auto;cursor:pointer;}
+  #view-planification .pf-seg{height:9px;border-radius:2px;background:var(--bg-elevated);border:1px solid var(--border);transition:background .12s;}
+  #view-planification .pf-seg:hover{outline:1px solid var(--accent-light);}
+  #view-planification .pf-charge{font-weight:700;font-size:13px;}
+  #view-planification .pf-num{width:40px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;text-align:center;padding:3px 2px;font-size:12px;}
+  #view-planification .pf-txt{width:100%;box-sizing:border-box;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-size:11px;font-family:inherit;resize:none;}
+  #view-planification .pf-ev{min-width:120px;}
+  #view-planification .pf-ta{min-width:120px;line-height:1.3;overflow:hidden;}
+  #view-planification .pf-txt:focus,#view-planification .pf-num:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring);}
+  #view-planification .pf-saved{border-color:var(--green)!important;box-shadow:0 0 0 2px rgba(52,211,153,.4)!important;}
+  #view-planification .pf-err{border-color:var(--red)!important;}
+  #view-planification .pf-bar.pf-saved{outline:2px solid var(--green);border-radius:3px;}
+  `;
+  const st = document.createElement('style');
+  st.id = 'planif-style';
+  st.textContent = css;
+  document.head.appendChild(st);
 }
 
 function renderCalendar() {
