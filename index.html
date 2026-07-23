@@ -7802,7 +7802,9 @@ function planifWire(view) {
     const r = planifRows[i];
     if (!r || !microRows.some(m => m.semaine_cal === r.semaine_cal)) return;
     th.classList.add('pf-clickable');
-    th.addEventListener('click', () => {
+    th.addEventListener('click', (ev) => {
+      // Ne pas ouvrir le microcycle quand on édite le titre/couleur de la phase
+      if (ev.target.closest('.pf-phasewrap')) return;
       microSelCal = r.semaine_cal;
       const wsel = document.getElementById('pf-micro-week');
       const mbody = document.getElementById('pf-micro-body');
@@ -7891,10 +7893,10 @@ function planifInjectStyle() {
   #view-planification .pf-err{border-color:var(--red)!important;}
   #view-planification .pf-bar.pf-saved{outline:2px solid var(--green);border-radius:3px;}
   #view-planification td.pf-logocell{padding:3px 2px;}
-  #view-planification .pf-logos{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;align-items:center;min-height:30px;}
-  #view-planification .pf-logoslot.pf-logoempty{border-style:dashed;opacity:.65;}
+  #view-planification .pf-logos{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;align-items:center;min-height:44px;}
+  #view-planification .pf-logoslot.pf-logoempty{width:24px;height:24px;border-style:dashed;opacity:.6;}
   #view-planification .pf-logoslot.pf-logoempty:hover{opacity:1;}
-  #view-planification .pf-logoslot{position:relative;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid var(--border);border-radius:5px;background:var(--bg-elevated);overflow:hidden;cursor:pointer;}
+  #view-planification .pf-logoslot{position:relative;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:1px solid var(--border);border-radius:6px;background:var(--bg-elevated);overflow:hidden;cursor:pointer;}
   #view-planification .pf-logoslot:hover{border-color:var(--accent);}
   #view-planification .pf-logoimg{width:100%;height:100%;object-fit:contain;}
   #view-planification .pf-logoadd{color:var(--text-dim);font-size:15px;line-height:1;}
