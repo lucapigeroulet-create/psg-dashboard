@@ -7361,6 +7361,9 @@ function renderPlanView() {
 // ============================================================================
 const PLANIF_CTX = { org: 'TEGG', categorie: '1ere PS', saison: '2026-2027' };
 let planifRows = [];
+let microRows = [];
+let planifLogos = [];   // bibliothèque de logos adversaires (org TEGG)
+let microSelCal = null; // semaine sélectionnée dans le détail microcycle
 
 // Barres 0→5 : charge (volume/intensité) + contenus athlétiques, chacune sa couleur.
 const PLANIF_BARS = [
@@ -7412,15 +7415,31 @@ async function renderPlanification() {
   }
   planifInjectStyle();
   view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Chargement de la planification…</p></div>';
-  const { data, error } = await sb.from('planification').select('*')
-    .eq('org', PLANIF_CTX.org).eq('categorie', PLANIF_CTX.categorie).eq('saison', PLANIF_CTX.saison)
-    .order('ordre', { ascending: true });
-  if (error) {
-    view.innerHTML = '<div class="card"><p style="color:var(--red);">Erreur de chargement : ' + escapeHtml(error.message) + '</p></div>';
+  const [planRes, microRes, logoRes] = await Promise.all([
+    sb.from('planification').select('*')
+      .eq('org', PLANIF_CTX.org).eq('categorie', PLANIF_CTX.categorie).eq('saison', PLANIF_CTX.saison)
+      .order('ordre', { ascending: true }),
+    sb.from('microcycle').select('*')
+      .eq('org', PLANIF_CTX.org).eq('categorie', PLANIF_CTX.categorie).eq('saison', PLANIF_CTX.saison)
+      .order('ordre', { ascending: true }),
+    sb.from('adversaire_logos').select('*').eq('org', PLANIF_CTX.org),
+  ]);
+  if (planRes.error) {
+    view.innerHTML = '<div class="card"><p style="color:var(--red);">Erreur de chargement : ' + escapeHtml(planRes.error.message) + '</p></div>';
     return;
   }
-  planifRows = data || [];
+  planifRows = planRes.data || [];
+  microRows = microRes.data || [];
+  planifLogos = logoRes.data || [];
+  if (!microSelCal && microRows.length) microSelCal = microRows[0].semaine_cal;
   drawPlanification();
+}
+
+function planifLogoLookup(name) {
+  const key = String(name || '').trim().toLowerCase();
+  if (!key) return null;
+  const hit = planifLogos.find(a => (a.adversaire || '').trim().toLowerCase() === key);
+  return hit ? hit.logo_data_url : null;
 }
 
 function drawPlanification() {
@@ -7445,10 +7464,58 @@ function drawPlanification() {
 
   // ---- Carte 2 : grille macrocycle éditable ----------------------------------
   const grid = '<div class="card"><div class="pf-scroll">' + planifTable(rows) + '</div>' +
-    '<p style="margin:10px 4px 0; color:var(--text-dim); font-size:12px;">Clique une barre pour régler le niveau (0→5). Les objectifs, tests et thèmes sont éditables directement. Tout est sauvegardé automatiquement.</p></div>';
+    '<p style="margin:10px 4px 0; color:var(--text-dim); font-size:12px;">Clique une barre pour régler le niveau (0→5). Les objectifs, tests et thèmes sont éditables directement. Clique l\'entête d\'une semaine pour voir son microcycle en détail. Tout est sauvegardé automatiquement.</p></div>';
 
-  view.innerHTML = overview + grid;
+  view.innerHTML = overview + grid + planifMicroCard();
   planifWire(view);
+}
+
+// ---- Carte 3 : détail du microcycle (semaine par semaine) --------------------
+function planifMicroCard() {
+  if (!microRows.length) return '';
+  const opts = microRows.map(m =>
+    '<option value="' + escapeHtml(m.semaine_cal) + '"' + (m.semaine_cal === microSelCal ? ' selected' : '') + '>' +
+    escapeHtml(m.semaine_cal) + (m.date_debut ? ' — ' + m.date_debut.slice(8, 10) + '/' + m.date_debut.slice(5, 7) : '') + '</option>'
+  ).join('');
+  return '<div class="card pf-micro-card">' +
+    '<div class="pf-head"><div><h2 style="margin:0;">📅 Détail du microcycle</h2>' +
+    '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">Séances jour par jour de la semaine sélectionnée (séance principale + complément).</p></div>' +
+    '<select id="pf-micro-week" class="pf-weeksel">' + opts + '</select></div>' +
+    '<div id="pf-micro-body">' + planifMicroBody(microSelCal) + '</div></div>';
+}
+
+function planifMicroBody(cal) {
+  const m = microRows.find(r => r.semaine_cal === cal);
+  if (!m) return '<p style="color:var(--text-dim);">Semaine introuvable.</p>';
+  const plan = planifRows.find(r => r.semaine_cal === cal);
+  const jours = Array.isArray(m.jours) ? m.jours : [];
+  // Bandeau récap (charge issue de la planification macro)
+  let recap = '';
+  if (plan) {
+    const c = planifCharge(plan);
+    recap = '<div class="pf-micro-recap">' +
+      '<span>Volume <b style="color:#38b6ff">' + (plan.volume || 0) + '</b></span>' +
+      '<span>Intensité <b style="color:#fb7185">' + (plan.intensite || 0) + '</b></span>' +
+      '<span>Charge <b style="color:' + planifChargeColor(c) + '">' + c + '</b></span>' +
+      (plan.nb_entrainements != null ? '<span>Entraînements <b>' + plan.nb_entrainements + '</b></span>' : '') +
+      (plan.nb_matchs ? '<span>Matchs <b>' + plan.nb_matchs + '</b></span>' : '') +
+      '</div>';
+  }
+  const themeRow = '<div class="pf-micro-meta">' +
+    '<label>Thème <input class="pf-txt pf-mtheme" data-cal="' + escapeHtml(cal) + '" value="' + escapeHtml(m.theme || '') + '"></label>' +
+    '<label>Note / durée <input class="pf-txt pf-mnote" data-cal="' + escapeHtml(cal) + '" value="' + escapeHtml(m.note || '') + '"></label>' +
+    '</div>';
+  // Grille jours
+  let head = '<tr>', s1 = '<tr><th class="pf-lbl pf-mlbl">Séance principale</th>', s2 = '<tr><th class="pf-lbl pf-mlbl">Complément</th>';
+  jours.forEach((jr, i) => {
+    head += '<th class="pf-mday">' + escapeHtml(jr.j || ('J' + (i + 1))) + '</th>';
+    s1 += '<td><textarea class="pf-txt pf-mses" rows="3" data-cal="' + escapeHtml(cal) + '" data-idx="' + i + '" data-slot="s1">' + escapeHtml(jr.s1 || '') + '</textarea></td>';
+    s2 += '<td><textarea class="pf-txt pf-mses pf-mses2" rows="2" data-cal="' + escapeHtml(cal) + '" data-idx="' + i + '" data-slot="s2">' + escapeHtml(jr.s2 || '') + '</textarea></td>';
+  });
+  head = '<tr><th class="pf-lbl pf-mlbl"></th>' + head.slice(4) + '</tr>';
+  s1 += '</tr>'; s2 += '</tr>';
+  return recap + themeRow +
+    '<div class="pf-scroll"><table class="pf-table pf-mtable"><thead>' + head + '</thead><tbody>' + s1 + s2 + '</tbody></table></div>';
 }
 
 // Courbe de périodisation : Volume (aires) + Intensité (ligne) sur toute la saison.
@@ -7522,6 +7589,9 @@ function planifTable(rows) {
     cell('<input class="pf-txt pf-ev" data-id="' + r.id + '" data-field="evenement" value="' + escapeHtml(r.evenement || '') + '" title="' + escapeHtml(r.evenement || '') + '">')
   ).join('') + '</tr>';
 
+  // Logos adversaires : 1 ou 2 selon le nombre de matchs
+  body += '<tr>' + lbl('Logos') + rows.map(r => cell(planifLogoCell(r), 'pf-logocell')).join('') + '</tr>';
+
   // Séances : entraînements + matchs (éditable numérique)
   body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl" colspan="' + (rows.length + 1) + '">SÉANCES</th></tr>';
   body += '<tr>' + lbl('Entraînements') + rows.map(r =>
@@ -7569,6 +7639,30 @@ function planifBarHTML(r, b) {
   return '<div class="pf-bar" data-field="' + b.key + '" data-color="' + b.color + '" title="' + escapeHtml(b.label) + ' : ' + v + '/5">' + segs + '</div>';
 }
 
+// ---- Logos adversaires (sous l'événement) ----------------------------------
+function planifLogoOptions(selected) {
+  const names = planifLogos.map(a => a.adversaire).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  let o = '<option value="">—</option>';
+  const sel = String(selected || '').toLowerCase();
+  names.forEach(n => { o += '<option value="' + escapeHtml(n) + '"' + (sel === n.toLowerCase() ? ' selected' : '') + '>' + escapeHtml(n) + '</option>'; });
+  return o;
+}
+function planifLogoSlot(r, slot) {
+  const val = slot === 1 ? r.logo1 : r.logo2;
+  const src = planifLogoLookup(val);
+  const inner = src ? '<img class="pf-logoimg" src="' + src + '" alt="' + escapeHtml(val || '') + '">' : '<span class="pf-logoadd">+</span>';
+  return '<span class="pf-logoslot" title="' + escapeHtml(val || 'Choisir un adversaire') + '">' + inner +
+    '<select class="pf-logosel" data-id="' + r.id + '" data-slot="' + slot + '">' + planifLogoOptions(val) + '</select></span>';
+}
+function planifLogoCell(r) {
+  const n = r.nb_matchs || 0;
+  let s = '<div class="pf-logos" data-id="' + r.id + '">';
+  if (n >= 1) s += planifLogoSlot(r, 1);
+  if (n >= 2) s += planifLogoSlot(r, 2);
+  if (n < 1) s += '<span class="pf-nomatch">—</span>';
+  return s + '</div>';
+}
+
 function planifWire(view) {
   // Barres : clic segment
   view.querySelectorAll('.pf-seg').forEach(seg => {
@@ -7604,10 +7698,15 @@ function planifWire(view) {
       const val = inp.value === '' ? null : parseInt(inp.value, 10);
       if (row) row[field] = val;
       planifSave(id, field, val, inp);
+      // Le nombre de matchs pilote le nombre d'emplacements de logo
+      if (field === 'nb_matchs' && row) {
+        const cellWrap = view.querySelector('.pf-logos[data-id="' + id + '"]');
+        if (cellWrap) cellWrap.outerHTML = planifLogoCell(row);
+      }
     });
   });
-  // Champs texte / zones de texte
-  view.querySelectorAll('.pf-txt').forEach(inp => {
+  // Champs texte macro (event, objectifs, thèmes) — uniquement ceux avec data-field
+  view.querySelectorAll('.pf-txt[data-field]').forEach(inp => {
     inp.addEventListener('change', () => {
       const id = inp.dataset.id, field = inp.dataset.field;
       const row = planifRows.find(r => String(r.id) === String(id));
@@ -7617,6 +7716,83 @@ function planifWire(view) {
       planifSave(id, field, val, inp);
     });
   });
+
+  // Délégation (attachée une seule fois sur le conteneur persistant) :
+  // logos + édition microcycle. Utilise les variables globales, donc valable après recharge.
+  if (!view._pfDelegated) {
+    view._pfDelegated = true;
+    // Logos : sélection d'un adversaire (cellules re-rendues dynamiquement)
+    view.addEventListener('change', ev => {
+      const sel = ev.target.closest('.pf-logosel');
+      if (!sel) return;
+      const id = sel.dataset.id, slot = sel.dataset.slot;
+      const field = slot === '1' ? 'logo1' : 'logo2';
+      const row = planifRows.find(r => String(r.id) === String(id));
+      const val = sel.value || null;
+      if (row) row[field] = val;
+      planifSave(id, field, val, sel.closest('.pf-logoslot'));
+      const cellWrap = view.querySelector('.pf-logos[data-id="' + id + '"]');
+      if (cellWrap && row) cellWrap.outerHTML = planifLogoCell(row);
+    });
+    // Microcycle : édition des séances / thème / note
+    view.addEventListener('change', ev => {
+      const t = ev.target;
+      if (t.classList.contains('pf-mses')) {
+        const cal = t.dataset.cal, idx = parseInt(t.dataset.idx, 10), slot = t.dataset.slot;
+        const m = microRows.find(r => r.semaine_cal === cal);
+        if (!m) return;
+        if (!Array.isArray(m.jours)) m.jours = [];
+        if (!m.jours[idx]) m.jours[idx] = { j: '', s1: '', s2: '' };
+        m.jours[idx][slot] = t.value;
+        planifSaveMicro(cal, { jours: m.jours }, t);
+      } else if (t.classList.contains('pf-mtheme') || t.classList.contains('pf-mnote')) {
+        const cal = t.dataset.cal;
+        const m = microRows.find(r => r.semaine_cal === cal);
+        if (!m) return;
+        const field = t.classList.contains('pf-mtheme') ? 'theme' : 'note';
+        const val = t.value.trim() === '' ? null : t.value.trim();
+        m[field] = val;
+        planifSaveMicro(cal, { [field]: val }, t);
+      }
+    });
+  }
+
+  // Clic sur l'entête d'une semaine → ouvrir son microcycle
+  view.querySelectorAll('thead .pf-wcol').forEach((th, i) => {
+    const r = planifRows[i];
+    if (!r || !microRows.some(m => m.semaine_cal === r.semaine_cal)) return;
+    th.classList.add('pf-clickable');
+    th.addEventListener('click', () => {
+      microSelCal = r.semaine_cal;
+      const wsel = document.getElementById('pf-micro-week');
+      const mbody = document.getElementById('pf-micro-body');
+      if (wsel) wsel.value = microSelCal;
+      if (mbody) { mbody.innerHTML = planifMicroBody(microSelCal); }
+      const card = document.querySelector('.pf-micro-card');
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  // Microcycle : changement de semaine
+  const wsel = document.getElementById('pf-micro-week');
+  if (wsel) wsel.addEventListener('change', () => {
+    microSelCal = wsel.value;
+    const mbody = document.getElementById('pf-micro-body');
+    if (mbody) mbody.innerHTML = planifMicroBody(microSelCal);
+  });
+}
+
+async function planifSaveMicro(cal, patch, el) {
+  const { error } = await sb.from('microcycle')
+    .update(Object.assign({}, patch, { updated_at: new Date().toISOString() }))
+    .eq('org', PLANIF_CTX.org).eq('categorie', PLANIF_CTX.categorie).eq('saison', PLANIF_CTX.saison)
+    .eq('semaine_cal', cal);
+  if (error) {
+    toast('Sauvegarde impossible : ' + error.message, 'error');
+    if (el) { el.classList.add('pf-err'); setTimeout(() => el.classList.remove('pf-err'), 1200); }
+  } else if (el) {
+    el.classList.add('pf-saved'); setTimeout(() => el.classList.remove('pf-saved'), 600);
+  }
 }
 
 async function planifSave(id, field, value, el) {
@@ -7668,6 +7844,28 @@ function planifInjectStyle() {
   #view-planification .pf-saved{border-color:var(--green)!important;box-shadow:0 0 0 2px rgba(52,211,153,.4)!important;}
   #view-planification .pf-err{border-color:var(--red)!important;}
   #view-planification .pf-bar.pf-saved{outline:2px solid var(--green);border-radius:3px;}
+  #view-planification td.pf-logocell{padding:3px 2px;}
+  #view-planification .pf-logos{display:flex;gap:3px;justify-content:center;align-items:center;min-height:30px;}
+  #view-planification .pf-logoslot{position:relative;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid var(--border);border-radius:5px;background:var(--bg-elevated);overflow:hidden;cursor:pointer;}
+  #view-planification .pf-logoslot:hover{border-color:var(--accent);}
+  #view-planification .pf-logoimg{width:100%;height:100%;object-fit:contain;}
+  #view-planification .pf-logoadd{color:var(--text-dim);font-size:15px;line-height:1;}
+  #view-planification .pf-logosel{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;}
+  #view-planification .pf-nomatch{color:var(--border);font-size:12px;}
+  #view-planification thead .pf-clickable{cursor:pointer;}
+  #view-planification thead .pf-clickable:hover{background:var(--accent-soft);}
+  #view-planification .pf-weeksel{background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:13px;}
+  #view-planification .pf-micro-recap{display:flex;flex-wrap:wrap;gap:8px 18px;margin-bottom:12px;font-size:13px;color:var(--text-dim);}
+  #view-planification .pf-micro-recap b{font-size:15px;}
+  #view-planification .pf-micro-meta{display:flex;flex-wrap:wrap;gap:10px 16px;margin-bottom:12px;}
+  #view-planification .pf-micro-meta label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--text-dim);flex:1 1 260px;}
+  #view-planification .pf-micro-meta input{font-size:13px;padding:6px 8px;}
+  #view-planification table.pf-mtable{width:100%;table-layout:fixed;}
+  #view-planification .pf-mday{position:sticky;top:0;background:var(--bg-card);color:var(--text);font-size:12px;font-weight:700;padding:6px 4px;text-align:center;text-transform:capitalize;}
+  #view-planification .pf-mlbl{min-width:130px;max-width:130px;font-size:11px;color:var(--accent-light);vertical-align:top;}
+  #view-planification .pf-mtable td{vertical-align:top;padding:3px;}
+  #view-planification .pf-mses{width:100%;min-height:52px;font-size:11px;line-height:1.35;white-space:pre-wrap;}
+  #view-planification .pf-mses2{min-height:34px;opacity:.9;}
   `;
   const st = document.createElement('style');
   st.id = 'planif-style';
