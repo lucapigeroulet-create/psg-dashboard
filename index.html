@@ -12025,6 +12025,7 @@ function renderGPSWeekIndiv() {
 
 // ===== DISTANCE VS INTENSITÉ (HSR) =====
 let gpsDistHsrMode = 'cumul'; // 'cumul' (un point par joueur, cumul saison) | 'match' (un point par joueur, un seul match) | 'player' (un point par match, un seul joueur)
+let gpsLogoMapOpen = false; // état déplié/replié du panneau d'association des logos
 
 // Devine le nom de l'adversaire à partir du titre de séance Catapult (ex: "MATCH N3 VS BELFORT / 11 AVRIL 2026" -> "BELFORT")
 const GPS_KNOWN_COMPETITION_TOKENS = ['MATCH', 'N3', 'N2', 'N1', 'R1', 'R2', 'R3', 'CDF', 'RESERVE', 'U19', 'U18', 'U17', 'U15', 'J1'];
@@ -12298,8 +12299,9 @@ function renderGPSDistHSR() {
     if (opps.length) {
       const lib = [...(state.bdd_adversaire_logos || [])].sort((a, b) => (a.adversaire || '').localeCompare(b.adversaire || ''));
       const esc1 = s => String(s).replace(/'/g, "\\'");
-      html += '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">';
-      html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">🎯 Associe un logo à chaque point (les points sans logo s\'affichent en bleu). Choix pioché dans la bibliothèque — gère-la dans <b>Paramètres → Logos</b>.</div>';
+      html += '<details id="gps-logomap" style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);"' + (gpsLogoMapOpen ? ' open' : '') + '>';
+      html += '<summary style="cursor:pointer; font-size:13px; font-weight:600; color:var(--accent-light);">🎯 Associer un logo aux points (' + opps.length + ')</summary>';
+      html += '<div style="font-size:12px; color:var(--text-dim); margin:8px 0;">Les points sans logo s\'affichent en bleu. Choix pioché dans la bibliothèque — gère-la dans <b>Paramètres → Logos</b>.</div>';
       html += '<div style="display:flex; flex-wrap:wrap; gap:8px;">';
       opps.forEach(o => {
         const cur = gpsLogoLookup(o);
@@ -12312,13 +12314,16 @@ function renderGPSDistHSR() {
           '<select onchange="gpsAssignLogo(\'' + esc1(o) + '\', this.value)" style="background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 6px; font-size:12px;">' + optionsHtml + '</select>' +
           '</div>';
       });
-      html += '</div></div>';
+      html += '</div></details>';
     }
   }
 
   html += '</div>';
   document.getElementById('gps-content').innerHTML = html;
   gpsUpdateZoomAxisButtons();
+  // Mémorise l'état déplié/replié du panneau d'association entre deux rendus
+  const gpsLm = document.getElementById('gps-logomap');
+  if (gpsLm) gpsLm.addEventListener('toggle', () => { gpsLogoMapOpen = gpsLm.open; });
 
   gpsRenderDistHsrChart(points);
 }
@@ -12335,7 +12340,7 @@ async function gpsRenderDistHsrChart(points) {
 
   const axisSuffix = gpsDistHsrMode === 'cumul' ? ' — cumul équipe' : '';
   // Logos légèrement plus petits en mode "comparer les matchs" (plus de points à l'écran) qu'en mode "un joueur"
-  const logoRadius = gpsDistHsrMode === 'cumul' ? 11 : 14;
+  const logoRadius = gpsDistHsrMode === 'cumul' ? 15 : 19;
   // Normalise la taille d'affichage : Chart.js dessine une image au format naturel de sa
   // source (64px, 128px…), donc sans ça les logos apparaissent de tailles différentes.
   const logoSize = logoRadius * 2;
