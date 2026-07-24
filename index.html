@@ -12340,7 +12340,7 @@ async function gpsRenderDistHsrChart(points) {
 
   const axisSuffix = gpsDistHsrMode === 'cumul' ? ' — cumul équipe' : '';
   // Logos légèrement plus petits en mode "comparer les matchs" (plus de points à l'écran) qu'en mode "un joueur"
-  const logoRadius = gpsDistHsrMode === 'cumul' ? 15 : 19;
+  const logoRadius = gpsDistHsrMode === 'cumul' ? 30 : 38;
   // Normalise la taille d'affichage : Chart.js dessine une image au format naturel de sa
   // source (64px, 128px…), donc sans ça les logos apparaissent de tailles différentes.
   const logoSize = logoRadius * 2;
