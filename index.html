@@ -2126,6 +2126,7 @@
         <button class="settings-tab" data-tab="vignettes" onclick="switchSettingsTab('vignettes')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">🎯 Vignettes</button>
         <button class="settings-tab" data-tab="coachs" onclick="switchSettingsTab('coachs')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">🧑‍🏫 Coachs</button>
         <button class="settings-tab" data-tab="ratios" onclick="switchSettingsTab('ratios')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">📐 Ratios de travail</button>
+        <button class="settings-tab" data-tab="logos" onclick="switchSettingsTab('logos')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">🖼️ Logos</button>
       </div>
     </div>
 
@@ -2314,6 +2315,17 @@
           Ratio cible pour chaque jour d'entraînement, exprimé en % du meilleur match de référence du joueur (Distance, HSR, Sprint, Vmax, Décélérations, Power Plays). Utilisé dans <b>Données GPS → Rapport de séance</b> pour vérifier si un joueur est dans le bon ratio selon la semaine et le jour sélectionnés. <b>Le tableau est modifiable</b> : ajuste les valeurs, renomme les phases, ajoute ou supprime des semaines, puis « 💾 Enregistrer » — la configuration est propre à chaque organisation.
         </p>
         <div id="ratios-settings-content"></div>
+      </div>
+    </div>
+
+    <!-- Onglet LOGOS ADVERSAIRES -->
+    <div id="settings-logos" class="settings-pane" style="display:none;">
+      <div class="card">
+        <h2>🖼️ Logos des clubs adversaires</h2>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
+          Bibliothèque centrale des écussons. Ils sont réutilisés partout : <b>Données GPS → Distance vs Intensité</b> et <b>Gestion → Planification</b>. Ajoute un club manquant (nom + image PNG/JPG), remplace un logo erroné ou supprime-le. Les logos sont propres à chaque organisation.
+        </p>
+        <div id="logos-settings-content"></div>
       </div>
     </div>
   </div>
@@ -7453,72 +7465,8 @@ function planifLogoLookup(name) {
   return hit ? hit.logo_data_url : null;
 }
 
-// ---- Bibliothèque de logos adversaires (ajout / remplacement / suppression) --
-let planifLibOpen = false;
-
-function planifLogoLibraryHTML() {
-  const logos = [...planifLogos].sort((a, b) => (a.adversaire || '').localeCompare(b.adversaire || ''));
-  const esc1 = s => String(s).replace(/'/g, "\\'");
-  const items = logos.map(l => {
-    const nm = escapeHtml(l.adversaire || '');
-    return '<div class="pf-libitem">' +
-      '<img src="' + l.logo_data_url + '" alt="' + nm + '">' +
-      '<span class="pf-libname" title="' + nm + '">' + nm + '</span>' +
-      '<label class="pf-minibtn" title="Remplacer l\'image">✏️<input type="file" accept="image/*" style="display:none" onchange="planifReplaceLogo(\'' + esc1(l.adversaire) + '\', this)"></label>' +
-      '<button class="pf-minibtn pf-del" title="Supprimer" onclick="planifDeleteLogo(\'' + esc1(l.adversaire) + '\')">🗑</button>' +
-      '</div>';
-  }).join('');
-  return '<details class="pf-lib" id="pf-lib"' + (planifLibOpen ? ' open' : '') + '>' +
-    '<summary>🖼️ Bibliothèque de logos adversaires (' + logos.length + ')</summary>' +
-    '<p style="margin:8px 0; color:var(--text-dim); font-size:12px;">Ajoute un club manquant : saisis son nom, puis choisis une image (PNG/JPG). Il devient disponible dans tous les sélecteurs de logo.</p>' +
-    '<div class="pf-addlogo">' +
-      '<input type="text" id="pf-newlogo-name" placeholder="Nom du club (ex : annecy)" class="pf-txt" style="max-width:220px;">' +
-      '<label class="pf-btn" for="pf-newlogo-file">📤 Choisir une image…</label>' +
-      '<input type="file" id="pf-newlogo-file" accept="image/*" style="display:none" onchange="planifAddLogo(this)">' +
-    '</div>' +
-    '<div class="pf-libgrid">' + (items || '<span style="color:var(--text-dim); font-size:12px;">Aucun logo pour l\'instant.</span>') + '</div>' +
-    '</details>';
-}
-
-async function planifRefreshLogos(reopen) {
-  const { data } = await sb.from('adversaire_logos').select('*').eq('org', PLANIF_CTX.org);
-  planifLogos = data || [];
-  planifLibOpen = !!reopen;
-  drawPlanification();
-}
-
-function planifUpsertLogo(name, file, msg) {
-  gpsResizeImageFile(file, 128, async (dataUrl) => {
-    const { error } = await sb.from('adversaire_logos')
-      .upsert({ org: PLANIF_CTX.org, adversaire: name, logo_data_url: dataUrl }, { onConflict: 'org,adversaire' });
-    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
-    toast(msg, 'success');
-    await planifRefreshLogos(true);
-  });
-}
-
-function planifAddLogo(input) {
-  const file = input.files && input.files[0];
-  if (!file) return;
-  const nameEl = document.getElementById('pf-newlogo-name');
-  const name = (nameEl ? nameEl.value : '').trim().toLowerCase();
-  if (!name) { toast('Saisis d\'abord le nom du club', 'error'); input.value = ''; return; }
-  planifUpsertLogo(name, file, 'Logo « ' + name + ' » ajouté ✓');
-}
-
-function planifReplaceLogo(name, input) {
-  const file = input.files && input.files[0];
-  if (!file) return;
-  planifUpsertLogo(name, file, 'Logo « ' + name + ' » mis à jour ✓');
-}
-
-async function planifDeleteLogo(name) {
-  if (!confirm('Supprimer le logo « ' + name + ' » de la bibliothèque ?')) return;
-  const { error } = await sb.from('adversaire_logos').delete().eq('org', PLANIF_CTX.org).eq('adversaire', name);
-  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
-  toast('Logo supprimé', 'success');
-  await planifRefreshLogos(true);
-}
+// La gestion des logos adversaires est centralisée dans Paramètres → onglet Logos
+// (voir renderLogosSettings / settingsAddLogo / settingsReplaceLogo / settingsDeleteLogo).
 
 function drawPlanification() {
   const view = document.getElementById('view-planification');
@@ -7538,7 +7486,6 @@ function drawPlanification() {
       '</div>' +
       planifCurveSVG(rows) +
       planifLegend() +
-      planifLogoLibraryHTML() +
     '</div>';
 
   // ---- Carte 2 : grille macrocycle éditable ----------------------------------
@@ -7891,9 +7838,6 @@ function planifWire(view) {
     if (mbody) mbody.innerHTML = planifMicroBody(microSelCal);
   });
 
-  // Bibliothèque de logos : mémoriser l'état ouvert/fermé entre les redraws
-  const lib = document.getElementById('pf-lib');
-  if (lib) lib.addEventListener('toggle', () => { planifLibOpen = lib.open; });
 }
 
 async function planifSaveMicro(cal, patch, el) {
@@ -12330,11 +12274,7 @@ function renderGPSDistHSR() {
 
   html += '<div class="chart-container tall"><canvas id="gps-dist-hsr-scatter"></canvas></div>';
 
-  // Modes "un joueur" et "comparer les matchs" : gérer les logos adversaires (ajout / remplacement)
-  if (gpsDistHsrMode === 'player' || gpsDistHsrMode === 'cumul') {
-    const opponents = uniqueSorted(points.filter(p => p.opponent).map(p => p.opponent));
-    html += renderAdversaireLogoManager(opponents);
-  }
+  // Gestion des logos adversaires centralisée dans Paramètres → Logos.
 
   html += '</div>';
   document.getElementById('gps-content').innerHTML = html;
@@ -18983,6 +18923,103 @@ function renderSettings() {
   else if (currentSettingsTab === 'vignettes') renderVignettesSettings();
   else if (currentSettingsTab === 'coachs') renderCoachsSettings();
   else if (currentSettingsTab === 'ratios') renderRatiosSettings();
+  else if (currentSettingsTab === 'logos') renderLogosSettings();
+}
+
+// ---------- LOGOS ADVERSAIRES (bibliothèque centrale, par organisation) --------
+function injectLogoMgrStyle() {
+  if (document.getElementById('logomgr-style')) return;
+  const css = `
+  .lgm-add{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px;}
+  .lgm-name{max-width:240px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;}
+  .lgm-name:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring);}
+  .lgm-btn{background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:13px;cursor:pointer;}
+  .lgm-btn:hover{border-color:var(--accent);color:var(--accent-light);}
+  .lgm-grid{display:flex;flex-wrap:wrap;gap:10px;}
+  .lgm-item{display:flex;align-items:center;gap:8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:6px 10px;}
+  .lgm-item img{width:34px;height:34px;object-fit:contain;border-radius:5px;background:#ffffff12;}
+  .lgm-name-lbl{font-size:13px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:capitalize;}
+  .lgm-mini{cursor:pointer;background:none;border:none;font-size:14px;padding:2px 5px;border-radius:5px;color:var(--text-dim);}
+  .lgm-mini:hover{background:var(--bg-card);color:var(--text);}
+  `;
+  const st = document.createElement('style');
+  st.id = 'logomgr-style';
+  st.textContent = css;
+  document.head.appendChild(st);
+}
+
+function renderLogosSettings() {
+  const cont = document.getElementById('logos-settings-content');
+  if (!cont) return;
+  injectLogoMgrStyle();
+  const canEdit = canWrite();
+  const logos = [...(state.bdd_adversaire_logos || [])].sort((a, b) => (a.adversaire || '').localeCompare(b.adversaire || ''));
+  const esc1 = s => String(s).replace(/'/g, "\\'");
+  const items = logos.map(l => {
+    const nm = escapeHtml(l.adversaire || '');
+    return '<div class="lgm-item">' +
+      '<img src="' + l.logo_data_url + '" alt="' + nm + '">' +
+      '<span class="lgm-name-lbl" title="' + nm + '">' + nm + '</span>' +
+      (canEdit
+        ? '<label class="lgm-mini" title="Remplacer l\'image">✏️<input type="file" accept="image/*" style="display:none" onchange="settingsReplaceLogo(\'' + esc1(l.adversaire) + '\', this)"></label>' +
+          '<button class="lgm-mini" title="Supprimer" onclick="settingsDeleteLogo(\'' + esc1(l.adversaire) + '\')">🗑</button>'
+        : '') +
+      '</div>';
+  }).join('');
+  let html = '';
+  if (canEdit) {
+    html += '<div class="lgm-add">' +
+      '<input type="text" id="settings-newlogo-name" class="lgm-name" placeholder="Nom du club (ex : annecy)">' +
+      '<label class="lgm-btn" for="settings-newlogo-file">📤 Choisir une image…</label>' +
+      '<input type="file" id="settings-newlogo-file" accept="image/*" style="display:none" onchange="settingsAddLogo(this)">' +
+      '</div>';
+  } else {
+    html += '<p style="color:var(--text-dim); font-size:12px;">Lecture seule — seuls le staff et l\'admin peuvent modifier les logos.</p>';
+  }
+  html += '<div class="lgm-grid">' + (items || '<span style="color:var(--text-dim); font-size:13px;">Aucun logo pour ' + escapeHtml(currentOrg) + ' pour l\'instant.</span>') + '</div>';
+  cont.innerHTML = html;
+}
+
+async function settingsRefreshLogos() {
+  const { data } = await sb.from('adversaire_logos').select('*').eq('org', currentOrg);
+  state.bdd_adversaire_logos = data || [];
+  renderLogosSettings();
+}
+
+function settingsUpsertLogo(name, file, msg) {
+  gpsResizeImageFile(file, 128, async (dataUrl) => {
+    const { error } = await sb.from('adversaire_logos')
+      .upsert({ org: currentOrg, adversaire: name, logo_data_url: dataUrl }, { onConflict: 'org,adversaire' });
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+    toast(msg, 'success');
+    await settingsRefreshLogos();
+  });
+}
+
+function settingsAddLogo(input) {
+  if (!canWrite()) { toast('Droits admin/staff requis', 'error'); return; }
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const nameEl = document.getElementById('settings-newlogo-name');
+  const name = (nameEl ? nameEl.value : '').trim().toLowerCase();
+  if (!name) { toast('Saisis d\'abord le nom du club', 'error'); input.value = ''; return; }
+  settingsUpsertLogo(name, file, 'Logo « ' + name + ' » ajouté ✓');
+}
+
+function settingsReplaceLogo(name, input) {
+  if (!canWrite()) { toast('Droits admin/staff requis', 'error'); return; }
+  const file = input.files && input.files[0];
+  if (!file) return;
+  settingsUpsertLogo(name, file, 'Logo « ' + name + ' » mis à jour ✓');
+}
+
+async function settingsDeleteLogo(name) {
+  if (!canWrite()) { toast('Droits admin/staff requis', 'error'); return; }
+  if (!confirm('Supprimer le logo « ' + name + ' » de la bibliothèque ?')) return;
+  const { error } = await sb.from('adversaire_logos').delete().eq('org', currentOrg).eq('adversaire', name);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  toast('Logo supprimé', 'success');
+  await settingsRefreshLogos();
 }
 // ---------- RATIOS DE TRAVAIL (référence, lecture seule) ----------
 // Tableau ÉDITABLE : chaque cellule est un champ % ; phases renommables ;
