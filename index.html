@@ -12059,6 +12059,23 @@ function gpsLogoLookup(adversaire) {
   return hit ? hit.logo_data_url : null;
 }
 
+// Associe un logo (piochés dans la bibliothèque) à un adversaire pour ses points du nuage.
+// Copie l'image du club choisi sous le nom de l'adversaire → le point affiche ce logo.
+async function gpsAssignLogo(opponent, clubKey) {
+  if (!clubKey) return;
+  if (!canWrite()) { toast('Droits admin/staff requis', 'error'); return; }
+  const club = (state.bdd_adversaire_logos || []).find(l => l.adversaire === clubKey);
+  if (!club) return;
+  const key = String(opponent).trim().toLowerCase();
+  const { error } = await sb.from('adversaire_logos')
+    .upsert({ org: currentOrg, adversaire: key, logo_data_url: club.logo_data_url }, { onConflict: 'org,adversaire' });
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  const { data } = await sb.from('adversaire_logos').select('*').eq('org', currentOrg);
+  state.bdd_adversaire_logos = data || [];
+  toast('Logo associé ✓', 'success');
+  renderGPSDistHSR();
+}
+
 // Liste, pour chaque adversaire présent dans la vue, un bouton d'ajout ou de remplacement du logo
 function renderAdversaireLogoManager(opponents) {
   if (!opponents.length) return '';
@@ -12274,7 +12291,30 @@ function renderGPSDistHSR() {
 
   html += '<div class="chart-container tall"><canvas id="gps-dist-hsr-scatter"></canvas></div>';
 
-  // Gestion des logos adversaires centralisée dans Paramètres → Logos.
+  // Association point → logo : dans les modes avec adversaire, permet de remplacer
+  // un point bleu par le logo du club de son choix (piochés dans la bibliothèque).
+  if ((gpsDistHsrMode === 'player' || gpsDistHsrMode === 'cumul') && canWrite()) {
+    const opps = uniqueSorted(points.map(p => p.opponent).filter(Boolean));
+    if (opps.length) {
+      const lib = [...(state.bdd_adversaire_logos || [])].sort((a, b) => (a.adversaire || '').localeCompare(b.adversaire || ''));
+      const esc1 = s => String(s).replace(/'/g, "\\'");
+      html += '<div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">';
+      html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">🎯 Associe un logo à chaque point (les points sans logo s\'affichent en bleu). Choix pioché dans la bibliothèque — gère-la dans <b>Paramètres → Logos</b>.</div>';
+      html += '<div style="display:flex; flex-wrap:wrap; gap:8px;">';
+      opps.forEach(o => {
+        const cur = gpsLogoLookup(o);
+        const okey = String(o).trim().toLowerCase();
+        let optionsHtml = '<option value="">— choisir un logo —</option>';
+        lib.forEach(l => { optionsHtml += '<option value="' + escapeHtml(l.adversaire) + '"' + (l.adversaire === okey ? ' selected' : '') + '>' + escapeHtml(l.adversaire) + '</option>'; });
+        html += '<div style="display:flex; align-items:center; gap:6px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:5px 8px;">' +
+          (cur ? '<img src="' + cur + '" style="width:26px; height:26px; object-fit:contain; border-radius:4px; background:#ffffff12;">' : '<span style="width:14px; height:14px; border-radius:50%; background:#00a3ff; display:inline-block;"></span>') +
+          '<span style="font-size:12px; text-transform:capitalize;">' + escapeHtml(o) + '</span>' +
+          '<select onchange="gpsAssignLogo(\'' + esc1(o) + '\', this.value)" style="background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 6px; font-size:12px;">' + optionsHtml + '</select>' +
+          '</div>';
+      });
+      html += '</div></div>';
+    }
+  }
 
   html += '</div>';
   document.getElementById('gps-content').innerHTML = html;
@@ -12296,6 +12336,10 @@ async function gpsRenderDistHsrChart(points) {
   const axisSuffix = gpsDistHsrMode === 'cumul' ? ' — cumul équipe' : '';
   // Logos légèrement plus petits en mode "comparer les matchs" (plus de points à l'écran) qu'en mode "un joueur"
   const logoRadius = gpsDistHsrMode === 'cumul' ? 11 : 14;
+  // Normalise la taille d'affichage : Chart.js dessine une image au format naturel de sa
+  // source (64px, 128px…), donc sans ça les logos apparaissent de tailles différentes.
+  const logoSize = logoRadius * 2;
+  logoImgs.forEach(img => { if (img) { img.width = logoSize; img.height = logoSize; } });
   destroyChart('gps-dist-hsr-scatter');
   charts['gps-dist-hsr-scatter'] = new Chart(canvas, {
     type: 'scatter',
