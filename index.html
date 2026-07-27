@@ -20620,8 +20620,12 @@ function testTypeById(id) {
 // décimales (3:45 -> 3.75). Rétro-compatible avec les anciennes saisies en
 // minutes entières (3 -> 3:00).
 function isTimeTest(unite) {
-  const u = String(unite || '').trim().toLowerCase();
-  return ['min', 'mn', 'minute', 'minutes', 'mm:ss', 'm:ss', 'min:s', 'min:ss', 'min:sec', 'temps', 'time'].indexOf(u) >= 0;
+  // Normalise les espaces : "mm : ss" -> "mm:ss"
+  const u = String(unite || '').trim().toLowerCase().replace(/\s+/g, '');
+  if (!u) return false;
+  if (['min', 'mn', 'minute', 'minutes', 'mm:ss', 'm:ss', 'min:s', 'min:ss', 'min:sec', 'temps', 'time'].indexOf(u) >= 0) return true;
+  // Formats génériques type "mm:ss", "m:s", "h:mm:ss"
+  return u.indexOf(':') >= 0 && /^[hms:]+$/.test(u);
 }
 // "3:45" ou "3,75" -> minutes décimales ; vide/invalide -> null
 function parseTimeValue(raw) {
@@ -20893,10 +20897,13 @@ function buildTestingImportRows(parsed, defaultDate) {
       const joueur = joueurCol ? matchPlayerName(r[joueurCol]) : null;
       const rawName = (r[testCol] || '').trim();
       const { name, unite } = splitTestNameUnit(rawName);
-      const valeur = parseTestCell(r[valCol], unite);
+      const rawVal = r[valCol];
+      const valeur = parseTestCell(rawVal, unite);
       if (!joueur || !rawName || valeur === null) return;
+      // Colonne de temps (cellule "mm:ss") sans unité déclarée => unité mm:ss
+      const uniteFinal = (String(rawVal || '').indexOf(':') >= 0 && !isTimeTest(unite)) ? 'mm:ss' : unite;
       const date = (dateCol && gpsNormalizeDate(r[dateCol])) || defaultDate;
-      out.push({ date, joueur, testName: name, unite, valeur, notes: notesCol ? (r[notesCol] || null) : null });
+      out.push({ date, joueur, testName: name, unite: uniteFinal, valeur, notes: notesCol ? (r[notesCol] || null) : null });
     });
   } else if (joueurCol) {
     // Format large : chaque colonne autre que Joueur/Date = un test
@@ -20907,10 +20914,12 @@ function buildTestingImportRows(parsed, defaultDate) {
       const date = (dateCol && gpsNormalizeDate(r[dateCol])) || defaultDate;
       testCols.forEach(h => {
         const { name, unite } = splitTestNameUnit(h);
-        const valeur = parseTestCell(r[h], unite);
+        const rawVal = r[h];
+        const valeur = parseTestCell(rawVal, unite);
         if (valeur === null) return;
         if (!name) return;
-        out.push({ date, joueur, testName: name, unite, valeur, notes: null });
+        const uniteFinal = (String(rawVal || '').indexOf(':') >= 0 && !isTimeTest(unite)) ? 'mm:ss' : unite;
+        out.push({ date, joueur, testName: name, unite: uniteFinal, valeur, notes: null });
       });
     });
   }
@@ -20975,8 +20984,16 @@ async function doTestingImport() {
   (state.bdd_test_types || []).forEach(t => { byName[(t.nom || '').toLowerCase()] = t; });
   const neededNames = [...new Set(testingImportRows.map(r => r.testName))];
   for (const name of neededNames) {
-    if (byName[name.toLowerCase()]) continue;
     const unite = (testingImportRows.find(r => r.testName === name && r.unite) || {}).unite || null;
+    const existing = byName[name.toLowerCase()];
+    if (existing) {
+      // Renseigner l'unité si absente (ex. colonne de temps mm:ss détectée à l'import)
+      if (unite && !existing.unite) {
+        const { error: upErr } = await sb.from('test_types').update({ unite }).eq('id', existing.id);
+        if (!upErr) existing.unite = unite;
+      }
+      continue;
+    }
     const { data, error } = await sb.from('test_types').insert({ org: currentOrg, nom: name, unite }).select();
     if (error) { toast('Erreur création test « ' + name + ' » : ' + error.message, 'error'); if (btn) btn.disabled = false; return; }
     if (data && data[0]) { state.bdd_test_types.push(data[0]); byName[name.toLowerCase()] = data[0]; }
