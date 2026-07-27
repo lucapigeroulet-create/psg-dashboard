@@ -3002,6 +3002,13 @@
               <label>Joueur</label>
               <select id="tv-player" onchange="renderTestingViz()"><option value="">Tous (équipe)</option></select>
             </div>
+            <div class="filter-group">
+              <label>&nbsp;</label>
+              <div onwheel="onTvPlayerWheel(event)" title="Molette de la souris ou flèches pour changer de joueur" style="display:flex; gap:4px;">
+                <button class="btn btn-secondary" style="padding:6px 12px; font-size:14px;" onclick="stepTestingVizPlayer(-1)" title="Joueur précédent">▲</button>
+                <button class="btn btn-secondary" style="padding:6px 12px; font-size:14px;" onclick="stepTestingVizPlayer(1)" title="Joueur suivant">▼</button>
+              </div>
+            </div>
           </div>
         </div>
         <div id="tv-empty" style="display:none; color:var(--text-dim); text-align:center; padding:24px;">Aucun résultat pour ce test.</div>
@@ -3025,7 +3032,7 @@
 
       <!-- Vue individuelle (quand un joueur est sélectionné) -->
       <div class="card" id="tv-individual" style="display:none;">
-        <div id="tv-indiv-header" style="margin-bottom:14px;"></div>
+        <div id="tv-indiv-header" onwheel="onTvPlayerWheel(event)" title="Molette de la souris pour changer de joueur" style="margin-bottom:14px;"></div>
         <h3 style="margin:6px 0 8px;">Évolution — <span id="tv-indiv-testname"></span></h3>
         <div class="chart-container tall"><canvas id="tv-indiv-trend"></canvas></div>
         <h3 style="margin:20px 0 8px;">Détail des résultats</h3>
@@ -20733,6 +20740,27 @@ function populateTestingVizSelect() {
     ? types.map(t => '<option value="' + t.id + '">' + escapeHtml(t.nom) + (t.unite ? ' (' + escapeHtml(t.unite) + ')' : '') + '</option>').join('')
     : '<option value="">— Aucun résultat enregistré —</option>';
   if (prev && types.some(t => t.id === prev)) sel.value = prev;
+}
+
+// Passe au joueur précédent (-1) ou suivant (+1) dans la vue individuelle.
+// Depuis « Tous (équipe) », entre en vue individuelle sur le 1er / dernier joueur.
+function stepTestingVizPlayer(dir) {
+  const sel = document.getElementById('tv-player');
+  if (!sel) return;
+  const players = [...sel.options].map(o => o.value).filter(Boolean);
+  if (!players.length) return;
+  let idx = players.indexOf(sel.value);
+  let ni;
+  if (idx === -1) ni = (dir > 0 ? 0 : players.length - 1); // depuis "Tous"
+  else { ni = idx + dir; if (ni < 0) ni = players.length - 1; if (ni >= players.length) ni = 0; }
+  sel.value = players[ni];
+  renderTestingViz();
+}
+
+// Molette souris => changer de joueur (empêche le défilement de la page)
+function onTvPlayerWheel(e) {
+  e.preventDefault();
+  stepTestingVizPlayer(e.deltaY > 0 ? 1 : -1);
 }
 
 function renderTestingViz() {
