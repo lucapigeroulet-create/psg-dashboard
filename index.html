@@ -2842,6 +2842,16 @@
 
   <!-- ========== TESTING (tests physiques / performance — staff) ========== -->
   <div class="view" id="view-testing">
+    <!-- Sous-navigation testing -->
+    <div class="card" style="padding:0; overflow:hidden; margin-bottom:16px;">
+      <div style="display:flex; gap:2px; background:var(--border);">
+        <button class="testing-tab active" data-tab="saisie" onclick="switchTestingTab('saisie')" style="flex:1; background:var(--bg-card); color:var(--accent-light); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">✍️ Saisie test</button>
+        <button class="testing-tab" data-tab="viz" onclick="switchTestingTab('viz')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">📊 Visualisation &amp; comparaison</button>
+      </div>
+    </div>
+
+    <!-- Panneau SAISIE (catalogue + import + saisie + résultats) -->
+    <div class="testing-pane" id="testing-saisie">
     <!-- 1) Catalogue des types de tests -->
     <div class="card">
       <h2>🧪 Catalogue des tests</h2>
@@ -2972,6 +2982,43 @@
         </table>
       </div>
     </div>
+    </div><!-- /testing-saisie -->
+
+    <!-- Panneau VISUALISATION & COMPARAISON -->
+    <div class="testing-pane" id="testing-viz" style="display:none;">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+          <h2 style="margin:0;">📊 Visualisation &amp; comparaison</h2>
+          <div class="filters" style="margin:0;">
+            <div class="filter-group">
+              <label>Test</label>
+              <select id="tv-test" onchange="renderTestingViz()"></select>
+            </div>
+            <div class="filter-group">
+              <label>Groupe</label>
+              <select id="tv-group" onchange="renderTestingViz()"><option value="">Tous</option></select>
+            </div>
+          </div>
+        </div>
+        <div id="tv-empty" style="display:none; color:var(--text-dim); text-align:center; padding:24px;">Aucun résultat pour ce test.</div>
+        <div id="tv-charts">
+          <h3 style="margin:6px 0 8px;">Comparaison — dernier résultat par joueur</h3>
+          <div class="chart-container tall"><canvas id="tv-compare"></canvas></div>
+          <h3 style="margin:20px 0 8px;">Évolution dans le temps</h3>
+          <p style="color:var(--text-dim); font-size:12px; margin:0 0 8px;">Une courbe par joueur — survole un point pour la valeur exacte.</p>
+          <div class="chart-container tall"><canvas id="tv-trend"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2 style="margin:0 0 12px;">Récapitulatif par joueur</h2>
+        <div class="table-wrap" style="max-height:460px;">
+          <table id="tv-table">
+            <thead><tr><th>Joueur</th><th>Groupe</th><th>Dernier</th><th>Min</th><th>Max</th><th>Moyenne</th><th>Nb</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /testing-viz -->
   </div>
 
 
@@ -20631,6 +20678,151 @@ function renderTesting() {
   populateTestingSelects();
   renderTestTypesList();
   renderTestResults();
+  switchTestingTab(currentTestingTab); // ré-applique le sous-onglet actif (et rafraîchit la viz si active)
+}
+
+// ===== Sous-onglets Testing (Saisie / Visualisation) =====
+let currentTestingTab = 'saisie';
+function switchTestingTab(tab) {
+  currentTestingTab = tab;
+  document.querySelectorAll('.testing-tab').forEach(b => {
+    const on = b.dataset.tab === tab;
+    b.style.background = on ? 'var(--bg-card)' : 'var(--bg-elevated)';
+    b.style.color = on ? 'var(--accent-light)' : 'var(--text-dim)';
+    b.classList.toggle('active', on);
+  });
+  document.querySelectorAll('.testing-pane').forEach(p => p.style.display = 'none');
+  const pane = document.getElementById('testing-' + tab);
+  if (pane) pane.style.display = 'block';
+  if (tab === 'viz') { populateTestingVizSelect(); renderTestingViz(); }
+}
+
+// Remplit le sélecteur de test de la vue viz (uniquement les tests ayant des résultats)
+function populateTestingVizSelect() {
+  const sel = document.getElementById('tv-test');
+  if (!sel) return;
+  const withResults = new Set((state.bdd_test_results || []).map(r => r.test_type_id));
+  const types = (state.bdd_test_types || []).filter(t => withResults.has(t.id)).sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+  const prev = sel.value;
+  sel.innerHTML = types.length
+    ? types.map(t => '<option value="' + t.id + '">' + escapeHtml(t.nom) + (t.unite ? ' (' + escapeHtml(t.unite) + ')' : '') + '</option>').join('')
+    : '<option value="">— Aucun résultat enregistré —</option>';
+  if (prev && types.some(t => t.id === prev)) sel.value = prev;
+}
+
+function renderTestingViz() {
+  const sel = document.getElementById('tv-test');
+  if (!sel) return;
+  const tid = sel.value;
+  const t = testTypeById(tid);
+  const unite = t ? t.unite : '';
+  const timeTest = isTimeTest(unite);
+
+  // Rafraîchir la liste des groupes selon le test choisi (en préservant la sélection si valide)
+  const gsel = document.getElementById('tv-group');
+  if (gsel) {
+    const playersAll = [...new Set((state.bdd_test_results || []).filter(r => r.test_type_id === tid).map(r => r.joueur))];
+    const groups = [...new Set(playersAll.map(p => getJoueurInfo(p).groupe || '').filter(Boolean))].sort();
+    const gprev = gsel.value;
+    const desired = groups.indexOf(gprev) >= 0 ? gprev : '';
+    gsel.innerHTML = '<option value="">Tous</option>' + groups.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+    gsel.value = desired;
+  }
+  const grp = gsel ? gsel.value : '';
+
+  let results = (state.bdd_test_results || []).filter(r => r.test_type_id === tid && r.valeur != null && r.valeur !== '');
+  if (grp) results = results.filter(r => (getJoueurInfo(r.joueur).groupe || '') === grp);
+
+  const emptyEl = document.getElementById('tv-empty');
+  const chartsEl = document.getElementById('tv-charts');
+  const tbody = document.querySelector('#tv-table tbody');
+  if (!results.length) {
+    if (emptyEl) emptyEl.style.display = 'block';
+    if (chartsEl) chartsEl.style.display = 'none';
+    if (tbody) tbody.innerHTML = '';
+    destroyChart('tv-compare'); destroyChart('tv-trend');
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+  if (chartsEl) chartsEl.style.display = 'block';
+
+  // Regrouper par joueur (résultats triés par date)
+  const byPlayer = {};
+  results.forEach(r => { (byPlayer[r.joueur] = byPlayer[r.joueur] || []).push(r); });
+  const players = Object.keys(byPlayer);
+  players.forEach(p => byPlayer[p].sort((a, b) => (a.date || '').localeCompare(b.date || '')));
+
+  const fmt = v => timeTest ? formatTimeValue(v) : (Math.round(Number(v) * 100) / 100);
+
+  // Stats par joueur
+  const stats = players.map(p => {
+    const arr = byPlayer[p];
+    const vals = arr.map(r => Number(r.valeur));
+    const last = arr[arr.length - 1];
+    return {
+      player: p,
+      groupe: getJoueurInfo(p).groupe || '—',
+      last: Number(last.valeur),
+      min: Math.min.apply(null, vals),
+      max: Math.max.apply(null, vals),
+      avg: vals.reduce((s, x) => s + x, 0) / vals.length,
+      nb: vals.length
+    };
+  });
+  // Tri : temps => ascendant (plus court en tête) ; sinon descendant
+  stats.sort((a, b) => timeTest ? a.last - b.last : b.last - a.last);
+
+  // Bar chart : dernier résultat par joueur
+  destroyChart('tv-compare');
+  charts['tv-compare'] = new Chart(document.getElementById('tv-compare'), {
+    type: 'bar',
+    data: { labels: stats.map(s => s.player), datasets: [{ label: 'Dernier' + (unite ? ' (' + unite + ')' : ''), data: stats.map(s => s.last), backgroundColor: '#00a3ff', borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => fmt(ctx.parsed.x) } } },
+      scales: {
+        x: { ticks: { color: '#8ba3c1', callback: v => timeTest ? formatTimeValue(v) : v }, grid: { color: '#1f3a5f' } },
+        y: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } }
+      }
+    }
+  });
+
+  // Line chart : évolution dans le temps (une courbe par joueur)
+  const allDates = [...new Set(results.map(r => r.date))].sort();
+  const palette = ['#00a3ff', '#34d399', '#fbbf24', '#f87171', '#a78bfa', '#f472b6', '#22d3ee', '#facc15', '#4ade80', '#fb923c'];
+  const datasets = players.map((p, i) => {
+    const map = {}; byPlayer[p].forEach(r => { map[r.date] = Number(r.valeur); });
+    const color = palette[i % palette.length];
+    return { label: p, data: allDates.map(d => (d in map ? map[d] : null)), borderColor: color, backgroundColor: color, spanGaps: true, tension: 0.25, pointRadius: 3, borderWidth: 2 };
+  });
+  destroyChart('tv-trend');
+  charts['tv-trend'] = new Chart(document.getElementById('tv-trend'), {
+    type: 'line',
+    data: { labels: allDates.map(d => formatDateFR(d)), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#e8eef6', boxWidth: 12, font: { size: 10 } } }, tooltip: { callbacks: { label: ctx => ctx.dataset.label + ' : ' + fmt(ctx.parsed.y) } } },
+      scales: {
+        x: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { color: '#1f3a5f' } },
+        y: { ticks: { color: '#8ba3c1', callback: v => timeTest ? formatTimeValue(v) : v }, grid: { color: '#1f3a5f' } }
+      }
+    }
+  });
+
+  // Table récap
+  if (tbody) {
+    tbody.innerHTML = stats.map(s =>
+      '<tr>' +
+      '<td><b>' + escapeHtml(s.player) + '</b></td>' +
+      '<td>' + escapeHtml(s.groupe) + '</td>' +
+      '<td><b style="color:var(--accent-light);">' + fmt(s.last) + '</b></td>' +
+      '<td>' + fmt(s.min) + '</td>' +
+      '<td>' + fmt(s.max) + '</td>' +
+      '<td>' + fmt(s.avg) + '</td>' +
+      '<td>' + s.nb + '</td>' +
+      '</tr>'
+    ).join('');
+  }
 }
 
 function testTypeById(id) {
