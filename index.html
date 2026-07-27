@@ -20771,10 +20771,13 @@ function renderTestingViz() {
   const unite = t ? t.unite : '';
   const timeTest = isTimeTest(unite);
 
+  // On n'affiche que les joueurs actifs (les archivés sont exclus de la visualisation)
+  const archived = new Set((state.joueurs_archived || []).map(j => j.nom));
+
   // Rafraîchir la liste des groupes selon le test choisi (en préservant la sélection si valide)
   const gsel = document.getElementById('tv-group');
   if (gsel) {
-    const playersAll = [...new Set((state.bdd_test_results || []).filter(r => r.test_type_id === tid).map(r => r.joueur))];
+    const playersAll = [...new Set((state.bdd_test_results || []).filter(r => r.test_type_id === tid && !archived.has(r.joueur)).map(r => r.joueur))];
     const groups = [...new Set(playersAll.map(p => getJoueurInfo(p).groupe || '').filter(Boolean))].sort();
     const gprev = gsel.value;
     const desired = groups.indexOf(gprev) >= 0 ? gprev : '';
@@ -20783,7 +20786,7 @@ function renderTestingViz() {
   }
   const grp = gsel ? gsel.value : '';
 
-  let results = (state.bdd_test_results || []).filter(r => r.test_type_id === tid && r.valeur != null && r.valeur !== '');
+  let results = (state.bdd_test_results || []).filter(r => r.test_type_id === tid && r.valeur != null && r.valeur !== '' && !archived.has(r.joueur));
   if (grp) results = results.filter(r => (getJoueurInfo(r.joueur).groupe || '') === grp);
 
   // Rafraîchir la liste des joueurs disponibles pour ce test/groupe (en préservant la sélection)
