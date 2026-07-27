@@ -11189,7 +11189,10 @@ function renderGPSSession() {
   const avgVmax = rows.reduce((s, r) => s + gpsVal(r, 'top_speed'), 0) / n;
 
   let html = '<div class="card">';
-  html += '<h2>Rapport de séance — ' + formatDateFR(date) + (titles.length ? ' · ' + escapeHtml(titles[0]) : '') + escapeHtml(splitLabel) + '</h2>';
+  html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:6px;">';
+  html += '<h2 style="margin:0;">Rapport de séance — ' + formatDateFR(date) + (titles.length ? ' · ' + escapeHtml(titles[0]) : '') + escapeHtml(splitLabel) + '</h2>';
+  html += '<button class="btn btn-secondary" onclick="exportGPSSessionPDF()" style="white-space:nowrap;">📄 Exporter en PDF</button>';
+  html += '</div>';
 
   // Filtre poste (cases à cocher)
   if (allSessionPostes.length > 1) {
@@ -11482,6 +11485,181 @@ function renderGPSSession() {
       plugins: [gpsScatterDecorPlugin(medX, medY, true)]
     });
   })();
+}
+
+// Export PDF du rapport de séance (respecte la sélection courante : séance, split, filtres joueurs/postes)
+function exportGPSSessionPDF() {
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non disponible (vérifie ta connexion).', 'error'); return; }
+  const sessionVal = document.getElementById('gps-session-select').value;
+  if (!sessionVal) { toast('Sélectionne une séance à exporter.', 'error'); return; }
+  const sepIdx = sessionVal.indexOf('||');
+  const date = sepIdx >= 0 ? sessionVal.slice(0, sepIdx) : sessionVal;
+  const seanceTitle = sepIdx >= 0 ? sessionVal.slice(sepIdx + 2) : '';
+  const splitSel = document.getElementById('gps-split-select');
+  const selectedSplit = splitSel ? splitSel.value : 'all';
+
+  let allRows = state.bdd_gps.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
+  if (selectedSplit) allRows = allRows.filter(x => (x.split_name || 'all') === selectedSplit);
+  const posteOfPlayer = p => (getJoueurInfo(p).poste || 'Sans poste');
+  // Respecter les filtres poste + joueurs actifs à l'écran
+  const postePlayers = uniqueSorted(allRows.map(r => r.joueur)).filter(p => gpsSelectedPostes.indexOf(posteOfPlayer(p)) >= 0);
+  const rows = allRows.filter(r => gpsSelectedPlayers.indexOf(r.joueur) >= 0 && postePlayers.indexOf(r.joueur) >= 0);
+  if (rows.length === 0) { toast('Aucun joueur sélectionné à exporter.', 'error'); return; }
+
+  const titles = uniqueSorted(allRows.map(x => x.seance || x.session_title || '')).filter(Boolean);
+  const splitLabel = (selectedSplit && selectedSplit.toLowerCase() !== 'all') ? selectedSplit : 'Séance entière';
+
+  // Tri identique à l'écran
+  rows.sort((a, b) => {
+    const va = gpsSessionSortValue(a, gpsSessionSortKey);
+    const vb = gpsSessionSortValue(b, gpsSessionSortKey);
+    if (typeof va === 'string' || typeof vb === 'string') return gpsSessionSortDir * String(va).localeCompare(String(vb));
+    return gpsSessionSortDir * (va - vb);
+  });
+
+  const hasBestMatch = rows.some(r => getBestMatchRow(r.joueur) !== null);
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 40;
+
+  // En-tête
+  doc.setFontSize(15); doc.setTextColor(20);
+  doc.text('Rapport de séance — ' + currentOrg, margin, 34);
+  doc.setFontSize(10); doc.setTextColor(110);
+  const sub = formatDateFR(date) + (titles.length ? '   ·   ' + titles[0] : '') + '   ·   ' + splitLabel;
+  doc.text(sub, margin, 50);
+
+  // Moyennes d'équipe
+  const n = rows.length;
+  const avgDist = Math.round(rows.reduce((s, r) => s + gpsVal(r, 'distance_km') * 1000, 0) / n);
+  const avgHSR = Math.round(rows.reduce((s, r) => s + gpsVal(r, 'hsr'), 0) / n);
+  const avgSprint = Math.round(rows.reduce((s, r) => s + gpsVal(r, 'sprint_dist_m'), 0) / n);
+  const avgVmax = (rows.reduce((s, r) => s + gpsVal(r, 'top_speed'), 0) / n).toFixed(1);
+  doc.setFontSize(9); doc.setTextColor(60);
+  doc.text(n + ' joueurs    ·    Distance moy. ' + avgDist + ' m    ·    HSR moy. ' + avgHSR + ' m    ·    Sprint moy. ' + avgSprint + ' m    ·    Vmax moy. ' + avgVmax + ' km/h', margin, 66);
+
+  // ===== Tableau par joueur — colonnes calquées sur l'affichage écran (mode %) =====
+  // Mêmes règles que renderGPSSession : Vol/Int + % Best si mode 'all'/'best',
+  // colonnes ratio si mode 'all'/'ratio' ET semaine + jour choisis.
+  const showBestPct = hasBestMatch && (gpsSessionPctMode === 'all' || gpsSessionPctMode === 'best');
+  const showRatio = hasBestMatch && !!gpsSessionRatioWeek && !!gpsSessionRatioDay && (gpsSessionPctMode === 'all' || gpsSessionPctMode === 'ratio');
+
+  const RGB = {
+    green: [52, 211, 153], amber: [251, 191, 36], red: [248, 113, 113], dim: [148, 163, 184],
+    volHead: [29, 67, 83], volText: [52, 211, 153], intHead: [53, 64, 69], intText: [251, 191, 36],
+    bestText: [96, 165, 250], ratioHead: [45, 33, 83], ratioText: [167, 139, 250]
+  };
+  const cssRgb = (c) => {
+    if (!c) return RGB.dim;
+    if (c.indexOf('34d399') >= 0 || c.indexOf('--green') >= 0) return RGB.green;
+    if (c.indexOf('fbbf24') >= 0) return RGB.amber;
+    if (c.indexOf('f87171') >= 0) return RGB.red;
+    return RGB.dim;
+  };
+
+  // Ligne de mode (documente ce que montre le tableau)
+  const shownParts = [];
+  if (showBestPct) shownParts.push('Meilleur match (Vol / Int + % Best)');
+  if (showRatio) shownParts.push('Ratio de travail ' + gpsSessionRatioWeek + ' · ' + gpsSessionRatioDay);
+  const modeTxt = 'Colonnes % : ' + (shownParts.length ? shownParts.join('   +   ') : 'aucune (valeurs brutes)');
+  doc.setFontSize(8); doc.setTextColor(90);
+  doc.text(modeTxt, margin, 78);
+
+  // Description des colonnes (pilote en-têtes, cellules et couleurs)
+  const cols = [{ type: 'player' }, { type: 'poste' }];
+  if (showBestPct) { cols.push({ type: 'volume' }, { type: 'intensity' }); }
+  GPS_METRICS.forEach(m => {
+    cols.push({ type: 'metric', m });
+    if (showBestPct && m.key !== 'duree_min' && m.key !== 'dist_per_min') cols.push({ type: 'best', m });
+    if (showRatio) { const wm = WORK_RATIO_METRICS.find(x => x.key === m.key); if (wm) cols.push({ type: 'ratio', m, wm }); }
+  });
+
+  const headLabel = (c) => {
+    if (c.type === 'player') return 'Joueur';
+    if (c.type === 'poste') return 'Poste';
+    if (c.type === 'volume') return 'Vol %';
+    if (c.type === 'intensity') return 'Int %';
+    if (c.type === 'metric') return c.m.label + (c.m.unit ? '\n(' + c.m.unit + ')' : '');
+    if (c.type === 'best') return '% Best';
+    if (c.type === 'ratio') return c.wm.shortLabel;
+    return '';
+  };
+  const head = [cols.map(headLabel)];
+
+  // Corps + couleurs de statut par cellule (indexées "row_col")
+  const cellStyle = {};
+  const body = rows.map((r, ri) => cols.map((c, ci) => {
+    let text = '', color = null;
+    if (c.type === 'player') text = r.joueur;
+    else if (c.type === 'poste') text = posteOfPlayer(r);
+    else if (c.type === 'volume') { const v = getVolumeScore(r.joueur, r); text = v !== null ? v + '%' : '—'; color = v !== null ? cssRgb(scoreColor(v)) : RGB.dim; }
+    else if (c.type === 'intensity') { const v = getIntensityScore(r.joueur, r); text = v !== null ? v + '%' : '—'; color = v !== null ? cssRgb(scoreColor(v)) : RGB.dim; }
+    else if (c.type === 'metric') { const v = gpsDisplayVal(r, c.m); text = v > 0 ? (c.m.dec === 0 ? String(Math.round(v)) : v.toFixed(c.m.dec)) : '·'; }
+    else if (c.type === 'best') { const ratio = getBestMatchRatio(r.joueur, c.m.key, r); text = ratio !== null ? ratioLabel(ratio) : '—'; color = ratio !== null ? cssRgb(ratioColor(ratio)) : RGB.dim; }
+    else if (c.type === 'ratio') {
+      const target = getWorkRatioTarget(gpsSessionRatioWeek, gpsSessionRatioDay, c.wm.key);
+      const actual = getWorkRatioActual(r.joueur, c.wm.key, r);
+      const st = workRatioStatus(actual, target);
+      const aPct = actual !== null ? Math.round(actual * 100) + '%' : '—';
+      const tPct = target !== null ? Math.round(target * 100) + '%' : '—';
+      text = aPct + (st.label && st.label !== '—' && st.label !== 'OK' ? ' ' + st.label : '') + (target !== null ? '\ncible ' + tPct : '');
+      color = cssRgb(st.color);
+    }
+    if (color) cellStyle[ri + '_' + ci] = color;
+    return text;
+  }));
+
+  // Police plus compacte quand beaucoup de colonnes (mode "Les deux")
+  const bodyFont = cols.length > 20 ? 6 : (cols.length > 14 ? 6.8 : 7.5);
+
+  doc.autoTable({
+    head, body, startY: 90,
+    styles: { fontSize: bodyFont, halign: 'center', cellPadding: 2.5, overflow: 'linebreak', valign: 'middle' },
+    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontSize: Math.max(5.5, bodyFont - 1), valign: 'middle' },
+    columnStyles: { 0: { halign: 'left', fontStyle: 'bold' }, 1: { halign: 'left' } },
+    margin: { left: margin, right: margin },
+    didParseCell: function (d) {
+      const c = cols[d.column.index];
+      if (!c) return;
+      if (d.section === 'head') {
+        if (c.type === 'volume') { d.cell.styles.fillColor = RGB.volHead; d.cell.styles.textColor = RGB.volText; }
+        else if (c.type === 'intensity') { d.cell.styles.fillColor = RGB.intHead; d.cell.styles.textColor = RGB.intText; }
+        else if (c.type === 'best') { d.cell.styles.textColor = RGB.bestText; }
+        else if (c.type === 'ratio') { d.cell.styles.fillColor = RGB.ratioHead; d.cell.styles.textColor = RGB.ratioText; }
+      } else if (d.section === 'body') {
+        const col = cellStyle[d.row.index + '_' + d.column.index];
+        if (col) { d.cell.styles.textColor = col; d.cell.styles.fontStyle = 'bold'; }
+      }
+    }
+  });
+
+  // Graphiques (canvas déjà rendus à l'écran) — sur fond sombre pour garder les légendes lisibles
+  let y = doc.lastAutoTable.finalY + 22;
+  const chartDefs = [
+    { id: 'gps-session-metric', title: 'Comparaison par joueur' },
+    { id: 'gps-session-zones', title: 'Distance par zone de vitesse' },
+    { id: 'gps-session-ie', title: 'Charge interne vs externe' }
+  ];
+  chartDefs.forEach(cd => {
+    const cv = document.getElementById(cd.id);
+    if (!cv || !cv.width || !cv.height) return;
+    const imgW = pageW - margin * 2;
+    const imgH = Math.min(imgW * (cv.height / cv.width), pageH - margin * 2 - 24);
+    if (y + imgH + 24 > pageH - margin) { doc.addPage(); y = margin; }
+    doc.setFontSize(11); doc.setTextColor(20);
+    doc.text(cd.title, margin, y);
+    y += 10;
+    doc.setFillColor(15, 23, 42);
+    doc.roundedRect(margin - 6, y - 6, imgW + 12, imgH + 12, 4, 4, 'F');
+    try { doc.addImage(cv.toDataURL('image/png', 1.0), 'PNG', margin, y, imgW, imgH); } catch (e) {}
+    y += imgH + 26;
+  });
+
+  const safeTitle = (titles[0] || 'seance').replace(/[^\w\-]+/g, '_').slice(0, 40);
+  doc.save('rapport-seance-' + currentOrg + '-' + date + '-' + safeTitle + '.pdf');
 }
 
 // ===== RAPPORT HEBDO ÉQUIPE =====
