@@ -2943,9 +2943,31 @@
           </div>
         </div>
       </div>
+
+      <!-- Barre d'actions groupées (visible quand des lignes sont cochées) -->
+      <div id="tr-bulk-bar" style="display:none; flex-wrap:wrap; align-items:center; gap:10px; margin-top:12px; padding:10px 12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px;">
+        <span style="font-size:13px; font-weight:600;"><span id="tr-bulk-count">0</span> ligne(s) sélectionnée(s)</span>
+        <span style="width:1px; height:20px; background:var(--border);"></span>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="date" id="tr-bulk-date" style="padding:5px 8px; font-size:12px;" />
+          <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="bulkEditTestResults('date')">📅 Appliquer la date</button>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="text" id="tr-bulk-val" placeholder="Valeur (mm:ss si temps)" style="padding:5px 8px; font-size:12px; width:150px;" />
+          <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="bulkEditTestResults('valeur')">🔢 Appliquer la valeur</button>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="text" id="tr-bulk-notes" placeholder="Notes" style="padding:5px 8px; font-size:12px; width:150px;" />
+          <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="bulkEditTestResults('notes')">📝 Appliquer les notes</button>
+        </div>
+        <span style="flex:1;"></span>
+        <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px; color:#f87171;" onclick="bulkDeleteTestResults()">🗑 Supprimer</button>
+        <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="clearTestSelection()">Désélectionner</button>
+      </div>
+
       <div class="table-wrap" style="max-height:500px; margin-top:12px;">
         <table id="test-results-table">
-          <thead><tr><th>Date</th><th>Test</th><th>Catégorie</th><th>Joueur</th><th>Valeur</th><th>Notes</th><th>Actions</th></tr></thead>
+          <thead><tr><th style="width:34px; text-align:center;"><input type="checkbox" id="tr-select-all" onclick="toggleSelectAllTestResults(this)" title="Tout sélectionner" /></th><th>Date</th><th>Test</th><th>Catégorie</th><th>Joueur</th><th>Valeur</th><th>Notes</th><th>Actions</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -20732,32 +20754,197 @@ function renderTestTypesList() {
   }).join('') + '</div>';
 }
 
-function renderTestResults() {
-  const tbody = document.querySelector('#test-results-table tbody');
-  if (!tbody) return;
+// Sélection multiple + ligne en cours d'édition (résultats de tests)
+let trSelected = new Set();
+let trEditingId = null;
+
+// Lignes visibles après application des filtres courants (sans tri)
+function getVisibleTestResultRows() {
   const fType = (document.getElementById('tr-filter-type') || {}).value || '';
   const fJoueur = (document.getElementById('tr-filter-joueur') || {}).value || '';
   let rows = (state.bdd_test_results || []).slice();
   if (fType) rows = rows.filter(r => r.test_type_id === fType);
   if (fJoueur) rows = rows.filter(r => r.joueur === fJoueur);
+  return rows;
+}
+
+function renderTestResults() {
+  const tbody = document.querySelector('#test-results-table tbody');
+  if (!tbody) return;
+  let rows = getVisibleTestResultRows();
   rows.sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.created_at || '').localeCompare(a.created_at || ''));
-  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-dim); padding:20px;">Aucun résultat pour ces filtres.</td></tr>'; return; }
+
+  // Purger la sélection des lignes qui ne sont plus visibles
+  const visibleIds = new Set(rows.map(r => r.id));
+  [...trSelected].forEach(id => { if (!visibleIds.has(id)) trSelected.delete(id); });
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-dim); padding:20px;">Aucun résultat pour ces filtres.</td></tr>';
+    const selAll = document.getElementById('tr-select-all'); if (selAll) selAll.checked = false;
+    updateTestBulkBar();
+    return;
+  }
   tbody.innerHTML = rows.map(r => {
     const t = testTypeById(r.test_type_id);
     const nom = t ? t.nom : '—';
     const cat = t && t.categorie ? t.categorie : '—';
     const unite = t && t.unite ? t.unite : '';
+    const cb = '<td style="text-align:center;"><input type="checkbox" onclick="toggleTestResultSelection(\'' + r.id + '\', this)"' + (trSelected.has(r.id) ? ' checked' : '') + ' /></td>';
+
+    if (r.id === trEditingId) {
+      // Ligne en édition inline
+      const valEdit = isTimeTest(unite) ? formatTimeValue(r.valeur) : (r.valeur != null ? r.valeur : '');
+      return '<tr style="background:rgba(0,163,255,0.06);">' + cb +
+        '<td><input type="date" id="tr-edit-date" value="' + escapeHtml(r.date || '') + '" style="padding:4px 6px; font-size:12px;" /></td>' +
+        '<td><b>' + escapeHtml(nom) + '</b></td>' +
+        '<td>' + escapeHtml(cat) + '</td>' +
+        '<td>' + escapeHtml(r.joueur) + '</td>' +
+        '<td><input type="text" id="tr-edit-val" value="' + escapeHtml(String(valEdit)) + '" placeholder="' + (isTimeTest(unite) ? 'mm:ss' : '0') + '" style="padding:4px 6px; font-size:12px; width:90px;" /></td>' +
+        '<td><input type="text" id="tr-edit-notes" value="' + escapeHtml(r.notes || '') + '" placeholder="Notes" style="padding:4px 6px; font-size:12px; width:130px;" /></td>' +
+        '<td style="white-space:nowrap;">' +
+          '<button class="btn" style="padding:2px 8px; font-size:11px;" onclick="saveTestRowEdit(\'' + r.id + '\')">💾</button> ' +
+          '<button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="cancelTestRowEdit()">✕</button>' +
+        '</td></tr>';
+    }
+
     const val = formatTestValue(r.valeur, unite);
-    return '<tr>' +
+    return '<tr>' + cb +
       '<td>' + formatDateFR(r.date) + '</td>' +
       '<td><b>' + escapeHtml(nom) + '</b></td>' +
       '<td>' + escapeHtml(cat) + '</td>' +
       '<td>' + escapeHtml(r.joueur) + '</td>' +
       '<td><b style="color:var(--accent-light);">' + escapeHtml(String(val)) + '</b></td>' +
       '<td>' + (r.notes ? escapeHtml(r.notes) : '<span style="color:var(--text-dim);">—</span>') + '</td>' +
-      '<td><button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#f87171;" onclick="deleteTestResult(\'' + r.id + '\')">🗑</button></td>' +
-      '</tr>';
+      '<td style="white-space:nowrap;">' +
+        '<button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="startEditTestRow(\'' + r.id + '\')" title="Modifier">✏️</button> ' +
+        '<button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#f87171;" onclick="deleteTestResult(\'' + r.id + '\')">🗑</button>' +
+      '</td></tr>';
   }).join('');
+
+  const selAll = document.getElementById('tr-select-all');
+  if (selAll) selAll.checked = rows.every(r => trSelected.has(r.id));
+  updateTestBulkBar();
+}
+
+function updateTestBulkBar() {
+  const bar = document.getElementById('tr-bulk-bar');
+  const cnt = document.getElementById('tr-bulk-count');
+  if (cnt) cnt.textContent = trSelected.size;
+  if (bar) bar.style.display = trSelected.size > 0 ? 'flex' : 'none';
+}
+
+function toggleTestResultSelection(id, el) {
+  if (el && el.checked) trSelected.add(id); else trSelected.delete(id);
+  const rows = getVisibleTestResultRows();
+  const selAll = document.getElementById('tr-select-all');
+  if (selAll) selAll.checked = rows.length > 0 && rows.every(r => trSelected.has(r.id));
+  updateTestBulkBar();
+}
+
+function toggleSelectAllTestResults(el) {
+  const rows = getVisibleTestResultRows();
+  if (el && el.checked) rows.forEach(r => trSelected.add(r.id));
+  else rows.forEach(r => trSelected.delete(r.id));
+  renderTestResults();
+}
+
+function clearTestSelection() { trSelected.clear(); renderTestResults(); }
+
+// ---- Édition d'une ligne -----------------------------------------------------
+function startEditTestRow(id) { trEditingId = id; renderTestResults(); }
+function cancelTestRowEdit() { trEditingId = null; renderTestResults(); }
+
+async function saveTestRowEdit(id) {
+  const r = (state.bdd_test_results || []).find(x => x.id === id);
+  if (!r) return;
+  const t = testTypeById(r.test_type_id);
+  const unite = t ? t.unite : '';
+  const date = (document.getElementById('tr-edit-date') || {}).value || '';
+  const valRaw = ((document.getElementById('tr-edit-val') || {}).value || '').trim();
+  const notes = ((document.getElementById('tr-edit-notes') || {}).value || '').trim() || null;
+  if (!date) { toast('Choisis une date', 'error'); return; }
+  if (valRaw === '') { toast('Saisis une valeur', 'error'); return; }
+  let valeur;
+  if (isTimeTest(unite)) {
+    valeur = parseTimeValue(valRaw);
+    if (valeur === null) { toast('Temps invalide — format mm:ss (ex : 3:45)', 'error'); return; }
+  } else {
+    valeur = parseFloat(valRaw.replace(',', '.'));
+    if (isNaN(valeur)) { toast('Valeur numérique invalide', 'error'); return; }
+  }
+  const patch = { date, valeur, notes };
+  const { error } = await sb.from('test_results').update(patch).eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  Object.assign(r, patch);
+  trEditingId = null;
+  renderTestResults();
+  toast('Ligne modifiée ✓', 'success');
+}
+
+// ---- Actions groupées --------------------------------------------------------
+async function bulkEditTestResults(field) {
+  const ids = [...trSelected];
+  if (!ids.length) { toast('Aucune ligne sélectionnée', 'error'); return; }
+  const rowsById = {};
+  (state.bdd_test_results || []).forEach(r => { if (trSelected.has(r.id)) rowsById[r.id] = r; });
+
+  if (field === 'date') {
+    const date = (document.getElementById('tr-bulk-date') || {}).value || '';
+    if (!date) { toast('Choisis une date dans la barre', 'error'); return; }
+    if (!confirm('Appliquer la date ' + formatDateFR(date) + ' à ' + ids.length + ' ligne(s) ?')) return;
+    const { error } = await sb.from('test_results').update({ date }).in('id', ids);
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+    ids.forEach(id => { if (rowsById[id]) rowsById[id].date = date; });
+    toast(ids.length + ' ligne(s) mise(s) à jour ✓', 'success');
+
+  } else if (field === 'notes') {
+    const notes = ((document.getElementById('tr-bulk-notes') || {}).value || '').trim() || null;
+    if (!confirm('Appliquer ces notes à ' + ids.length + ' ligne(s) ?')) return;
+    const { error } = await sb.from('test_results').update({ notes }).in('id', ids);
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+    ids.forEach(id => { if (rowsById[id]) rowsById[id].notes = notes; });
+    toast(ids.length + ' ligne(s) mise(s) à jour ✓', 'success');
+
+  } else if (field === 'valeur') {
+    const raw = ((document.getElementById('tr-bulk-val') || {}).value || '').trim();
+    if (raw === '') { toast('Saisis une valeur dans la barre', 'error'); return; }
+    // Parse par ligne selon l'unité du test (temps => mm:ss)
+    const updates = [];
+    let invalid = 0;
+    ids.forEach(id => {
+      const r = rowsById[id]; if (!r) return;
+      const t = testTypeById(r.test_type_id);
+      const unite = t ? t.unite : '';
+      const v = isTimeTest(unite) ? parseTimeValue(raw) : parseFloat(raw.replace(',', '.'));
+      if (v === null || isNaN(v)) { invalid++; return; }
+      updates.push({ id, valeur: v });
+    });
+    if (!updates.length) { toast('Valeur incompatible avec les tests sélectionnés', 'error'); return; }
+    if (!confirm('Appliquer la valeur « ' + raw + ' » à ' + updates.length + ' ligne(s)' + (invalid ? ' (' + invalid + ' ignorée(s) : format incompatible)' : '') + ' ?')) return;
+    // Grouper par valeur pour limiter les requêtes
+    const byVal = {};
+    updates.forEach(u => { (byVal[u.valeur] = byVal[u.valeur] || []).push(u.id); });
+    for (const v of Object.keys(byVal)) {
+      const { error } = await sb.from('test_results').update({ valeur: Number(v) }).in('id', byVal[v]);
+      if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+      byVal[v].forEach(id => { if (rowsById[id]) rowsById[id].valeur = Number(v); });
+    }
+    toast(updates.length + ' ligne(s) mise(s) à jour ✓', 'success');
+  }
+  renderTestResults();
+}
+
+async function bulkDeleteTestResults() {
+  const ids = [...trSelected];
+  if (!ids.length) { toast('Aucune ligne sélectionnée', 'error'); return; }
+  if (!confirm('Supprimer ' + ids.length + ' résultat(s) ? Action irréversible.')) return;
+  const { error } = await sb.from('test_results').delete().in('id', ids);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  state.bdd_test_results = state.bdd_test_results.filter(r => !trSelected.has(r.id));
+  trSelected.clear();
+  renderTestResults();
+  renderTestTypesList();
+  toast(ids.length + ' résultat(s) supprimé(s)', 'success');
 }
 
 async function createTestType() {
