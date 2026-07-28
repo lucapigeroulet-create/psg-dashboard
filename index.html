@@ -782,6 +782,7 @@
   <button class="nav-btn player-only" data-view="player-rpe" style="display:none;" data-en="⭐ Rate sessions" data-fr="⭐ Noter les séances">⭐ Rate sessions</button>
   <button class="nav-btn player-only" data-view="player-history" style="display:none;" data-en="📊 My ratings" data-fr="📊 Mes notes">📊 My ratings</button>
   <button class="nav-btn player-only" data-view="player-hooper" style="display:none;" data-en="💚 Daily check-in" data-fr="💚 État de forme">💚 Daily check-in</button>
+  <button class="nav-btn player-only" data-view="player-gps" style="display:none;" data-en="📡 My GPS data" data-fr="📡 Mes données GPS">📡 Mes données GPS</button>
   <button class="nav-btn player-only" data-view="competition" style="display:none;" data-en="🏆 Competition" data-fr="🏆 Compétition">🏆 Compétition</button>
   <button class="nav-btn player-only" data-view="minijeux" style="display:none;" data-en="🎮 Mini-games" data-fr="🎮 Mini-jeux">🎮 Mini-jeux</button>
   <button class="nav-btn player-only" data-view="messages" style="display:none;" data-en="📣 Messages" data-fr="📣 Messages">📣 Messages</button>
@@ -3051,6 +3052,27 @@
         </div>
       </div>
     </div><!-- /testing-viz -->
+  </div>
+
+
+  <!-- ========== ESPACE JOUEUR — MES DONNÉES GPS (lecteur) ========== -->
+  <div class="view" id="view-player-gps">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:6px;">
+        <h2 style="margin:0;" data-en="📡 My GPS data" data-fr="📡 Mes données GPS">📡 Mes données GPS</h2>
+        <div class="filters" style="margin:0;">
+          <div class="filter-group">
+            <label data-en="Player" data-fr="Joueur">Joueur</label>
+            <select id="pgps-joueur" onchange="renderPlayerGPS()"></select>
+          </div>
+          <div class="filter-group">
+            <label data-en="Session" data-fr="Séance">Séance</label>
+            <select id="pgps-seance" onchange="renderPlayerGPS()"></select>
+          </div>
+        </div>
+      </div>
+      <div id="pgps-content"></div>
+    </div>
   </div>
 
 
@@ -6653,6 +6675,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'player-history') renderPlayerHistory();
     else if (view === 'player-hooper') renderPlayerHooper();
     else if (view === 'player-overview') renderPlayerOverview();
+    else if (view === 'player-gps') renderPlayerGPS();
     else if (view === 'staff-hooper') renderStaffHooper();
     else if (view === 'messages') renderMessages();
     else if (view === 'player-seances') renderPlayerSeances();
@@ -20702,6 +20725,147 @@ function renderMedicalNotes() {
 // ============================================================================
 // TESTING — catalogue de tests configurables + saisie de résultats (staff/admin)
 // ============================================================================
+// ============================================================================
+// ESPACE JOUEUR — MES DONNÉES GPS (vue individuelle simplifiée pour les lecteurs)
+// ============================================================================
+function pgpsInt(v) { return Math.round(Number(v) || 0).toLocaleString(playerLang() === 'fr' ? 'fr-FR' : 'en-US'); }
+
+// Résumé GPS agrégé d'un ensemble de lignes (une séance = somme des lignes, Vmax = max)
+function aggPlayerGps(rows) {
+  if (!rows || !rows.length) return null;
+  const sum = k => rows.reduce((s, r) => s + gpsVal(r, k), 0);
+  const duree = sum('duree_min');
+  const distance = sum('distance_km') * 1000; // km -> m
+  return {
+    duree: duree,
+    distance: distance,
+    dpm: duree > 0 ? distance / duree : 0,
+    hsr: sum('hsr'),
+    sprint: sum('sprint_dist_m'),
+    vmax: Math.max.apply(null, rows.map(r => gpsVal(r, 'top_speed')).concat([0])),
+    decel: sum('decel_count_high'),
+    power: sum('power_plays'),
+    load: sum('player_load')
+  };
+}
+
+// Pour une séance : privilégier la ligne "séance entière" (split_name = all/vide), sinon toutes
+function pgpsWholeRows(rows) {
+  const whole = rows.filter(r => { const s = String(r.split_name || 'all').toLowerCase(); return s === 'all' || s === ''; });
+  return whole.length ? whole : rows;
+}
+
+function playerGpsCards() {
+  return [
+    { key: 'duree', icon: '⏱️', label: tr('Duration', 'Durée'), fmt: v => Math.round(v) + ' min' },
+    { key: 'distance', icon: '📏', label: tr('Total distance', 'Distance totale'), fmt: v => pgpsInt(v) + ' m' },
+    { key: 'dpm', icon: '📐', label: tr('Metres per minute', 'Mètres par minute'), fmt: v => (Number(v) || 0).toFixed(1) + ' m/min' },
+    { key: 'hsr', icon: '🏃', label: 'HSR', sub: '(> 15 km/h)', fmt: v => pgpsInt(v) + ' m' },
+    { key: 'sprint', icon: '⚡', label: 'Sprint', sub: '(> 20 km/h)', fmt: v => pgpsInt(v) + ' m' },
+    { key: 'vmax', icon: '🚀', label: tr('Top speed', 'Vitesse maximale'), fmt: v => (Number(v) || 0).toFixed(1) + ' km/h' },
+    { key: 'decel', icon: '🛑', label: tr('Hard decelerations', 'Décélérations fortes'), sub: '(> 4 m/s²)', fmt: v => pgpsInt(v) },
+    { key: 'power', icon: '💥', label: 'Power plays', sub: tr('(intense actions)', '(actions intensives)'), fmt: v => pgpsInt(v) },
+    { key: 'load', icon: '📊', label: 'Player load', sub: tr('(GPS load)', '(charge GPS)'), fmt: v => pgpsInt(v) }
+  ];
+}
+
+function renderPlayerGPS() {
+  const jsel = document.getElementById('pgps-joueur');
+  const ssel = document.getElementById('pgps-seance');
+  const content = document.getElementById('pgps-content');
+  if (!content) return;
+
+  // Joueurs disponibles (pour un lecteur, la RLS ne renvoie que ses propres lignes)
+  let jList = uniqueSorted((state.bdd_gps || []).map(r => r.joueur).filter(Boolean));
+  if (currentRole === 'lecteur' && currentJoueurNom && !jList.length) jList = [currentJoueurNom];
+  if (jsel) {
+    const prev = jsel.value || (currentRole === 'lecteur' ? (currentJoueurNom || '') : '');
+    jsel.innerHTML = jList.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+    if (prev && jList.indexOf(prev) >= 0) jsel.value = prev;
+  }
+  const joueur = jsel ? jsel.value : (currentJoueurNom || '');
+
+  const mine = (state.bdd_gps || []).filter(r => r.joueur === joueur);
+
+  // Sélecteur de séance (dates + titres), récentes d'abord
+  const sessions = [];
+  const seen = {};
+  mine.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).forEach(r => {
+    const title = r.seance || r.session_title || '';
+    const key = r.date + '||' + title;
+    if (!seen[key]) { seen[key] = true; sessions.push({ key: key, date: r.date, title: title }); }
+  });
+  if (ssel) {
+    const prev = ssel.value;
+    let opts = '<option value="__ALL__">' + tr('Season average (all sessions)', 'Moyenne saison (toutes les séances)') + '</option>';
+    opts += sessions.map(s => '<option value="' + escapeHtml(s.key) + '">' + formatDateFR(s.date) + (s.title ? ' · ' + escapeHtml(s.title) : '') + '</option>').join('');
+    ssel.innerHTML = opts;
+    if (prev && (prev === '__ALL__' || sessions.some(s => s.key === prev))) ssel.value = prev;
+  }
+  const sel = ssel ? ssel.value : '__ALL__';
+
+  if (!mine.length) {
+    content.innerHTML = '<div style="padding:30px; text-align:center; color:var(--text-dim);">' + tr('No GPS data available yet.', 'Aucune donnée GPS disponible pour le moment.') + '</div>';
+    return;
+  }
+
+  // Résumé selon la sélection
+  let summary, contextLabel;
+  if (sel === '__ALL__') {
+    const groups = {};
+    mine.forEach(r => { const t = r.seance || r.session_title || ''; const k = r.date + '||' + t; (groups[k] = groups[k] || []).push(r); });
+    const perSession = Object.keys(groups).map(k => aggPlayerGps(pgpsWholeRows(groups[k]))).filter(Boolean);
+    const avg = k => perSession.reduce((s, x) => s + x[k], 0) / (perSession.length || 1);
+    summary = { duree: avg('duree'), distance: avg('distance'), dpm: avg('dpm'), hsr: avg('hsr'), sprint: avg('sprint'), vmax: avg('vmax'), decel: avg('decel'), power: avg('power'), load: avg('load') };
+    contextLabel = tr('Average of ', 'Moyenne de ') + perSession.length + tr(' session(s)', ' séance(s)');
+  } else {
+    const sepIdx = sel.indexOf('||');
+    const d = sepIdx >= 0 ? sel.slice(0, sepIdx) : sel;
+    const title = sepIdx >= 0 ? sel.slice(sepIdx + 2) : '';
+    const rows = mine.filter(r => r.date === d && (r.seance || r.session_title || '') === title);
+    summary = aggPlayerGps(pgpsWholeRows(rows));
+    contextLabel = formatDateFR(d) + (title ? ' · ' + title : '');
+  }
+
+  // En-tête joueur
+  const info = getJoueurInfo(joueur);
+  const grp = (info.groupe && info.groupe !== '?') ? info.groupe : '';
+  const poste = (info.poste && info.poste !== '?') ? info.poste : '';
+  let html = '<div style="display:flex; align-items:center; gap:12px; margin:6px 0 18px;">';
+  html += '<div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#0a3d91,#00a3ff);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:18px;">' + escapeHtml((joueur || '?').slice(0, 1).toUpperCase()) + '</div>';
+  html += '<div><div style="font-size:18px;font-weight:800;">' + escapeHtml(joueur || '') + '</div>';
+  html += '<div style="font-size:12px;color:var(--text-dim);">' + escapeHtml([grp, poste].filter(Boolean).join(' · ')) + (grp || poste ? ' — ' : '') + escapeHtml(contextLabel) + '</div></div></div>';
+
+  // Grille de cartes
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">';
+  playerGpsCards().forEach(c => {
+    const v = summary ? summary[c.key] : 0;
+    html += '<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">'
+      + '<div style="font-size:20px;line-height:1;">' + c.icon + '</div>'
+      + '<div style="font-size:24px;font-weight:800;margin:8px 0 2px;color:var(--accent-light);">' + (summary ? c.fmt(v) : '—') + '</div>'
+      + '<div style="font-size:12px;font-weight:600;">' + escapeHtml(c.label) + '</div>'
+      + (c.sub ? '<div style="font-size:11px;color:var(--text-dim);">' + escapeHtml(c.sub) + '</div>' : '')
+      + '</div>';
+  });
+  html += '</div>';
+
+  // Notes de bas de page (explications des données entre parenthèses)
+  const defs = [
+    ['HSR', tr('distance covered above 15 km/h.', 'distance parcourue à plus de 15 km/h.')],
+    ['Sprint', tr('distance covered above 20 km/h.', 'distance parcourue à plus de 20 km/h.')],
+    [tr('Metres per minute', 'Mètres par minute'), tr('intensity = total distance ÷ duration.', 'intensité = distance totale ÷ durée.')],
+    [tr('Hard decelerations', 'Décélérations fortes'), tr('braking harder than 4 m/s².', 'freinages de plus de 4 m/s².')],
+    ['Power plays', tr('number of intense actions (repeated accelerations/decelerations).', "nombre d'actions intensives (accélérations/décélérations enchaînées).")],
+    ['Player load', tr('overall GPS training load.', "charge globale de l'entraînement mesurée par le GPS.")]
+  ];
+  html += '<div style="margin-top:22px;padding-top:14px;border-top:1px solid var(--border);font-size:11px;color:var(--text-dim);line-height:1.8;">';
+  html += '<b>' + tr('Definitions', 'Définitions') + ' :</b><br>';
+  html += defs.map(d => '• <b>' + escapeHtml(d[0]) + '</b> : ' + escapeHtml(d[1])).join('<br>');
+  html += '</div>';
+
+  content.innerHTML = html;
+}
+
 function renderTesting() {
   const dateEl = document.getElementById('tr-date');
   if (dateEl && !dateEl.value) dateEl.value = toLocalISO(new Date());
