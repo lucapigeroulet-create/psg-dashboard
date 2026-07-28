@@ -4944,9 +4944,25 @@ async function disablePushNotifications() {
 }
 
 // Affiche l'état des notifications (banner) dans la vue Messages, joueur uniquement
+// Compte démo (tutoriel) : reconnaît le joueur fictif pour afficher des éléments illustratifs
+function isDemoPushAccount() {
+  const email = (typeof currentUser !== 'undefined' && currentUser && currentUser.email) ? String(currentUser.email).toLowerCase() : '';
+  return email === 'demo@tegg.fr' || currentJoueurNom === 'Démo';
+}
+function demoPushHint() {
+  toast(tr('Demo mode — illustrative button', "Mode démo — bouton d'illustration"), 'info');
+}
+
 async function renderPushBanner() {
   const el = document.getElementById('push-banner');
   if (!el) return;
+  // Compte démo : afficher le bouton "Activer" à titre illustratif (non fonctionnel) pour les tutos
+  if (isDemoPushAccount()) {
+    el.innerHTML = '<div class="card" style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">' +
+      '<div style="font-size:13px;">🔕 ' + tr('Get reminders directly on your phone', 'Reçois les rappels directement sur ton téléphone') + '</div>' +
+      '<button class="btn" style="padding:4px 12px; font-size:12px;" onclick="demoPushHint()">🔔 ' + tr('Enable', 'Activer') + '</button></div>';
+    return;
+  }
   const status = pushEnvironmentStatus();
   if (status === 'ios-needs-install') {
     el.innerHTML = '<div class="card" style="border:1px solid var(--orange); margin-bottom:12px;">' +
