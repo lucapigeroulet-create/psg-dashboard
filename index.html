@@ -3058,17 +3058,19 @@
   <!-- ========== ESPACE JOUEUR — MES DONNÉES GPS (lecteur) ========== -->
   <div class="view" id="view-player-gps">
     <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:6px;">
-        <h2 style="margin:0;" data-en="📡 My GPS data" data-fr="📡 Mes données GPS">📡 Mes données GPS</h2>
-        <div class="filters" style="margin:0;">
-          <div class="filter-group">
-            <label data-en="Player" data-fr="Joueur">Joueur</label>
-            <select id="pgps-joueur" onchange="renderPlayerGPS()"></select>
-          </div>
-          <div class="filter-group">
-            <label data-en="Session" data-fr="Séance">Séance</label>
-            <select id="pgps-seance" onchange="renderPlayerGPS()"></select>
-          </div>
+      <h2 style="margin:0 0 12px;" data-en="📡 My GPS data" data-fr="📡 Mes données GPS">📡 Mes données GPS</h2>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+        <div style="flex:1 1 120px; min-width:0;">
+          <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Category" data-fr="Catégorie">Catégorie</label>
+          <select id="pgps-cat" onchange="renderPlayerGPS()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px 10px; font-size:14px;"></select>
+        </div>
+        <div id="pgps-joueur-group" style="flex:1 1 120px; min-width:0;">
+          <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Player" data-fr="Joueur">Joueur</label>
+          <select id="pgps-joueur" onchange="renderPlayerGPS()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px 10px; font-size:14px;"></select>
+        </div>
+        <div style="flex:2 1 200px; min-width:0;">
+          <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Session" data-fr="Séance">Séance</label>
+          <select id="pgps-seance" onchange="renderPlayerGPS()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px 10px; font-size:14px;"></select>
         </div>
       </div>
       <div id="pgps-content"></div>
@@ -20788,8 +20790,21 @@ function playerGpsCards() {
 function renderPlayerGPS() {
   const jsel = document.getElementById('pgps-joueur');
   const ssel = document.getElementById('pgps-seance');
+  const csel = document.getElementById('pgps-cat');
   const content = document.getElementById('pgps-content');
   if (!content) return;
+
+  // Filtre catégorie (Toutes / Séance / Match / Individuelle)
+  if (csel) {
+    const prevC = csel.value || 'all';
+    csel.innerHTML =
+      '<option value="all">' + tr('All', 'Toutes') + '</option>' +
+      '<option value="seance">' + tr('Training', 'Séance') + '</option>' +
+      '<option value="match">' + tr('Match', 'Match') + '</option>' +
+      '<option value="individuel">' + tr('Individual', 'Individuelle') + '</option>';
+    csel.value = prevC;
+  }
+  const cat = csel ? csel.value : 'all';
 
   // Joueurs disponibles (pour un lecteur, la RLS ne renvoie que ses propres lignes)
   let jList = uniqueSorted((state.bdd_gps || []).map(r => r.joueur).filter(Boolean));
@@ -20799,9 +20814,14 @@ function renderPlayerGPS() {
     jsel.innerHTML = jList.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
     if (prev && jList.indexOf(prev) >= 0) jsel.value = prev;
   }
+  // Masquer le sélecteur "Joueur" quand il n'y en a qu'un (cas lecteur) — gain de place sur mobile
+  const jGroup = document.getElementById('pgps-joueur-group');
+  if (jGroup) jGroup.style.display = (jList.length <= 1) ? 'none' : '';
   const joueur = jsel ? jsel.value : (currentJoueurNom || '');
 
-  const mine = (state.bdd_gps || []).filter(r => r.joueur === joueur);
+  // Lignes du joueur, filtrées par catégorie
+  let mine = (state.bdd_gps || []).filter(r => r.joueur === joueur);
+  if (cat !== 'all') mine = mine.filter(r => gpsCategorie(r) === cat);
 
   // Sélecteur de séance (dates + titres), récentes d'abord
   const sessions = [];
@@ -20813,15 +20833,17 @@ function renderPlayerGPS() {
   });
   if (ssel) {
     const prev = ssel.value;
-    let opts = '<option value="__ALL__">' + tr('Season average (all sessions)', 'Moyenne saison (toutes les séances)') + '</option>';
+    let opts = '<option value="__ALL__">' + tr('Average (all)', 'Moyenne (toutes)') + '</option>';
     opts += sessions.map(s => '<option value="' + escapeHtml(s.key) + '">' + formatDateFR(s.date) + (s.title ? ' · ' + escapeHtml(s.title) : '') + '</option>').join('');
     ssel.innerHTML = opts;
+    // Par défaut : la séance la plus récente. On ne conserve l'ancien choix que s'il est encore valide.
     if (prev && (prev === '__ALL__' || sessions.some(s => s.key === prev))) ssel.value = prev;
+    else ssel.value = sessions.length ? sessions[0].key : '__ALL__';
   }
   const sel = ssel ? ssel.value : '__ALL__';
 
   if (!mine.length) {
-    content.innerHTML = '<div style="padding:30px; text-align:center; color:var(--text-dim);">' + tr('No GPS data available yet.', 'Aucune donnée GPS disponible pour le moment.') + '</div>';
+    content.innerHTML = '<div style="padding:30px; text-align:center; color:var(--text-dim);">' + tr('No GPS data for this filter.', 'Aucune donnée GPS pour ce filtre.') + '</div>';
     return;
   }
 
