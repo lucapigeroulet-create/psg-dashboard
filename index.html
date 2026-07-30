@@ -6074,12 +6074,17 @@ function handleRealtimeChange(table, payload) {
       else state.bdd_rpe.push(obj);
     }
   } else if (table === 'joueurs') {
+    if (newRow && newRow.org && newRow.org !== currentOrg) return;
     if (eventType === 'DELETE') {
       state.joueurs = state.joueurs.filter(j => j.nom !== oldRow.nom);
+      state.joueurs_archived = (state.joueurs_archived || []).filter(j => j.nom !== oldRow.nom);
     } else {
-      const idx = state.joueurs.findIndex(j => j.nom === newRow.nom);
-      const obj = { nom: newRow.nom, groupe: newRow.groupe, poste: newRow.poste, numero: newRow.numero, photo: newRow.photo || null };
-      if (idx >= 0) state.joueurs[idx] = obj;
+      const obj = { nom: newRow.nom, groupe: newRow.groupe, poste: newRow.poste, numero: newRow.numero, photo: newRow.photo || null, archived: !!newRow.archived };
+      // On retire l'ancienne occurrence des deux listes, puis on reclasse selon `archived`
+      // (sinon un joueur archivé via l'écho realtime réapparaît dans l'effectif actif)
+      state.joueurs = state.joueurs.filter(j => j.nom !== obj.nom);
+      state.joueurs_archived = (state.joueurs_archived || []).filter(j => j.nom !== obj.nom);
+      if (obj.archived) state.joueurs_archived.push(obj);
       else state.joueurs.push(obj);
     }
   } else if (table === 'groupes') {
