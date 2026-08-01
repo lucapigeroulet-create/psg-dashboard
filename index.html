@@ -11931,11 +11931,36 @@ function exportGPSSessionPDF() {
 
   // Légende sous le tableau (façon notes de la web app)
   let ly = doc.lastAutoTable.finalY + 14;
-  if (ly > pageH - 60) { doc.addPage(); ly = 58; }
+  const ensureSpace = (need) => { if (ly + need > pageH - 34) { doc.addPage(); ly = 58; } };
+  ensureSpace(34);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor.apply(doc, P.dim);
-  doc.text('Longueur de la barre de chaque métrique proportionnelle à la valeur du joueur (barre la plus longue = valeur la plus haute de la colonne).', margin, ly);
-  if (showBestPct) doc.text('Vol / Int / % Best : vert = proche du meilleur match, orange = écart, rouge = loin.', margin, ly + 11);
-  if (showRatio) doc.text('% ratio : valeur réelle ÷ meilleur match, comparée à la cible ' + gpsSessionRatioWeek + ' · ' + gpsSessionRatioDay + '.', margin, ly + (showBestPct ? 22 : 11));
+  doc.text('Longueur de la barre de chaque métrique proportionnelle à la valeur du joueur (barre la plus longue = valeur la plus haute de la colonne).', margin, ly); ly += 11;
+  if (showBestPct) { doc.text('Vol / Int / % Best : vert = proche du meilleur match, orange = écart, rouge = loin.', margin, ly); ly += 11; }
+  if (showRatio) { doc.text('% ratio : valeur réelle ÷ meilleur match, comparée à la cible ' + gpsSessionRatioWeek + ' · ' + gpsSessionRatioDay + '.', margin, ly); ly += 11; }
+
+  // ── Index des données (mêmes définitions que la fiche joueur) ──
+  const defsIdx = gpsDataDefinitions();
+  const idxColW = (pageW - margin * 2) / 2;
+  const idxRowsPerCol = Math.ceil(defsIdx.length / 2);
+  const idxPanelH = 24 + idxRowsPerCol * 12;
+  ensureSpace(idxPanelH + 12);
+  ly += 10;
+  doc.setFillColor.apply(doc, P.zebra); doc.roundedRect(margin, ly, pageW - margin * 2, idxPanelH, 5, 5, 'F');
+  doc.setDrawColor.apply(doc, P.line); doc.setLineWidth(0.6); doc.roundedRect(margin, ly, pageW - margin * 2, idxPanelH, 5, 5, 'S');
+  doc.setFillColor.apply(doc, P.accent); doc.rect(margin, ly, 3, idxPanelH, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor.apply(doc, P.ink);
+  doc.text('Index des données', margin + 14, ly + 16);
+  defsIdx.forEach((d, i) => {
+    const col = Math.floor(i / idxRowsPerCol), rowi = i % idxRowsPerCol;
+    const dx = margin + 14 + col * idxColW, dy = ly + 31 + rowi * 12;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor.apply(doc, P.ink);
+    const lbl = '• ' + d[0] + ' : ';
+    doc.text(lbl, dx, dy);
+    const lblW = doc.getTextWidth(lbl);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor.apply(doc, P.dim);
+    doc.text(d[1], dx + lblW + 2, dy);
+  });
+  ly += idxPanelH;
 
   // Graphiques (canvas déjà rendus à l'écran) — carte navy pour garder les légendes lisibles
   let y = ly + 22;
@@ -20941,6 +20966,19 @@ function pgpsWholeRows(rows) {
   return whole.length ? whole : rows;
 }
 
+// Définitions des données GPS montrées aux joueurs — source unique, réutilisée
+// par la fiche joueur ET l'index du rapport PDF (pour rester identiques).
+function gpsDataDefinitions() {
+  return [
+    ['HSR', tr('distance covered above 15 km/h.', 'distance parcourue à plus de 15 km/h.')],
+    ['Sprint', tr('distance covered above 20 km/h.', 'distance parcourue à plus de 20 km/h.')],
+    [tr('Metres per minute', 'Mètres par minute'), tr('intensity = total distance ÷ duration.', 'intensité = distance totale ÷ durée.')],
+    [tr('Hard decelerations', 'Décélérations fortes'), tr('braking harder than 4 m/s².', 'freinages de plus de 4 m/s².')],
+    ['Power plays', tr('number of intense actions (repeated accelerations/decelerations).', "nombre d'actions intensives (accélérations/décélérations enchaînées).")],
+    ['Player load', tr('overall GPS training load.', "charge globale de l'entraînement mesurée par le GPS.")]
+  ];
+}
+
 function playerGpsCards() {
   return [
     { key: 'duree', icon: '⏱️', label: tr('Duration', 'Durée'), fmt: v => Math.round(v) + ' min' },
@@ -21056,14 +21094,7 @@ function renderPlayerGPS() {
   html += '</div>';
 
   // Notes de bas de page (explications des données entre parenthèses)
-  const defs = [
-    ['HSR', tr('distance covered above 15 km/h.', 'distance parcourue à plus de 15 km/h.')],
-    ['Sprint', tr('distance covered above 20 km/h.', 'distance parcourue à plus de 20 km/h.')],
-    [tr('Metres per minute', 'Mètres par minute'), tr('intensity = total distance ÷ duration.', 'intensité = distance totale ÷ durée.')],
-    [tr('Hard decelerations', 'Décélérations fortes'), tr('braking harder than 4 m/s².', 'freinages de plus de 4 m/s².')],
-    ['Power plays', tr('number of intense actions (repeated accelerations/decelerations).', "nombre d'actions intensives (accélérations/décélérations enchaînées).")],
-    ['Player load', tr('overall GPS training load.', "charge globale de l'entraînement mesurée par le GPS.")]
-  ];
+  const defs = gpsDataDefinitions();
   html += '<div style="margin-top:22px;padding-top:14px;border-top:1px solid var(--border);font-size:11px;color:var(--text-dim);line-height:1.8;">';
   html += '<b>' + tr('Definitions', 'Définitions') + ' :</b><br>';
   html += defs.map(d => '• <b>' + escapeHtml(d[0]) + '</b> : ' + escapeHtml(d[1])).join('<br>');
