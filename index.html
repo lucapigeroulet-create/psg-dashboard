@@ -11760,48 +11760,69 @@ function exportGPSSessionPDF() {
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 40;
 
-  // En-tête
-  doc.setFontSize(15); doc.setTextColor(20);
-  doc.text('Rapport de séance — ' + currentOrg, margin, 34);
-  doc.setFontSize(10); doc.setTextColor(110);
-  const sub = formatDateFR(date) + (titles.length ? '   ·   ' + titles[0] : '') + '   ·   ' + splitLabel;
-  doc.text(sub, margin, 50);
+  // Palette calquée sur la web app (fond clair, imprimable) + couleurs de statut lisibles
+  const P = {
+    navy: [15, 31, 51], navy2: [22, 40, 64], ink: [30, 41, 59], dim: [100, 116, 139],
+    line: [226, 232, 240], zebra: [244, 247, 251], white: [255, 255, 255],
+    accent: [0, 144, 232], accentL: [56, 182, 255],
+    green: [22, 163, 74], amber: [202, 138, 4], red: [220, 38, 38], violet: [124, 92, 246]
+  };
+  const RGB = { dim: P.dim };
+  const cssRgb = (c) => {
+    if (!c) return P.dim;
+    if (c.indexOf('34d399') >= 0 || c.indexOf('--green') >= 0) return P.green;
+    if (c.indexOf('fbbf24') >= 0) return P.amber;
+    if (c.indexOf('f87171') >= 0) return P.red;
+    return P.dim;
+  };
+  const metricArr = (key) => gpsMetricRgb(key).split(',').map(Number);
+  const blendWhite = (rgb, a) => [Math.round(255 + (rgb[0] - 255) * a), Math.round(255 + (rgb[1] - 255) * a), Math.round(255 + (rgb[2] - 255) * a)];
 
-  // Moyennes d'équipe
+  const sub = formatDateFR(date) + '   ·   ' + (titles.length ? titles[0] + '   ·   ' : '') + splitLabel;
+
+  // ── Bandeau d'en-tête (navy, façon carte web) ──
+  doc.setFillColor.apply(doc, P.navy); doc.rect(0, 0, pageW, 82, 'F');
+  doc.setFillColor.apply(doc, P.accent); doc.rect(0, 82, pageW, 3, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(255, 255, 255);
+  doc.text('Rapport de séance', margin, 34);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor.apply(doc, P.accentL);
+  doc.text(String(currentOrg).toUpperCase(), pageW - margin, 33, { align: 'right' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(205, 217, 233);
+  doc.text(sub, margin, 54);
+
+  // Ligne de mode (documente ce que montre le tableau)
+  const showBestPct = hasBestMatch && (gpsSessionPctMode === 'all' || gpsSessionPctMode === 'best');
+  const showRatio = hasBestMatch && !!gpsSessionRatioWeek && !!gpsSessionRatioDay && (gpsSessionPctMode === 'all' || gpsSessionPctMode === 'ratio');
+  const shownParts = [];
+  if (showBestPct) shownParts.push('Meilleur match (Vol / Int + % Best)');
+  if (showRatio) shownParts.push('Ratio de travail ' + gpsSessionRatioWeek + ' · ' + gpsSessionRatioDay);
+  doc.setFontSize(8); doc.setTextColor(150, 170, 195);
+  doc.text('Colonnes % : ' + (shownParts.length ? shownParts.join('   +   ') : 'valeurs brutes'), margin, 70);
+
+  // ── Tuiles de moyennes (comme les .stat de la web app) ──
   const n = rows.length;
   const avgDist = Math.round(rows.reduce((s, r) => s + gpsVal(r, 'distance_km') * 1000, 0) / n);
   const avgHSR = Math.round(rows.reduce((s, r) => s + gpsVal(r, 'hsr'), 0) / n);
   const avgSprint = Math.round(rows.reduce((s, r) => s + gpsVal(r, 'sprint_dist_m'), 0) / n);
   const avgVmax = (rows.reduce((s, r) => s + gpsVal(r, 'top_speed'), 0) / n).toFixed(1);
-  doc.setFontSize(9); doc.setTextColor(60);
-  doc.text(n + ' joueurs    ·    Distance moy. ' + avgDist + ' m    ·    HSR moy. ' + avgHSR + ' m    ·    Sprint moy. ' + avgSprint + ' m    ·    Vmax moy. ' + avgVmax + ' km/h', margin, 66);
-
-  // ===== Tableau par joueur — colonnes calquées sur l'affichage écran (mode %) =====
-  // Mêmes règles que renderGPSSession : Vol/Int + % Best si mode 'all'/'best',
-  // colonnes ratio si mode 'all'/'ratio' ET semaine + jour choisis.
-  const showBestPct = hasBestMatch && (gpsSessionPctMode === 'all' || gpsSessionPctMode === 'best');
-  const showRatio = hasBestMatch && !!gpsSessionRatioWeek && !!gpsSessionRatioDay && (gpsSessionPctMode === 'all' || gpsSessionPctMode === 'ratio');
-
-  const RGB = {
-    green: [52, 211, 153], amber: [251, 191, 36], red: [248, 113, 113], dim: [148, 163, 184],
-    volHead: [29, 67, 83], volText: [52, 211, 153], intHead: [53, 64, 69], intText: [251, 191, 36],
-    bestText: [96, 165, 250], ratioHead: [45, 33, 83], ratioText: [167, 139, 250]
-  };
-  const cssRgb = (c) => {
-    if (!c) return RGB.dim;
-    if (c.indexOf('34d399') >= 0 || c.indexOf('--green') >= 0) return RGB.green;
-    if (c.indexOf('fbbf24') >= 0) return RGB.amber;
-    if (c.indexOf('f87171') >= 0) return RGB.red;
-    return RGB.dim;
-  };
-
-  // Ligne de mode (documente ce que montre le tableau)
-  const shownParts = [];
-  if (showBestPct) shownParts.push('Meilleur match (Vol / Int + % Best)');
-  if (showRatio) shownParts.push('Ratio de travail ' + gpsSessionRatioWeek + ' · ' + gpsSessionRatioDay);
-  const modeTxt = 'Colonnes % : ' + (shownParts.length ? shownParts.join('   +   ') : 'aucune (valeurs brutes)');
-  doc.setFontSize(8); doc.setTextColor(90);
-  doc.text(modeTxt, margin, 78);
+  const tiles = [
+    ['Joueurs', String(n), P.accent],
+    ['Distance moy.', avgDist + ' m', metricArr('distance_km')],
+    ['HSR moy.', avgHSR + ' m', metricArr('hsr')],
+    ['Sprint moy.', avgSprint + ' m', metricArr('sprint_dist_m')],
+    ['Vmax moy.', avgVmax + ' km/h', metricArr('top_speed')]
+  ];
+  const tGap = 8, tY = 98, tH = 48, tW = (pageW - margin * 2 - tGap * (tiles.length - 1)) / tiles.length;
+  tiles.forEach((t, i) => {
+    const tx = margin + i * (tW + tGap);
+    doc.setFillColor.apply(doc, P.zebra); doc.roundedRect(tx, tY, tW, tH, 5, 5, 'F');
+    doc.setDrawColor.apply(doc, P.line); doc.setLineWidth(0.7); doc.roundedRect(tx, tY, tW, tH, 5, 5, 'S');
+    doc.setFillColor.apply(doc, t[2]); doc.rect(tx + 5, tY, tW - 10, 3, 'F');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor.apply(doc, P.dim);
+    doc.text(t[0].toUpperCase(), tx + 9, tY + 20);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor.apply(doc, P.ink);
+    doc.text(t[1], tx + 9, tY + 39);
+  });
 
   // Description des colonnes (pilote en-têtes, cellules et couleurs)
   const cols = [{ type: 'player' }, { type: 'poste' }];
@@ -11824,15 +11845,25 @@ function exportGPSSessionPDF() {
   };
   const head = [cols.map(headLabel)];
 
-  // Corps + couleurs de statut par cellule (indexées "row_col")
+  // Max par métrique pour la teinte "chaleur" (saturation ∝ valeur, comme à l'écran)
+  const maxes = {};
+  GPS_METRICS.forEach(m => { maxes[m.key] = Math.max.apply(null, rows.map(r => gpsDisplayVal(r, m)).concat([0])); });
+
+  // Corps + couleurs de statut / teinte de fond par cellule (indexées "row_col")
   const cellStyle = {};
+  const fillStyle = {};
   const body = rows.map((r, ri) => cols.map((c, ci) => {
     let text = '', color = null;
     if (c.type === 'player') text = r.joueur;
     else if (c.type === 'poste') text = posteOfPlayer(r);
     else if (c.type === 'volume') { const v = getVolumeScore(r.joueur, r); text = v !== null ? v + '%' : '—'; color = v !== null ? cssRgb(scoreColor(v)) : RGB.dim; }
     else if (c.type === 'intensity') { const v = getIntensityScore(r.joueur, r); text = v !== null ? v + '%' : '—'; color = v !== null ? cssRgb(scoreColor(v)) : RGB.dim; }
-    else if (c.type === 'metric') { const v = gpsDisplayVal(r, c.m); text = v > 0 ? (c.m.dec === 0 ? String(Math.round(v)) : v.toFixed(c.m.dec)) : '·'; }
+    else if (c.type === 'metric') {
+      const v = gpsDisplayVal(r, c.m);
+      text = v > 0 ? (c.m.dec === 0 ? String(Math.round(v)) : v.toFixed(c.m.dec)) : '·';
+      const pct = maxes[c.m.key] > 0 ? v / maxes[c.m.key] : 0;
+      if (v > 0) fillStyle[ri + '_' + ci] = blendWhite(metricArr(c.m.key), 0.10 + 0.42 * pct);
+    }
     else if (c.type === 'best') { const ratio = getBestMatchRatio(r.joueur, c.m.key, r); text = ratio !== null ? ratioLabel(ratio) : '—'; color = ratio !== null ? cssRgb(ratioColor(ratio)) : RGB.dim; }
     else if (c.type === 'ratio') {
       const target = getWorkRatioTarget(gpsSessionRatioWeek, gpsSessionRatioDay, c.wm.key);
@@ -11851,28 +11882,50 @@ function exportGPSSessionPDF() {
   const bodyFont = cols.length > 20 ? 6 : (cols.length > 14 ? 6.8 : 7.5);
 
   doc.autoTable({
-    head, body, startY: 90,
-    styles: { fontSize: bodyFont, halign: 'center', cellPadding: 2.5, overflow: 'linebreak', valign: 'middle' },
-    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontSize: Math.max(5.5, bodyFont - 1), valign: 'middle' },
-    columnStyles: { 0: { halign: 'left', fontStyle: 'bold' }, 1: { halign: 'left' } },
-    margin: { left: margin, right: margin },
+    head, body, startY: tY + tH + 16, theme: 'grid',
+    styles: { fontSize: bodyFont, halign: 'center', cellPadding: 3, overflow: 'linebreak', valign: 'middle', textColor: P.ink, lineColor: P.line, lineWidth: 0.4 },
+    headStyles: { fillColor: P.navy, textColor: 255, fontSize: Math.max(5.5, bodyFont - 0.5), fontStyle: 'bold', valign: 'middle', lineColor: P.navy2, lineWidth: 0.4 },
+    columnStyles: { 0: { halign: 'left', fontStyle: 'bold' }, 1: { halign: 'left', textColor: P.dim } },
+    margin: { top: 58, left: margin, right: margin, bottom: 34 },
     didParseCell: function (d) {
       const c = cols[d.column.index];
       if (!c) return;
       if (d.section === 'head') {
-        if (c.type === 'volume') { d.cell.styles.fillColor = RGB.volHead; d.cell.styles.textColor = RGB.volText; }
-        else if (c.type === 'intensity') { d.cell.styles.fillColor = RGB.intHead; d.cell.styles.textColor = RGB.intText; }
-        else if (c.type === 'best') { d.cell.styles.textColor = RGB.bestText; }
-        else if (c.type === 'ratio') { d.cell.styles.fillColor = RGB.ratioHead; d.cell.styles.textColor = RGB.ratioText; }
+        if (c.type === 'metric') { d.cell.styles.textColor = metricArr(c.m.key); d.cell.styles.lineWidth = { top: 0, left: 0, right: 0, bottom: 1.8 }; d.cell.styles.lineColor = metricArr(c.m.key); }
+        else if (c.type === 'volume') { d.cell.styles.textColor = [110, 231, 183]; }
+        else if (c.type === 'intensity') { d.cell.styles.textColor = [253, 224, 71]; }
+        else if (c.type === 'best') { d.cell.styles.textColor = P.accentL; }
+        else if (c.type === 'ratio') { d.cell.styles.textColor = [196, 181, 253]; }
       } else if (d.section === 'body') {
-        const col = cellStyle[d.row.index + '_' + d.column.index];
+        const key = d.row.index + '_' + d.column.index;
+        const fill = fillStyle[key];
+        d.cell.styles.fillColor = fill || (d.row.index % 2 ? P.zebra : P.white);
+        const col = cellStyle[key];
         if (col) { d.cell.styles.textColor = col; d.cell.styles.fontStyle = 'bold'; }
+      }
+    },
+    didDrawPage: function (data) {
+      if (data.pageNumber > 1) {
+        doc.setFillColor.apply(doc, P.navy); doc.rect(0, 0, pageW, 44, 'F');
+        doc.setFillColor.apply(doc, P.accent); doc.rect(0, 44, pageW, 2, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(255, 255, 255);
+        doc.text('Rapport de séance — ' + currentOrg, margin, 27);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor.apply(doc, P.accentL);
+        doc.text(sub, pageW - margin, 27, { align: 'right' });
       }
     }
   });
 
-  // Graphiques (canvas déjà rendus à l'écran) — sur fond sombre pour garder les légendes lisibles
-  let y = doc.lastAutoTable.finalY + 22;
+  // Légende sous le tableau (façon notes de la web app)
+  let ly = doc.lastAutoTable.finalY + 14;
+  if (ly > pageH - 60) { doc.addPage(); ly = 58; }
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor.apply(doc, P.dim);
+  doc.text('Intensité de la couleur des cellules ∝ valeur (plus foncé = plus haut).', margin, ly);
+  if (showBestPct) doc.text('Vol / Int / % Best : vert = proche du meilleur match, orange = écart, rouge = loin.', margin, ly + 11);
+  if (showRatio) doc.text('% ratio : valeur réelle ÷ meilleur match, comparée à la cible ' + gpsSessionRatioWeek + ' · ' + gpsSessionRatioDay + '.', margin, ly + (showBestPct ? 22 : 11));
+
+  // Graphiques (canvas déjà rendus à l'écran) — carte navy pour garder les légendes lisibles
+  let y = ly + 22;
   const chartDefs = [
     { id: 'gps-session-metric', title: 'Comparaison par joueur' },
     { id: 'gps-session-zones', title: 'Distance par zone de vitesse' },
@@ -11882,16 +11935,27 @@ function exportGPSSessionPDF() {
     const cv = document.getElementById(cd.id);
     if (!cv || !cv.width || !cv.height) return;
     const imgW = pageW - margin * 2;
-    const imgH = Math.min(imgW * (cv.height / cv.width), pageH - margin * 2 - 24);
-    if (y + imgH + 24 > pageH - margin) { doc.addPage(); y = margin; }
-    doc.setFontSize(11); doc.setTextColor(20);
-    doc.text(cd.title, margin, y);
-    y += 10;
-    doc.setFillColor(15, 23, 42);
-    doc.roundedRect(margin - 6, y - 6, imgW + 12, imgH + 12, 4, 4, 'F');
-    try { doc.addImage(cv.toDataURL('image/png', 1.0), 'PNG', margin, y, imgW, imgH); } catch (e) {}
-    y += imgH + 26;
+    const imgH = Math.min(imgW * (cv.height / cv.width), pageH - margin * 2 - 40);
+    if (y + imgH + 40 > pageH - 34) { doc.addPage(); y = 58; }
+    // Carte : bandeau titre + zone graphique sur fond navy
+    doc.setFillColor.apply(doc, P.navy); doc.roundedRect(margin, y, imgW, imgH + 34, 5, 5, 'F');
+    doc.setFillColor.apply(doc, P.accent); doc.rect(margin, y + 26, imgW, 2, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(255, 255, 255);
+    doc.text(cd.title, margin + 12, y + 18);
+    try { doc.addImage(cv.toDataURL('image/png', 1.0), 'PNG', margin + 8, y + 34, imgW - 16, imgH - 6); } catch (e) {}
+    y += imgH + 34 + 18;
   });
+
+  // Pied de page (numérotation) sur toutes les pages
+  const totalPages = doc.getNumberOfPages();
+  for (let pi = 1; pi <= totalPages; pi++) {
+    doc.setPage(pi);
+    doc.setDrawColor.apply(doc, P.line); doc.setLineWidth(0.5);
+    doc.line(margin, pageH - 24, pageW - margin, pageH - 24);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor.apply(doc, P.dim);
+    doc.text('StatField · ' + currentOrg, margin, pageH - 13);
+    doc.text('Page ' + pi + ' / ' + totalPages, pageW - margin, pageH - 13, { align: 'right' });
+  }
 
   const safeTitle = (titles[0] || 'seance').replace(/[^\w\-]+/g, '_').slice(0, 40);
   doc.save('rapport-seance-' + currentOrg + '-' + date + '-' + safeTitle + '.pdf');
