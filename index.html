@@ -11825,7 +11825,7 @@ function exportGPSSessionPDF() {
   });
 
   // Description des colonnes (pilote en-têtes, cellules et couleurs)
-  const cols = [{ type: 'player' }, { type: 'poste' }];
+  const cols = [{ type: 'player' }];
   if (showBestPct) { cols.push({ type: 'volume' }, { type: 'intensity' }); }
   GPS_METRICS.forEach(m => {
     cols.push({ type: 'metric', m });
@@ -11885,7 +11885,7 @@ function exportGPSSessionPDF() {
     head, body, startY: tY + tH + 16, theme: 'grid',
     styles: { fontSize: bodyFont, halign: 'center', cellPadding: 3, overflow: 'linebreak', valign: 'middle', textColor: P.ink, lineColor: P.line, lineWidth: 0.4 },
     headStyles: { fillColor: P.navy, textColor: 255, fontSize: Math.max(5.5, bodyFont - 0.5), fontStyle: 'bold', valign: 'middle', lineColor: P.navy2, lineWidth: 0.4 },
-    columnStyles: { 0: { halign: 'left', fontStyle: 'bold' }, 1: { halign: 'left', textColor: P.dim } },
+    columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } },
     margin: { top: 58, left: margin, right: margin, bottom: 34 },
     didParseCell: function (d) {
       const c = cols[d.column.index];
@@ -11920,7 +11920,7 @@ function exportGPSSessionPDF() {
   let ly = doc.lastAutoTable.finalY + 14;
   if (ly > pageH - 60) { doc.addPage(); ly = 58; }
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor.apply(doc, P.dim);
-  doc.text('Intensité de la couleur des cellules ∝ valeur (plus foncé = plus haut).', margin, ly);
+  doc.text('Intensité de la couleur des cellules proportionnelle à la valeur (plus foncé = plus haut).', margin, ly);
   if (showBestPct) doc.text('Vol / Int / % Best : vert = proche du meilleur match, orange = écart, rouge = loin.', margin, ly + 11);
   if (showRatio) doc.text('% ratio : valeur réelle ÷ meilleur match, comparée à la cible ' + gpsSessionRatioWeek + ' · ' + gpsSessionRatioDay + '.', margin, ly + (showBestPct ? 22 : 11));
 
