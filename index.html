@@ -10027,6 +10027,8 @@ async function saveGpsSessionEdit() {
 let gpsSelectedPlayers = [];
 let gpsSessionFilterKey = '';
 let gpsSessionChartMetric = 'distance_km';
+// Procédés/mi-temps cochés quand l'affichage est en mode « Cumul » (vide = tous par défaut)
+let gpsCumulSplits = [];
 // État du filtre poste (rapport de séance)
 let gpsSelectedPostes = [];
 let gpsSessionAllPlayers = [];
@@ -10489,12 +10491,20 @@ function populateGPSSplitSelect() {
     return na - nb;
   });
   const cur = splitSel.value;
-  splitSel.innerHTML = splits.map(s => {
+  const optionVals = splits.slice();
+  let optionsHTML = splits.map(s => {
     const label = (s.toLowerCase() === 'all') ? '🟦 Séance entière' : '▸ ' + s;
     return '<option value="' + escapeHtml(s) + '">' + label + '</option>';
   }).join('');
+  // Option « Cumul » dès qu'au moins 2 procédés découpés existent (ex. 1re + 2e mi-temps)
+  const nonAll = splits.filter(s => s.toLowerCase() !== 'all');
+  if (nonAll.length >= 2) {
+    optionsHTML += '<option value="__cumul__">🟰 Cumul de procédés…</option>';
+    optionVals.push('__cumul__');
+  }
+  splitSel.innerHTML = optionsHTML;
   // Conserver la sélection si elle existe encore, sinon défaut "all"
-  if (splits.indexOf(cur) >= 0) splitSel.value = cur;
+  if (optionVals.indexOf(cur) >= 0) splitSel.value = cur;
   else { const allOpt = splits.find(s => s.toLowerCase() === 'all'); splitSel.value = allOpt || splits[0]; }
   // Si la séance n'a qu'un seul niveau (pas de procédés découpés), masquer le filtre d'affichage
   const splitWrap = document.getElementById('gps-split-wrap');
@@ -11292,6 +11302,71 @@ function pctOfMax(val, max) {
   return Math.round((val / max) * 100);
 }
 
+// Combine plusieurs procédés/mi-temps d'un même joueur en une seule ligne « cumulée ».
+// Somme les volumes (distance, HSR, minutes, zones, comptages), garde le pic pour les
+// maxima (Vmax, accél), recalcule les dérivés (m/min) à partir des totaux.
+function gpsCombineRows(list) {
+  const base = Object.assign({}, list[0]);
+  const sumKeys = ['duree_min', 'distance_km', 'sprint_dist_m', 'hsr', 'hsr_m', 'player_load',
+    'energy_kcal', 'decel_count_high', 'acc_count_high', 'power_plays', 'impacts',
+    'dist_zone1', 'dist_zone2', 'dist_zone3', 'dist_zone4', 'dist_zone5'];
+  sumKeys.forEach(k => {
+    let any = false, sum = 0;
+    list.forEach(r => { const v = r[k]; if (v !== null && v !== undefined && !isNaN(v)) { sum += parseFloat(v); any = true; } });
+    base[k] = any ? sum : null;
+  });
+  ['top_speed', 'max_accel', 'hr_max'].forEach(k => {
+    let any = false, mx = -Infinity;
+    list.forEach(r => { const v = r[k]; if (v !== null && v !== undefined && !isNaN(v)) { mx = Math.max(mx, parseFloat(v)); any = true; } });
+    base[k] = any ? mx : null;
+  });
+  // Décélération max = plus grande magnitude (les valeurs sont souvent négatives)
+  let anyD = false, md = 0;
+  list.forEach(r => { const v = r.max_decel; if (v !== null && v !== undefined && !isNaN(v)) { if (!anyD || Math.abs(v) > Math.abs(md)) md = parseFloat(v); anyD = true; } });
+  base.max_decel = anyD ? md : null;
+  // m/min recalculé sur les totaux (distance en km -> m, ÷ minutes cumulées)
+  base.dist_per_min = (base.duree_min && base.distance_km !== null && base.distance_km !== undefined)
+    ? Math.round((base.distance_km * 1000) / base.duree_min * 10) / 10 : null;
+  // Work ratio : moyenne pondérée par la durée
+  let wSum = 0, wDur = 0;
+  list.forEach(r => { if (r.work_ratio !== null && r.work_ratio !== undefined && !isNaN(r.work_ratio) && r.duree_min) { wSum += parseFloat(r.work_ratio) * r.duree_min; wDur += r.duree_min; } });
+  base.work_ratio = wDur ? wSum / wDur : null;
+  base.split_name = '__cumul__';
+  return base;
+}
+
+// Résout les lignes d'un rapport de séance selon l'affichage choisi.
+// selectedSplit === '__cumul__' -> combine les procédés cochés (gpsCumulSplits) en une
+// ligne par joueur ; sinon filtre sur « séance entière » (all) ou un procédé précis.
+function gpsResolveSessionRows(date, seanceTitle, selectedSplit) {
+  const sessionRows = state.bdd_gps.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
+  if (selectedSplit === '__cumul__') {
+    const avail = uniqueSorted(sessionRows.map(x => x.split_name || 'all')).filter(s => s.toLowerCase() !== 'all');
+    avail.sort((a, b) => (parseInt((a.match(/\d+/) || [999])[0])) - (parseInt((b.match(/\d+/) || [999])[0])));
+    // Réconcilier la sélection avec les procédés disponibles (ordre trié ; défaut = tous)
+    let sel = avail.filter(s => gpsCumulSplits.indexOf(s) >= 0);
+    if (sel.length === 0) sel = avail.slice();
+    gpsCumulSplits = sel;
+    const chosen = sessionRows.filter(x => sel.indexOf(x.split_name || 'all') >= 0);
+    const byPlayer = {};
+    chosen.forEach(r => { (byPlayer[r.joueur] = byPlayer[r.joueur] || []).push(r); });
+    const allRows = Object.keys(byPlayer).map(p => gpsCombineRows(byPlayer[p]));
+    return { allRows, splitLabel: 'Cumul : ' + sel.join(' + '), isCumul: true, availSplits: avail, selSplits: sel };
+  }
+  let allRows = sessionRows;
+  if (selectedSplit) allRows = allRows.filter(x => (x.split_name || 'all') === selectedSplit);
+  const splitLabel = (selectedSplit && selectedSplit.toLowerCase() !== 'all') ? selectedSplit : 'Séance entière';
+  return { allRows, splitLabel, isCumul: false };
+}
+
+// Coche/décoche un procédé dans le cumul (garde toujours au moins un procédé actif)
+function gpsToggleCumulSplit(sp) {
+  const i = gpsCumulSplits.indexOf(sp);
+  if (i >= 0) { if (gpsCumulSplits.length > 1) gpsCumulSplits.splice(i, 1); }
+  else gpsCumulSplits.push(sp);
+  renderGPSSession();
+}
+
 // ===== RAPPORT DE SÉANCE (équipe, 1 date) =====
 function renderGPSSession() {
   const sessionVal = document.getElementById('gps-session-select').value;
@@ -11304,13 +11379,10 @@ function renderGPSSession() {
   const splitSel = document.getElementById('gps-split-select');
   const selectedSplit = splitSel ? splitSel.value : 'all';
 
-  let allRows = state.bdd_gps.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
-  // Filtrer par split sélectionné (séance entière "all" ou un procédé précis)
-  if (selectedSplit) {
-    allRows = allRows.filter(x => (x.split_name || 'all') === selectedSplit);
-  }
+  const resolved = gpsResolveSessionRows(date, seanceTitle, selectedSplit);
+  let allRows = resolved.allRows;
   const titles = uniqueSorted(allRows.map(x => x.seance || x.session_title || '')).filter(Boolean);
-  const splitLabel = (selectedSplit && selectedSplit.toLowerCase() !== 'all') ? ' · ' + selectedSplit : ' · Séance entière';
+  const splitLabel = ' · ' + resolved.splitLabel;
 
   // Liste des joueurs de cette séance
   const allSessionPlayers = uniqueSorted(allRows.map(r => r.joueur));
@@ -11342,6 +11414,20 @@ function renderGPSSession() {
   html += '<h2 style="margin:0;">Rapport de séance — ' + formatDateFR(date) + (titles.length ? ' · ' + escapeHtml(titles[0]) : '') + escapeHtml(splitLabel) + '</h2>';
   html += '<button class="btn btn-secondary" onclick="exportGPSSessionPDF()" style="white-space:nowrap;">📄 Exporter en PDF</button>';
   html += '</div>';
+
+  // Sélecteur des procédés cumulés (mode « Cumul » : ex. 1re + 2e mi-temps)
+  if (resolved.isCumul) {
+    html += '<div style="margin-bottom:12px;padding:10px 12px;background:var(--bg-elevated);border-radius:8px;border:1px solid var(--border);">';
+    html += '<div style="font-size:12px;color:var(--text-dim);font-weight:600;margin-bottom:8px;">🟰 Procédés cumulés (' + resolved.selSplits.length + '/' + resolved.availSplits.length + ') — additionne les volumes, garde le pic (Vmax), recalcule le m/min sur le total</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    resolved.availSplits.forEach(sp => {
+      const checked = resolved.selSplits.indexOf(sp) >= 0;
+      html += '<button onclick="gpsToggleCumulSplit(\'' + sp.replace(/'/g, "\\'") + '\')" style="padding:4px 12px;border-radius:14px;font-size:12px;cursor:pointer;border:1px solid ' +
+        (checked ? 'var(--accent)' : 'var(--border)') + ';background:' + (checked ? 'var(--accent)' : 'var(--bg-card)') + ';color:' + (checked ? 'white' : 'var(--text-dim)') + ';">' +
+        (checked ? '✓ ' : '') + escapeHtml(sp) + '</button>';
+    });
+    html += '</div></div>';
+  }
 
   // Filtre poste (cases à cocher)
   if (allSessionPostes.length > 1) {
@@ -11647,8 +11733,8 @@ function exportGPSSessionPDF() {
   const splitSel = document.getElementById('gps-split-select');
   const selectedSplit = splitSel ? splitSel.value : 'all';
 
-  let allRows = state.bdd_gps.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
-  if (selectedSplit) allRows = allRows.filter(x => (x.split_name || 'all') === selectedSplit);
+  const _res = gpsResolveSessionRows(date, seanceTitle, selectedSplit);
+  let allRows = _res.allRows;
   const posteOfPlayer = p => (getJoueurInfo(p).poste || 'Sans poste');
   // Respecter les filtres poste + joueurs actifs à l'écran
   const postePlayers = uniqueSorted(allRows.map(r => r.joueur)).filter(p => gpsSelectedPostes.indexOf(posteOfPlayer(p)) >= 0);
@@ -11656,7 +11742,7 @@ function exportGPSSessionPDF() {
   if (rows.length === 0) { toast('Aucun joueur sélectionné à exporter.', 'error'); return; }
 
   const titles = uniqueSorted(allRows.map(x => x.seance || x.session_title || '')).filter(Boolean);
-  const splitLabel = (selectedSplit && selectedSplit.toLowerCase() !== 'all') ? selectedSplit : 'Séance entière';
+  const splitLabel = _res.splitLabel;
 
   // Tri identique à l'écran
   rows.sort((a, b) => {
