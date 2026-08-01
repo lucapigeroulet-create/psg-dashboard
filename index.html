@@ -11849,9 +11849,9 @@ function exportGPSSessionPDF() {
   const maxes = {};
   GPS_METRICS.forEach(m => { maxes[m.key] = Math.max.apply(null, rows.map(r => gpsDisplayVal(r, m)).concat([0])); });
 
-  // Corps + couleurs de statut / teinte de fond par cellule (indexées "row_col")
+  // Corps + couleurs de statut par cellule + longueur de barre (histogramme) des métriques
   const cellStyle = {};
-  const fillStyle = {};
+  const barPct = {};
   const body = rows.map((r, ri) => cols.map((c, ci) => {
     let text = '', color = null;
     if (c.type === 'player') text = r.joueur;
@@ -11861,8 +11861,8 @@ function exportGPSSessionPDF() {
     else if (c.type === 'metric') {
       const v = gpsDisplayVal(r, c.m);
       text = v > 0 ? (c.m.dec === 0 ? String(Math.round(v)) : v.toFixed(c.m.dec)) : '·';
-      const pct = maxes[c.m.key] > 0 ? v / maxes[c.m.key] : 0;
-      if (v > 0) fillStyle[ri + '_' + ci] = blendWhite(metricArr(c.m.key), 0.10 + 0.42 * pct);
+      // Barre proportionnelle : longueur = valeur / max de la colonne (fait ressortir les plus hauts)
+      if (v > 0 && maxes[c.m.key] > 0) barPct[ri + '_' + ci] = v / maxes[c.m.key];
     }
     else if (c.type === 'best') { const ratio = getBestMatchRatio(r.joueur, c.m.key, r); text = ratio !== null ? ratioLabel(ratio) : '—'; color = ratio !== null ? cssRgb(ratioColor(ratio)) : RGB.dim; }
     else if (c.type === 'ratio') {
@@ -11898,11 +11898,24 @@ function exportGPSSessionPDF() {
         else if (c.type === 'ratio') { d.cell.styles.textColor = [196, 181, 253]; }
       } else if (d.section === 'body') {
         const key = d.row.index + '_' + d.column.index;
-        const fill = fillStyle[key];
-        d.cell.styles.fillColor = fill || (d.row.index % 2 ? P.zebra : P.white);
+        // Métriques : fond transparent (la barre est tracée dans willDrawCell) ; sinon zébrage
+        d.cell.styles.fillColor = (c.type === 'metric') ? false : (d.row.index % 2 ? P.zebra : P.white);
         const col = cellStyle[key];
         if (col) { d.cell.styles.textColor = col; d.cell.styles.fontStyle = 'bold'; }
       }
+    },
+    willDrawCell: function (d) {
+      if (d.section !== 'body') return;
+      const c = cols[d.column.index];
+      if (!c || c.type !== 'metric') return;
+      const pct = barPct[d.row.index + '_' + d.column.index];
+      if (!pct) return;
+      const cell = d.cell, pad = 0.8;
+      // Teinte de la barre : plus la valeur est haute, plus la barre est longue ET saturée
+      const tint = blendWhite(metricArr(c.m.key), 0.34 + 0.34 * Math.min(pct, 1));
+      const w = Math.max(1.6, (cell.width - pad * 2) * Math.min(pct, 1));
+      doc.setFillColor(tint[0], tint[1], tint[2]);
+      doc.rect(cell.x + pad, cell.y + pad, w, cell.height - pad * 2, 'F');
     },
     didDrawPage: function (data) {
       if (data.pageNumber > 1) {
@@ -11920,7 +11933,7 @@ function exportGPSSessionPDF() {
   let ly = doc.lastAutoTable.finalY + 14;
   if (ly > pageH - 60) { doc.addPage(); ly = 58; }
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor.apply(doc, P.dim);
-  doc.text('Intensité de la couleur des cellules proportionnelle à la valeur (plus foncé = plus haut).', margin, ly);
+  doc.text('Longueur de la barre de chaque métrique proportionnelle à la valeur du joueur (barre la plus longue = valeur la plus haute de la colonne).', margin, ly);
   if (showBestPct) doc.text('Vol / Int / % Best : vert = proche du meilleur match, orange = écart, rouge = loin.', margin, ly + 11);
   if (showRatio) doc.text('% ratio : valeur réelle ÷ meilleur match, comparée à la cible ' + gpsSessionRatioWeek + ' · ' + gpsSessionRatioDay + '.', margin, ly + (showBestPct ? 22 : 11));
 
