@@ -3072,6 +3072,10 @@
           <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Session" data-fr="Séance">Séance</label>
           <select id="pgps-seance" onchange="renderPlayerGPS()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px 10px; font-size:14px;"></select>
         </div>
+        <div id="pgps-split-group" style="flex:1 1 140px; min-width:0; display:none;">
+          <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Display" data-fr="Affichage">Affichage</label>
+          <select id="pgps-split" onchange="renderPlayerGPS()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px 10px; font-size:14px;"></select>
+        </div>
       </div>
       <div id="pgps-content"></div>
     </div>
@@ -20993,6 +20997,15 @@ function playerGpsCards() {
   ];
 }
 
+// Temps cochés quand la fiche joueur est en mode « Cumul de temps » (vide = tous)
+let pgpsCumulSplits = [];
+function pgpsToggleCumulSplit(sp) {
+  const i = pgpsCumulSplits.indexOf(sp);
+  if (i >= 0) { if (pgpsCumulSplits.length > 1) pgpsCumulSplits.splice(i, 1); }
+  else pgpsCumulSplits.push(sp);
+  renderPlayerGPS();
+}
+
 function renderPlayerGPS() {
   const jsel = document.getElementById('pgps-joueur');
   const ssel = document.getElementById('pgps-seance');
@@ -21054,8 +21067,11 @@ function renderPlayerGPS() {
   }
 
   // Résumé selon la sélection
-  let summary, contextLabel;
+  const splitSelEl = document.getElementById('pgps-split');
+  const splitGroupEl = document.getElementById('pgps-split-group');
+  let summary, contextLabel, pgpsSplitChipsHTML = '';
   if (sel === '__ALL__') {
+    if (splitGroupEl) splitGroupEl.style.display = 'none';
     const groups = {};
     mine.forEach(r => { const t = r.seance || r.session_title || ''; const k = r.date + '||' + t; (groups[k] = groups[k] || []).push(r); });
     const perSession = Object.keys(groups).map(k => aggPlayerGps(pgpsWholeRows(groups[k]))).filter(Boolean);
@@ -21067,8 +21083,51 @@ function renderPlayerGPS() {
     const d = sepIdx >= 0 ? sel.slice(0, sepIdx) : sel;
     const title = sepIdx >= 0 ? sel.slice(sepIdx + 2) : '';
     const rows = mine.filter(r => r.date === d && (r.seance || r.session_title || '') === title);
-    summary = aggPlayerGps(pgpsWholeRows(rows));
-    contextLabel = formatDateFR(d) + (title ? ' · ' + title : '');
+
+    // Temps découpés disponibles (mi-temps, échauffement…), hors « séance entière »
+    const availSplits = uniqueSorted(rows.map(r => r.split_name || 'all')).filter(s => s.toLowerCase() !== 'all');
+    availSplits.sort((a, b) => (parseInt((a.match(/\d+/) || [999])[0])) - (parseInt((b.match(/\d+/) || [999])[0])));
+
+    let splitChoice = 'all';
+    if (availSplits.length && splitSelEl) {
+      const cur = splitSelEl.value;
+      let optsHTML = '<option value="all">' + tr('Whole session', 'Séance entière') + '</option>';
+      optsHTML += availSplits.map(s => '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>').join('');
+      if (availSplits.length >= 2) optsHTML += '<option value="__cumul__">' + tr('Sum of periods…', 'Cumul de temps…') + '</option>';
+      splitSelEl.innerHTML = optsHTML;
+      const validVals = ['all'].concat(availSplits, availSplits.length >= 2 ? ['__cumul__'] : []);
+      splitChoice = validVals.indexOf(cur) >= 0 ? cur : 'all';
+      splitSelEl.value = splitChoice;
+      if (splitGroupEl) splitGroupEl.style.display = '';
+    } else if (splitGroupEl) {
+      splitGroupEl.style.display = 'none';
+    }
+
+    let chosenRows, splitSuffix = '';
+    if (splitChoice === '__cumul__') {
+      let selc = availSplits.filter(s => pgpsCumulSplits.indexOf(s) >= 0);
+      if (!selc.length) selc = availSplits.slice();
+      pgpsCumulSplits = selc;
+      chosenRows = rows.filter(r => selc.indexOf(r.split_name || 'all') >= 0);
+      splitSuffix = ' · ' + tr('Sum', 'Cumul') + ' : ' + selc.join(' + ');
+      pgpsSplitChipsHTML = '<div style="margin:0 0 14px;padding:10px 12px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;">'
+        + '<div style="font-size:12px;color:var(--text-dim);font-weight:600;margin-bottom:8px;">' + tr('Periods to add up', 'Temps à cumuler') + ' (' + selc.length + '/' + availSplits.length + ')</div>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:6px;">'
+        + availSplits.map(sp => {
+            const on = selc.indexOf(sp) >= 0;
+            return '<button onclick="pgpsToggleCumulSplit(\'' + sp.replace(/'/g, "\\'") + '\')" style="padding:5px 13px;border-radius:14px;font-size:12px;cursor:pointer;border:1px solid '
+              + (on ? 'var(--accent)' : 'var(--border)') + ';background:' + (on ? 'var(--accent)' : 'var(--bg-card)') + ';color:' + (on ? '#fff' : 'var(--text-dim)') + ';">'
+              + (on ? '✓ ' : '') + escapeHtml(sp) + '</button>';
+          }).join('')
+        + '</div></div>';
+    } else if (splitChoice !== 'all') {
+      chosenRows = rows.filter(r => (r.split_name || 'all') === splitChoice);
+      splitSuffix = ' · ' + splitChoice;
+    } else {
+      chosenRows = pgpsWholeRows(rows);
+    }
+    summary = aggPlayerGps(chosenRows);
+    contextLabel = formatDateFR(d) + (title ? ' · ' + title : '') + splitSuffix;
   }
 
   // En-tête joueur
@@ -21079,6 +21138,9 @@ function renderPlayerGPS() {
   html += '<div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#0a3d91,#00a3ff);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:18px;">' + escapeHtml((joueur || '?').slice(0, 1).toUpperCase()) + '</div>';
   html += '<div><div style="font-size:18px;font-weight:800;">' + escapeHtml(joueur || '') + '</div>';
   html += '<div style="font-size:12px;color:var(--text-dim);">' + escapeHtml([grp, poste].filter(Boolean).join(' · ')) + (grp || poste ? ' — ' : '') + escapeHtml(contextLabel) + '</div></div></div>';
+
+  // Sélection des temps à cumuler (mode « Cumul de temps »)
+  html += pgpsSplitChipsHTML;
 
   // Grille de cartes
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">';
