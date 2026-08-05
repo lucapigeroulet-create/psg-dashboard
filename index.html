@@ -18987,7 +18987,21 @@ async function renderPlayerOverview() {
     });
     liveANoter.sort((a, b) => b.date.localeCompare(a.date));
 
-    if (planANoter.length === 0 && liveANoter.length === 0) {
+    // ── Matchs joués (48 h) : temps de jeu > 0, non notés, fenêtre encore ouverte ──
+    const matchsANoter = [];
+    (state.bdd_matchs || []).forEach(m => {
+      if (!m || !m.date) return;
+      if (m.date > today || m.date < cutoff) return;                              // ni futur, ni trop ancien
+      const compo = (m.composition || []).find(x => x.joueur === currentJoueurNom);
+      if (!compo || (compo.total_min || 0) <= 0) return;                          // non joué → rien à noter
+      const seanceNom = matchSeanceNom(m);
+      if (getRPEJoueurSeance(m.date, currentJoueurNom, seanceNom) !== null) return; // déjà noté
+      if (isSessionWindowClosed(m.date, seanceNom)) return;                       // fenêtre 48 h fermée
+      matchsANoter.push({ date: m.date, seance: seanceNom, adversaire: m.adversaire || '', minutes: compo.total_min || 0 });
+    });
+    matchsANoter.sort((a, b) => b.date.localeCompare(a.date));
+
+    if (planANoter.length === 0 && liveANoter.length === 0 && matchsANoter.length === 0) {
       rpeEl.innerHTML = '<div style="color:var(--green); font-size:13px;">✅ ' + (isFR ? 'Aucune séance en attente de note.' : 'No sessions pending rating.') + '</div>';
     } else {
       const itemStyle = 'display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; margin-bottom:6px; cursor:pointer;';
@@ -19008,6 +19022,21 @@ async function renderPlayerOverview() {
         '</div>';
       }).join('');
 
+      // Matchs joués
+      const matchHtml = matchsANoter.map(it => {
+        const badge = '<span style="display:inline-block; font-size:10px; font-weight:700; color:#1a1a1a; background:#fbbf24; border:1px solid #d97706; border-radius:4px; padding:1px 6px; margin-right:6px;">\u26bd MATCH</span>';
+        const msg = isFR ? 'Match jou\u00e9 — \u00e0 noter avant fermeture (48 h)' : 'Match played — rate before the 48h window closes';
+        const pubMs = getSeancePublishedMs(it.date, it.seance);
+        const chip = (pubMs !== null) ? aNoterCountdownChip(pubMs + SESSION_WINDOW_HOURS * 3600000, isFR) : '';
+        const titre = it.adversaire ? ((isFR ? 'Match vs ' : 'Match vs ') + it.adversaire) : (isFR ? 'Match' : 'Match');
+        return '<div onclick="playerRateLiveDate(\'' + it.date + '\')" style="' + itemStyle + '" ' + hover + '>' +
+          '<div>' +
+            '<div style="font-weight:600; font-size:13px;">' + badge + escapeHtml(titre) + '</div>' +
+            '<div style="font-size:11px; color:var(--text-dim);">' + formatDateFR(it.date) + ' \u00b7 ' + it.minutes + ' min ' + (isFR ? 'jou\u00e9es' : 'played') + ' \u00b7 ' + msg + (chip ? ' \u00b7 ' + chip : '') + '</div>' +
+          '</div>' + rate +
+        '</div>';
+      }).join('');
+
       // Séances planifiées (autonomie)
       const planHtml = planANoter.map(sp => {
         const badge = '<span style="display:inline-block; font-size:10px; font-weight:700; color:#c7d2fe; background:rgba(99,102,241,0.18); border:1px solid #4338ca; border-radius:4px; padding:1px 6px; margin-right:6px;">🔵 ' + (isFR ? 'AUTONOMIE' : 'SELF') + '</span>';
@@ -19024,7 +19053,7 @@ async function renderPlayerOverview() {
         '</div>';
       }).join('');
 
-      rpeEl.innerHTML = liveHtml + planHtml;
+      rpeEl.innerHTML = matchHtml + liveHtml + planHtml;
 
       // Décompte live : met à jour les chips toutes les 30 s (timer global unique)
       if (!window.__anoterCountdownTimer) {
