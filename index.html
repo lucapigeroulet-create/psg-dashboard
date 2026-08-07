@@ -15736,6 +15736,10 @@ async function saveMatchNoteJoueur(matchId, value) {
 
 
 function renderEntry() {
+  // Render "propre" (navigation vers la vue) : on repart d'un formulaire vierge,
+  // donc plus de saisie en cours à protéger. On (re)branche le suivi des frappes.
+  entryDirty = false;
+  bindEntryDirtyTracking();
   // Pré-remplir la date avec aujourd'hui si vide
   const dateInput = document.getElementById('entry-date');
   if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0,10);
@@ -16661,6 +16665,20 @@ async function removeAffectation() {
 // ============================================================================
 // État du mode RPE (table ou card)
 let rpeSuppressRefresh = false;
+// Saisie séance en cours → empêche l'écho realtime (sauvegarde d'un autre staff)
+// de réinitialiser le formulaire pendant qu'on le remplit. Remis à false à chaque
+// render "propre" de la vue (navigation) ; mis à true dès la première frappe.
+let entryDirty = false;
+let _entryDirtyBound = false;
+function bindEntryDirtyTracking() {
+  if (_entryDirtyBound) return;
+  const view = document.getElementById('view-entry');
+  if (!view) return;
+  _entryDirtyBound = true;
+  const mark = () => { entryDirty = true; };
+  view.addEventListener('input', mark);
+  view.addEventListener('change', mark);
+}
 let overviewRPEShowAll = false; // déplier la liste des RPE non remplis // empêche le re-render realtime pendant la saisie
 let rpeMode = 'table';
 let rpeCardIndex = 0;
@@ -17539,6 +17557,9 @@ function editSeance(date, nom) {
     // Sélectionner la séance existante
     document.getElementById('entry-existing').value = nom;
     loadExistingSeance();
+    // Chargement programmatique (pas d'événement DOM) → protéger tout de suite la
+    // séance chargée contre un écho realtime qui la réinitialiserait avant la 1re frappe.
+    entryDirty = true;
     toast('Séance chargée pour modification', 'success');
   }, 150);
 }
@@ -17636,7 +17657,7 @@ function refreshActiveView() {
   else if (id === 'view-rpe') renderRPE();
   else if (id === 'view-gps') renderGPS();
   else if (id === 'view-injury') renderInjury();
-  else if (id === 'view-entry') renderEntry();
+  else if (id === 'view-entry') { if (!entryDirty) renderEntry(); }
   else if (id === 'view-rpe-entry') { if (!rpeSuppressRefresh) renderRPEEntry(); }
   else if (id === 'view-history') renderHistory();
 }
