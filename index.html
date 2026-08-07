@@ -3494,6 +3494,89 @@ function initSupabase() {
 }
 
 // ============================================================================
+// CACHE LOCAL (réduction bande passante) — logos + gps_data
+// Évite de retélécharger tout le dataset d'une org à chaque ouverture.
+// Toute écriture rafraîchit le cache (_writeCache) → jamais de données périmées
+// pour l'auteur de l'écriture ; le realtime couvre les autres sessions ouvertes.
+// En cas de moindre erreur, on retombe sur un chargement complet classique.
+// ============================================================================
+const CACHE_ENABLED = true;       // false pour désactiver entièrement le cache
+const CACHE_VERSION = 'v1';       // à bumper si le schéma des tables cachées change
+const CACHE_MAX_BYTES = 4000000;  // ne cache pas au-delà de ~4 Mo (quota localStorage)
+
+function _cacheKey(t, org) { return 'sfcache_' + CACHE_VERSION + '_' + t + '_' + (org || ''); }
+function _readCache(t, org) {
+  try { const r = localStorage.getItem(_cacheKey(t, org)); return r ? JSON.parse(r) : null; }
+  catch (e) { return null; }
+}
+function _writeCache(t, org, rows) {
+  try {
+    if (!Array.isArray(rows)) return;
+    let maxId = 0;
+    for (const r of rows) { if (r && r.id > maxId) maxId = r.id; }
+    const payload = JSON.stringify({ rows: rows, count: rows.length, maxId: maxId });
+    if (payload.length > CACHE_MAX_BYTES) { localStorage.removeItem(_cacheKey(t, org)); return; }
+    localStorage.setItem(_cacheKey(t, org), payload);
+  } catch (e) { /* quota plein : le cache est optionnel, on ignore */ }
+}
+function invalidateCache(t, org) { try { localStorage.removeItem(_cacheKey(t, org)); } catch (e) {} }
+
+async function _fullFetch(t, org, orderCol) {
+  let q = sb.from(t).select('*').eq('org', org);
+  if (orderCol) q = q.order(orderCol);
+  const { data } = await q;
+  return data || [];
+}
+async function _count(t, org) {
+  const h = await sb.from(t).select('id', { count: 'exact', head: true }).eq('org', org);
+  return (h && typeof h.count === 'number') ? h.count : null;
+}
+async function _maxId(t, org) {
+  const { data } = await sb.from(t).select('id').eq('org', org).order('id', { ascending: false }).limit(1);
+  return (data && data[0]) ? data[0].id : 0;
+}
+
+// Petite table quasi-statique (logos) : sert le cache tant que (count, maxId) inchangés.
+async function loadCachedBySignature(t, org, orderCol) {
+  if (!CACHE_ENABLED) return _fullFetch(t, org, orderCol);
+  try {
+    const cache = _readCache(t, org);
+    const count = await _count(t, org);
+    const maxId = await _maxId(t, org);
+    if (cache && cache.count === count && cache.maxId === maxId && Array.isArray(cache.rows)) return cache.rows;
+    const rows = await _fullFetch(t, org, orderCol);
+    _writeCache(t, org, rows);
+    return rows;
+  } catch (e) { return _fullFetch(t, org, orderCol); }
+}
+
+// Grosse table qui s'ajoute (gps) : ne télécharge que les lignes id > maxId en cache ;
+// refetch complet si le total serveur diffère (suppression détectée).
+async function loadIncremental(t, org, orderCol) {
+  if (!CACHE_ENABLED) return _fullFetch(t, org, orderCol);
+  try {
+    const cache = _readCache(t, org);
+    if (!cache || !Array.isArray(cache.rows) || !cache.rows.length) {
+      const rows = await _fullFetch(t, org, orderCol);
+      _writeCache(t, org, rows);
+      return rows;
+    }
+    const { data: fresh } = await sb.from(t).select('*').eq('org', org).gt('id', cache.maxId).order('id');
+    const newRows = fresh || [];
+    const serverCount = await _count(t, org);
+    if (serverCount !== null && (cache.count + newRows.length) !== serverCount) {
+      const rows = await _fullFetch(t, org, orderCol);
+      _writeCache(t, org, rows);
+      return rows;
+    }
+    let merged = cache.rows.concat(newRows);
+    if (orderCol) merged.sort((a, b) => { const x = a[orderCol] || '', y = b[orderCol] || ''; return x < y ? -1 : x > y ? 1 : 0; });
+    _writeCache(t, org, merged);
+    return merged;
+  } catch (e) { return _fullFetch(t, org, orderCol); }
+}
+
+// ============================================================================
 // AUTHENTIFICATION
 // ============================================================================
 async function handleLogin() {
@@ -5709,15 +5792,13 @@ async function loadState() {
     }));
 
     setLoad('Chargement des données GPS...');
-    const { data: gps } = await sb.from('gps_data').select('*').eq('org', currentOrg).order('date');
-    state.bdd_gps = (gps || []);
+    state.bdd_gps = await loadIncremental('gps_data', currentOrg, 'date');
     try {
       const { data: aliases } = await sb.from('player_aliases').select('*').eq('org', currentOrg);
       state.bdd_player_aliases = aliases || [];
     } catch(e) { state.bdd_player_aliases = []; }
     try {
-      const { data: logos } = await sb.from('adversaire_logos').select('*').eq('org', currentOrg);
-      state.bdd_adversaire_logos = logos || [];
+      state.bdd_adversaire_logos = await loadCachedBySignature('adversaire_logos', currentOrg, null);
     } catch(e) { state.bdd_adversaire_logos = []; }
 
     setLoad('Chargement des matchs...');
@@ -9766,6 +9847,7 @@ async function doGPSImport() {
     // Recharger les données GPS
     const { data: gps } = await sb.from('gps_data').select('*').eq('org', currentOrg).order('date');
     state.bdd_gps = gps || [];
+    _writeCache('gps_data', currentOrg, state.bdd_gps);
     gpsImportRows = null;
     gpsNameResolutions = {};
     document.getElementById('gps-import-file').value = '';
@@ -9871,6 +9953,7 @@ async function deleteGPSSession(date, seance) {
     // Recharger
     const { data: gps } = await sb.from('gps_data').select('*').eq('org', currentOrg).order('date');
     state.bdd_gps = gps || [];
+    _writeCache('gps_data', currentOrg, state.bdd_gps);
     renderGPSHistory();
     renderGPS();
     toast('Séance GPS supprimée', 'success');
@@ -10018,6 +10101,7 @@ async function saveGpsSessionEdit() {
     if (catChanged) bits.push('type');
     toast('Séance mise à jour (' + bits.join(', ') + ')', 'success');
   }
+  _writeCache('gps_data', currentOrg, state.bdd_gps);
   closeGpsSessionEdit();
   renderGPSHistory();
   renderGPS();
@@ -12592,6 +12676,7 @@ async function gpsAssignLogo(opponent, clubKey) {
   if (error) { toast('Erreur : ' + error.message, 'error'); return; }
   const { data } = await sb.from('adversaire_logos').select('*').eq('org', currentOrg);
   state.bdd_adversaire_logos = data || [];
+  _writeCache('adversaire_logos', currentOrg, state.bdd_adversaire_logos);
   toast('Logo associé ✓', 'success');
   renderGPSDistHSR();
 }
@@ -12654,6 +12739,7 @@ async function handleAdversaireLogoUpload(input, adversaire) {
     if (error) { toast('Erreur : ' + error.message, 'error'); return; }
     const { data } = await sb.from('adversaire_logos').select('*').eq('org', currentOrg);
     state.bdd_adversaire_logos = data || [];
+    _writeCache('adversaire_logos', currentOrg, state.bdd_adversaire_logos);
     toast('Logo enregistré ✓', 'success');
     renderGPSDistHSR();
   });
@@ -19601,6 +19687,7 @@ function renderLogosSettings() {
 async function settingsRefreshLogos() {
   const { data } = await sb.from('adversaire_logos').select('*').eq('org', currentOrg);
   state.bdd_adversaire_logos = data || [];
+  _writeCache('adversaire_logos', currentOrg, state.bdd_adversaire_logos);
   renderLogosSettings();
 }
 
@@ -19919,6 +20006,7 @@ async function clearAllData() {
   state.bdd_ent2 = [];
   state.bdd_rpe = [];
   state.bdd_gps = [];
+  _writeCache('gps_data', currentOrg, state.bdd_gps);
   selectedHistKey = null;
   rpeCardIndex = 0;
 
@@ -19999,6 +20087,7 @@ async function resetData() {
   state.bdd_ent2 = [];
   state.bdd_rpe = [];
   state.bdd_gps = [];
+  _writeCache('gps_data', currentOrg, state.bdd_gps);
   selectedHistKey = null;
 
   refreshAllSelectors();
@@ -20258,6 +20347,7 @@ async function editPlayer(oldName) {
     // GPS
     state.bdd_gps.forEach(g => { if (g.joueur === oldName) g.joueur = trimmed; });
     await sb.from('gps_data').update({ joueur: trimmed }).eq('joueur', oldName);
+    _writeCache('gps_data', currentOrg, state.bdd_gps);
   }
 
   Object.assign(j, updated);
@@ -20318,6 +20408,7 @@ async function deletePlayer(nom) {
   state.bdd_ent = state.bdd_ent.filter(e => e.joueur !== nom);
   state.bdd_rpe = state.bdd_rpe.filter(e => e.joueur !== nom);
   state.bdd_gps = state.bdd_gps.filter(e => e.joueur !== nom);
+  _writeCache('gps_data', currentOrg, state.bdd_gps);
   renderPlayersSettings();
   refreshAllSelectors();
   toast('Joueur supprimé', 'success');
