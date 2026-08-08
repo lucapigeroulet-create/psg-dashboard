@@ -14882,42 +14882,50 @@ function mjCuratedQs() {
     CQ(N(), 'Quels pays coorganisent la Coupe du Monde 2026 ?', 'Which countries co-host the 2026 World Cup?', ['États-Unis, Canada et Mexique', 'USA, Canada and Mexico'], [['États-Unis uniquement', 'USA only'], ['Mexique et États-Unis', 'Mexico and USA'], ['Canada et États-Unis', 'Canada and USA']])
   ];
 }
-// ---- « Devine le joueur » : parcours de clubs DANS L'ORDRE → retrouver le
-// joueur. Question à choix multiple, ajoutée à la banque du quiz du jour (donc
-// mélangée + protégée par l'anti-copiage). Parcours vérifiés (clubs pros
-// majeurs, ordre chronologique ; les prêts courts sont volontairement omis).
+// ---- « Devine le joueur » : parcours de clubs DANS L'ORDRE → l'utilisateur
+// TAPE le nom du joueur (saisie libre, pas de QCM). Jeu type 'devine' programmé
+// 1 jour/semaine, généré depuis MJ_CAREERS. Chaque entrée : [nom, [clubs dans
+// l'ordre], 'alias1|alias2'] (alias acceptés à la saisie, normalisés sans
+// accents/casse). Parcours vérifiés (clubs pros majeurs, prêts courts omis).
 const MJ_CAREERS = [
-  ['Zinédine Zidane', ['Cannes', 'Bordeaux', 'Juventus', 'Real Madrid']],
-  ['Thierry Henry', ['Monaco', 'Juventus', 'Arsenal', 'Barcelone']],
-  ['David Beckham', ['Manchester United', 'Real Madrid', 'LA Galaxy', 'PSG']],
-  ['Cristiano Ronaldo', ['Sporting', 'Manchester United', 'Real Madrid', 'Juventus', 'Al-Nassr']],
-  ['Kylian Mbappé', ['Monaco', 'PSG', 'Real Madrid']],
-  ['Neymar', ['Santos', 'Barcelone', 'PSG', 'Al-Hilal']],
-  ['Ronaldinho', ['Grêmio', 'PSG', 'Barcelone', 'Milan AC']],
-  ['Ronaldo', ['PSV Eindhoven', 'Barcelone', 'Inter Milan', 'Real Madrid', 'Milan AC']],
-  ['Luís Figo', ['Sporting', 'Barcelone', 'Real Madrid', 'Inter Milan']],
-  ['Andrea Pirlo', ['Brescia', 'Inter Milan', 'Milan AC', 'Juventus']],
-  ['Robert Lewandowski', ['Lech Poznań', 'Borussia Dortmund', 'Bayern Munich', 'Barcelone']],
-  ['Luka Modrić', ['Dinamo Zagreb', 'Tottenham', 'Real Madrid']],
-  ['Gareth Bale', ['Southampton', 'Tottenham', 'Real Madrid']],
-  ['Carlos Tevez', ['Boca Juniors', 'Corinthians', 'West Ham', 'Manchester United', 'Manchester City', 'Juventus']],
-  ['George Weah', ['Monaco', 'PSG', 'Milan AC', 'Chelsea']],
-  ['Zlatan Ibrahimović', ['Ajax', 'Juventus', 'Inter Milan', 'Barcelone', 'Milan AC', 'PSG', 'Manchester United']]
+  ['Zinédine Zidane', ['Cannes', 'Bordeaux', 'Juventus', 'Real Madrid'], 'zidane|zizou'],
+  ['Thierry Henry', ['Monaco', 'Juventus', 'Arsenal', 'Barcelone'], 'henry|titi'],
+  ['David Beckham', ['Manchester United', 'Real Madrid', 'LA Galaxy', 'PSG'], 'beckham'],
+  ['Cristiano Ronaldo', ['Sporting', 'Manchester United', 'Real Madrid', 'Juventus', 'Al-Nassr'], 'cristiano|cr7|cristiano ronaldo'],
+  ['Kylian Mbappé', ['Monaco', 'PSG', 'Real Madrid'], 'mbappe|kylian'],
+  ['Neymar', ['Santos', 'Barcelone', 'PSG', 'Al-Hilal'], 'neymar jr'],
+  ['Ronaldinho', ['Grêmio', 'PSG', 'Barcelone', 'Milan AC'], 'dinho'],
+  ['Ronaldo', ['PSV Eindhoven', 'Barcelone', 'Inter Milan', 'Real Madrid', 'Milan AC'], 'ronaldo nazario|r9|el fenomeno|ronaldo bresilien'],
+  ['Luís Figo', ['Sporting', 'Barcelone', 'Real Madrid', 'Inter Milan'], 'figo'],
+  ['Andrea Pirlo', ['Brescia', 'Inter Milan', 'Milan AC', 'Juventus'], 'pirlo'],
+  ['Robert Lewandowski', ['Lech Poznań', 'Borussia Dortmund', 'Bayern Munich', 'Barcelone'], 'lewandowski|lewa'],
+  ['Luka Modrić', ['Dinamo Zagreb', 'Tottenham', 'Real Madrid'], 'modric'],
+  ['Gareth Bale', ['Southampton', 'Tottenham', 'Real Madrid'], 'bale'],
+  ['Carlos Tevez', ['Boca Juniors', 'Corinthians', 'West Ham', 'Manchester United', 'Manchester City', 'Juventus'], 'tevez|carlitos'],
+  ['George Weah', ['Monaco', 'PSG', 'Milan AC', 'Chelsea'], 'weah'],
+  ['Zlatan Ibrahimović', ['Ajax', 'Juventus', 'Inter Milan', 'Barcelone', 'Milan AC', 'PSG', 'Manchester United'], 'zlatan|ibrahimovic|ibra']
 ];
-function mjCareerQs() {
-  const names = MJ_CAREERS.map(c => c[0]);
-  return MJ_CAREERS.map((c, i) => {
-    const name = c[0];
-    const pathFr = c[1].join(' → '), pathEn = c[1].map(mjEn).join(' → ');
-    const others = mjShuffled(names.filter(n => n !== name), 73001 + i * 17).slice(0, 3);
-    const opts = mjShuffled([name].concat(others), 91001 + i * 13);
-    return {
-      q: { fr: '🧭 Quel joueur a connu ce parcours : ' + pathFr + ' ?',
-           en: '🧭 Which player had this career path: ' + pathEn + '?' },
-      choix: opts.map(o => ({ fr: o, en: mjEn(o) })),
-      bonne: opts.indexOf(name)
-    };
-  });
+// Construit le jeu "devine le joueur" du jour : 7 parcours tirés de MJ_CAREERS,
+// tournant chaque semaine pour varier. Réponse en saisie libre.
+function mjDevineGame(week) {
+  const order = mjShuffled(MJ_CAREERS.map((_, i) => i), 424242);
+  const N = Math.min(7, MJ_CAREERS.length);
+  const off = ((week % order.length) + order.length) % order.length;
+  const qs = [];
+  for (let k = 0; k < N; k++) {
+    const c = MJ_CAREERS[order[(off + k) % order.length]];
+    qs.push({
+      q: { fr: c[1].join(' → '), en: c[1].map(mjEn).join(' → ') },
+      reponse: c[0],
+      alias: (c[2] ? c[2].split('|') : []).concat([c[0]])
+    });
+  }
+  return {
+    id: 'devine-' + week, type: 'devine', duree: 90,
+    titre: { fr: '🧭 Devine le joueur', en: '🧭 Guess the player' },
+    regle: { fr: N + ' parcours de clubs (dans l\'ordre). Tape le nom du joueur ! Le plus rapide départage les égalités.', en: N + ' career paths (in order). Type the player\'s name! Fastest wins ties.' },
+    questions: qs
+  };
 }
 // ---- Jeux de citation (type Sporcle) ----------------------------------------
 // TA(fr, en, 'alias1|alias2') : les deux langues + variantes sont acceptées à la saisie
@@ -15264,7 +15272,6 @@ function mjGetBank() {
   add(mjMakeYearQs(MJ_D.facup, 1, 'Quel club a remporté la FA Cup en {y} ?', 'Who won the FA Cup in {y}?', [1], 9, 20));
   add(mjMakeYearQs(MJ_D.cdmFem, 1, 'Qui a remporté la Coupe du Monde féminine {y} ?', 'Who won the {y} Women\'s World Cup?', [1], 16, 21));
   add(mjMakeYearQs(MJ_D.bdoFem, 1, 'Qui a remporté le Ballon d\'Or féminin {y} ?', 'Who won the {y} women\'s Ballon d\'Or?', [1], 8, 22));
-  add(mjCareerQs());
   add(mjCuratedQs());
   __mjBank = B;
   return B;
@@ -15277,10 +15284,10 @@ function mjEpochDay(dateStr) {
 const MJ_QUIZ_PAR_JOUR = 7;
 function mjGameForDate(dateStr) {
   const D = mjEpochDay(dateStr), week = Math.floor(D / 7), rem = ((D % 7) + 7) % 7;
-  // 2 jours de citation par semaine (rem 2 et 5), 5 jours de quiz
-  if (rem === 2 || rem === 5) {
-    const t = week * 2 + (rem === 5 ? 1 : 0);
-    return MJ_TOP10S[((t % MJ_TOP10S.length) + MJ_TOP10S.length) % MJ_TOP10S.length];
+  // Semaine : 5 j de quiz, 1 j de citation (rem 2), 1 j "devine le joueur" (rem 5)
+  if (rem === 5) return mjDevineGame(week);
+  if (rem === 2) {
+    return MJ_TOP10S[((week % MJ_TOP10S.length) + MJ_TOP10S.length) % MJ_TOP10S.length];
   }
   const avant = { 0: 0, 1: 1, 2: 2, 3: 2, 4: 3, 5: 4, 6: 4 };
   const qIdx = week * 5 + avant[rem];
@@ -15389,11 +15396,12 @@ function mjStrSeed(s) {
   return h >>> 0;
 }
 function mjPlayerQuiz(jeu) {
-  if (!jeu || jeu.type !== 'quiz' || !Array.isArray(jeu.questions)) return jeu;
+  if (!jeu || !Array.isArray(jeu.questions) || (jeu.type !== 'quiz' && jeu.type !== 'devine')) return jeu;
   const seed = mjStrSeed(mjPlayerId() + '|' + todayYMD() + '|' + jeu.id);
   const order = mjShuffled(jeu.questions.map((_, i) => i), seed);
   const questions = order.map((qi, k) => {
     const q = jeu.questions[qi];
+    if (jeu.type !== 'quiz') return q; // "devine" : on mélange juste l'ordre des parcours
     const seedK = (seed ^ Math.imul(k + 1, 2654435761)) >>> 0;
     const perm = mjShuffled(q.choix.map((_, i) => i), seedK);
     return { q: q.q, choix: perm.map(i => q.choix[i]), bonne: perm.indexOf(q.bonne) };
@@ -15403,9 +15411,10 @@ function mjPlayerQuiz(jeu) {
 
 function mjStart(jeu) {
   mjClearTimer();
-  if (jeu && jeu.type === 'quiz') jeu = mjPlayerQuiz(jeu); // ordre personnalisé anti-copiage
+  if (jeu && (jeu.type === 'quiz' || jeu.type === 'devine')) jeu = mjPlayerQuiz(jeu); // ordre personnalisé anti-copiage
   minijeuxState = { jeu, startTs: Date.now(), found: [], qIndex: 0, correct: 0, remaining: jeu.duree, total: jeu.duree, done: false };
   if (jeu.type === 'top10') mjRenderTop10();
+  else if (jeu.type === 'devine') mjShowDevine();
   else mjShowQuestion();
   mjTimerId = setInterval(() => {
     if (getCurrentView() !== 'minijeux' || !minijeuxState) { mjClearTimer(); return; }
@@ -15427,6 +15436,7 @@ function mjUpdateTimerUI() {
 function mjTimeUp() {
   if (!minijeuxState) return;
   if (minijeuxState.jeu.type === 'top10') mjFinishTop10();
+  else if (minijeuxState.jeu.type === 'devine') mjFinishDevine();
   else mjFinishQuiz();
 }
 
@@ -15530,6 +15540,60 @@ function mjFinishQuiz() {
   mjFinish(minijeuxState.correct, tempsMs, { max: jeu.questions.length, type: 'quiz' });
 }
 
+// ---- Jeu type "Devine le joueur" : parcours affiché, réponse tapée au clavier ----
+function mjShowDevine() {
+  const jeu = minijeuxState.jeu;
+  const i = minijeuxState.qIndex;
+  const q = jeu.questions[i];
+  const c = document.getElementById('minijeu-content');
+  c.innerHTML = '<div class="mj-hero" style="text-align:left;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">' +
+    '<div class="mj-sub" style="margin:0;">' + tr('Player', 'Joueur') + ' ' + (i + 1) + '/' + jeu.questions.length + '</div>' +
+    '<div class="mj-timer low" id="mj-timer" style="font-size:22px;">--</div></div>' +
+    '<div class="mj-progressbar"><div id="mj-progress" style="width:100%"></div></div>' +
+    '<div class="mj-sub" style="text-align:center;margin-top:12px;">🧭 ' + tr('Guess the player from his career path:', 'Devine le joueur d\'après son parcours :') + '</div>' +
+    '<h2 style="text-align:center;margin:8px 0 14px;">' + escapeHtml(L(q.q)) + '</h2>' +
+    '<div id="mj-devine-fb" class="mj-sub" style="text-align:center;min-height:24px;font-size:16px;margin-bottom:6px;"></div>' +
+    '<div style="display:flex; gap:8px; justify-content:center; align-items:center; max-width:420px; margin:0 auto;">' +
+      '<input class="mj-input" id="mj-input" style="margin:0; flex:1;" placeholder="' + tr('Player name…', 'Nom du joueur…') + '" autocomplete="off" autocapitalize="off" spellcheck="false">' +
+      '<button class="btn" id="mj-add-btn" style="padding:11px 18px; font-size:18px;" title="' + tr('Validate', 'Valider') + '">✓</button>' +
+    '</div>' +
+    '<div style="margin-top:14px;text-align:center;"><button class="btn btn-secondary" id="mj-skip-btn" style="font-size:12px;">' + tr('Skip', 'Passer') + ' ⏭</button></div>' +
+    '</div>';
+  const input = document.getElementById('mj-input');
+  const submit = () => mjDevineAnswer(input.value);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+  document.getElementById('mj-add-btn').addEventListener('click', submit);
+  document.getElementById('mj-skip-btn').addEventListener('click', () => mjDevineAnswer(''));
+  setTimeout(() => { try { input.focus(); } catch (e) {} }, 60);
+  mjUpdateTimerUI();
+}
+
+function mjDevineAnswer(val) {
+  if (!minijeuxState) return;
+  const jeu = minijeuxState.jeu;
+  const q = jeu.questions[minijeuxState.qIndex];
+  const n = mjNormalize(val);
+  const ok = !!n && (mjNormalize(q.reponse) === n || (q.alias || []).some(a => mjNormalize(a) === n));
+  if (ok) minijeuxState.correct++;
+  ['mj-input', 'mj-add-btn', 'mj-skip-btn'].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
+  const fb = document.getElementById('mj-devine-fb');
+  if (fb) fb.innerHTML = (ok ? '✅ ' : '❌ ') + '<strong>' + escapeHtml(q.reponse) + '</strong>';
+  setTimeout(() => {
+    if (!minijeuxState) return;
+    minijeuxState.qIndex++;
+    if (minijeuxState.qIndex >= jeu.questions.length) { mjClearTimer(); mjFinishDevine(); }
+    else mjShowDevine();
+  }, 950);
+}
+
+function mjFinishDevine() {
+  if (!minijeuxState) return;
+  const jeu = minijeuxState.jeu;
+  const tempsMs = Date.now() - minijeuxState.startTs;
+  mjFinish(minijeuxState.correct, tempsMs, { max: jeu.questions.length, type: 'devine' });
+}
+
 async function mjFinish(score, tempsMs, detail) {
   if (!minijeuxState || minijeuxState.done) return;
   minijeuxState.done = true;
@@ -15572,6 +15636,9 @@ function mjResultHTML(jeu, row, already) {
     const missedChips = jeu.reponses.map((r, i) => foundSet[i] ? '' : '<span>' + escapeHtml(L(r.label)) + '</span>').join('');
     if (foundChips.trim()) answersHtml += '<div class="mj-found" style="justify-content:center;">' + foundChips + '</div>';
     if (missedChips.trim()) answersHtml += '<div class="mj-sub" style="margin-top:12px;">' + tr('Missed', 'Non trouvés') + '</div><div class="mj-missed" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;">' + missedChips + '</div>';
+  } else if (jeu.type === 'devine' && jeu.questions) {
+    const chips = jeu.questions.map(q => '<span>' + escapeHtml(q.reponse) + '</span>').join('');
+    answersHtml += '<div class="mj-sub" style="margin-top:12px;">' + tr('The players', 'Les joueurs') + '</div><div class="mj-found" style="justify-content:center;">' + chips + '</div>';
   }
   return '<div class="mj-hero">' +
     '<div class="mj-emoji">' + (already ? '📅' : '🎉') + '</div>' +
