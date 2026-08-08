@@ -15284,6 +15284,15 @@ function mjEpochDay(dateStr) {
 const MJ_QUIZ_PAR_JOUR = 7;
 function mjGameForDate(dateStr) {
   const D = mjEpochDay(dateStr), week = Math.floor(D / 7), rem = ((D % 7) + 7) % 7;
+  // Trappe de test (inoffensive) : ?mjtest=devine|quiz|top10 force le jeu du jour
+  // pour l'URL courante uniquement — n'affecte pas les autres joueurs.
+  try {
+    if (typeof location !== 'undefined' && location.search) {
+      const f = new URLSearchParams(location.search).get('mjtest');
+      if (f === 'devine') return mjDevineGame(week);
+      if (f === 'top10') return MJ_TOP10S[((week % MJ_TOP10S.length) + MJ_TOP10S.length) % MJ_TOP10S.length];
+    }
+  } catch (e) {}
   // Semaine : 5 j de quiz, 1 j de citation (rem 2), 1 j "devine le joueur" (rem 5)
   if (rem === 5) return mjDevineGame(week);
   if (rem === 2) {
