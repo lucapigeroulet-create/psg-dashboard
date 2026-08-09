@@ -872,7 +872,7 @@
       </div>
       <div class="card">
         <h2>💚 Hooper à surveiller</h2>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs avec un Hooper moyen élevé (≥ 17) sur leurs 3 dernières saisies.</p>
+        <p id="overview-hooper-watch-desc" style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs avec un Hooper moyen élevé (≥ 17) sur leurs 3 dernières saisies.</p>
         <div id="overview-hooper-watch"></div>
       </div>
     </div>
@@ -2762,6 +2762,18 @@
       </div>
     </div>
 
+    <!-- Humeur globale au réveil + licorne (SECONDE LIGUE uniquement) -->
+    <div class="card" id="hooper-mood-card" style="display:none;">
+      <div class="hooper-question">
+        <h3 style="font-size:15px; margin-bottom:4px;">🌅 Humeur globale au réveil</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Coche la (les) humeur(s) qui te correspond(ent) ce matin.</p>
+        <div id="hooper-mood-chips"></div>
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
+          <div id="hooper-unicorn-chip"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Notes facultatives -->
     <div class="card">
       <h3 style="font-size:15px; margin-bottom:4px;"><span data-en="📝 Anything else?" data-fr="📝 Autre chose à signaler ?">📝 Anything else?</span> <span style="font-size:11px; color:var(--text-dim); font-weight:normal;">(<span data-en="optional" data-fr="facultatif">optional</span>)</span></h3>
@@ -2809,7 +2821,7 @@
     </div>
 
     <div class="card">
-      <h2>Joueurs à surveiller (Hooper élevé ces 3 derniers jours)</h2>
+      <h2 id="hooper-alerts-title">Joueurs à surveiller (Hooper élevé ces 3 derniers jours)</h2>
       <div class="table-wrap">
         <table id="hooper-alerts-table">
           <thead><tr><th>Joueur</th><th>Groupe</th><th>Hooper moyen (3j)</th><th>Détail (Sleep / Fatigue / Stress / Soreness)</th><th>Dernière saisie</th></tr></thead>
@@ -7308,11 +7320,19 @@ function renderOverviewHooperWatch() {
     container.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px;">😊 Aucun joueur en alerte. Tout l\'effectif est en bon état de forme.</div>';
     return;
   }
+  const trendMode = (currentOrg === 'D2F');
+  const desc = document.getElementById('overview-hooper-watch-desc');
+  if (desc) desc.textContent = trendMode
+    ? "Joueuses dont l'état de forme monte ou baisse nettement sur les derniers jours."
+    : 'Joueurs avec un Hooper moyen élevé (≥ 17) sur leurs 3 dernières saisies.';
   container.innerHTML = watch.slice(0, 8).map(w => {
     const interp = interpretHooper(parseFloat(w.avg));
+    const right = trendMode
+      ? hooperTrendBadge(w) + ' <span style="font-size:11px;color:var(--text-dim);">(' + w.avg + '/28)</span>'
+      : '<span style="font-weight:700;color:' + interp.color + ';">' + w.avg + ' / 28</span>';
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);">' +
       '<div><b>' + escapeHtml(w.joueur) + '</b> <span style="font-size:11px;color:var(--text-dim);">' + escapeHtml(getJoueurInfo(w.joueur).groupe || '') + '</span></div>' +
-      '<div style="font-weight:700;color:' + interp.color + ';">' + w.avg + ' / 28</div>' +
+      '<div>' + right + '</div>' +
       '</div>';
   }).join('');
 }
@@ -18743,6 +18763,9 @@ async function renderPlayerHooper() {
     renderHooperScale(key, existing ? existing[key] : null);
   });
 
+  // Humeur au réveil + licorne (SECONDE LIGUE uniquement)
+  renderHooperMoodCard(existing);
+
   // Mannequin : visible si soreness existe et est > 1
   const soreness = existing ? existing.muscle_soreness : null;
   const painLocations = (existing && Array.isArray(existing.pain_locations)) ? existing.pain_locations : [];
@@ -18760,6 +18783,69 @@ async function renderPlayerHooper() {
 
   // Brancher les clics du mannequin (idempotent)
   bindMannequinClicks();
+}
+
+// Humeurs au réveil proposées (SECONDE LIGUE / D2F) — sélection multiple
+const HOOPER_MOODS = [
+  { key: 'joyeuse',   emoji: '😄', label: 'Joyeuse' },
+  { key: 'sereine',   emoji: '😌', label: 'Sereine' },
+  { key: 'motivee',   emoji: '💪', label: 'Motivée' },
+  { key: 'fatiguee',  emoji: '🥱', label: 'Fatiguée' },
+  { key: 'stressee',  emoji: '😰', label: 'Stressée' },
+  { key: 'triste',    emoji: '😔', label: 'Triste' },
+  { key: 'irritable', emoji: '😤', label: 'Irritable' },
+  { key: 'neutre',    emoji: '😐', label: 'Neutre' }
+];
+
+function hooperMoodLabel(key) {
+  const m = HOOPER_MOODS.find(x => x.key === key);
+  return m ? (m.emoji + ' ' + m.label) : key;
+}
+
+// Rend la carte "humeur au réveil" + case licorne — visible uniquement pour SECONDE LIGUE
+function renderHooperMoodCard(existing) {
+  const card = document.getElementById('hooper-mood-card');
+  if (!card) return;
+  const show = (currentOrg === 'D2F');
+  card.style.display = show ? '' : 'none';
+  if (!show) return;
+  const selected = (existing && Array.isArray(existing.humeur)) ? existing.humeur : [];
+  const chips = document.getElementById('hooper-mood-chips');
+  if (chips) {
+    chips.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px;">' + HOOPER_MOODS.map(m => {
+      const on = selected.includes(m.key);
+      return '<button type="button" class="hooper-btn" onclick="toggleHooperMood(\'' + m.key + '\')" ' +
+        'style="display:inline-flex;align-items:center;gap:6px;border:1px solid ' + (on ? 'var(--accent)' : 'var(--border)') + ';' +
+        'background:' + (on ? 'var(--accent)' : 'var(--bg-elevated)') + ';color:' + (on ? '#fff' : 'var(--text)') + ';' +
+        'border-radius:16px;padding:6px 12px;cursor:pointer;font-size:13px;font-weight:600;">' +
+        '<span style="font-size:18px;">' + m.emoji + '</span>' + m.label + '</button>';
+    }).join('') + '</div>';
+  }
+  const uni = document.getElementById('hooper-unicorn-chip');
+  if (uni) {
+    const on = !!(existing && existing.licorne);
+    uni.innerHTML = '<label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600;">' +
+      '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="toggleHooperUnicorn(this.checked)" style="width:18px;height:18px;cursor:pointer;"> ' +
+      '<span style="font-size:22px;">🦄</span> Humeur licorne</label>';
+  }
+}
+
+async function toggleHooperMood(key) {
+  const date = document.getElementById('hooper-date').value;
+  if (!date) return;
+  const existing = getHooper(date, hooperTargetJoueur);
+  let humeur = (existing && Array.isArray(existing.humeur)) ? existing.humeur.slice() : [];
+  if (humeur.includes(key)) humeur = humeur.filter(k => k !== key);
+  else humeur.push(key);
+  const ok = await saveHooperToSupabase(date, hooperTargetJoueur, { humeur });
+  if (ok) renderHooperMoodCard(getHooper(date, hooperTargetJoueur));
+}
+
+async function toggleHooperUnicorn(checked) {
+  const date = document.getElementById('hooper-date').value;
+  if (!date) return;
+  const ok = await saveHooperToSupabase(date, hooperTargetJoueur, { licorne: !!checked });
+  if (ok) renderHooperMoodCard(getHooper(date, hooperTargetJoueur));
 }
 
 function updatePainLocalization(soreness, currentLocations) {
@@ -18984,9 +19070,13 @@ async function renderStaffHooper() {
   const avg = validIndices.length > 0 ? (validIndices.reduce((a,b)=>a+b,0) / validIndices.length).toFixed(1) : '—';
   document.getElementById('hooper-stat-avg').textContent = avg;
 
-  // Joueurs à surveiller : Hooper >= 17 sur leurs 3 dernières saisies
+  // Joueurs à surveiller : Hooper >= 17 sur 3 saisies (ou tendance hausse/baisse pour SECONDE LIGUE)
   const playersToWatch = computePlayersToWatch();
   document.getElementById('hooper-stat-alerts').textContent = playersToWatch.length;
+  const alertsTitle = document.getElementById('hooper-alerts-title');
+  if (alertsTitle) alertsTitle.textContent = (currentOrg === 'D2F')
+    ? 'Joueuses à surveiller (tendance en hausse ou baisse sur les derniers jours)'
+    : 'Joueurs à surveiller (Hooper élevé ces 3 derniers jours)';
 
   // Taux de réponse aujourd'hui
   const today = toLocalISO(new Date());
@@ -19012,6 +19102,9 @@ async function renderStaffHooper() {
   renderStaffHooperAllTable();
 }
 
+// Seuil de variation (en points d'index Hooper) pour considérer une tendance notable (SECONDE LIGUE)
+const HOOPER_TREND_THRESHOLD = 3;
+
 function computePlayersToWatch() {
   // Pour chaque joueur, prendre ses 3 dernières saisies complètes et calculer la moyenne
   const byPlayer = {};
@@ -19021,13 +19114,29 @@ function computePlayersToWatch() {
     if (!byPlayer[h.joueur]) byPlayer[h.joueur] = [];
     byPlayer[h.joueur].push({ date: h.date, idx, h });
   });
+  // SECONDE LIGUE : on fait ressortir les joueuses dont la TENDANCE monte OU baisse
+  // sur les derniers jours (écart >= seuil), et non plus le simple niveau >= 17.
+  const isTrendMode = (currentOrg === 'D2F');
   const result = [];
   Object.entries(byPlayer).forEach(([joueur, entries]) => {
     entries.sort((a, b) => b.date.localeCompare(a.date));
     const last3 = entries.slice(0, 3);
     if (last3.length === 0) return;
     const avg = last3.reduce((s, e) => s + e.idx, 0) / last3.length;
-    if (avg >= 17) {
+    let flag, trendDelta = null, trendDir = null;
+    if (isTrendMode) {
+      if (last3.length >= 2) {
+        // écart entre la saisie la plus récente et la plus ancienne de la fenêtre
+        trendDelta = last3[0].idx - last3[last3.length - 1].idx;
+        trendDir = trendDelta > 0 ? 'up' : (trendDelta < 0 ? 'down' : 'flat');
+        flag = Math.abs(trendDelta) >= HOOPER_TREND_THRESHOLD;
+      } else {
+        flag = false; // pas assez de points pour dégager une tendance
+      }
+    } else {
+      flag = avg >= 17;
+    }
+    if (flag) {
       const lastEntry = last3[0].h;
       result.push({
         joueur,
@@ -19036,11 +19145,23 @@ function computePlayersToWatch() {
         fatigue: lastEntry.fatigue,
         stress: lastEntry.stress,
         soreness: lastEntry.muscle_soreness,
-        lastDate: last3[0].date
+        lastDate: last3[0].date,
+        trendDelta, trendDir
       });
     }
   });
+  if (isTrendMode) return result.sort((a, b) => Math.abs(b.trendDelta || 0) - Math.abs(a.trendDelta || 0));
   return result.sort((a, b) => parseFloat(b.avg) - parseFloat(a.avg));
+}
+
+// Badge de tendance Hooper (SECONDE LIGUE) : ▲ hausse (fatigue/stress en hausse) = rouge, ▼ baisse = vert
+function hooperTrendBadge(w) {
+  if (!w || w.trendDelta == null || w.trendDir === 'flat') return '';
+  const up = w.trendDir === 'up';
+  const color = up ? '#f87171' : 'var(--green)';
+  const arrow = up ? '▲' : '▼';
+  const sign = w.trendDelta > 0 ? '+' : '';
+  return '<span style="font-weight:800;color:' + color + ';">' + arrow + ' ' + sign + w.trendDelta + '</span>';
 }
 
 function renderStaffHooperTeamChart() {
@@ -19086,10 +19207,13 @@ function renderStaffHooperAlertsTable(watch) {
       const color = HOOPER_SCALE.find(i => i.value === v).color;
       return '<span style="display:inline-block; min-width:22px; padding:2px 6px; background:' + color + '; color:white; border-radius:4px; font-weight:600; font-size:11px;">' + v + '</span>';
     };
+    const avgCell = (currentOrg === 'D2F')
+      ? hooperTrendBadge(w) + ' <span style="font-size:11px;color:var(--text-dim);">(' + w.avg + ')</span>'
+      : '<b style="color:' + interpretHooper(parseFloat(w.avg)).color + ';">' + w.avg + '</b>';
     return '<tr>' +
       '<td><b>' + escapeHtml(w.joueur) + '</b></td>' +
       '<td>' + escapeHtml(info.groupe || '') + '</td>' +
-      '<td><b style="color:' + interpretHooper(parseFloat(w.avg)).color + ';">' + w.avg + '</b></td>' +
+      '<td>' + avgCell + '</td>' +
       '<td>' + detailItem(w.sleep) + ' ' + detailItem(w.fatigue) + ' ' + detailItem(w.stress) + ' ' + detailItem(w.soreness) + '</td>' +
       '<td style="font-size:11px;">' + formatDateDMY(w.lastDate) + '</td>' +
       '</tr>';
