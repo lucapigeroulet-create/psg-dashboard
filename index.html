@@ -748,7 +748,13 @@
   <button class="nav-btn" data-view="staff-hooper">💚 État de forme</button>
   <button class="nav-btn" data-view="rpe">💪 Charge RPE</button>
   <button class="nav-btn" data-view="gps">📡 Données GPS</button>
-  <button class="nav-btn" data-view="competition">🏆 Compétition</button>
+  <div class="nav-dropdown" id="nav-competition-dropdown">
+    <button type="button" class="nav-btn nav-dropdown-toggle" id="nav-competition-toggle" onclick="toggleCompetitionMenu(event)">🏆 Compétition <span style="font-size:10px;">▾</span></button>
+    <div class="nav-dropdown-menu" id="nav-competition-menu">
+      <button class="nav-btn" data-view="competition" onclick="ciTab('matchs')">📊 Statistiques match</button>
+      <button class="nav-btn" data-view="competition" onclick="ciTab('interne')">🏆 Compétition interne</button>
+    </div>
+  </div>
   <button class="nav-btn staff-only-btn" data-view="testing" id="nav-testing-btn">🧪 Testing</button>
   <div class="nav-dropdown" id="nav-medical-dropdown">
     <button type="button" class="nav-btn nav-dropdown-toggle staff-only-btn" id="nav-medical-toggle" onclick="toggleMedicalMenu(event)">🩺 Médical <span style="font-size:10px;">▾</span></button>
@@ -5521,6 +5527,9 @@ function applyRoleRestrictions() {
   relocateSeancePanels();
   // Le texte du bouton de déconnexion est géré par applyPlayerLanguage selon l'organisation
   const gestionDropdown = document.getElementById('nav-gestion-dropdown');
+  const competitionDropdown = document.getElementById('nav-competition-dropdown');
+  // Par défaut le menu déroulant Compétition (staff) est masqué ; réaffiché dans la branche staff/admin.
+  if (competitionDropdown) competitionDropdown.style.display = 'none';
   if (currentRole === 'lecteur') {
     // Pour un joueur : interface ultra-simplifiée avec seulement les onglets dédiés
     // Masquer TOUS les onglets staff et n'afficher que les onglets joueur
@@ -5597,9 +5606,10 @@ function applyRoleRestrictions() {
     // Afficher le bouton Saisie blessures direct
     document.querySelectorAll('.médical-only-btn').forEach(b => b.style.display = '');
   } else {
-    // Staff/admin : cacher les onglets joueur, réafficher le menu Gestion
+    // Staff/admin : cacher les onglets joueur, réafficher le menu Gestion + Compétition
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
     if (gestionDropdown) gestionDropdown.style.display = '';
+    if (competitionDropdown) competitionDropdown.style.display = '';
     // Le rôle 'staff' a une interface allégée par rapport à l'admin :
     // pas d'export JSON, pas de Notes médicales, pas de Paramètres.
     const staffLimited = (currentRole === 'staff');
@@ -6758,12 +6768,38 @@ function closeMedicalMenu() {
   const menu = document.getElementById('nav-medical-menu');
   if (menu) menu.classList.remove('open');
 }
+// Menu déroulant Compétition (même comportement que Gestion)
+function ciTab(t) { competitionTab = (t === 'interne') ? 'interne' : 'matchs'; }
+function toggleCompetitionMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('nav-competition-menu');
+  const toggle = document.getElementById('nav-competition-toggle');
+  if (!menu) return;
+  const willOpen = !menu.classList.contains('open');
+  menu.classList.toggle('open');
+  if (willOpen && toggle) {
+    const r = toggle.getBoundingClientRect();
+    menu.style.top = (r.bottom + 2) + 'px';
+    let left = r.left;
+    const menuWidth = menu.offsetWidth || 220;
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - menuWidth - 8);
+    }
+    menu.style.left = left + 'px';
+  }
+}
+function closeCompetitionMenu() {
+  const menu = document.getElementById('nav-competition-menu');
+  if (menu) menu.classList.remove('open');
+}
 // Fermer les menus si on clique ailleurs
 document.addEventListener('click', (e) => {
   const dd = document.getElementById('nav-gestion-dropdown');
   if (dd && !dd.contains(e.target)) closeGestionMenu();
   const md = document.getElementById('nav-medical-dropdown');
   if (md && !md.contains(e.target)) closeMedicalMenu();
+  const cd = document.getElementById('nav-competition-dropdown');
+  if (cd && !cd.contains(e.target)) closeCompetitionMenu();
 });
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -6791,8 +6827,15 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
       if (medicalViews.includes(view)) medicalToggle.classList.add('has-active');
       else medicalToggle.classList.remove('has-active');
     }
+    // Gérer l'état visuel du menu déroulant Compétition
+    const competitionToggle = document.getElementById('nav-competition-toggle');
+    if (competitionToggle) {
+      if (view === 'competition') competitionToggle.classList.add('has-active');
+      else competitionToggle.classList.remove('has-active');
+    }
     closeGestionMenu();
     closeMedicalMenu();
+    closeCompetitionMenu();
     // Si on est lecteur, ré-appliquer la langue à chaque changement de vue (au cas où la vue contient du nouveau contenu)
     if (currentRole === 'lecteur') setTimeout(applyPlayerLanguage, 0);
     // Render on demand
@@ -16048,7 +16091,9 @@ function setCompetitionTab(tab) {
 }
 
 function renderCompetition() {
-  // Vue sélectionnée via le menu déroulant (statistiques match / compétition interne)
+  // Vue sélectionnée : staff via le menu déroulant du nav (comme Gestion) ; joueur via le sélecteur intégré.
+  const tabsBar = document.getElementById('competition-tabs');
+  if (tabsBar) tabsBar.style.display = canWrite() ? 'none' : 'block';
   const tab = competitionTab || 'matchs';
   const paneM = document.getElementById('competition-pane-matchs');
   const paneI = document.getElementById('competition-pane-interne');
@@ -16131,12 +16176,12 @@ function renderCompetitionInterne() {
     html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;">Groupe</label>' +
       '<select id="ci-group" onchange="ciFillPlayerSelect();renderCiDayList();"><option value="">Tous</option>' +
       groups.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('') + '</select></div>';
-    html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;">Joueur</label>' +
-      '<select id="ci-joueur" style="min-width:160px;"></select></div>';
     html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;">Jeu (optionnel)</label>' +
       '<input type="text" id="ci-jeu" maxlength="60" placeholder="ex : tournoi 3v3" /></div>';
     html += '<button class="btn" onclick="addCompetitionInterneWin()">Ajouter</button>';
     html += '</div>';
+    html += '<div style="margin-top:10px;"><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:4px;">Joueurs — coche un ou plusieurs vainqueurs</label>' +
+      '<div id="ci-joueur-list" style="max-height:170px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg-card);display:flex;flex-wrap:wrap;gap:6px;"></div></div>';
     html += '<div id="ci-day-list" style="margin-top:14px;"></div>';
     html += '</div>';
   }
@@ -16184,18 +16229,24 @@ function renderCompetitionInterne() {
   renderCiRecap();
 }
 
-// Remplit le sélecteur de joueur selon le groupe choisi
+// Remplit la liste de joueurs (cases à cocher) selon le groupe choisi — sélection multiple
 function ciFillPlayerSelect() {
-  const sel = document.getElementById('ci-joueur');
-  if (!sel) return;
+  const box = document.getElementById('ci-joueur-list');
+  if (!box) return;
   const grp = (document.getElementById('ci-group') || {}).value || '';
   const joueurs = (state.joueurs || [])
     .filter(j => !grp || j.groupe === grp)
     .map(j => j.nom)
     .sort((a, b) => a.localeCompare(b));
-  const cur = sel.value;
-  sel.innerHTML = joueurs.map(n => '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>').join('');
-  if (cur) for (const o of sel.options) if (o.value === cur) { sel.value = cur; break; }
+  if (joueurs.length === 0) {
+    box.innerHTML = '<span style="font-size:12px;color:var(--text-dim);">Aucun joueur dans ce groupe.</span>';
+    return;
+  }
+  box.innerHTML = joueurs.map(n => {
+    const id = 'cij-' + n.replace(/[^a-zA-Z0-9]/g, '_');
+    return '<label for="' + id + '" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:14px;padding:3px 10px;cursor:pointer;">' +
+      '<input type="checkbox" class="ci-joueur-cb" id="' + id + '" value="' + escapeHtml(n) + '" style="cursor:pointer;"> ' + escapeHtml(n) + '</label>';
+  }).join('');
 }
 
 // Liste des vainqueurs de la date choisie (avec suppression pour le staff)
@@ -16262,21 +16313,24 @@ function renderCiRecap() {
 async function addCompetitionInterneWin() {
   if (!canWrite()) { toast('Réservé au staff/admin', 'error'); return; }
   const date = (document.getElementById('ci-date') || {}).value;
-  const joueur = (document.getElementById('ci-joueur') || {}).value;
   const jeu = ((document.getElementById('ci-jeu') || {}).value || '').trim() || null;
   if (!date) { toast('Choisis une date', 'error'); return; }
-  if (!joueur) { toast('Choisis un joueur', 'error'); return; }
-  if ((state.bdd_competition_interne || []).some(r => r.date === date && r.joueur === joueur)) {
-    toast(joueur + ' est déjà vainqueur ce jour-là', 'error'); return;
-  }
+  const checked = [...document.querySelectorAll('.ci-joueur-cb:checked')].map(cb => cb.value);
+  if (checked.length === 0) { toast('Coche au moins un joueur', 'error'); return; }
+  // Écarter ceux déjà enregistrés vainqueurs ce jour-là
+  const existing = (state.bdd_competition_interne || []);
+  const toAdd = checked.filter(j => !existing.some(r => r.date === date && r.joueur === j));
+  const already = checked.length - toAdd.length;
+  if (toAdd.length === 0) { toast('Déjà enregistré(s) ce jour-là', 'error'); return; }
   try {
-    const row = { org: currentOrg, date: date, joueur: joueur, jeu: jeu };
-    const { data, error } = await sb.from('competition_interne').insert(row).select();
+    const rows = toAdd.map(j => ({ org: currentOrg, date: date, joueur: j, jeu: jeu }));
+    const { data, error } = await sb.from('competition_interne').insert(rows).select();
     if (error) { toast('Erreur : ' + error.message, 'error'); return; }
-    const saved = (data && data[0]) ? data[0] : row;
-    (state.bdd_competition_interne = state.bdd_competition_interne || []).push(saved);
+    const saved = (data && data.length) ? data : rows;
+    (state.bdd_competition_interne = state.bdd_competition_interne || []).push(...saved);
+    document.querySelectorAll('.ci-joueur-cb:checked').forEach(cb => { cb.checked = false; });
     const jeuInput = document.getElementById('ci-jeu'); if (jeuInput) jeuInput.value = '';
-    toast('🏅 ' + joueur + ' ajouté', 'success');
+    toast('🏅 ' + toAdd.length + ' vainqueur(s) ajouté(s)' + (already ? ' · ' + already + ' déjà présent(s)' : ''), 'success');
     renderCiDayList();
     renderCiRecap();
   } catch (e) { toast('Erreur : ' + e.message, 'error'); }
