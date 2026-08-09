@@ -15885,6 +15885,95 @@ async function mjAdminDeleteScore(id) {
   renderMinijeuxAdmin(); renderMinijeuxLeaderboard(); renderMinijeuxCumul();
 }
 
+// Export PDF des notes de performance des joueurs — grille joueur × match, tenue sur UNE seule page.
+// Respecte le filtre équipe courant (competitionTeamFilter).
+function exportPerfNotesPDF() {
+  if (!canWrite()) { toast('Réservé au staff/admin', 'error'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non disponible (vérifie ta connexion).', 'error'); return; }
+
+  const allMatchs = (state.bdd_matchs || []);
+  const matchs = (competitionTeamFilter ? allMatchs.filter(m => m.groupe === competitionTeamFilter) : allMatchs)
+    .slice().sort((a, b) => (a.date < b.date ? -1 : (a.date > b.date ? 1 : 0)));
+  if (matchs.length === 0) { toast('Aucun match à exporter.', 'error'); return; }
+  const agg = competitionAggregate(matchs);
+  const players = Object.keys(agg).sort((a, b) => a.localeCompare(b));
+  if (players.length === 0) { toast('Aucune donnée joueur à exporter.', 'error'); return; }
+
+  const dShort = (d) => d.slice(8) + '/' + d.slice(5, 7);
+  const shortOpp = (m) => (m.type_match === 'interne') ? 'Interne' : ((m.adversaire || '').slice(0, 9));
+  const head = [['Joueur', ...matchs.map(m => dShort(m.date) + '\n' + shortOpp(m)), 'Moy', 'Coachs']];
+  const body = players.map(p => {
+    const notes = matchs.map(m => getMatchPerfNote(m.id, p));
+    const vals = notes.filter(n => n != null).map(Number);
+    const moy = vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+    const coachVals = matchs.map(m => {
+      const c = (m.composition || []).find(x => x.joueur === p);
+      return (c && c.note_coachs_avg != null) ? Number(c.note_coachs_avg) : null;
+    }).filter(n => n != null);
+    const moyC = coachVals.length ? (coachVals.reduce((a, b) => a + b, 0) / coachVals.length) : null;
+    return [p, ...notes.map(n => n != null ? String(n) : '·'), moy != null ? moy.toFixed(1) : '—', moyC != null ? moyC.toFixed(1) : '—'];
+  });
+
+  const { jsPDF } = window.jspdf;
+  const probeDoc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const pageW = probeDoc.internal.pageSize.getWidth();
+  const sideMargin = 28, topY = 62, bottomMargin = 22;
+  const nameColW = Math.max(64, Math.min(110, pageW * 0.11));
+
+  // Fabrique les options autoTable pour une taille de police donnée
+  const makeOpts = (fs, pad) => ({
+    head, body, startY: topY,
+    margin: { left: sideMargin, right: sideMargin, bottom: bottomMargin },
+    tableWidth: pageW - sideMargin * 2,
+    styles: { fontSize: fs, halign: 'center', valign: 'middle', cellPadding: pad, overflow: 'linebreak', lineWidth: 0.3, lineColor: [214, 214, 214] },
+    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontSize: Math.max(5, fs - 1), valign: 'middle' },
+    columnStyles: { 0: { halign: 'left', fontStyle: 'bold', cellWidth: nameColW } },
+    didParseCell: function (d) {
+      if (d.section !== 'body') return;
+      const col = d.column.index;
+      if (col >= 1 && col <= matchs.length) {
+        const raw = d.cell.raw;
+        const v = (raw === '·' || raw == null) ? null : parseFloat(raw);
+        if (v != null && !isNaN(v)) {
+          if (v >= 7) d.cell.styles.fillColor = [220, 246, 231];
+          else if (v < 5) d.cell.styles.fillColor = [252, 226, 226];
+        } else {
+          d.cell.styles.textColor = [180, 180, 180];
+        }
+      } else if (col === matchs.length + 1) {
+        d.cell.styles.fontStyle = 'bold';
+        d.cell.styles.fillColor = [237, 242, 247];
+      }
+    },
+    pageBreak: 'avoid',
+    rowPageBreak: 'avoid'
+  });
+
+  // Choisir la plus grande police qui produit RÉELLEMENT une seule page.
+  // On teste sur un document jetable (la mise en page autoTable dépend des retours à la ligne).
+  let chosen = { fs: 3, pad: 1 };
+  for (const fs of [9, 8, 7, 6, 5, 4, 3]) {
+    const pad = fs <= 6 ? 1 : 2;
+    const probe = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    probe.autoTable(makeOpts(fs, pad));
+    if (probe.internal.getNumberOfPages() === 1) { chosen = { fs, pad }; break; }
+  }
+
+  // Document final
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  doc.setFontSize(14); doc.setTextColor(20);
+  doc.text('Notes de performance — ' + orgLabelText(currentOrg), sideMargin, 28);
+  doc.setFontSize(9); doc.setTextColor(110);
+  const sub = (competitionTeamFilter ? 'Équipe : ' + competitionTeamFilter + ' · ' : '') +
+    matchs.length + ' match' + (matchs.length > 1 ? 's' : '') + ' · ' + players.length + ' joueurs · ' +
+    'généré le ' + formatDateFR(toLocalISO(new Date()));
+  doc.text(sub, sideMargin, 45);
+  doc.autoTable(makeOpts(chosen.fs, chosen.pad));
+
+  const safeTeam = competitionTeamFilter ? ('-' + competitionTeamFilter.replace(/[^a-zA-Z0-9]/g, '')) : '';
+  doc.save('notes-performance-' + currentOrg + safeTeam + '-' + toLocalISO(new Date()) + '.pdf');
+}
+
 function renderCompetition() {
   const filters = document.getElementById('competition-filters');
   const content = document.getElementById('competition-content');
@@ -15912,6 +16001,7 @@ function renderCompetitionStaff(filters, content, matchs) {
   fh += '<option value="">— Choisir un match —</option>';
   matchs.forEach(m => fh += '<option value="' + m.id + '"' + (competitionDetailMatch === m.id ? ' selected' : '') + '>' + formatDateFR(m.date) + ' · ' + escapeHtml(m.adversaire) + (m.groupe ? ' (' + escapeHtml(m.groupe) + ')' : '') + '</option>');
   fh += '</select></div>';
+  fh += '<div class="filter-group"><label>&nbsp;</label><button class="btn btn-secondary" onclick="exportPerfNotesPDF()">📄 Exporter notes de perf (PDF)</button></div>';
   filters.innerHTML = fh;
 
   const filtered = (competitionTeamFilter ? matchs.filter(m => m.groupe === competitionTeamFilter) : matchs);
