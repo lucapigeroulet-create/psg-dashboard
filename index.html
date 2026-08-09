@@ -1987,12 +1987,25 @@
 
   <div class="view" id="view-competition">
     <div class="card">
-      <h2>🏆 Compétition — Statistiques de match</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" id="competition-intro">
-        Statistiques individuelles des joueurs sur les matchs : temps de jeu, buts, passes décisives, note du staff et note personnelle du joueur.
-      </p>
-      <div id="competition-filters" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px;"></div>
-      <div id="competition-content"></div>
+      <h2>🏆 Compétition</h2>
+      <div id="competition-tabs" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+        <button id="comp-tab-matchs" class="btn" onclick="setCompetitionTab('matchs')">📊 Statistiques matchs</button>
+        <button id="comp-tab-interne" class="btn btn-secondary" onclick="setCompetitionTab('interne')">🏆 Compétition interne</button>
+      </div>
+
+      <!-- Onglet : statistiques de match -->
+      <div id="competition-pane-matchs">
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" id="competition-intro">
+          Statistiques individuelles des joueurs sur les matchs : temps de jeu, buts, passes décisives, note du staff et note personnelle du joueur.
+        </p>
+        <div id="competition-filters" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px;"></div>
+        <div id="competition-content"></div>
+      </div>
+
+      <!-- Onglet : compétition interne (vainqueur du jeu de fin) -->
+      <div id="competition-pane-interne" style="display:none;">
+        <div id="competition-interne-content"></div>
+      </div>
     </div>
   </div>
 
@@ -5738,7 +5751,8 @@ async function loadState() {
     bdd_test_types: [],
     bdd_test_results: [],
     bdd_player_aliases: [],
-    bdd_adversaire_logos: []
+    bdd_adversaire_logos: [],
+    bdd_competition_interne: []
   };
   const setLoad = (t) => { document.getElementById('loading-text').textContent = t; };
 
@@ -5822,6 +5836,11 @@ async function loadState() {
       const { data: mnotes } = await sb.from('match_notes').select('*').eq('org', currentOrg);
       state.bdd_match_notes = mnotes || [];
     } catch(e) { state.bdd_match_notes = []; }
+
+    try {
+      const { data: compInt } = await sb.from('competition_interne').select('*').eq('org', currentOrg).order('date', { ascending: false });
+      state.bdd_competition_interne = compInt || [];
+    } catch(e) { state.bdd_competition_interne = []; }
 
     setLoad('Chargement des coachs...');
     try {
@@ -16019,7 +16038,26 @@ function exportPerfNotesPDF(singleMatchId) {
   doc.save(fileName);
 }
 
+let competitionTab = 'matchs';
+function setCompetitionTab(tab) {
+  competitionTab = (tab === 'interne') ? 'interne' : 'matchs';
+  renderCompetition();
+}
+
 function renderCompetition() {
+  // Onglets (statistiques matchs / compétition interne)
+  const tab = competitionTab || 'matchs';
+  const paneM = document.getElementById('competition-pane-matchs');
+  const paneI = document.getElementById('competition-pane-interne');
+  const btnM = document.getElementById('comp-tab-matchs');
+  const btnI = document.getElementById('comp-tab-interne');
+  if (paneM) paneM.style.display = (tab === 'matchs') ? 'block' : 'none';
+  if (paneI) paneI.style.display = (tab === 'interne') ? 'block' : 'none';
+  if (btnM) btnM.className = (tab === 'matchs') ? 'btn' : 'btn btn-secondary';
+  if (btnI) btnI.className = (tab === 'interne') ? 'btn' : 'btn btn-secondary';
+
+  if (tab === 'interne') { renderCompetitionInterne(); return; }
+
   const filters = document.getElementById('competition-filters');
   const content = document.getElementById('competition-content');
   if (!content) return;
@@ -16031,6 +16069,228 @@ function renderCompetition() {
   }
   if (currentRole === 'lecteur') renderCompetitionPlayer(filters, content, matchs);
   else renderCompetitionStaff(filters, content, matchs);
+}
+
+// ============================================================================
+// COMPÉTITION INTERNE — vainqueur(s) du "jeu de fin" à chaque entraînement
+// Saisie par jour (staff) + classement sur période (semaine / mois / libre).
+// ============================================================================
+function ci_mondayOf(dStr) {
+  const dt = new Date(dStr + 'T00:00:00');
+  const day = (dt.getDay() + 6) % 7; // 0 = lundi
+  dt.setDate(dt.getDate() - day);
+  return toLocalISO(dt);
+}
+function ci_addDays(dStr, n) {
+  const dt = new Date(dStr + 'T00:00:00');
+  dt.setDate(dt.getDate() + n);
+  return toLocalISO(dt);
+}
+// Renvoie la plage [start, end] (ISO) selon les contrôles de période courants
+function ci_currentRange() {
+  const period = (document.getElementById('ci-period') || {}).value || 'semaine';
+  if (period === 'mois') {
+    const val = (document.getElementById('ci-ref-month') || {}).value || toLocalISO(new Date()).slice(0, 7);
+    const [y, mo] = val.split('-').map(Number);
+    const start = val + '-01';
+    const end = toLocalISO(new Date(y, mo, 0)); // jour 0 du mois suivant = dernier jour du mois courant
+    return { start, end, label: 'Mois de ' + val };
+  }
+  if (period === 'libre') {
+    const from = (document.getElementById('ci-from') || {}).value || '';
+    const to = (document.getElementById('ci-to') || {}).value || '';
+    const start = from || '0000-01-01';
+    const end = to || '9999-12-31';
+    return { start, end, label: (from ? formatDateFR(from) : '…') + ' → ' + (to ? formatDateFR(to) : '…') };
+  }
+  // semaine (lundi → dimanche contenant la date de référence)
+  const ref = (document.getElementById('ci-ref-date') || {}).value || toLocalISO(new Date());
+  const start = ci_mondayOf(ref);
+  const end = ci_addDays(start, 6);
+  return { start, end, label: 'Semaine du ' + formatDateFR(start) };
+}
+
+function renderCompetitionInterne() {
+  const container = document.getElementById('competition-interne-content');
+  if (!container) return;
+  const staff = canWrite();
+  const today = toLocalISO(new Date());
+  const groups = (typeof getAllGroups === 'function' ? getAllGroups() : (state.groupes || []));
+
+  let html = '';
+  html += '<p style="color:var(--text-dim);font-size:12px;margin-bottom:14px;">Désigne le(s) vainqueur(s) du <b>jeu de fin</b> à chaque entraînement, puis consulte le classement sur la période de ton choix.</p>';
+
+  // ----- Saisie (staff/admin) -----
+  if (staff) {
+    html += '<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:18px;">';
+    html += '<h3 style="margin-top:0;">➕ Vainqueur(s) du jour</h3>';
+    html += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">';
+    html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;">Date</label>' +
+      '<input type="date" id="ci-date" value="' + today + '" onchange="renderCiDayList()" /></div>';
+    html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;">Groupe</label>' +
+      '<select id="ci-group" onchange="ciFillPlayerSelect();renderCiDayList();"><option value="">Tous</option>' +
+      groups.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('') + '</select></div>';
+    html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;">Joueur</label>' +
+      '<select id="ci-joueur" style="min-width:160px;"></select></div>';
+    html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;">Jeu (optionnel)</label>' +
+      '<input type="text" id="ci-jeu" maxlength="60" placeholder="ex : tournoi 3v3" /></div>';
+    html += '<button class="btn" onclick="addCompetitionInterneWin()">Ajouter</button>';
+    html += '</div>';
+    html += '<div id="ci-day-list" style="margin-top:14px;"></div>';
+    html += '</div>';
+  }
+
+  // ----- Classement -----
+  const curMonth = today.slice(0, 7);
+  html += '<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:14px;">';
+  html += '<h3 style="margin-top:0;">🏆 Classement des vainqueurs</h3>';
+  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;">';
+  html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;">Période</label>' +
+    '<select id="ci-period" onchange="renderCompetitionInterne()">' +
+    '<option value="semaine">Semaine</option><option value="mois">Mois</option><option value="libre">Libre</option>' +
+    '</select></div>';
+  // Contrôles spécifiques à la période (remplis après insertion via ciPeriod placeholders)
+  html += '<div id="ci-period-controls" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;"></div>';
+  html += '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;">Groupe</label>' +
+    '<select id="ci-recap-group" onchange="renderCiRecap()"><option value="">Tous</option>' +
+    groups.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('') + '</select></div>';
+  html += '</div>';
+  html += '<div id="ci-recap"></div>';
+  html += '</div>';
+
+  container.innerHTML = html;
+
+  // Contrôles de période (dépendent du <select> qui vient d'être posé)
+  const period = (document.getElementById('ci-period') || {}).value || 'semaine';
+  const pc = document.getElementById('ci-period-controls');
+  if (pc) {
+    if (period === 'mois') {
+      pc.innerHTML = '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;">Mois</label>' +
+        '<input type="month" id="ci-ref-month" value="' + curMonth + '" onchange="renderCiRecap()" /></div>';
+    } else if (period === 'libre') {
+      pc.innerHTML = '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;">Du</label>' +
+        '<input type="date" id="ci-from" onchange="renderCiRecap()" /></div>' +
+        '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;">Au</label>' +
+        '<input type="date" id="ci-to" onchange="renderCiRecap()" /></div>';
+    } else {
+      pc.innerHTML = '<div><label style="display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;">Dans la semaine du</label>' +
+        '<input type="date" id="ci-ref-date" value="' + today + '" onchange="renderCiRecap()" /></div>';
+    }
+  }
+
+  if (staff) ciFillPlayerSelect();
+  if (staff) renderCiDayList();
+  renderCiRecap();
+}
+
+// Remplit le sélecteur de joueur selon le groupe choisi
+function ciFillPlayerSelect() {
+  const sel = document.getElementById('ci-joueur');
+  if (!sel) return;
+  const grp = (document.getElementById('ci-group') || {}).value || '';
+  const joueurs = (state.joueurs || [])
+    .filter(j => !grp || j.groupe === grp)
+    .map(j => j.nom)
+    .sort((a, b) => a.localeCompare(b));
+  const cur = sel.value;
+  sel.innerHTML = joueurs.map(n => '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>').join('');
+  if (cur) for (const o of sel.options) if (o.value === cur) { sel.value = cur; break; }
+}
+
+// Liste des vainqueurs de la date choisie (avec suppression pour le staff)
+function renderCiDayList() {
+  const box = document.getElementById('ci-day-list');
+  if (!box) return;
+  const date = (document.getElementById('ci-date') || {}).value || toLocalISO(new Date());
+  const grp = (document.getElementById('ci-group') || {}).value || '';
+  let rows = (state.bdd_competition_interne || []).filter(r => r.date === date);
+  if (grp) rows = rows.filter(r => getJoueurInfo(r.joueur).groupe === grp);
+  rows.sort((a, b) => a.joueur.localeCompare(b.joueur));
+  if (rows.length === 0) {
+    box.innerHTML = '<div style="font-size:12px;color:var(--text-dim);">Aucun vainqueur enregistré pour le ' + formatDateFR(date) + (grp ? ' (' + escapeHtml(grp) + ')' : '') + '.</div>';
+    return;
+  }
+  let h = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Vainqueur(s) du ' + formatDateFR(date) + ' :</div>';
+  h += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+  rows.forEach(r => {
+    h += '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:4px 10px;font-size:13px;">' +
+      '🏅 <b>' + escapeHtml(r.joueur) + '</b>' + (r.jeu ? ' <span style="color:var(--text-dim);font-size:11px;">(' + escapeHtml(r.jeu) + ')</span>' : '') +
+      ' <button title="Supprimer" onclick="deleteCompetitionInterneWin(\'' + r.id + '\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;line-height:1;padding:0;">×</button></span>';
+  });
+  h += '</div>';
+  box.innerHTML = h;
+}
+
+// Classement sur la période courante
+function renderCiRecap() {
+  const box = document.getElementById('ci-recap');
+  if (!box) return;
+  const { start, end, label } = ci_currentRange();
+  const grp = (document.getElementById('ci-recap-group') || {}).value || '';
+  let rows = (state.bdd_competition_interne || []).filter(r => r.date >= start && r.date <= end);
+  if (grp) rows = rows.filter(r => getJoueurInfo(r.joueur).groupe === grp);
+
+  const counts = {};
+  const days = {};
+  rows.forEach(r => {
+    counts[r.joueur] = (counts[r.joueur] || 0) + 1;
+    (days[r.joueur] = days[r.joueur] || new Set()).add(r.date);
+  });
+  const players = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b));
+
+  let h = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Période : <b>' + escapeHtml(label) + '</b> · ' + rows.length + ' victoire' + (rows.length > 1 ? 's' : '') + '</div>';
+  if (players.length === 0) {
+    box.innerHTML = h + '<div style="font-size:13px;color:var(--text-dim);padding:8px;">Aucune victoire sur cette période.</div>';
+    return;
+  }
+  h += '<div class="table-wrap"><table style="font-size:13px;"><thead><tr>' +
+    '<th style="text-align:left;">#</th><th style="text-align:left;">Joueur</th><th style="text-align:left;">Groupe</th><th>Victoires</th></tr></thead><tbody>';
+  players.forEach((p, i) => {
+    const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : (i + 1)));
+    h += '<tr>' +
+      '<td style="text-align:left;">' + medal + '</td>' +
+      '<td style="text-align:left;font-weight:600;">' + escapeHtml(p) + '</td>' +
+      '<td style="text-align:left;color:var(--text-dim);">' + escapeHtml(getJoueurInfo(p).groupe || '') + '</td>' +
+      '<td style="text-align:center;font-weight:700;color:var(--accent-light);">' + counts[p] + '</td>' +
+      '</tr>';
+  });
+  h += '</tbody></table></div>';
+  box.innerHTML = h;
+}
+
+async function addCompetitionInterneWin() {
+  if (!canWrite()) { toast('Réservé au staff/admin', 'error'); return; }
+  const date = (document.getElementById('ci-date') || {}).value;
+  const joueur = (document.getElementById('ci-joueur') || {}).value;
+  const jeu = ((document.getElementById('ci-jeu') || {}).value || '').trim() || null;
+  if (!date) { toast('Choisis une date', 'error'); return; }
+  if (!joueur) { toast('Choisis un joueur', 'error'); return; }
+  if ((state.bdd_competition_interne || []).some(r => r.date === date && r.joueur === joueur)) {
+    toast(joueur + ' est déjà vainqueur ce jour-là', 'error'); return;
+  }
+  try {
+    const row = { org: currentOrg, date: date, joueur: joueur, jeu: jeu };
+    const { data, error } = await sb.from('competition_interne').insert(row).select();
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+    const saved = (data && data[0]) ? data[0] : row;
+    (state.bdd_competition_interne = state.bdd_competition_interne || []).push(saved);
+    const jeuInput = document.getElementById('ci-jeu'); if (jeuInput) jeuInput.value = '';
+    toast('🏅 ' + joueur + ' ajouté', 'success');
+    renderCiDayList();
+    renderCiRecap();
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); }
+}
+
+async function deleteCompetitionInterneWin(id) {
+  if (!canWrite()) { toast('Réservé au staff/admin', 'error'); return; }
+  try {
+    const { error } = await sb.from('competition_interne').delete().eq('id', id);
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+    state.bdd_competition_interne = (state.bdd_competition_interne || []).filter(r => r.id !== id);
+    toast('Vainqueur retiré', 'success');
+    renderCiDayList();
+    renderCiRecap();
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); }
 }
 
 function renderCompetitionStaff(filters, content, matchs) {
