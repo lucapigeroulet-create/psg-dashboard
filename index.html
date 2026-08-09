@@ -19590,15 +19590,15 @@ function renderPlayerMatchNotation(date, joueur, m) {
   // Le joueur estime la QUALITÉ de son match (pas son effort). À saisir en même temps que la RPE.
   const myPerf = getMyMatchPerfNote(m.id);
   const matchIdEsc = String(m.id).replace(/'/g, "\\'");
-  const perfMissing = (rpeUnique !== null && myPerf == null);
-  html += '<div style="margin-top:14px;padding:12px;border-radius:8px;background:var(--bg-elevated);border:1px solid ' + (perfMissing ? '#fbbf24' : 'var(--border)') + ';">';
-  html += '<div style="font-size:13px;font-weight:700;margin-bottom:2px;">🎯 ' + tr('My performance rating', 'Ma note de performance') + '</div>';
-  html += '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">' + tr("Rate how well you played this match, out of 10 (same scale as the coach's rating). This is not your effort — it's your own estimate of your performance.", "Estime la qualité de ton match, sur 10 (même échelle que la note du coach). Ce n'est pas ton effort ressenti, mais ta propre estimation de ta performance.") + '</div>';
+  const perfMissing = (myPerf == null);
+  html += '<div style="margin-top:14px;padding:12px;border-radius:8px;background:var(--bg-elevated);border:1px solid ' + (perfMissing && !locked ? 'var(--red)' : 'var(--border)') + ';">';
+  html += '<div style="font-size:13px;font-weight:700;margin-bottom:2px;">🎯 ' + tr('My performance rating', 'Ma note de performance') + ' <span style="color:var(--red);">*</span></div>';
+  html += '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">' + tr("Rate how well you played this match, out of 10. This is not your effort — it's your own estimate of your performance. Required.", "Estime la qualité de ton match, sur 10. Ce n'est pas ton effort ressenti, mais ta propre estimation de ta performance. Obligatoire.") + '</div>';
   if (locked) {
     html += '<div style="font-size:15px;font-weight:700;">' + (myPerf != null ? myPerf + ' / 10' : tr('No rating submitted', 'Aucune note saisie')) + '</div>';
   } else {
-    html += '<input type="number" min="0" max="10" step="0.5" value="' + (myPerf != null ? myPerf : '') + '" onchange="savePlayerMatchPerf(\'' + matchIdEsc + '\', this.value)" placeholder="0-10" style="width:96px;background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:15px;font-weight:700;text-align:center;" />';
-    if (perfMissing) html += '<div style="margin-top:6px;font-size:12px;color:#fbbf24;font-weight:600;">⚠️ ' + tr("Add your performance rating to complete this match.", "Ajoute ta note de performance pour compléter ce match.") + '</div>';
+    html += '<input type="number" min="0" max="10" step="0.5" required value="' + (myPerf != null ? myPerf : '') + '" onchange="savePlayerMatchPerf(\'' + matchIdEsc + '\', this.value)" placeholder="0-10" style="width:96px;background:var(--bg-card);color:var(--text);border:1px solid ' + (perfMissing ? 'var(--red)' : 'var(--border)') + ';border-radius:6px;padding:8px;font-size:15px;font-weight:700;text-align:center;" />';
+    if (perfMissing) html += '<div style="margin-top:6px;font-size:12px;color:var(--red);font-weight:600;">⚠️ ' + tr("Performance rating required to complete this match.", "Note de performance obligatoire pour valider ce match.") + '</div>';
   }
   html += '</div>';
 
