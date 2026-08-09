@@ -1883,6 +1883,24 @@
 
       <div class="form-row">
         <div>
+          <label>Type de match</label>
+          <select id="match-type" onchange="onMatchTypeChange()">
+            <option value="">— Choisir —</option>
+            <option value="amical">Amical</option>
+            <option value="championnat">Championnat</option>
+            <option value="coupe">Coupe</option>
+            <option value="interne">Opposition interne</option>
+            <option value="autre">Autre</option>
+          </select>
+        </div>
+        <div id="match-type-detail-wrap" style="display:none;">
+          <label id="match-type-detail-label">Détail</label>
+          <input type="text" id="match-type-detail" placeholder="" />
+        </div>
+      </div>
+
+      <div class="form-row" id="match-adv-row">
+        <div>
           <label>Adversaire <span style="color:var(--red);">*</span></label>
           <input type="text" id="match-adversaire" maxlength="100" placeholder="Ex: Olympique Lyonnais" />
         </div>
@@ -1901,28 +1919,11 @@
 
       <div class="form-row">
         <div>
-          <label>Type de match</label>
-          <select id="match-type" onchange="onMatchTypeChange()">
-            <option value="">— Choisir —</option>
-            <option value="amical">Amical</option>
-            <option value="championnat">Championnat</option>
-            <option value="coupe">Coupe</option>
-            <option value="autre">Autre</option>
-          </select>
-        </div>
-        <div id="match-type-detail-wrap" style="display:none;">
-          <label id="match-type-detail-label">Détail</label>
-          <input type="text" id="match-type-detail" placeholder="" />
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div>
           <label id="match-label-score">Score PSG</label>
           <input type="number" id="match-score-psg" min="0" placeholder="0" />
         </div>
         <div>
-          <label>Score adversaire</label>
+          <label id="match-label-score-adv">Score adversaire</label>
           <input type="number" id="match-score-adv" min="0" placeholder="0" />
         </div>
         <div>
@@ -13840,6 +13841,18 @@ function onMatchTypeChange() {
   const label = document.getElementById('match-type-detail-label');
   const input = document.getElementById('match-type-detail');
   if (!wrap || !label || !input) return;
+
+  // Opposition interne : PSG contre PSG → pas d'adversaire, uniquement le score.
+  // On masque tout le bloc adversaire/niveau/lieu et on adapte les libellés de score.
+  const isInterne = (t === 'interne');
+  const advRow = document.getElementById('match-adv-row');
+  if (advRow) advRow.style.display = isInterne ? 'none' : '';
+  const lblScore = document.getElementById('match-label-score');
+  const lblScoreAdv = document.getElementById('match-label-score-adv');
+  const orgLabel = orgLabelText(currentOrg || 'PSG');
+  if (lblScore) lblScore.textContent = isInterne ? 'Score équipe A' : ('Score ' + orgLabel);
+  if (lblScoreAdv) lblScoreAdv.textContent = isInterne ? 'Score équipe B' : 'Score adversaire';
+
   if (t === 'championnat') {
     wrap.style.display = '';
     label.textContent = 'N° de journée';
@@ -13853,7 +13866,7 @@ function onMatchTypeChange() {
     label.textContent = 'Précision';
     input.placeholder = 'ex : tournoi U15';
   } else {
-    // amical ou aucun choix → pas de champ détail
+    // amical, opposition interne ou aucun choix → pas de champ détail
     wrap.style.display = 'none';
     input.value = '';
   }
@@ -14218,8 +14231,12 @@ async function migrateRPESeanceKey(oldDate, oldNom, newDate, newNom) {
 async function saveMatch() {
   if (!canWrite()) { toast('Réservé au staff/admin', 'error'); return; }
   const date = document.getElementById('match-date').value;
-  const adversaire = document.getElementById('match-adversaire').value.trim();
-  if (!date || !adversaire) { toast('Date et adversaire obligatoires', 'error'); return; }
+  const typeMatch = document.getElementById('match-type').value || null;
+  const isInterne = (typeMatch === 'interne');
+  // En opposition interne, l'adversaire n'est pas requis : on force un libellé fixe.
+  const adversaire = isInterne ? 'Opposition interne' : document.getElementById('match-adversaire').value.trim();
+  if (!date) { toast('Date obligatoire', 'error'); return; }
+  if (!isInterne && !adversaire) { toast('Date et adversaire obligatoires', 'error'); return; }
   // Mémoriser l'ancien match (avant mise à jour) pour migrer les RPE si le nom/la date change
   const oldMatch = currentMatchId ? (state.bdd_matchs || []).find(m => m.id === currentMatchId) : null;
 
@@ -14250,7 +14267,7 @@ async function saveMatch() {
     org: currentOrg,
     heure: document.getElementById('match-heure').value || null,
     adversaire: adversaire,
-    niveau: document.getElementById('match-niveau').value.trim() || null,
+    niveau: isInterne ? null : (document.getElementById('match-niveau').value.trim() || null),
     groupe: groupe || null,
     score_psg: document.getElementById('match-score-psg').value !== '' ? parseInt(document.getElementById('match-score-psg').value) : null,
     score_adversaire: document.getElementById('match-score-adv').value !== '' ? parseInt(document.getElementById('match-score-adv').value) : null,
@@ -14258,8 +14275,8 @@ async function saveMatch() {
     nb_periodes: nbP,
     duree_periode: dureeP,
     composition: composition,
-    type_match: document.getElementById('match-type').value || null,
-    type_detail: document.getElementById('match-type-detail').value.trim() || null,
+    type_match: typeMatch,
+    type_detail: isInterne ? null : (document.getElementById('match-type-detail').value.trim() || null),
     coachs_presents: Array.isArray(matchCoachsPresents) ? matchCoachsPresents.slice() : []
   };
 
@@ -14341,8 +14358,8 @@ function resetMatchForm() {
   document.getElementById('match-duree-periode').value = 45;
   const existSel = document.getElementById('match-existing'); if (existSel) existSel.value = '';
   document.getElementById('match-delete-btn').style.display = 'none';
-  const detailWrap = document.getElementById('match-type-detail-wrap');
-  if (detailWrap) detailWrap.style.display = 'none';
+  // Resynchronise l'affichage (champ détail, bloc adversaire, libellés de score)
+  onMatchTypeChange();
   // Réinitialisation : nouveau match → tous les coachs présents par défaut
   matchCoachsPresents = (state.bdd_coachs || []).map(c => c.id);
   renderMatchPeriodes();
@@ -14408,12 +14425,15 @@ let competitionTeamFilter = '';
 let competitionDetailMatch = '';
 
 function matchResult(m) {
+  // Opposition interne : PSG contre PSG → pas de victoire/nul/défaite comptabilisée
+  if (m.type_match === 'interne') return null;
   if (m.score_psg == null || m.score_adversaire == null) return null;
   if (m.score_psg > m.score_adversaire) return 'V';
   if (m.score_psg < m.score_adversaire) return 'D';
   return 'N';
 }
 function matchLabelStr(m) {
+  if (m.type_match === 'interne') return '🔁 Opposition interne';
   const org = m.org || currentOrg || 'PSG';
   return m.domicile === false
     ? escapeHtml(m.adversaire) + ' vs ' + org
@@ -19546,7 +19566,7 @@ function renderPlayerMatchNotation(date, joueur, m) {
   const lockInfo = rpeLockInfo(date, joueur, seanceNom);
 
   let html = '<div class="rpe-session-card' + (locked ? ' rpe-locked' : '') + '" style="border-left:3px solid #fbbf24;">';
-  html += '<div class="rpe-session-name">⚽ Match vs ' + escapeHtml(m.adversaire) + '</div>';
+  html += '<div class="rpe-session-name">' + (m.type_match === 'interne' ? '🔁 Opposition interne' : ('⚽ Match vs ' + escapeHtml(m.adversaire))) + '</div>';
   html += '<div class="rpe-session-type" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">';
   html += '<span class="badge" style="background:#fbbf24;color:#1a1a1a;">MATCH</span>';
   html += '<span style="font-size:12px;color:var(--text-dim);">Your playing time: <b style="color:var(--text);">' + tempsJeu + ' min</b></span>';
