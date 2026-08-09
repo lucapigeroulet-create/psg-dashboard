@@ -3302,7 +3302,7 @@
             <div id="med-ov-injuries"></div>
           </div>
           <div class="card">
-            <h2 style="margin-bottom:10px;">🚨 Alertes Hooper <span style="font-size:11px; color:var(--text-dim); font-weight:400;">(moy ≥ 17 sur 3 der. saisies)</span></h2>
+            <h2 style="margin-bottom:10px;">🚨 Alertes Hooper <span id="med-ov-hooper-alerts-desc" style="font-size:11px; color:var(--text-dim); font-weight:400;">(moy ≥ 17 sur 3 der. saisies)</span></h2>
             <div id="med-ov-hooper-alerts"></div>
           </div>
         </div>
@@ -18787,14 +18787,22 @@ async function renderPlayerHooper() {
 
 // Humeurs au réveil proposées (SECONDE LIGUE / D2F) — sélection multiple
 const HOOPER_MOODS = [
-  { key: 'joyeuse',   emoji: '😄', label: 'Joyeuse' },
-  { key: 'sereine',   emoji: '😌', label: 'Sereine' },
-  { key: 'motivee',   emoji: '💪', label: 'Motivée' },
-  { key: 'fatiguee',  emoji: '🥱', label: 'Fatiguée' },
-  { key: 'stressee',  emoji: '😰', label: 'Stressée' },
-  { key: 'triste',    emoji: '😔', label: 'Triste' },
-  { key: 'irritable', emoji: '😤', label: 'Irritable' },
-  { key: 'neutre',    emoji: '😐', label: 'Neutre' }
+  { key: 'joyeuse',       emoji: '😄', label: 'Joyeuse' },
+  { key: 'sereine',       emoji: '😌', label: 'Sereine' },
+  { key: 'motivee',       emoji: '💪', label: 'Motivée' },
+  { key: 'fatiguee',      emoji: '🥱', label: 'Fatiguée' },
+  { key: 'stressee',      emoji: '😰', label: 'Stressée' },
+  { key: 'triste',        emoji: '😔', label: 'Triste' },
+  { key: 'irritable',     emoji: '😤', label: 'Irritable' },
+  { key: 'neutre',        emoji: '😐', label: 'Neutre' },
+  { key: 'enthousiaste',  emoji: '🤩', label: 'Enthousiaste' },
+  { key: 'confiante',     emoji: '😎', label: 'Confiante' },
+  { key: 'epuisee',       emoji: '😩', label: 'Épuisée' },
+  { key: 'anxieuse',      emoji: '😟', label: 'Anxieuse' },
+  { key: 'detendue',      emoji: '🧘', label: 'Détendue' },
+  { key: 'malade',        emoji: '🤒', label: 'Malade' },
+  { key: 'reconnaissante',emoji: '🥰', label: 'Reconnaissante' },
+  { key: 'energie',       emoji: '⚡', label: "Pleine d'énergie" }
 ];
 
 function hooperMoodLabel(key) {
@@ -18826,7 +18834,7 @@ function renderHooperMoodCard(existing) {
     const on = !!(existing && existing.licorne);
     uni.innerHTML = '<label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600;">' +
       '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="toggleHooperUnicorn(this.checked)" style="width:18px;height:18px;cursor:pointer;"> ' +
-      '<span style="font-size:22px;">🦄</span> Humeur licorne</label>';
+      '<span style="font-size:22px;">🦄</span></label>';
   }
 }
 
@@ -21648,26 +21656,20 @@ function renderMedicalOverview() {
     }).join('');
   }
 
-  // Alertes Hooper
+  // Alertes Hooper — aligné sur computePlayersToWatch (tendance hausse/baisse pour SECONDE LIGUE, sinon niveau >= 17)
   const hAlert = document.getElementById('med-ov-hooper-alerts');
   if (hAlert) {
-    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 28);
-    const cutoffIso = toLocalISO(cutoff);
-    const byPlayer = {};
-    hooperData.forEach(h => { if (h.date >= cutoffIso) { if (!byPlayer[h.joueur]) byPlayer[h.joueur] = []; byPlayer[h.joueur].push(h); } });
-    const alertPlayers = allPlayers.filter(p => {
-      const entries = (byPlayer[p]||[]).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,3);
-      const last3 = entries.map(e=>computeHooperIndex(e)).filter(v=>v!==null);
-      return last3.length > 0 && (last3.reduce((a,b)=>a+b,0)/last3.length) >= 17;
-    });
-    if (!alertPlayers.length) { hAlert.innerHTML = '<p style="color:var(--green); font-size:13px;">✅ Aucune alerte Hooper.</p>'; }
-    else hAlert.innerHTML = alertPlayers.map(p => {
-      const entries = (byPlayer[p]||[]).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,3);
-      const last3 = entries.map(e=>computeHooperIndex(e)).filter(v=>v!==null);
-      const avg = (last3.reduce((a,b)=>a+b,0)/last3.length).toFixed(1);
+    const trendMode = (currentOrg === 'D2F');
+    const desc = document.getElementById('med-ov-hooper-alerts-desc');
+    if (desc) desc.textContent = trendMode ? '(tendance hausse/baisse sur les derniers jours)' : '(moy ≥ 17 sur 3 der. saisies)';
+    const watch = computePlayersToWatch();
+    if (!watch.length) { hAlert.innerHTML = '<p style="color:var(--green); font-size:13px;">✅ Aucune alerte Hooper.</p>'; }
+    else hAlert.innerHTML = watch.map(w => {
+      const right = trendMode
+        ? hooperTrendBadge(w) + ' <span style="font-size:11px;color:var(--text-dim);">(' + w.avg + ')</span>'
+        : '<span style="font-weight:800; color:#f87171;">' + w.avg + '</span>';
       return '<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-radius:8px; background:rgba(248,113,113,0.08); border:1px solid #7f1d1d44; margin-bottom:6px;">' +
-        '<b>' + escapeHtml(p) + '</b>' +
-        '<span style="font-weight:800; color:#f87171;">' + avg + '</span>' +
+        '<b>' + escapeHtml(w.joueur) + '</b>' + right +
         '</div>';
     }).join('');
   }
