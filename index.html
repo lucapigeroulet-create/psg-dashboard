@@ -1988,9 +1988,12 @@
   <div class="view" id="view-competition">
     <div class="card">
       <h2>🏆 Compétition</h2>
-      <div id="competition-tabs" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
-        <button id="comp-tab-matchs" class="btn" onclick="setCompetitionTab('matchs')">📊 Statistiques matchs</button>
-        <button id="comp-tab-interne" class="btn btn-secondary" onclick="setCompetitionTab('interne')">🏆 Compétition interne</button>
+      <div id="competition-tabs" style="margin-bottom:14px;">
+        <label style="display:block; font-size:11px; color:var(--text-dim); margin-bottom:4px;">Vue</label>
+        <select id="comp-tab-select" onchange="setCompetitionTab(this.value)" style="min-width:220px;">
+          <option value="matchs">📊 Statistiques match</option>
+          <option value="interne">🏆 Compétition interne</option>
+        </select>
       </div>
 
       <!-- Onglet : statistiques de match -->
@@ -16045,16 +16048,14 @@ function setCompetitionTab(tab) {
 }
 
 function renderCompetition() {
-  // Onglets (statistiques matchs / compétition interne)
+  // Vue sélectionnée via le menu déroulant (statistiques match / compétition interne)
   const tab = competitionTab || 'matchs';
   const paneM = document.getElementById('competition-pane-matchs');
   const paneI = document.getElementById('competition-pane-interne');
-  const btnM = document.getElementById('comp-tab-matchs');
-  const btnI = document.getElementById('comp-tab-interne');
+  const sel = document.getElementById('comp-tab-select');
   if (paneM) paneM.style.display = (tab === 'matchs') ? 'block' : 'none';
   if (paneI) paneI.style.display = (tab === 'interne') ? 'block' : 'none';
-  if (btnM) btnM.className = (tab === 'matchs') ? 'btn' : 'btn btn-secondary';
-  if (btnI) btnI.className = (tab === 'interne') ? 'btn' : 'btn btn-secondary';
+  if (sel && sel.value !== tab) sel.value = tab;
 
   if (tab === 'interne') { renderCompetitionInterne(); return; }
 
