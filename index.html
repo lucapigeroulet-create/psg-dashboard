@@ -3350,7 +3350,7 @@
     <div id="medical-pane-hooper" style="display:none;">
       <div class="card">
         <h2>💚 Indices Hooper par joueur</h2>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Synthèse des derniers check-ins Hooper. Score &gt; 17 = joueur à surveiller.</p>
+        <p id="med-hooper-desc" style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Synthèse des derniers check-ins Hooper. Score &gt; 17 = joueur à surveiller.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px;">
           <select id="med-hooper-group" onchange="renderMedicalHooper()" style="min-width:140px;"><option value="">Tous les groupes</option></select>
           <select id="med-hooper-period" onchange="renderMedicalHooper()">
@@ -3373,7 +3373,7 @@
       </div>
       <div class="card">
         <h2>🚨 Joueurs à surveiller</h2>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Moyenne Hooper ≥ 17 sur les 3 dernières saisies.</p>
+        <p id="med-hooper-alerts-desc" style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Moyenne Hooper ≥ 17 sur les 3 dernières saisies.</p>
         <div id="med-hooper-alerts"></div>
       </div>
     </div>
@@ -19172,6 +19172,21 @@ function hooperTrendBadge(w) {
   return '<span style="font-weight:800;color:' + color + ';">' + arrow + ' ' + sign + w.trendDelta + '</span>';
 }
 
+// Détermine si une série (index du plus RÉCENT au plus ANCIEN) doit être mise en alerte.
+// SECONDE LIGUE (D2F) : alerte si la tendance monte OU baisse nettement (écart >= seuil).
+// Autres entités : alerte si la moyenne des 3 dernières saisies >= 17.
+function hooperFlagFromLast3(last3) {
+  if (currentOrg === 'D2F') {
+    if (last3.length >= 2) {
+      const delta = last3[0] - last3[last3.length - 1];
+      return { flag: Math.abs(delta) >= HOOPER_TREND_THRESHOLD, delta, dir: delta > 0 ? 'up' : (delta < 0 ? 'down' : 'flat') };
+    }
+    return { flag: false, delta: null, dir: null };
+  }
+  const avg = last3.length ? last3.reduce((a, b) => a + b, 0) / last3.length : null;
+  return { flag: avg !== null && avg >= 17, delta: null, dir: null };
+}
+
 function renderStaffHooperTeamChart() {
   // Moyenne équipe par jour
   const byDate = {};
@@ -21817,6 +21832,15 @@ function renderMedicalHooper() {
 
   const tbody = document.getElementById('med-hooper-tbody');
   if (!tbody) return;
+  const trendMode = (currentOrg === 'D2F');
+  const dTop = document.getElementById('med-hooper-desc');
+  if (dTop) dTop.textContent = trendMode
+    ? "Synthèse des derniers check-ins Hooper. Alerte quand la tendance monte ou baisse nettement sur les derniers jours."
+    : 'Synthèse des derniers check-ins Hooper. Score > 17 = joueur à surveiller.';
+  const dAlert = document.getElementById('med-hooper-alerts-desc');
+  if (dAlert) dAlert.textContent = trendMode
+    ? 'Tendance en hausse ou baisse sur les dernières saisies.'
+    : 'Moyenne Hooper ≥ 17 sur les 3 dernières saisies.';
   const rows = allPlayers.map(p => {
     const entries = (byPlayer[p] || []).sort((a,b) => b.date.localeCompare(a.date));
     if (!entries.length) return '<tr><td><b>' + escapeHtml(p) + '</b></td><td>' + escapeHtml(getJoueurInfo(p).groupe || '—') + '</td><td colspan="7" style="color:var(--text-dim); font-size:12px;">Aucune saisie</td></tr>';
@@ -21825,7 +21849,8 @@ function renderMedicalHooper() {
     if (idx !== null) { totalIdx += idx; cntIdx++; }
     const last3 = entries.slice(0, 3).map(e => computeHooperIndex(e)).filter(v => v !== null);
     const avg3 = last3.length ? (last3.reduce((a,b)=>a+b,0)/last3.length).toFixed(1) : '—';
-    const isAlert = last3.length > 0 && (last3.reduce((a,b)=>a+b,0)/last3.length) >= 17;
+    const flagInfo = hooperFlagFromLast3(last3);
+    const isAlert = flagInfo.flag;
     if (isAlert) alertsCount++;
     const idxColor = idx === null ? 'var(--text-dim)' : idx >= 17 ? '#f87171' : idx >= 14 ? '#fbbf24' : 'var(--green)';
     const trendArrow = last3.length >= 2 ? (last3[0] > last3[1] ? '↑' : last3[0] < last3[1] ? '↓' : '→') : '—';
@@ -21845,11 +21870,12 @@ function renderMedicalHooper() {
   tbody.innerHTML = rows.join('') || '<tr><td colspan="9" style="text-align:center; color:var(--text-dim); padding:20px;">Aucune donnée</td></tr>';
 
   const avgIdx = cntIdx > 0 ? (totalIdx / cntIdx).toFixed(1) : '—';
+  const isTrend = (currentOrg === 'D2F');
   const kpiEl = document.getElementById('med-hooper-kpis');
   if (kpiEl) kpiEl.innerHTML = [
     { label:'Joueurs avec saisie', val: cntIdx },
     { label:'Index moyen', val: avgIdx },
-    { label:'Alertes (≥17)', val: alertsCount, color: alertsCount > 0 ? '#f87171' : 'var(--green)' }
+    { label: isTrend ? 'Alertes (tendance)' : 'Alertes (≥17)', val: alertsCount, color: alertsCount > 0 ? '#f87171' : 'var(--green)' }
   ].map(k => '<div class="stat"><div class="stat-label">' + k.label + '</div><div class="stat-value"' + (k.color ? ' style="color:' + k.color + ';"' : '') + '>' + k.val + '</div></div>').join('');
 
   const alertBox = document.getElementById('med-hooper-alerts');
@@ -21857,18 +21883,22 @@ function renderMedicalHooper() {
   const alertPlayers = allPlayers.filter(p => {
     const entries = (byPlayer[p] || []).sort((a,b) => b.date.localeCompare(a.date)).slice(0,3);
     const last3 = entries.map(e => computeHooperIndex(e)).filter(v => v !== null);
-    return last3.length > 0 && (last3.reduce((a,b)=>a+b,0)/last3.length) >= 17;
+    return hooperFlagFromLast3(last3).flag;
   });
   if (!alertPlayers.length) { alertBox.innerHTML = '<p style="color:var(--green); font-size:13px;">✅ Aucun joueur en alerte Hooper sur la période.</p>'; return; }
   alertBox.innerHTML = alertPlayers.map(p => {
     const entries = (byPlayer[p] || []).sort((a,b) => b.date.localeCompare(a.date)).slice(0,3);
     const last3 = entries.map(e => computeHooperIndex(e)).filter(v => v !== null);
     const avg = (last3.reduce((a,b)=>a+b,0)/last3.length).toFixed(1);
+    const f = hooperFlagFromLast3(last3);
+    const right = isTrend
+      ? hooperTrendBadge({ trendDelta: f.delta, trendDir: f.dir }) + ' <span style="font-size:12px; color:var(--text-dim);">(moy ' + avg + ')</span>'
+      : '<span style="font-size:22px; font-weight:800; color:#f87171;">' + avg + '</span>';
     const last = entries[0];
     return '<div style="border:1px solid #7f1d1d; border-radius:10px; padding:12px; margin-bottom:8px; background:rgba(248,113,113,0.07); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">' +
       '<div><b>' + escapeHtml(p) + '</b> <span style="color:var(--text-dim); font-size:12px;">— ' + escapeHtml(getJoueurInfo(p).groupe || '') + '</span>' +
       '<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">Dernière saisie : ' + formatDateDMY(last.date) + ' · Sommeil: ' + (last.sleep_quality||'?') + ' · Fatigue: ' + (last.fatigue||'?') + ' · Stress: ' + (last.stress||'?') + ' · Courbatures: ' + (last.muscle_soreness||'?') + '</div></div>' +
-      '<div style="font-size:22px; font-weight:800; color:#f87171;">' + avg + '</div></div>';
+      '<div>' + right + '</div></div>';
   }).join('');
 }
 
