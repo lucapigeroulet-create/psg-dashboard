@@ -16014,29 +16014,47 @@ function renderCompetitionPlayer(filters, content, matchs) {
   content.innerHTML = html;
 }
 
-// Sauvegarde de la note personnelle d'un joueur sur un match (table match_notes)
-async function saveMatchNoteJoueur(matchId, value) {
+// Note de performance perso du joueur pour un match donné (table match_notes), ou null
+function getMyMatchPerfNote(matchId) {
   const me = currentJoueurNom;
-  if (currentRole !== 'lecteur' || !me) { toast('Action réservée au joueur', 'error'); return; }
+  const n = (state.bdd_match_notes || []).find(x => x.match_id === matchId && x.joueur === me);
+  return (n && n.note != null) ? n.note : null;
+}
+
+// Cœur de sauvegarde de la note perso d'un joueur sur un match (table match_notes).
+// Retourne true si l'écriture a réussi. Les wrappers décident quelle vue re-render.
+async function _upsertMatchNoteJoueur(matchId, value) {
+  const me = currentJoueurNom;
+  if (currentRole !== 'lecteur' || !me) { toast('Action réservée au joueur', 'error'); return false; }
   const note = (value === '' || value == null) ? null : parseFloat(value);
-  if (note != null && (isNaN(note) || note < 0 || note > 10)) { toast('Note entre 0 et 10', 'error'); return; }
+  if (note != null && (isNaN(note) || note < 0 || note > 10)) { toast('Note entre 0 et 10', 'error'); return false; }
   try {
     if (note == null) {
       const { error } = await sb.from('match_notes').delete().match({ match_id: matchId, joueur: me });
-      if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+      if (error) { toast('Erreur : ' + error.message, 'error'); return false; }
       state.bdd_match_notes = (state.bdd_match_notes || []).filter(n => !(n.match_id === matchId && n.joueur === me));
     } else {
       const row = { match_id: matchId, joueur: me, note: note, org: currentOrg, updated_at: new Date().toISOString() };
       const { data, error } = await sb.from('match_notes').upsert(row, { onConflict: 'match_id,joueur' }).select();
-      if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+      if (error) { toast('Erreur : ' + error.message, 'error'); return false; }
       const saved = (data && data[0]) ? data[0] : row;
       const arr = state.bdd_match_notes || (state.bdd_match_notes = []);
       const idx = arr.findIndex(n => n.match_id === matchId && n.joueur === me);
       if (idx >= 0) arr[idx] = saved; else arr.push(saved);
     }
     toast((typeof playerLang === 'function' && playerLang() === 'en') ? 'Rating saved' : 'Note enregistrée', 'success');
-    renderCompetition();
-  } catch (e) { toast('Erreur : ' + e.message, 'error'); }
+    return true;
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); return false; }
+}
+
+// Sauvegarde depuis la vue Compétition ("Mes matchs")
+async function saveMatchNoteJoueur(matchId, value) {
+  if (await _upsertMatchNoteJoueur(matchId, value)) renderCompetition();
+}
+
+// Sauvegarde depuis la vue "Noter les séances" (carte match, au moment de la RPE)
+async function savePlayerMatchPerf(matchId, value) {
+  if (await _upsertMatchNoteJoueur(matchId, value)) renderPlayerRPE();
 }
 
 
@@ -19498,11 +19516,13 @@ function renderPlayerRPE() {
       }
     }
   });
-  // Compter les matchs à noter (1 note par match joué)
+  // Compter les matchs à noter : chaque match = 2 évaluations attendues (RPE + note de performance)
   matchsDuJour.forEach(m => {
     totalNotes += 1;
     const seanceNom = matchSeanceNom(m);
     if (getRPEJoueurSeance(date, currentJoueurNom, seanceNom) !== null) doneNotes += 1;
+    totalNotes += 1;
+    if (getMyMatchPerfNote(m.id) != null) doneNotes += 1;
   });
   const pct = totalNotes > 0 ? Math.round(doneNotes * 100 / totalNotes) : 0;
   html += '<div class="card" style="text-align:center; background:var(--bg-elevated);">';
@@ -19565,6 +19585,22 @@ function renderPlayerMatchNotation(date, joueur, m) {
       html += '<div class="rpe-scale-label">Rate your overall match intensity</div>';
     }
   }
+
+  // === Note de performance (auto-évaluation, même échelle que la note du coach) ===
+  // Le joueur estime la QUALITÉ de son match (pas son effort). À saisir en même temps que la RPE.
+  const myPerf = getMyMatchPerfNote(m.id);
+  const matchIdEsc = String(m.id).replace(/'/g, "\\'");
+  const perfMissing = (rpeUnique !== null && myPerf == null);
+  html += '<div style="margin-top:14px;padding:12px;border-radius:8px;background:var(--bg-elevated);border:1px solid ' + (perfMissing ? '#fbbf24' : 'var(--border)') + ';">';
+  html += '<div style="font-size:13px;font-weight:700;margin-bottom:2px;">🎯 ' + tr('My performance rating', 'Ma note de performance') + '</div>';
+  html += '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">' + tr("Rate how well you played this match, out of 10 (same scale as the coach's rating). This is not your effort — it's your own estimate of your performance.", "Estime la qualité de ton match, sur 10 (même échelle que la note du coach). Ce n'est pas ton effort ressenti, mais ta propre estimation de ta performance.") + '</div>';
+  if (locked) {
+    html += '<div style="font-size:15px;font-weight:700;">' + (myPerf != null ? myPerf + ' / 10' : tr('No rating submitted', 'Aucune note saisie')) + '</div>';
+  } else {
+    html += '<input type="number" min="0" max="10" step="0.5" value="' + (myPerf != null ? myPerf : '') + '" onchange="savePlayerMatchPerf(\'' + matchIdEsc + '\', this.value)" placeholder="0-10" style="width:96px;background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:15px;font-weight:700;text-align:center;" />';
+    if (perfMissing) html += '<div style="margin-top:6px;font-size:12px;color:#fbbf24;font-weight:600;">⚠️ ' + tr("Add your performance rating to complete this match.", "Ajoute ta note de performance pour compléter ce match.") + '</div>';
+  }
+  html += '</div>';
 
   html += '</div>';
   return html;
