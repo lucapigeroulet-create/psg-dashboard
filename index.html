@@ -3473,6 +3473,7 @@
 
   <!-- ===== VUE PLANNING SOINS (kiné) ===== -->
   <div class="view" id="view-medical-planning">
+    <div id="mp-push-banner"></div>
     <div class="card">
       <h2>📅 Planning soins — <span id="mp-club-label">—</span></h2>
       <p style="color:var(--text-dim); font-size:12px; margin-bottom:14px;">Crée des créneaux individuels (10 à 30 min). Les joueurs/euses réservent un créneau libre depuis leur compte pour venir se faire soigner. Sélectionne le club concerné.</p>
@@ -3938,6 +3939,24 @@ function mpActiveOrg() {
 }
 
 let mpSlotsById = {};  // cache des créneaux affichés (pour saveCompteRendu)
+let mpBookingAlerts = 0;  // nombre de réservations non consultées (badge kiné)
+
+function updateMedicalBookingBadge() {
+  const t = document.getElementById('nav-medical-toggle');
+  if (!t) return;
+  let b = document.getElementById('nav-medical-badge');
+  if (mpBookingAlerts > 0) {
+    if (!b) {
+      b = document.createElement('span');
+      b.id = 'nav-medical-badge';
+      b.style.cssText = 'background:var(--red);color:#fff;border-radius:10px;padding:0 6px;font-size:10px;margin-left:5px;font-weight:700;';
+      t.appendChild(b);
+    }
+    b.textContent = mpBookingAlerts;
+  } else if (b) {
+    b.remove();
+  }
+}
 
 async function renderMedicalPlanning() {
   const listEl = document.getElementById('mp-list');
@@ -3956,6 +3975,8 @@ async function renderMedicalPlanning() {
   const org = mpActiveOrg();
   const lbl = document.getElementById('mp-club-label');
   if (lbl) lbl.textContent = orgLabelText(org);
+  renderPushBanner('mp-push-banner');            // permet au kiné d'activer les notifs push
+  mpBookingAlerts = 0; updateMedicalBookingBadge(); // on consulte le planning → on efface le compteur
   const dateEl = document.getElementById('mp-date');
   if (dateEl && !dateEl.value) dateEl.value = toLocalISO(new Date());
   // Charger les créneaux frais du club actif
@@ -4054,6 +4075,7 @@ async function assignerCreneau(id) {
   if (!canWrite()) { toast('Action non autorisée', 'error'); return; }
   const joueur = ((document.getElementById('assign-sel-' + id) || {}).value || '').trim();
   if (!joueur) { toast('Choisis un joueur', 'error'); return; }
+  window._mpSelfActionUntil = Date.now() + 4000; // évite l'auto-alerte realtime pour son propre placement
   const { data, error } = await sb.from('creneaux_medicaux')
     .update({ joueur: joueur, booked_at: new Date().toISOString() })
     .eq('id', id).is('joueur', null).select();
@@ -5408,7 +5430,8 @@ async function getCurrentPushSubscription() {
 
 async function enablePushNotifications() {
   if (pushEnvironmentStatus() !== 'ready') { toast('Notifications non disponibles sur cet appareil', 'error'); return; }
-  if (!currentJoueurNom) { toast('Compte non rattaché à un joueur', 'error'); return; }
+  // Les joueurs (lecteur) doivent être rattachés à une fiche ; le staff médical n'a pas de joueur_nom.
+  if (!currentJoueurNom && currentRole === 'lecteur') { toast('Compte non rattaché à un joueur', 'error'); return; }
   try {
     const reg = await navigator.serviceWorker.register('/sw.js');
     const permission = await Notification.requestPermission();
@@ -5421,7 +5444,7 @@ async function enablePushNotifications() {
     const { error } = await sb.from('push_subscriptions').upsert({
       org: currentOrg,
       user_id: currentUser.id,
-      joueur_nom: currentJoueurNom,
+      joueur_nom: currentJoueurNom || null,
       endpoint: json.endpoint,
       keys: json.keys
     }, { onConflict: 'endpoint' });
@@ -5457,8 +5480,8 @@ function demoPushHint() {
   toast(tr('Demo mode — illustrative button', "Mode démo — bouton d'illustration"), 'info');
 }
 
-async function renderPushBanner() {
-  const el = document.getElementById('push-banner');
+async function renderPushBanner(elId) {
+  const el = document.getElementById(elId || 'push-banner');
   if (!el) return;
   // Compte démo : afficher le bouton "Activer" à titre illustratif (non fonctionnel) pour les tutos
   if (isDemoPushAccount()) {
@@ -6527,7 +6550,7 @@ let realtimeChannels = [];
 
 function setupRealtime() {
   if (realtimeChannels.length > 0) return; // déjà configuré
-  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores'];
+  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores', 'creneaux_medicaux'];
 
   tables.forEach(table => {
     const channel = sb.channel('realtime-' + table)
@@ -6549,6 +6572,23 @@ function handleRealtimeChange(table, payload) {
     const v = getCurrentView();
     if (v === 'minijeux') { renderMinijeuxLeaderboard(); renderMinijeuxCumul(); }
     if (v === 'player-overview') renderPlayerOverviewMinijeu();
+    return;
+  }
+
+  // ===== Créneaux de soins : alerte kiné quand un joueur réserve =====
+  if (table === 'creneaux_medicaux') {
+    const isStaff = ['admin', 'staff', 'médical'].includes(currentRole);
+    if (isStaff && eventType === 'UPDATE' && newRow && newRow.joueur && (!oldRow || !oldRow.joueur)) {
+      const allowed = Array.isArray(window.currentAllowedOrgs) ? window.currentAllowedOrgs : [currentOrg];
+      const selfWindow = (window._mpSelfActionUntil || 0) > Date.now();
+      if (allowed.includes(newRow.org) && !selfWindow) {
+        const dfmt = newRow.date ? String(newRow.date).split('-').reverse().join('/') : '';
+        toast('🩺 ' + newRow.joueur + ' a réservé un créneau' + (dfmt ? ' le ' + dfmt : '') + (newRow.heure ? ' à ' + newRow.heure : ''), 'info');
+        mpBookingAlerts++;
+        updateMedicalBookingBadge();
+      }
+    }
+    if (getCurrentView() === 'medical-planning') renderMedicalPlanning();
     return;
   }
 
