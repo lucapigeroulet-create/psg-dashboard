@@ -1272,6 +1272,13 @@
       <div class="chart-container tall"><canvas id="chart-rpe-weekly"></canvas></div>
     </div>
 
+    <!-- Graphique : note de plaisir (SECONDE LIGUE uniquement) -->
+    <div class="card" id="rpe-plaisir-card" style="display:none;">
+      <h2>😊 Plaisir ressenti (moyenne par jour)</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Note de plaisir déclarée par les joueuses à la fin de leur RPE, de -5 (aucun) à +5 (maximal).</p>
+      <div class="chart-container tall"><canvas id="chart-rpe-plaisir"></canvas></div>
+    </div>
+
     <!-- Graphique : charge hebdo cumulée comparée -->
     <div class="card">
       <h2>Charge hebdomadaire totale par joueur</h2>
@@ -5836,6 +5843,7 @@ async function loadState() {
     const { data: rpes } = await sb.from('rpe_declarations').select('*').eq('org', currentOrg).order('date');
     state.bdd_rpe = (rpes || []).map(r => ({
       date: r.date, joueur: r.joueur, rpe: r.rpe || [],
+      plaisir: (r.plaisir === null || r.plaisir === undefined) ? null : r.plaisir,
       created_at: r.created_at || null,
       updated_at: r.updated_at || r.created_at || null
     }));
@@ -6016,6 +6024,59 @@ async function saveRPEToSupabase(date, joueur, rpeArray) {
     if (error) { toast('Erreur RPE : ' + error.message, 'error'); return false; }
   }
   return true;
+}
+
+// ---- Note de plaisir (-5 à +5), une par joueur et par jour — SECONDE LIGUE uniquement ----
+function getPlaisir(date, joueur) {
+  const row = (state.bdd_rpe || []).find(r => r.date === date && r.joueur === joueur);
+  return (row && row.plaisir != null) ? row.plaisir : null;
+}
+function plaisirColor(v) {
+  if (v <= -3) return '#dc2626';
+  if (v < 0)   return '#f97316';
+  if (v === 0) return '#eab308';
+  if (v < 3)   return '#84cc16';
+  return '#16a34a';
+}
+async function savePlaisir(date, joueur, value) {
+  if (!canWriteRPE(joueur)) {
+    toast(tr('You can only rate your own sessions', 'Tu ne peux saisir que tes propres RPE'), 'error');
+    return;
+  }
+  const v = (value === null || value === undefined || value === '') ? null : parseInt(value, 10);
+  const existing = (state.bdd_rpe || []).find(r => r.date === date && r.joueur === joueur);
+  const rpeArr = existing ? (existing.rpe || []) : [];
+  const { error } = await sb.from('rpe_declarations').upsert({ date, joueur, rpe: rpeArr, plaisir: v, org: currentOrg }, { onConflict: 'date,joueur' });
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (existing) existing.plaisir = v;
+  else (state.bdd_rpe = state.bdd_rpe || []).push({ date, joueur, rpe: [], plaisir: v, created_at: null, updated_at: null });
+  if (currentRole === 'lecteur') renderPlayerRPE(); else renderRPEEntry();
+}
+function setPlaisirValue(date, joueur, v) { savePlaisir(date, joueur, v); }
+
+// Carte de saisie de la note de plaisir pour le joueur (SECONDE LIGUE)
+function renderPlaisirCard(date, joueur) {
+  const cur = getPlaisir(date, joueur);
+  const joueurEsc = joueur.replace(/'/g, "\\'");
+  let h = '<div class="rpe-session-card" style="border-left:3px solid #ec4899;">';
+  h += '<div class="rpe-session-name">😊 ' + tr('Enjoyment today', 'Plaisir du jour') + '</div>';
+  h += '<div style="font-size:12px;color:var(--text-dim);margin:4px 0 12px;">' + tr("How much did you enjoy today? From -5 (none) to +5 (maximum).", "Quel plaisir as-tu pris aujourd'hui ? De -5 (aucun) à +5 (maximal).") + '</div>';
+  h += '<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;">';
+  for (let v = -5; v <= 5; v++) {
+    const sel = cur === v;
+    const col = plaisirColor(v);
+    h += '<button type="button" class="hooper-btn" onclick="setPlaisirValue(\'' + date + '\',\'' + joueurEsc + '\',' + v + ')" ' +
+      'style="width:44px;height:44px;border-radius:10px;border:1px solid var(--border);background:' + (sel ? col : 'var(--bg-elevated)') + ';' +
+      'color:' + (sel ? '#fff' : 'var(--text)') + ';font-weight:700;cursor:pointer;' +
+      (sel ? 'box-shadow:0 0 0 3px rgba(255,255,255,0.6);transform:scale(1.06);' : '') + '">' + (v > 0 ? '+' + v : v) + '</button>';
+  }
+  h += '</div>';
+  if (cur !== null) {
+    h += '<div style="text-align:center;margin-top:10px;font-size:12px;color:var(--text-dim);">' + tr('Your rating: ', 'Ta note : ') +
+      '<b style="color:' + plaisirColor(cur) + ';">' + (cur > 0 ? '+' + cur : cur) + '</b></div>';
+  }
+  h += '</div>';
+  return h;
 }
 
 async function saveJoueurToSupabase(joueur, oldNom) {
@@ -9262,8 +9323,46 @@ function renderRPE() {
     });
   }
 
+  // Visuel note de plaisir (SECONDE LIGUE)
+  renderRPEPlaisirChart(dates, players);
+
   // Rafraîchir le bilan individuel si un joueur est déjà sélectionné
   renderBilanIndividuel();
+}
+
+// Graphique de la note de plaisir (moyenne par jour) — SECONDE LIGUE uniquement
+function renderRPEPlaisirChart(dates, players) {
+  const card = document.getElementById('rpe-plaisir-card');
+  if (!card) return;
+  const show = (currentOrg === 'D2F');
+  card.style.display = show ? '' : 'none';
+  if (!show) { destroyChart('chart-rpe-plaisir'); return; }
+  const playerSet = new Set(players);
+  const rowsForDay = (d) => (state.bdd_rpe || []).filter(r => r.date === d && r.plaisir != null && playerSet.has(r.joueur));
+  const perDay = dates.map(d => {
+    const vals = rowsForDay(d).map(r => r.plaisir);
+    return vals.length ? +(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2) : null;
+  });
+  const counts = dates.map(d => rowsForDay(d).length);
+  const jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  const labels = dates.map((d, i) => jours[i] + ' ' + d.slice(8) + '/' + d.slice(5, 7));
+  const colors = perDay.map(v => v == null ? 'rgba(148,163,184,0.35)' : plaisirColor(Math.round(v)));
+  destroyChart('chart-rpe-plaisir');
+  charts['chart-rpe-plaisir'] = new Chart(document.getElementById('chart-rpe-plaisir'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Plaisir moyen', data: perDay.map(v => v == null ? 0 : v), backgroundColor: colors, borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (c) => { const i = c.dataIndex; return perDay[i] == null ? 'Aucune donnée' : ('Moyenne : ' + perDay[i] + ' (' + counts[i] + ' joueuse' + (counts[i] > 1 ? 's' : '') + ')'); } } }
+      },
+      scales: {
+        y: { min: -5, max: 5, ticks: { stepSize: 1, color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+        x: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } }
+      }
+    }
+  });
 }
 
 function formatDateRange(monday) {
@@ -20221,6 +20320,12 @@ function renderPlayerRPE() {
     totalNotes += 1;
     if (getMyMatchPerfNote(m.id) != null) doneNotes += 1;
   });
+  // Note de plaisir (SECONDE LIGUE) — demandée à la fin de la saisie RPE
+  if (currentOrg === 'D2F') {
+    html += renderPlaisirCard(date, currentJoueurNom);
+    totalNotes += 1;
+    if (getPlaisir(date, currentJoueurNom) !== null) doneNotes += 1;
+  }
   const pct = totalNotes > 0 ? Math.round(doneNotes * 100 / totalNotes) : 0;
   html += '<div class="card" style="text-align:center; background:var(--bg-elevated);">';
   html += '<div style="color:var(--text-dim); font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">' + tr("Today's progress", 'Progression du jour') + '</div>';
