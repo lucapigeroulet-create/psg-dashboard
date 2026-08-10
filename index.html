@@ -761,6 +761,7 @@
     <div class="nav-dropdown-menu" id="nav-medical-menu">
       <button class="nav-btn" data-view="medical" id="nav-medical-btn">🏥 Disponibilités</button>
       <button class="nav-btn" data-view="medical-planning" id="nav-medical-planning-btn">📅 Planning soins</button>
+      <button class="nav-btn" data-view="medical-fiche" id="nav-medical-fiche-btn">👤 Fiche joueur</button>
       <button class="nav-btn" data-view="medical-notes" id="nav-medical-notes-btn">📋 Notes médicales</button>
     </div>
   </div>
@@ -795,6 +796,7 @@
   <button class="nav-btn player-only" data-view="competition" style="display:none;" data-en="🏆 Competition" data-fr="🏆 Compétition">🏆 Compétition</button>
   <button class="nav-btn player-only" data-view="minijeux" style="display:none;" data-en="🎮 Mini-games" data-fr="🎮 Mini-jeux">🎮 Mini-jeux</button>
   <button class="nav-btn player-only" data-view="messages" style="display:none;" data-en="📣 Messages" data-fr="📣 Messages">📣 Messages</button>
+  <button class="nav-btn player-only" data-view="player-fiche" style="display:none;" data-en="👤 My profile" data-fr="👤 Ma fiche">👤 Ma fiche</button>
 </nav>
 
 <main>
@@ -3298,6 +3300,16 @@
   </div>
   <!-- ===== FIN VUE SOINS KINÉ ===== -->
 
+  <!-- ===== VUE MA FICHE (joueur, lecture seule) ===== -->
+  <div class="view" id="view-player-fiche">
+    <div class="card">
+      <h2 data-en="👤 My profile" data-fr="👤 Ma fiche">👤 Ma fiche</h2>
+      <p style="color:var(--text-dim); font-size:12px;" data-en="Your medical & sport profile kept by the physio/staff." data-fr="Ta fiche médicale et sportive tenue par le kiné/staff.">Ta fiche médicale et sportive tenue par le kiné/staff.</p>
+    </div>
+    <div id="player-fiche-body"></div>
+  </div>
+  <!-- ===== FIN VUE MA FICHE ===== -->
+
   <!-- ===== VUE STAFF MÉDICAL ===== -->
   <div class="view" id="view-medical">
     <!-- Sous-onglets -->
@@ -3519,6 +3531,66 @@
     </div>
   </div>
   <!-- ===== FIN VUE PLANNING SOINS ===== -->
+
+  <!-- ===== VUE FICHE JOUEUR (médical) ===== -->
+  <div class="view" id="view-medical-fiche">
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+        <h2 style="margin:0;">👤 Fiche joueur</h2>
+        <select id="mf-joueur" onchange="loadMedicalFiche()" style="min-width:200px;"><option value="">— Sélectionner un joueur —</option></select>
+      </div>
+      <p style="color:var(--text-dim); font-size:12px; margin-top:8px;">Regroupe le contexte, les données anthropométriques (liées à l'onglet Testing), la formation et les antécédents médicaux du joueur.</p>
+    </div>
+
+    <div id="mf-body" style="display:none;">
+      <div class="card">
+        <label>Contexte médical et sportif</label>
+        <textarea id="mf-contexte" rows="4" placeholder="Décris le contexte médical et sportif du joueur…" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:13px; resize:vertical;"></textarea>
+      </div>
+
+      <div class="card">
+        <div class="form-row">
+          <div style="flex:1; min-width:160px;">
+            <label>Date de naissance</label>
+            <input type="date" id="mf-ddn" onchange="mfUpdateAge()" style="width:100%;" />
+            <div id="mf-age" style="font-size:12px; color:var(--accent-light); margin-top:4px;"></div>
+          </div>
+          <div style="flex:1; min-width:120px;">
+            <label>Poids (kg) <span style="color:var(--text-dim); font-weight:400;">· lié au Testing</span></label>
+            <input type="number" step="0.1" id="mf-poids" placeholder="—" style="width:100%;" />
+            <div id="mf-poids-hint" style="font-size:11px; color:var(--text-dim); margin-top:4px;"></div>
+          </div>
+          <div style="flex:1; min-width:120px;">
+            <label>Taille (cm) <span style="color:var(--text-dim); font-weight:400;">· lié au Testing</span></label>
+            <input type="number" step="0.1" id="mf-taille" placeholder="—" style="width:100%;" />
+            <div id="mf-taille-hint" style="font-size:11px; color:var(--text-dim); margin-top:4px;"></div>
+          </div>
+        </div>
+        <p style="font-size:11px; color:var(--text-dim); margin-top:6px;">💡 Une nouvelle valeur de poids/taille est enregistrée comme résultat de test (date du jour) et apparaît dans l'onglet Testing.</p>
+      </div>
+
+      <div class="card">
+        <label>Autre</label>
+        <textarea id="mf-autre" rows="3" placeholder="Autres informations utiles…" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:13px; resize:vertical;"></textarea>
+      </div>
+
+      <div class="card">
+        <label>Formation footballistique <span style="color:var(--text-dim); font-weight:400;">— une ligne par club marquant</span></label>
+        <textarea id="mf-formation" rows="4" placeholder="Un club par ligne&#10;Ex : 2015-2018 · AS Saint-Étienne&#10;2018-2021 · Olympique Lyonnais" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:13px; resize:vertical;"></textarea>
+      </div>
+
+      <div class="card">
+        <label>Antécédents médicaux <span style="color:var(--text-dim); font-weight:400;">— une ligne par antécédent</span></label>
+        <textarea id="mf-antecedents" rows="4" placeholder="Un antécédent par ligne&#10;Ex : Entorse cheville droite (2022)&#10;Lésion ischio gauche (2023)" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:13px; resize:vertical;"></textarea>
+      </div>
+
+      <div class="card" style="display:flex; gap:10px; align-items:center;">
+        <button class="btn" onclick="saveMedicalFiche()">💾 Enregistrer la fiche</button>
+        <span id="mf-saved" style="font-size:12px; color:var(--text-dim);"></span>
+      </div>
+    </div>
+  </div>
+  <!-- ===== FIN VUE FICHE JOUEUR ===== -->
 
 </main>
 
@@ -4083,6 +4155,161 @@ async function assignerCreneau(id) {
   if (!data || data.length === 0) { toast('Ce créneau vient d\'être pris', 'error'); renderMedicalPlanning(); return; }
   toast(joueur + ' placé sur le créneau ✓', 'success');
   renderMedicalPlanning();
+}
+
+// ============================================================
+// FICHE JOUEUR (médical) — table fiches_medicales + anthropométrie liée au Testing
+// ============================================================
+let mfLoaded = { poids: null, taille: null }; // valeurs anthropo chargées (n'écrit dans Testing que si modifié)
+
+function mfLatestTest(joueur, typeName) {
+  const type = (state.bdd_test_types || []).find(t => (t.nom || '').toLowerCase() === typeName.toLowerCase());
+  if (!type) return null;
+  const rows = (state.bdd_test_results || []).filter(r => r.test_type_id === type.id && r.joueur === joueur && r.valeur != null && r.valeur !== '');
+  if (!rows.length) return null;
+  rows.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  return { valeur: rows[0].valeur, date: rows[0].date, type };
+}
+
+function mfComputeAge(ddn) {
+  if (!ddn) return null;
+  const d = new Date(ddn + 'T00:00:00');
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+  return age;
+}
+
+function mfUpdateAge() {
+  const el = document.getElementById('mf-age');
+  if (!el) return;
+  const age = mfComputeAge(document.getElementById('mf-ddn').value);
+  el.textContent = (age !== null && age >= 0) ? ('Âge : ' + age + ' ans') : '';
+}
+
+function renderMedicalFiche() {
+  const sel = document.getElementById('mf-joueur');
+  if (!sel) return;
+  const prev = sel.value;
+  const players = (state.joueurs || []).map(j => j.nom).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  sel.innerHTML = '<option value="">— Sélectionner un joueur —</option>' +
+    players.map(n => '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>').join('');
+  if (prev && players.includes(prev)) { sel.value = prev; loadMedicalFiche(); }
+  else { const b = document.getElementById('mf-body'); if (b) b.style.display = 'none'; }
+}
+
+function loadMedicalFiche() {
+  const joueur = document.getElementById('mf-joueur').value;
+  const body = document.getElementById('mf-body');
+  if (!joueur) { if (body) body.style.display = 'none'; return; }
+  body.style.display = '';
+  const fiche = (state.bdd_fiches || []).find(f => f.joueur === joueur) || {};
+  document.getElementById('mf-contexte').value = fiche.contexte || '';
+  document.getElementById('mf-ddn').value = fiche.date_naissance || '';
+  document.getElementById('mf-autre').value = fiche.autre || '';
+  document.getElementById('mf-formation').value = fiche.formation || '';
+  document.getElementById('mf-antecedents').value = fiche.antecedents || '';
+  mfUpdateAge();
+  const poids = mfLatestTest(joueur, 'POIDS');
+  const taille = mfLatestTest(joueur, 'TAILLE');
+  mfLoaded.poids = poids ? Number(poids.valeur) : null;
+  mfLoaded.taille = taille ? Number(taille.valeur) : null;
+  document.getElementById('mf-poids').value = poids ? poids.valeur : '';
+  document.getElementById('mf-taille').value = taille ? taille.valeur : '';
+  document.getElementById('mf-poids-hint').textContent = poids
+    ? ('Dernière mesure : ' + poids.valeur + ' kg le ' + String(poids.date).split('-').reverse().join('/'))
+    : 'Aucune donnée — saisir directement';
+  document.getElementById('mf-taille-hint').textContent = taille
+    ? ('Dernière mesure : ' + taille.valeur + ' cm le ' + String(taille.date).split('-').reverse().join('/'))
+    : 'Aucune donnée — saisir directement';
+  const saved = document.getElementById('mf-saved'); if (saved) saved.textContent = '';
+}
+
+async function mfEnsureTestType(nom, unite) {
+  let t = (state.bdd_test_types || []).find(x => (x.nom || '').toLowerCase() === nom.toLowerCase());
+  if (t) return t;
+  const { data, error } = await sb.from('test_types').insert({ org: currentOrg, nom, unite, categorie: 'ANTHROPOLOGIE' }).select();
+  if (error || !data || !data[0]) throw (error || new Error('type ' + nom));
+  state.bdd_test_types.push(data[0]);
+  return data[0];
+}
+
+async function mfRecordAnthro(joueur, nom, unite, raw, loadedVal) {
+  const str = String(raw || '').trim();
+  if (str === '') return;
+  const v = parseFloat(str.replace(',', '.'));
+  if (isNaN(v)) return;
+  if (loadedVal !== null && Number(loadedVal) === v) return; // valeur inchangée → pas de nouveau résultat
+  const type = await mfEnsureTestType(nom, unite);
+  const { data } = await sb.from('test_results').insert({
+    org: currentOrg, test_type_id: type.id, joueur, date: toLocalISO(new Date()), valeur: v, notes: 'Saisi via fiche joueur'
+  }).select();
+  if (data && data[0]) state.bdd_test_results.unshift(data[0]);
+}
+
+// Vue joueur (lecture seule) : sa propre fiche
+async function renderPlayerFiche() {
+  const el = document.getElementById('player-fiche-body');
+  if (!el || !currentJoueurNom) return;
+  let fiche = {};
+  try {
+    const { data } = await sb.from('fiches_medicales').select('*').eq('org', currentOrg).eq('joueur', currentJoueurNom).maybeSingle();
+    if (data) fiche = data;
+  } catch (e) {}
+  const poids = mfLatestTest(currentJoueurNom, 'POIDS');
+  const taille = mfLatestTest(currentJoueurNom, 'TAILLE');
+  const age = mfComputeAge(fiche.date_naissance);
+  const fmtDate = d => d ? String(d).split('-').reverse().join('/') : '';
+  const textBlock = (label, txt) => txt ? '<div class="card"><h2 style="font-size:15px; margin-bottom:6px;">' + label + '</h2><div style="font-size:13px; white-space:pre-wrap;">' + escapeHtml(txt) + '</div></div>' : '';
+  const listBlock = (label, txt) => {
+    const lines = (txt || '').split('\n').map(s => s.trim()).filter(Boolean);
+    if (!lines.length) return '';
+    return '<div class="card"><h2 style="font-size:15px; margin-bottom:6px;">' + label + '</h2><ul style="margin:0; padding-left:18px;">' +
+      lines.map(l => '<li style="margin-bottom:4px; font-size:13px;">' + escapeHtml(l) + '</li>').join('') + '</ul></div>';
+  };
+  let html = '';
+  const chips = [];
+  if (age !== null && age >= 0) chips.push(tr('Age', 'Âge') + ' : <b>' + age + ' ' + tr('yrs', 'ans') + '</b>');
+  if (fiche.date_naissance) chips.push(tr('Born', 'Naissance') + ' : <b>' + fmtDate(fiche.date_naissance) + '</b>');
+  if (poids) chips.push(tr('Weight', 'Poids') + ' : <b>' + poids.valeur + ' kg</b>');
+  if (taille) chips.push(tr('Height', 'Taille') + ' : <b>' + taille.valeur + ' cm</b>');
+  if (chips.length) html += '<div class="card"><div style="display:flex; flex-wrap:wrap; gap:16px; font-size:13px;">' + chips.map(c => '<span>' + c + '</span>').join('') + '</div></div>';
+  html += textBlock(tr('Medical & sport context', 'Contexte médical et sportif'), fiche.contexte);
+  html += textBlock(tr('Other', 'Autre'), fiche.autre);
+  html += listBlock(tr('Football background', 'Formation footballistique'), fiche.formation);
+  html += listBlock(tr('Medical history', 'Antécédents médicaux'), fiche.antecedents);
+  if (!html) html = '<div class="card" style="color:var(--text-dim); font-size:13px;">' + tr('No information yet.', 'Aucune information pour le moment.') + '</div>';
+  el.innerHTML = html;
+  if (currentRole === 'lecteur') setTimeout(applyPlayerLanguage, 0);
+}
+
+async function saveMedicalFiche() {
+  if (!canWrite()) { toast('Action non autorisée', 'error'); return; }
+  const joueur = document.getElementById('mf-joueur').value;
+  if (!joueur) { toast('Sélectionne un joueur', 'error'); return; }
+  const row = {
+    org: currentOrg, joueur,
+    contexte: (document.getElementById('mf-contexte').value || '').trim() || null,
+    date_naissance: document.getElementById('mf-ddn').value || null,
+    autre: (document.getElementById('mf-autre').value || '').trim() || null,
+    formation: (document.getElementById('mf-formation').value || '').trim() || null,
+    antecedents: (document.getElementById('mf-antecedents').value || '').trim() || null,
+    updated_at: new Date().toISOString()
+  };
+  try {
+    const { data, error } = await sb.from('fiches_medicales').upsert(row, { onConflict: 'org,joueur' }).select().single();
+    if (error) throw error;
+    const idx = (state.bdd_fiches || []).findIndex(f => f.joueur === joueur);
+    if (idx >= 0) state.bdd_fiches[idx] = data; else { state.bdd_fiches = state.bdd_fiches || []; state.bdd_fiches.push(data); }
+    await mfRecordAnthro(joueur, 'POIDS', 'kg', document.getElementById('mf-poids').value, mfLoaded.poids);
+    await mfRecordAnthro(joueur, 'TAILLE', 'cm', document.getElementById('mf-taille').value, mfLoaded.taille);
+    toast('Fiche enregistrée ✓', 'success');
+    loadMedicalFiche();
+  } catch (e) {
+    toast('Erreur : ' + (e.message || e), 'error');
+  }
 }
 
 async function saveCompteRendu(id) {
@@ -6167,6 +6394,8 @@ async function loadState() {
     bdd_blessures: [],
     bdd_best_match: {},
     bdd_medical_notes: [],
+    bdd_creneaux_medicaux: [],
+    bdd_fiches: [],
     bdd_test_types: [],
     bdd_test_results: [],
     bdd_player_aliases: [],
@@ -6334,6 +6563,12 @@ async function loadState() {
       const { data: crn } = await cq.order('date').order('heure');
       state.bdd_creneaux_medicaux = crn || [];
     } catch(e) { state.bdd_creneaux_medicaux = []; }
+
+    // Fiches médicales joueur (org active)
+    try {
+      const { data: fiches } = await sb.from('fiches_medicales').select('*').eq('org', currentOrg);
+      state.bdd_fiches = fiches || [];
+    } catch(e) { state.bdd_fiches = []; }
 
     setLoad('Chargement des tests...');
     try {
@@ -7312,7 +7547,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
       else gestionToggle.classList.remove('has-active');
     }
     // Gérer l'état visuel du menu déroulant Médical
-    const medicalViews = ['medical', 'medical-planning', 'medical-notes'];
+    const medicalViews = ['medical', 'medical-planning', 'medical-fiche', 'medical-notes'];
     const medicalToggle = document.getElementById('nav-medical-toggle');
     if (medicalToggle) {
       if (medicalViews.includes(view)) medicalToggle.classList.add('has-active');
@@ -7355,8 +7590,10 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'player-seances') renderPlayerSeances();
     else if (view === 'medical') renderMedical();
     else if (view === 'medical-planning') renderMedicalPlanning();
+    else if (view === 'medical-fiche') renderMedicalFiche();
     else if (view === 'medical-notes') renderMedicalNotes();
     else if (view === 'player-soins') renderPlayerSoins();
+    else if (view === 'player-fiche') renderPlayerFiche();
     else if (view === 'testing') renderTesting();
     else if (view === 'competition') renderCompetition();
     else if (view === 'minijeux') renderMinijeux();
