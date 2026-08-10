@@ -3937,6 +3937,8 @@ function mpActiveOrg() {
   return (sel && sel.value) ? sel.value : currentOrg;
 }
 
+let mpSlotsById = {};  // cache des créneaux affichés (pour saveCompteRendu)
+
 async function renderMedicalPlanning() {
   const listEl = document.getElementById('mp-list');
   if (!listEl) return;
@@ -3970,6 +3972,14 @@ async function renderMedicalPlanning() {
   }
   const byDate = {};
   slots.forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
+  mpSlotsById = {};
+  slots.forEach(s => { mpSlotsById[s.id] = s; });
+  // Joueurs du club actif — pour placer directement un joueur sur un créneau libre
+  let optsPlayers = '';
+  try {
+    const { data: js } = await sb.from('joueurs').select('nom').eq('org', org).eq('archived', false).order('nom');
+    optsPlayers = (js || []).map(j => '<option value="' + escapeHtml(j.nom) + '">' + escapeHtml(j.nom) + '</option>').join('');
+  } catch (e) { optsPlayers = ''; }
   const jours = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
   let html = '';
   Object.keys(byDate).sort().forEach(d => {
@@ -3981,21 +3991,116 @@ async function renderMedicalPlanning() {
     byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => {
       const fin = _cmAddMinutes(s.heure, s.duree_min || 15);
       const libre = !s.joueur;
-      html += '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; border:1px solid var(--border); border-left:3px solid ' + (libre ? 'var(--green)' : 'var(--accent)') + '; border-radius:8px; padding:8px 10px; margin-bottom:5px; background:var(--bg-elevated);">';
-      html += '<div style="font-size:13px;"><b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b> <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min</span></div>';
-      html += '<div style="display:flex; align-items:center; gap:8px;">';
+      html += '<div style="border:1px solid var(--border); border-left:3px solid ' + (libre ? 'var(--green)' : (s.realise ? 'var(--green)' : 'var(--accent)')) + '; border-radius:8px; margin-bottom:5px; background:var(--bg-elevated); overflow:hidden;">';
+      html += '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px;">';
+      html += '<div style="font-size:13px;"><b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b> <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min</span>' + (s.realise ? ' <span style="color:var(--green); font-weight:600;">· ✅ Réalisé</span>' : '') + '</div>';
+      html += '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;">';
       if (libre) {
         html += '<span style="font-size:12px; color:var(--green);">Libre</span>';
+        html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="toggleAssign(\'' + s.id + '\')">➕ Placer un joueur</button>';
       } else {
         html += '<span style="font-size:12px; color:var(--accent-light);">🔒 ' + escapeHtml(s.joueur) + '</span>';
+        html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="toggleCompteRendu(\'' + s.id + '\')">' + (s.realise ? '✍️ Modifier le CR' : '✍️ Compte-rendu') + '</button>';
         html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="libererCreneauMedical(\'' + s.id + '\')">Libérer</button>';
       }
       html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px; color:var(--red);" onclick="deleteCreneauMedical(\'' + s.id + '\')" title="Supprimer">🗑</button>';
       html += '</div></div>';
+      // Panneau compte-rendu (créneaux réservés uniquement) — masqué par défaut
+      if (!libre) {
+        html += '<div id="cr-panel-' + s.id + '" style="display:' + (s.realise ? 'none' : 'none') + '; padding:0 10px 10px;">';
+        html += '<div style="border-top:1px solid var(--border); padding-top:8px;">';
+        html += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:2px;">Type de soin</div>';
+        html += '<select id="cr-type-' + s.id + '" style="width:100%; margin-bottom:6px;">' + _cmTypeOptions(s.soin_type || 'kiné') + '</select>';
+        html += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:2px;">Compte-rendu — ce qui a été réalisé <span style="color:var(--red);">*</span></div>';
+        html += '<textarea id="cr-txt-' + s.id + '" rows="3" placeholder="Soin effectué, observations, prescriptions…" style="width:100%; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px; font-size:13px; resize:vertical; margin-bottom:6px;">' + escapeHtml(s.compte_rendu || '') + '</textarea>';
+        html += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:2px;">Restrictions (optionnel)</div>';
+        html += '<input type="text" id="cr-restr-' + s.id + '" value="' + escapeHtml(s.restrictions || '') + '" placeholder="Ex: pas de contact 3 jours…" style="width:100%; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px; font-size:13px; margin-bottom:8px;" />';
+        html += '<button class="btn" style="padding:5px 12px; font-size:12px;" onclick="saveCompteRendu(\'' + s.id + '\')">💾 Enregistrer + créer la fiche médicale</button>';
+        html += '<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">💡 Enregistrer crée (ou met à jour) automatiquement une fiche médicale pour ' + escapeHtml(s.joueur) + '.</div>';
+        html += '</div></div>';
+      }
+      // Panneau "placer un joueur" (créneaux libres uniquement) — masqué par défaut
+      if (libre) {
+        html += '<div id="assign-panel-' + s.id + '" style="display:none; padding:0 10px 10px;">';
+        html += '<div style="border-top:1px solid var(--border); padding-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">';
+        html += '<select id="assign-sel-' + s.id + '" style="flex:1; min-width:160px;"><option value="">— Choisir un joueur —</option>' + optsPlayers + '</select>';
+        html += '<button class="btn" style="padding:5px 12px; font-size:12px;" onclick="assignerCreneau(\'' + s.id + '\')">Placer</button>';
+        html += '</div></div>';
+      }
+      html += '</div>';
     });
     html += '</div>';
   });
   listEl.innerHTML = html;
+}
+
+function _cmTypeOptions(selected) {
+  const opts = [['soin','🩹 Soin'],['bilan','📋 Bilan'],['manipulation','🤲 Manipulation'],['kiné','💆 Kiné'],['médecin','🩺 Médecin'],['autre','📌 Autre']];
+  return opts.map(o => '<option value="' + o[0] + '"' + (o[0] === selected ? ' selected' : '') + '>' + o[1] + '</option>').join('');
+}
+
+function toggleCompteRendu(id) {
+  const el = document.getElementById('cr-panel-' + id);
+  if (el) el.style.display = (el.style.display === 'none') ? '' : 'none';
+}
+
+function toggleAssign(id) {
+  const el = document.getElementById('assign-panel-' + id);
+  if (el) el.style.display = (el.style.display === 'none') ? '' : 'none';
+}
+
+// Placer directement un joueur sur un créneau libre (compte admin / médical)
+async function assignerCreneau(id) {
+  if (!canWrite()) { toast('Action non autorisée', 'error'); return; }
+  const joueur = ((document.getElementById('assign-sel-' + id) || {}).value || '').trim();
+  if (!joueur) { toast('Choisis un joueur', 'error'); return; }
+  const { data, error } = await sb.from('creneaux_medicaux')
+    .update({ joueur: joueur, booked_at: new Date().toISOString() })
+    .eq('id', id).is('joueur', null).select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (!data || data.length === 0) { toast('Ce créneau vient d\'être pris', 'error'); renderMedicalPlanning(); return; }
+  toast(joueur + ' placé sur le créneau ✓', 'success');
+  renderMedicalPlanning();
+}
+
+async function saveCompteRendu(id) {
+  if (!canWrite()) { toast('Action non autorisée', 'error'); return; }
+  const slot = mpSlotsById[id];
+  if (!slot) { toast('Créneau introuvable — recharge la page', 'error'); return; }
+  const type = (document.getElementById('cr-type-' + id) || {}).value || 'kiné';
+  const contenu = ((document.getElementById('cr-txt-' + id) || {}).value || '').trim();
+  const restrictions = ((document.getElementById('cr-restr-' + id) || {}).value || '').trim();
+  if (!contenu) { toast('Décris ce qui a été réalisé', 'error'); return; }
+  const noteRow = {
+    org: slot.org, joueur: slot.joueur, date: slot.date,
+    type: type, contenu: contenu, restrictions: restrictions || null,
+    auteur: currentUser ? currentUser.email : null
+  };
+  try {
+    let noteId = slot.note_id || null;
+    let savedNote;
+    if (noteId) {
+      const { data, error } = await sb.from('medical_notes').update(noteRow).eq('id', noteId).select().single();
+      if (error) throw error;
+      savedNote = data;
+      const idx = (state.bdd_medical_notes || []).findIndex(n => n.id === noteId);
+      if (idx >= 0 && savedNote.org === currentOrg) state.bdd_medical_notes[idx] = savedNote;
+    } else {
+      const { data, error } = await sb.from('medical_notes').insert(noteRow).select().single();
+      if (error) throw error;
+      savedNote = data;
+      noteId = savedNote.id;
+      if (savedNote.org === currentOrg) state.bdd_medical_notes.unshift(savedNote);
+    }
+    const { error: cErr } = await sb.from('creneaux_medicaux')
+      .update({ compte_rendu: contenu, soin_type: type, restrictions: restrictions || null, realise: true, note_id: noteId })
+      .eq('id', id);
+    if (cErr) throw cErr;
+    toast(slot.note_id ? 'Compte-rendu mis à jour · fiche médicale actualisée' : 'Compte-rendu enregistré · fiche médicale créée', 'success');
+    renderMedicalPlanning();
+  } catch (e) {
+    toast('Erreur : ' + (e.message || e), 'error');
+  }
 }
 
 async function addCreneauxMedicaux() {
