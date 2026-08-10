@@ -3807,7 +3807,9 @@ async function loadProfileAndStart() {
   }
   currentRole = profile.role;
   currentLang = profile.lang || null; // langue forcée par compte (fr/en), sinon défaut org
-  const MEDICAL_EMAILS = ['christian@tegg.fr', 'lucasm@psg.fr', 'lou@tegg.fr'];
+  // Comptes en rôle 'médical' pur (vue médicale restreinte). lou@tegg.fr et lucasm@psg.fr
+  // sont désormais staff multi-club (vue médicale + tous les onglets) — voir FULL_MEDICAL_EMAILS.
+  const MEDICAL_EMAILS = ['christian@tegg.fr'];
   if (MEDICAL_EMAILS.includes((currentUser.email || '').toLowerCase())) currentRole = 'médical';
   // Le rôle 'direction' et l'org viennent désormais directement de la table profiles
   // (role='direction', org='TEGG'), garantis par les policies RLS. Plus de hardcode d'UID ici.
@@ -3850,6 +3852,12 @@ async function loadProfileAndStart() {
     : '<span class="role-badge role-' + currentRole + '">' + currentRole.toUpperCase() + '</span>';
   const displayName = currentUser.email.replace(EMAIL_DOMAIN, '');
   userInfo.innerHTML = '👤 ' + displayName + roleBadge;
+
+  // Comptes multi-org (kinés/staff sur plusieurs clubs) : aligner l'org active côté base
+  // (droits RLS = club affiché) avant le chargement initial des données.
+  if (window.currentAllowedOrgs && window.currentAllowedOrgs.length > 1) {
+    try { await sb.rpc('set_active_org', { new_org: currentOrg }); } catch(e) {}
+  }
 
   await loadState();
   document.getElementById('data-loading-overlay').style.display = 'none';
@@ -6098,6 +6106,8 @@ function renderMessages() {
 async function switchOrg(org) {
   if (!ORGS.includes(org)) return;
   if (currentOrg === org) return;
+  // Aligner les droits (RLS) sur le club sélectionné : l'écriture suit le club actif
+  try { await sb.rpc('set_active_org', { new_org: org }); } catch(e) {}
   currentOrg = org;
   try { localStorage.setItem('current_org', org); } catch(e) {}
   updateOrgSwitcherUI();
@@ -6246,10 +6256,13 @@ function applyRoleRestrictions() {
     // Le rôle 'staff' a une interface allégée par rapport à l'admin :
     // pas d'export JSON, pas de Notes médicales, pas de Paramètres.
     const staffLimited = (currentRole === 'staff');
+    // Comptes médicaux staff : conservent la vue médicale COMPLÈTE (Notes médicales incluses)
+    const FULL_MEDICAL_EMAILS = ['lou@tegg.fr', 'lucasm@psg.fr'];
+    const isFullMedical = FULL_MEDICAL_EMAILS.includes((currentUser && currentUser.email || '').toLowerCase());
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = staffLimited ? 'none' : '';
     const medNotesBtn = document.getElementById('nav-medical-notes-btn');
-    if (medNotesBtn) medNotesBtn.style.display = staffLimited ? 'none' : '';
+    if (medNotesBtn) medNotesBtn.style.display = (staffLimited && !isFullMedical) ? 'none' : '';
     const settingsBtn = document.querySelector('.nav-btn[data-view="settings"]');
     if (settingsBtn) settingsBtn.style.display = staffLimited ? 'none' : '';
   }
