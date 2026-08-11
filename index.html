@@ -724,6 +724,7 @@
     <span class="save-status" id="saveStatus">☁️ Connecté à Supabase</span>
     <span id="user-info" style="color:var(--text-dim); font-size:12px;"></span>
     <button class="btn btn-secondary" onclick="exportData()" id="btn-export-json">Exporter JSON</button>
+    <button class="btn btn-secondary" onclick="refreshPlayerApp()" id="btn-refresh-player" data-en="🔄 Refresh" data-fr="🔄 Rafraîchir" style="display:none;">🔄 Rafraîchir</button>
     <button class="btn btn-secondary" onclick="logout()" id="logout-btn">↪ Déconnexion</button>
   </div>
 </header>
@@ -3904,6 +3905,21 @@ async function loadProfileAndStart() {
   setupRealtime();
 }
 
+// Rafraîchir l'app pour un joueur en mode "écran d'accueil" (PWA standalone),
+// où le navigateur ne propose plus de bouton de rechargement. On vide les caches
+// localStorage et on demande une mise à jour du service worker avant de recharger,
+// afin de garantir des données et un code à jour.
+async function refreshPlayerApp() {
+  try { ['gps_data', 'adversaire_logos'].forEach(t => invalidateCache(t, currentOrg)); } catch (e) {}
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.update();
+    }
+  } catch (e) {}
+  location.reload();
+}
+
 async function logout() {
   const msg = (currentRole === 'lecteur' && playerLang() === 'en') ? 'Log out?' : 'Se déconnecter ?';
   if (!confirm(msg)) return;
@@ -6266,6 +6282,10 @@ function applyRoleRestrictions() {
     if (gestionDropdown) gestionDropdown.style.display = 'none'; // Cacher le menu Gestion
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = 'none'; // Cacher l'export JSON aux joueurs
+    // Bouton Rafraîchir : indispensable en mode "écran d'accueil" (PWA standalone),
+    // où le navigateur n'offre plus de bouton de rechargement.
+    const btnRefresh = document.getElementById('btn-refresh-player');
+    if (btnRefresh) btnRefresh.style.display = '';
     // Forcer l'affichage sur "Vue d'ensemble" au démarrage joueur
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
