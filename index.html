@@ -3510,6 +3510,13 @@
             <option value="20">20 min</option>
             <option value="25">25 min</option>
             <option value="30">30 min</option>
+            <option value="40">40 min</option>
+            <option value="50">50 min</option>
+            <option value="60">1h</option>
+            <option value="75">1h15</option>
+            <option value="90">1h30</option>
+            <option value="105">1h45</option>
+            <option value="120">2h</option>
           </select>
         </div>
         <div class="filter-group">
@@ -3523,9 +3530,14 @@
     <div class="card">
       <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
         <h2 style="margin:0;">🗓️ Créneaux à venir</h2>
-        <label style="font-size:12px; color:var(--text-dim); display:flex; align-items:center; gap:6px; cursor:pointer;">
-          <input type="checkbox" id="mp-show-past" onchange="renderMedicalPlanning()" /> Afficher les créneaux passés
-        </label>
+        <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+          <label id="mp-cols-wrap" style="font-size:12px; color:var(--text-dim); display:none; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" id="mp-cols-toggle" onchange="renderMedicalPlanning()" /> 🗂️ Vue par club (colonnes)
+          </label>
+          <label style="font-size:12px; color:var(--text-dim); display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" id="mp-show-past" onchange="renderMedicalPlanning()" /> Afficher les créneaux passés
+          </label>
+        </div>
       </div>
       <div id="mp-list"></div>
     </div>
@@ -4038,6 +4050,102 @@ function updateMedicalBookingBadge() {
   }
 }
 
+// Format d'une durée en minutes : 45→"45 min", 60→"1h", 90→"1h30"
+function mpFmtDuree(min) {
+  min = parseInt(min, 10) || 0;
+  if (min < 60) return min + ' min';
+  const h = Math.floor(min / 60), m = min % 60;
+  return m === 0 ? (h + 'h') : (h + 'h' + String(m).padStart(2, '0'));
+}
+
+// HTML d'un créneau (ligne + panneaux compte-rendu / placement). optsPlayers = <option> des joueurs du club.
+function mpSlotRowHtml(s, optsPlayers) {
+  const fin = _cmAddMinutes(s.heure, s.duree_min || 15);
+  const libre = !s.joueur;
+  let html = '';
+  html += '<div style="border:1px solid var(--border); border-left:3px solid ' + (libre ? 'var(--green)' : (s.realise ? 'var(--green)' : 'var(--accent)')) + '; border-radius:8px; margin-bottom:5px; background:var(--bg-elevated); overflow:hidden;">';
+  html += '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px;">';
+  html += '<div style="font-size:13px;"><b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b> <span style="color:var(--text-dim);">· ' + mpFmtDuree(s.duree_min || 15) + '</span>' + (s.realise ? ' <span style="color:var(--green); font-weight:600;">· ✅ Réalisé</span>' : '') + '</div>';
+  html += '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;">';
+  if (libre) {
+    html += '<span style="font-size:12px; color:var(--green);">Libre</span>';
+    html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="toggleAssign(\'' + s.id + '\')">➕ Placer un joueur</button>';
+  } else {
+    html += '<span style="font-size:12px; color:var(--accent-light);">🔒 ' + escapeHtml(s.joueur) + '</span>';
+    html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="toggleCompteRendu(\'' + s.id + '\')">' + (s.realise ? '✍️ Modifier le CR' : '✍️ Compte-rendu') + '</button>';
+    html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="libererCreneauMedical(\'' + s.id + '\')">Libérer</button>';
+  }
+  html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px; color:var(--red);" onclick="deleteCreneauMedical(\'' + s.id + '\')" title="Supprimer">🗑</button>';
+  html += '</div></div>';
+  if (!libre) {
+    html += '<div id="cr-panel-' + s.id + '" style="display:none; padding:0 10px 10px;">';
+    html += '<div style="border-top:1px solid var(--border); padding-top:8px;">';
+    html += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:2px;">Type de soin</div>';
+    html += '<select id="cr-type-' + s.id + '" style="width:100%; margin-bottom:6px;">' + _cmTypeOptions(s.soin_type || 'kiné') + '</select>';
+    html += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:2px;">Compte-rendu — ce qui a été réalisé <span style="color:var(--red);">*</span></div>';
+    html += '<textarea id="cr-txt-' + s.id + '" rows="3" placeholder="Soin effectué, observations, prescriptions…" style="width:100%; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px; font-size:13px; resize:vertical; margin-bottom:6px;">' + escapeHtml(s.compte_rendu || '') + '</textarea>';
+    html += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:2px;">Restrictions (optionnel)</div>';
+    html += '<input type="text" id="cr-restr-' + s.id + '" value="' + escapeHtml(s.restrictions || '') + '" placeholder="Ex: pas de contact 3 jours…" style="width:100%; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px; font-size:13px; margin-bottom:8px;" />';
+    html += '<button class="btn" style="padding:5px 12px; font-size:12px;" onclick="saveCompteRendu(\'' + s.id + '\')">💾 Enregistrer + créer la fiche médicale</button>';
+    html += '<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">💡 Enregistrer crée (ou met à jour) automatiquement une fiche médicale pour ' + escapeHtml(s.joueur) + '.</div>';
+    html += '</div></div>';
+  } else {
+    html += '<div id="assign-panel-' + s.id + '" style="display:none; padding:0 10px 10px;">';
+    html += '<div style="border-top:1px solid var(--border); padding-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">';
+    html += '<select id="assign-sel-' + s.id + '" style="flex:1; min-width:160px;"><option value="">— Choisir un joueur —</option>' + (optsPlayers || '') + '</select>';
+    html += '<button class="btn" style="padding:5px 12px; font-size:12px;" onclick="assignerCreneau(\'' + s.id + '\')">Placer</button>';
+    html += '</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+// Vue planning multi-clubs : une colonne par entité (staff multi-accès)
+async function renderMpColumns(clubs, showPast, today) {
+  const listEl = document.getElementById('mp-list');
+  const lbl = document.getElementById('mp-club-label');
+  if (lbl) lbl.textContent = 'Tous les clubs';
+  let q = sb.from('creneaux_medicaux').select('*').in('org', clubs);
+  if (!showPast) q = q.gte('date', today);
+  const { data, error } = await q.order('date').order('heure');
+  if (error) { listEl.innerHTML = '<div style="color:var(--red);">Erreur : ' + escapeHtml(error.message) + '</div>'; return; }
+  const slots = data || [];
+  mpSlotsById = {};
+  slots.forEach(s => { mpSlotsById[s.id] = s; });
+  const optsByOrg = {};
+  await Promise.all(clubs.map(async (o) => {
+    try {
+      const { data: js } = await sb.from('joueurs').select('nom').eq('org', o).eq('archived', false).order('nom');
+      optsByOrg[o] = (js || []).map(j => '<option value="' + escapeHtml(j.nom) + '">' + escapeHtml(j.nom) + '</option>').join('');
+    } catch (e) { optsByOrg[o] = ''; }
+  }));
+  const colColors = { PSG: '#00a3ff', TEGG: '#2563eb', D2F: '#1e3a8a' };
+  const joursC = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  let html = '<div style="display:grid; grid-template-columns:repeat(' + clubs.length + ', minmax(250px,1fr)); gap:12px; overflow-x:auto; align-items:start;">';
+  clubs.forEach(o => {
+    const col = slots.filter(s => s.org === o);
+    const color = colColors[o] || 'var(--accent)';
+    html += '<div style="min-width:250px;">';
+    html += '<div style="font-weight:700; font-size:13px; padding:8px 10px; border-radius:8px 8px 0 0; background:' + color + '; color:#fff; text-align:center;">' + escapeHtml(orgLabelText(o)) + ' <span style="opacity:.85; font-weight:400;">· ' + col.length + '</span></div>';
+    html += '<div style="border:1px solid var(--border); border-top:none; border-radius:0 0 8px 8px; padding:8px;">';
+    if (col.length === 0) {
+      html += '<div style="font-size:12px; color:var(--text-dim); padding:6px;">Aucun créneau</div>';
+    } else {
+      const byDate = {};
+      col.forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
+      Object.keys(byDate).sort().forEach(d => {
+        const [yy, mm, dd] = d.split('-');
+        const jour = joursC[new Date(d + 'T00:00:00').getDay()];
+        html += '<div style="font-size:11px; font-weight:700; color:var(--accent-light); margin:8px 0 4px;">' + jour + ' ' + dd + '/' + mm + '</div>';
+        byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => { html += mpSlotRowHtml(s, optsByOrg[s.org] || ''); });
+      });
+    }
+    html += '</div></div>';
+  });
+  html += '</div>';
+  listEl.innerHTML = html;
+}
+
 async function renderMedicalPlanning() {
   const listEl = document.getElementById('mp-list');
   if (!listEl) return;
@@ -4051,17 +4159,23 @@ async function renderMedicalPlanning() {
     if (prev && clubs.includes(prev)) sel.value = prev;
     else if (clubs.includes(currentOrg)) sel.value = currentOrg;
   }
-  if (wrap) wrap.style.display = (clubs.length > 1) ? '' : 'none';
-  const org = mpActiveOrg();
-  const lbl = document.getElementById('mp-club-label');
-  if (lbl) lbl.textContent = orgLabelText(org);
   renderPushBanner('mp-push-banner');            // permet au kiné d'activer les notifs push
   mpBookingAlerts = 0; updateMedicalBookingBadge(); // on consulte le planning → on efface le compteur
   const dateEl = document.getElementById('mp-date');
   if (dateEl && !dateEl.value) dateEl.value = toLocalISO(new Date());
-  // Charger les créneaux frais du club actif
   const showPast = document.getElementById('mp-show-past') && document.getElementById('mp-show-past').checked;
   const today = toLocalISO(new Date());
+  // Vue par club (colonnes) — réservée au staff multi-club
+  const colsWrap = document.getElementById('mp-cols-wrap');
+  if (colsWrap) colsWrap.style.display = (clubs.length > 1) ? 'flex' : 'none';
+  const colsToggle = document.getElementById('mp-cols-toggle');
+  const colsMode = clubs.length > 1 && colsToggle && colsToggle.checked;
+  if (wrap) wrap.style.display = (!colsMode && clubs.length > 1) ? '' : 'none';
+  if (colsMode) { await renderMpColumns(clubs, showPast, today); return; }
+  // ---- Mode club unique ----
+  const org = mpActiveOrg();
+  const lbl = document.getElementById('mp-club-label');
+  if (lbl) lbl.textContent = orgLabelText(org);
   let q = sb.from('creneaux_medicaux').select('*').eq('org', org);
   if (!showPast) q = q.gte('date', today);
   const { data, error } = await q.order('date').order('heure');
@@ -4089,47 +4203,7 @@ async function renderMedicalPlanning() {
     const libres = byDate[d].filter(s => !s.joueur).length;
     html += '<div style="margin-bottom:14px;">';
     html += '<div style="font-weight:700; font-size:13px; margin-bottom:6px; color:var(--accent-light);">' + jour + ' ' + dd + '/' + m + '/' + y + ' <span style="color:var(--text-dim); font-weight:400;">· ' + libres + '/' + byDate[d].length + ' libres</span></div>';
-    byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => {
-      const fin = _cmAddMinutes(s.heure, s.duree_min || 15);
-      const libre = !s.joueur;
-      html += '<div style="border:1px solid var(--border); border-left:3px solid ' + (libre ? 'var(--green)' : (s.realise ? 'var(--green)' : 'var(--accent)')) + '; border-radius:8px; margin-bottom:5px; background:var(--bg-elevated); overflow:hidden;">';
-      html += '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px;">';
-      html += '<div style="font-size:13px;"><b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b> <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min</span>' + (s.realise ? ' <span style="color:var(--green); font-weight:600;">· ✅ Réalisé</span>' : '') + '</div>';
-      html += '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;">';
-      if (libre) {
-        html += '<span style="font-size:12px; color:var(--green);">Libre</span>';
-        html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="toggleAssign(\'' + s.id + '\')">➕ Placer un joueur</button>';
-      } else {
-        html += '<span style="font-size:12px; color:var(--accent-light);">🔒 ' + escapeHtml(s.joueur) + '</span>';
-        html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="toggleCompteRendu(\'' + s.id + '\')">' + (s.realise ? '✍️ Modifier le CR' : '✍️ Compte-rendu') + '</button>';
-        html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="libererCreneauMedical(\'' + s.id + '\')">Libérer</button>';
-      }
-      html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px; color:var(--red);" onclick="deleteCreneauMedical(\'' + s.id + '\')" title="Supprimer">🗑</button>';
-      html += '</div></div>';
-      // Panneau compte-rendu (créneaux réservés uniquement) — masqué par défaut
-      if (!libre) {
-        html += '<div id="cr-panel-' + s.id + '" style="display:' + (s.realise ? 'none' : 'none') + '; padding:0 10px 10px;">';
-        html += '<div style="border-top:1px solid var(--border); padding-top:8px;">';
-        html += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:2px;">Type de soin</div>';
-        html += '<select id="cr-type-' + s.id + '" style="width:100%; margin-bottom:6px;">' + _cmTypeOptions(s.soin_type || 'kiné') + '</select>';
-        html += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:2px;">Compte-rendu — ce qui a été réalisé <span style="color:var(--red);">*</span></div>';
-        html += '<textarea id="cr-txt-' + s.id + '" rows="3" placeholder="Soin effectué, observations, prescriptions…" style="width:100%; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px; font-size:13px; resize:vertical; margin-bottom:6px;">' + escapeHtml(s.compte_rendu || '') + '</textarea>';
-        html += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:2px;">Restrictions (optionnel)</div>';
-        html += '<input type="text" id="cr-restr-' + s.id + '" value="' + escapeHtml(s.restrictions || '') + '" placeholder="Ex: pas de contact 3 jours…" style="width:100%; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px; font-size:13px; margin-bottom:8px;" />';
-        html += '<button class="btn" style="padding:5px 12px; font-size:12px;" onclick="saveCompteRendu(\'' + s.id + '\')">💾 Enregistrer + créer la fiche médicale</button>';
-        html += '<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">💡 Enregistrer crée (ou met à jour) automatiquement une fiche médicale pour ' + escapeHtml(s.joueur) + '.</div>';
-        html += '</div></div>';
-      }
-      // Panneau "placer un joueur" (créneaux libres uniquement) — masqué par défaut
-      if (libre) {
-        html += '<div id="assign-panel-' + s.id + '" style="display:none; padding:0 10px 10px;">';
-        html += '<div style="border-top:1px solid var(--border); padding-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">';
-        html += '<select id="assign-sel-' + s.id + '" style="flex:1; min-width:160px;"><option value="">— Choisir un joueur —</option>' + optsPlayers + '</select>';
-        html += '<button class="btn" style="padding:5px 12px; font-size:12px;" onclick="assignerCreneau(\'' + s.id + '\')">Placer</button>';
-        html += '</div></div>';
-      }
-      html += '</div>';
-    });
+    byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => { html += mpSlotRowHtml(s, optsPlayers); });
     html += '</div>';
   });
   listEl.innerHTML = html;
@@ -4368,7 +4442,7 @@ async function addCreneauxMedicaux() {
   const duree = parseInt(document.getElementById('mp-duree').value, 10);
   const count = Math.max(1, Math.min(30, parseInt(document.getElementById('mp-count').value, 10) || 1));
   if (!date || !heure) { toast('Date et heure de début requises', 'error'); return; }
-  if (!(duree >= 10 && duree <= 30)) { toast('Durée entre 10 et 30 min', 'error'); return; }
+  if (!(duree >= 10 && duree <= 120)) { toast('Durée entre 10 min et 2h', 'error'); return; }
   const kine = (currentUser && currentUser.email) ? currentUser.email : null;
   const rows = [];
   let h = heure;
@@ -4439,7 +4513,7 @@ async function renderPlayerSoins() {
       const mine = (s.joueur === currentJoueurNom);
       const clickFn = mine ? ('annulerReservation(\'' + s.id + '\')') : ('reserverCreneau(\'' + s.id + '\')');
       html += '<div onclick="' + clickFn + '" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px; border-radius:8px; padding:9px 11px; margin-bottom:5px; background:' + (mine ? 'rgba(22,101,52,0.25)' : 'var(--bg-elevated)') + '; border-left:3px solid ' + (mine ? 'var(--green)' : 'var(--accent)') + ';">';
-      html += '<div style="font-size:13px;"><b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b> <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min</span></div>';
+      html += '<div style="font-size:13px;"><b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b> <span style="color:var(--text-dim);">· ' + mpFmtDuree(s.duree_min || 15) + '</span></div>';
       html += '<span style="font-size:12px; font-weight:600; color:' + (mine ? 'var(--green)' : 'var(--accent-light)') + ';">' + (mine ? ('✓ ' + tr('Booked — tap to cancel', 'Réservé — clique pour annuler')) : tr('Book', 'Réserver')) + '</span>';
       html += '</div>';
     });
