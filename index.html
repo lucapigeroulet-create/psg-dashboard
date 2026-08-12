@@ -11302,7 +11302,7 @@ function openGpsSessionEdit(date, seance) {
       '</div>' +
       '<div style="font-size:12px; color:var(--text-dim); margin-bottom:14px;">' +
         formatDateFR(date) + ' · ' + escapeHtml(seance) +
-        ' — corrige le type et la durée d\'un découpage : la durée s\'applique à tous les joueurs, et le m/min est recalculé.' +
+        ' — renomme un découpage, corrige son type et sa durée : le changement s\'applique à tous les joueurs, et le m/min est recalculé.' +
       '</div>' +
       '<div style="margin-bottom:16px;">' +
         '<label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;">Type d\'enregistrement</label>' +
@@ -11311,7 +11311,7 @@ function openGpsSessionEdit(date, seance) {
         '</select>' +
       '</div>' +
       '<div class="table-wrap"><table style="width:100%; font-size:13px;"><thead><tr style="text-align:left; color:var(--text-dim); font-size:11px;">' +
-        '<th style="padding:4px 8px;">Découpage</th><th style="padding:4px 8px; text-align:center;">Joueurs</th>' +
+        '<th style="padding:4px 8px;">Nom du découpage</th><th style="padding:4px 8px; text-align:center;">Joueurs</th>' +
         '<th style="padding:4px 8px; text-align:center;">Durée actuelle</th><th style="padding:4px 8px; text-align:center;">Nouvelle durée (min)</th></tr></thead><tbody>';
 
   gpsSessionEditData.splits.forEach((entry, i) => {
@@ -11319,10 +11319,15 @@ function openGpsSessionEdit(date, seance) {
     const uniform = durs.length === 1 && durs[0] !== null;
     const curLabel = uniform ? (durs[0] + ' min') : (durs.length === 1 ? '—' : 'varié');
     const curVal = uniform ? durs[0] : '';
-    const label = entry.split.toLowerCase() === 'all' ? 'Séance entière' : entry.split;
+    const isAll = entry.split.toLowerCase() === 'all';
+    const nameCell = isAll
+      ? '<span style="font-weight:600;">Séance entière</span>'
+      : '<input type="text" id="gps-se-name-' + i + '" value="' + escapeHtml(entry.split) + '" ' +
+        'placeholder="Nom du découpage" ' +
+        'style="width:160px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:13px; font-weight:600;">';
     inner +=
       '<tr style="border-top:1px solid var(--border);">' +
-        '<td style="padding:6px 8px; font-weight:600;">' + escapeHtml(label) + '</td>' +
+        '<td style="padding:6px 8px;">' + nameCell + '</td>' +
         '<td style="padding:6px 8px; text-align:center;">' + entry.rows.length + '</td>' +
         '<td style="padding:6px 8px; text-align:center; color:var(--text-dim);">' + curLabel + '</td>' +
         '<td style="padding:6px 8px; text-align:center;">' +
@@ -11355,7 +11360,25 @@ async function saveGpsSessionEdit() {
   const newCat = (catSel && catSel.value) || 'seance';
   const catChanged = allRows.length > 0 && newCat !== gpsCategorie(allRows[0]);
 
-  // Regrouper les modifications par ligne (durée/​m-min + catégorie)
+  // Renommage des découpages : le nouveau nom (split_name) s'applique à toutes les
+  // lignes du découpage. « Séance entière » (all) n'est pas renommable.
+  const nameChanges = {}; // ancien split_name -> nouveau nom
+  const seenNames = {};
+  let nameInvalid = '';
+  gpsSessionEditData.splits.forEach((entry, i) => {
+    if (entry.split.toLowerCase() === 'all') return;
+    const nInp = document.getElementById('gps-se-name-' + i);
+    if (!nInp) return;
+    const newName = gpsNormalizeSplitName(nInp.value);
+    if (newName === 'all') { nameInvalid = 'Nom de découpage vide ou réservé'; return; }
+    const lc = newName.toLowerCase();
+    if (seenNames[lc]) { nameInvalid = 'Deux découpages ne peuvent pas porter le même nom (« ' + newName + ' »)'; return; }
+    seenNames[lc] = true;
+    if (newName !== entry.split) nameChanges[entry.split] = newName;
+  });
+  if (nameInvalid) { toast(nameInvalid, 'error'); return; }
+
+  // Regrouper les modifications par ligne (durée/​m-min + catégorie + nom)
   const payloads = {}; // id -> { patch, ref }
   let invalid = false;
   gpsSessionEditData.splits.forEach((entry, i) => {
@@ -11381,6 +11404,15 @@ async function saveGpsSessionEdit() {
     });
   }
 
+  Object.keys(nameChanges).forEach(oldSplit => {
+    const entry = gpsSessionEditData.splits.find(e => e.split === oldSplit);
+    if (!entry) return;
+    entry.rows.forEach(r => {
+      payloads[r.id] = payloads[r.id] || { patch: {}, ref: r };
+      payloads[r.id].patch.split_name = nameChanges[oldSplit];
+    });
+  });
+
   const entries = Object.values(payloads);
   if (entries.length === 0) { toast('Aucune modification', 'info'); closeGpsSessionEdit(); return; }
 
@@ -11398,6 +11430,7 @@ async function saveGpsSessionEdit() {
   } else {
     const bits = [];
     if (Object.values(payloads).some(o => o.patch.duree_min !== undefined)) bits.push('durée · m/min recalculé');
+    if (Object.keys(nameChanges).length) bits.push('nom du découpage');
     if (catChanged) bits.push('type');
     toast('Séance mise à jour (' + bits.join(', ') + ')', 'success');
   }
