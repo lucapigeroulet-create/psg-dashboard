@@ -1691,7 +1691,7 @@
         </div>
         <div>
           <label>Statut actuel</label>
-          <select id="bl-statut">
+          <select id="bl-statut" onchange="onBlStatutChange()">
             <option value="en_cours">Blessé (en cours)</option>
             <option value="reathle">Réathlétisation</option>
             <option value="disponible">Disponible (retour)</option>
@@ -14449,6 +14449,17 @@ function editBlessure(id) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// Quand on marque une fiche « Disponible (retour) », on renseigne d'office la date
+// de retour (aujourd'hui par défaut) si elle est vide — sinon la blessure resterait
+// affichée jusqu'à aujourd'hui faute de date de fin. Le staff peut la corriger.
+function onBlStatutChange() {
+  const st = document.getElementById('bl-statut');
+  const dateFin = document.getElementById('bl-date-fin');
+  if (st && dateFin && st.value === 'disponible' && !dateFin.value) {
+    dateFin.value = todayYMD();
+  }
+}
+
 async function saveBlessure() {
   if (!canWrite()) { toast('Lecture seule', 'error'); return; }
   const joueur = document.getElementById('bl-joueur').value;
@@ -14470,6 +14481,10 @@ async function saveBlessure() {
     reathle_debut_prev: val('bl-reathle-debut-prev'),
     debut_reathle: val('bl-debut-reathle'), fin_reathle: val('bl-fin-reathle'), date_fin: val('bl-date-fin')
   };
+  const statut = val('bl-statut') || 'en_cours';
+  // Fiche clôturée sans date de retour → on la fixe à aujourd'hui pour que la blessure
+  // se termine réellement (sinon elle resterait affichée jusqu'à aujourd'hui inclus).
+  if (statut === 'disponible' && !details.date_fin) details.date_fin = todayYMD();
   const row = {
     org: currentOrg,
     joueur: joueur,
@@ -14477,7 +14492,7 @@ async function saveBlessure() {
     date_blessure: date,
     zone: val('bl-zone') || null,
     cote: val('bl-cote') || null,
-    statut: val('bl-statut') || 'en_cours',
+    statut: statut,
     duree_indispo: val('bl-duree') || null,
     details: details
   };
