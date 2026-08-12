@@ -22851,9 +22851,10 @@ function renderMedicalInjurySummary(group) {
     return;
   }
 
-  const daysByPlayer = {};
-  const zoneCount = {};
-  const typeCount = {};
+  const daysByPlayer = {};  // jours cumulés par joueur
+  const zoneCount = {};     // nombre d'occurrences par membre/zone
+  const typeCount = {};     // nombre d'occurrences par type
+  const monthDays = {};     // jours de blessure par mois (AAAA-MM)
   let totalDays = 0;
   const injuredSet = new Set();
   fiches.forEach(b => {
@@ -22864,8 +22865,9 @@ function renderMedicalInjurySummary(group) {
     if (j > 0) injuredSet.add(b.joueur);
     let zone = b.zone || '?';
     if (zone === 'Autre' && b.details && b.details.zone_autre) zone = b.details.zone_autre;
-    zoneCount[zone] = (zoneCount[zone] || 0) + j;   // pondéré par jours (impact réel)
-    typeCount[blessureType(b)] = (typeCount[blessureType(b)] || 0) + j;
+    zoneCount[zone] = (zoneCount[zone] || 0) + 1;                        // occurrences
+    typeCount[blessureType(b)] = (typeCount[blessureType(b)] || 0) + 1;  // occurrences
+    ficheInjuryDates(b).forEach(ds => { const ym = ds.slice(0, 7); monthDays[ym] = (monthDays[ym] || 0) + 1; });
   });
 
   const kpis = [
@@ -22874,7 +22876,8 @@ function renderMedicalInjurySummary(group) {
     { label: 'Fiches', val: fiches.length }
   ].map(k => '<div class="stat"><div class="stat-label">' + k.label + '</div><div class="stat-value">' + k.val + '</div></div>').join('');
 
-  const barBlock = (title, entries, colorFn, fmtLabel) => {
+  // suffix : ' j' pour des jours, '' pour un nombre d'occurrences
+  const barBlock = (title, entries, colorFn, fmtLabel, suffix) => {
     const sorted = Object.entries(entries).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
     const max = sorted.length ? sorted[0][1] : 0;
     const rows = sorted.length ? sorted.map(([k, n]) => {
@@ -22885,21 +22888,46 @@ function renderMedicalInjurySummary(group) {
           '<div style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(fmtLabel ? fmtLabel(k) : k) + '</div>' +
           '<div style="height:6px; background:var(--bg-card); border-radius:3px; overflow:hidden;"><div style="height:100%; width:' + pct + '%; background:' + col + ';"></div></div>' +
         '</div>' +
-        '<div style="font-weight:700; font-size:13px; min-width:52px; text-align:right;">' + n + ' j</div>' +
+        '<div style="font-weight:700; font-size:13px; min-width:52px; text-align:right;">' + n + (suffix || '') + '</div>' +
       '</div>';
     }).join('') : '<div style="color:var(--text-dim); font-size:12px;">—</div>';
     return '<div style="flex:1; min-width:220px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:12px;">' +
       '<div style="font-weight:700; margin-bottom:8px;">' + title + '</div>' + rows + '</div>';
   };
 
+  // Courbe : jours de blessure par mois
+  const months = Object.keys(monthDays).sort();
+  const MOIS_FR = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const monthLabel = ym => { const p = ym.split('-'); return (MOIS_FR[parseInt(p[1], 10) - 1] || p[1]) + ' ' + p[0].slice(2); };
+
   cont.innerHTML =
     '<div class="stats-grid" style="margin-bottom:14px;">' + kpis + '</div>' +
+    '<div style="font-weight:700; margin-bottom:6px;">📈 Jours de blessure par mois</div>' +
+    (months.length
+      ? '<div style="height:220px; margin-bottom:16px;"><canvas id="med-injury-monthly"></canvas></div>'
+      : '<div style="color:var(--text-dim); font-size:12px; margin-bottom:16px;">—</div>') +
     '<div style="display:flex; gap:12px; flex-wrap:wrap;">' +
-      barBlock('👤 Jours par joueur', daysByPlayer, null, null) +
-      barBlock('🦵 Membres touchés', zoneCount, null, null) +
-      barBlock('🩹 Type de blessure', typeCount, k => BLESSURE_TYPE_COLORS[k] || 'var(--accent)', k => BLESSURE_TYPE_LABELS[k] || k) +
+      barBlock('👤 Jours par joueur', daysByPlayer, null, null, ' j') +
+      barBlock('🦵 Membres touchés', zoneCount, null, null, '') +
+      barBlock('🩹 Type de blessure', typeCount, k => BLESSURE_TYPE_COLORS[k] || 'var(--accent)', k => BLESSURE_TYPE_LABELS[k] || k, '') +
     '</div>' +
-    '<div style="font-size:11px; color:var(--text-dim); margin-top:10px;">Jours pondérés par la durée réelle de chaque blessure (début → retour, ou aujourd\'hui si en cours). Les fiches sans « type » renseigné sont classées d\'après la zone touchée.</div>';
+    '<div style="font-size:11px; color:var(--text-dim); margin-top:10px;">Jours par joueur et courbe mensuelle = durée réelle des blessures. Membres touchés et types = nombre d\'occurrences (fiches). Les fiches sans « type » renseigné sont classées d\'après la zone touchée.</div>';
+
+  if (months.length) {
+    destroyChart('med-injury-monthly');
+    charts['med-injury-monthly'] = new Chart(document.getElementById('med-injury-monthly'), {
+      type: 'line',
+      data: { labels: months.map(monthLabel), datasets: [{ label: 'Jours de blessure', data: months.map(m => monthDays[m]), borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,0.15)', fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.y + ' jour(s)' } } },
+        scales: {
+          x: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { color: '#1f3a5f' } },
+          y: { beginAtZero: true, ticks: { color: '#8ba3c1', precision: 0 }, grid: { color: '#1f3a5f' } }
+        }
+      }
+    });
+  }
 }
 
 // ---------- ONGLET ÉTAT DE FORME ----------
