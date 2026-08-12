@@ -14680,13 +14680,15 @@ function getBlessureStatusForDay(joueur, date) {
   (state.bdd_blessures || []).forEach(b => {
     if (b.joueur !== joueur || !b.date_blessure || date < b.date_blessure) return;
     const d = b.details || {};
-    // Fin de période : reprise collective actée (même bornage que computeFicheIndispo).
-    // Blessure encore en cours : l'état court aussi sur les jours à venir du calendrier,
-    // y compris une réathlétisation planifiée dans le futur.
-    const end = (b.statut === 'disponible')
-      ? (d.date_fin || (d.fin_reathle && d.fin_reathle <= today ? d.fin_reathle : today))
-      : '9999-12-31';
-    if (date > end) return;
+    // Blessure marquée TERMINÉE (statut "disponible") : le joueur redevient disponible
+    // À PARTIR de sa date de retour (date_fin), sinon fin de réathlé prévue, sinon
+    // aujourd'hui. Dès cette date, plus aucun état "blessé/réathlé" n'est affiché —
+    // y compris le jour même où l'on clôt la fiche sans renseigner de date de retour.
+    if (b.statut === 'disponible') {
+      const retour = d.date_fin || d.fin_reathle || today;
+      if (date >= retour) return;
+    }
+    // Blessure en cours (en_cours / réathlé) : l'état court aussi sur les jours à venir.
     const debutReathle = d.debut_reathle || (b.statut === 'reathle' ? b.date_blessure : '');
     if (debutReathle && date >= debutReathle) {
       if (status !== 'INJURY') status = 'REATHLE';
