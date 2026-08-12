@@ -7527,15 +7527,14 @@ function getCellStatusClass(seances) {
   // Un match (préfixe ⚽) est prioritaire sur l'affichage
   const hasMatch = seances.some(s => typeof s === 'string' && s.indexOf('⚽') === 0);
   if (hasMatch) return 'match';
-  // Priorité d'affichage : si le joueur s'entraîne (au moins une séance non-statut),
-  // on l'affiche en "train" (vert) même s'il a aussi un statut comme INJURY.
-  // Cela reflète le cas "blessé mais participe à REHAB FIELD" : il fait quelque chose.
-  const hasTraining = seances.some(s => !STATUTS_NON_ENT.includes(s));
-  if (hasTraining) return 'train';
-  // La réathlétisation prime sur la blessure : c'est l'état le plus récent médicalement
-  // (le joueur reste comptabilisé blessé tant que la fiche n'est pas terminée).
+  // Un joueur blessé / en réathlétisation garde sa couleur médicale (rouge / violet)
+  // MÊME s'il effectue des séances (rééducation, réathlé terrain…) : l'état médical
+  // prime sur l'entraînement tant que la fiche blessure n'est pas terminée.
   if (seances.includes('REATHLE')) return 'reathle';
   if (seances.includes('INJURY')) return 'injury';
+  // Sinon, s'il s'entraîne (au moins une séance non-statut), on l'affiche en "train" (vert).
+  const hasTraining = seances.some(s => !STATUTS_NON_ENT.includes(s));
+  if (hasTraining) return 'train';
   if (seances.includes('SICK')) return 'sick';
   if (seances.includes('ABSENT')) return 'absent';
   if (seances.includes('REST')) return 'rest';
