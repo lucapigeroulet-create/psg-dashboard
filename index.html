@@ -2901,7 +2901,24 @@
     </div>
 
     <div class="card">
-      <h2>Toutes les réponses</h2>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+        <h2 style="margin:0;">Toutes les réponses</h2>
+        <span id="hooper-all-count" style="font-size:12px; color:var(--text-dim);"></span>
+      </div>
+      <div class="filters" style="margin-bottom:12px;">
+        <div class="filter-group">
+          <label>Joueur</label>
+          <select id="hooper-all-player" onchange="renderStaffHooperAllTable()"><option value="">Tous les joueurs</option></select>
+        </div>
+        <div class="filter-group">
+          <label>Jour</label>
+          <input type="date" id="hooper-all-date" onchange="renderStaffHooperAllTable()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;" />
+        </div>
+        <div class="filter-group" style="justify-content:flex-end;">
+          <label>&nbsp;</label>
+          <button class="btn btn-secondary" style="padding:6px 12px; font-size:13px;" onclick="resetHooperAllFilters()">↺ Réinitialiser</button>
+        </div>
+      </div>
       <div class="table-wrap" style="max-height:500px;">
         <table id="hooper-all-table">
           <thead><tr><th>Date</th><th>Joueur</th><th>Sleep</th><th>Fatigue</th><th>Stress</th><th>Soreness</th><th>Total</th><th>Douleurs</th><th>Notes</th></tr></thead>
@@ -21034,11 +21051,43 @@ function renderHooperMissing() {
   container.innerHTML = html;
 }
 
+function resetHooperAllFilters() {
+  const playerSel = document.getElementById('hooper-all-player');
+  const dateEl = document.getElementById('hooper-all-date');
+  if (playerSel) playerSel.value = '';
+  if (dateEl) dateEl.value = '';
+  renderStaffHooperAllTable();
+}
+
 function renderStaffHooperAllTable() {
   const tbody = document.querySelector('#hooper-all-table tbody');
-  const sorted = hooperData.slice().sort((a, b) => b.date.localeCompare(a.date) || a.joueur.localeCompare(b.joueur));
+
+  // Remplit le filtre joueur (liste unique triée), en conservant la sélection courante
+  const playerSel = document.getElementById('hooper-all-player');
+  if (playerSel) {
+    const cur = playerSel.value;
+    const players = [...new Set(hooperData.map(h => h.joueur))].sort((a, b) => a.localeCompare(b));
+    playerSel.innerHTML = '<option value="">Tous les joueurs</option>' +
+      players.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+    if (players.indexOf(cur) >= 0) playerSel.value = cur;
+  }
+
+  const fPlayer = (playerSel && playerSel.value) || '';
+  const dateEl = document.getElementById('hooper-all-date');
+  const fDate = (dateEl && dateEl.value) || '';
+
+  let sorted = hooperData.slice().sort((a, b) => b.date.localeCompare(a.date) || a.joueur.localeCompare(b.joueur));
+  if (fPlayer) sorted = sorted.filter(h => h.joueur === fPlayer);
+  if (fDate) sorted = sorted.filter(h => h.date === fDate);
+
+  const countEl = document.getElementById('hooper-all-count');
+  if (countEl) countEl.textContent = sorted.length + ' réponse' + (sorted.length > 1 ? 's' : '');
+
   if (sorted.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:20px;">Aucune réponse Hooper enregistrée pour l\'instant.</td></tr>';
+    const msg = (fPlayer || fDate)
+      ? 'Aucune réponse pour ce filtre.'
+      : 'Aucune réponse Hooper enregistrée pour l\'instant.';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:20px;">' + msg + '</td></tr>';
     return;
   }
   const cell = (v) => {
