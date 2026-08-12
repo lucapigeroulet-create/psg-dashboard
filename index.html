@@ -848,32 +848,19 @@
       <div class="chart-container tall"><canvas id="chart-overview-charges"></canvas></div>
     </div>
 
-    <!-- 2) Activité quotidienne par état (aire empilée) -->
+    <!-- 2) État de l'effectif par jour (pleine largeur) -->
     <div class="card">
-      <h2>Activité quotidienne par état</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Nombre de joueurs par jour, cumulé selon leur état (entraînement par équipe, repos, blessure...).</p>
-      <div class="filters" style="margin-bottom:12px;">
-        <div class="filter-group">
-          <label>Du</label>
-          <input type="date" id="overview-activity-from" onchange="renderOverviewActivity()" />
-        </div>
-        <div class="filter-group">
-          <label>Au</label>
-          <input type="date" id="overview-activity-to" onchange="renderOverviewActivity()" />
-        </div>
-        <div class="filter-group" style="justify-content:flex-end;">
-          <label>&nbsp;</label>
-          <button class="btn btn-secondary" onclick="resetOverviewActivityDates()" style="padding:8px 12px;">↺ Toutes les dates</button>
-        </div>
-      </div>
-      <div class="chart-container tall"><canvas id="chart-activity-stacked"></canvas></div>
+      <h2>État de l'effectif par jour</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Répartition des joueurs par état chaque jour (match, entraînement, séance planifiée, repos, blessure...).</p>
+      <div class="chart-container tall"><canvas id="chart-status-stacked"></canvas></div>
     </div>
 
-    <!-- 3) État de l'effectif (compact, demi-page) + Hooper à surveiller côte à côte -->
+    <!-- 3) Joueurs en surpoids + Hooper à surveiller côte à côte -->
     <div class="grid-2">
       <div class="card">
-        <h2>État de l'effectif par jour</h2>
-        <div class="chart-container" style="height:280px;"><canvas id="chart-status-stacked"></canvas></div>
+        <h2>⚖️ Joueurs en surpoids</h2>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs dont le dernier poids mesuré dépasse leur poids de forme de plus de 1,5 kg. Renseigne le poids de forme dans Paramètres → Joueurs.</p>
+        <div id="overview-surpoids"></div>
       </div>
       <div class="card">
         <h2>💚 Hooper à surveiller</h2>
@@ -7727,8 +7714,8 @@ function renderOverview() {
   // Rapports quotidiens : on s'arrête au jour, pas aux séances planifiées à venir
   const dates = getDatesUpToToday();
 
-  // ===== Activité quotidienne (extraite en fonction pour le filtre dates) =====
-  renderOverviewActivity();
+  // ===== Joueurs en surpoids (vs poids de forme) =====
+  renderOverviewSurpoids();
 
   // ===== État de l'effectif par jour (compact) =====
   const statusByDay = {};
@@ -7807,9 +7794,9 @@ function renderOverview() {
     playerSel.innerHTML = getAllPlayers().map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
     playerSel.dataset.org = currentOrg;
   }
-  // Bornes par défaut des intervalles de dates (charges + activité) : bornées à aujourd'hui
+  // Bornes par défaut des intervalles de dates (charges) : bornées à aujourd'hui
   const allDates = getDatesUpToToday();
-  ['overview-charge-from', 'overview-charge-to', 'overview-activity-from', 'overview-activity-to'].forEach(id => {
+  ['overview-charge-from', 'overview-charge-to'].forEach(id => {
     const el = document.getElementById(id);
     if (el && allDates.length > 0 && !el.value) { el.min = allDates[0]; el.max = allDates[allDates.length-1]; }
   });
@@ -7954,7 +7941,87 @@ function openSeancePlanForConfirmation(spId, joueur) {
   renderSeancePlanModal(spId, joueur);
 }
 
+// Joueurs en surpoids : dernier poids mesuré > poids de forme + marge (1,5 kg)
+function renderOverviewSurpoids() {
+  const cont = document.getElementById('overview-surpoids');
+  if (!cont) return;
+  const MARGIN = 1.5; // kg au-dessus du poids de forme
+
+  // Types de test "poids" (unité kg ou nom contenant "poids")
+  const weightTypeIds = new Set(
+    (state.bdd_test_types || [])
+      .filter(t => String(t.unite || '').trim().toLowerCase() === 'kg' || /poids/i.test(t.nom || ''))
+      .map(t => t.id)
+  );
+
+  const withTarget = (state.joueurs || []).filter(j => j.poids_forme != null && !isNaN(Number(j.poids_forme)));
+  if (withTarget.length === 0) {
+    cont.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:6px 0;">Aucun poids de forme renseigné. Ajoute-le dans <b>Paramètres → Joueurs</b>.</div>';
+    return;
+  }
+  if (weightTypeIds.size === 0) {
+    cont.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:6px 0;">Aucun test de poids (unité « kg ») trouvé. Crée-le dans <b>Testing</b>, puis saisis les poids.</div>';
+    return;
+  }
+
+  // Dernier poids mesuré par joueur (parmi les tests de poids)
+  const latestByPlayer = {};
+  (state.bdd_test_results || []).forEach(r => {
+    if (!weightTypeIds.has(r.test_type_id)) return;
+    if (r.valeur == null || r.valeur === '' || isNaN(Number(r.valeur))) return;
+    const cur = latestByPlayer[r.joueur];
+    if (!cur || (r.date || '') > (cur.date || '')) latestByPlayer[r.joueur] = { date: r.date, valeur: Number(r.valeur) };
+  });
+
+  const rows = withTarget.map(j => {
+    const last = latestByPlayer[j.nom];
+    if (!last) return null;
+    const cible = Number(j.poids_forme);
+    const ecart = Math.round((last.valeur - cible) * 10) / 10;
+    return { nom: j.nom, groupe: j.groupe || '', cible, poids: last.valeur, date: last.date, ecart };
+  }).filter(x => x && x.ecart > MARGIN);
+
+  if (rows.length === 0) {
+    cont.innerHTML = '<div style="color:var(--green);font-size:13px;padding:6px 0;font-weight:600;">Aucun joueur en surpoids 👍</div>';
+    return;
+  }
+
+  rows.sort((a, b) => b.ecart - a.ecart);
+  cont.innerHTML = rows.map(r =>
+    '<div onclick="openPlayerWeightTest(\'' + r.nom.replace(/'/g, "\\'") + '\')" title="Voir la courbe de poids" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);">' +
+      '<div><b>' + escapeHtml(r.nom) + '</b> <span style="font-size:11px;color:var(--text-dim);">' + escapeHtml(r.groupe) + '</span>' +
+        '<div style="font-size:11px;color:var(--text-dim);">Forme ' + r.cible + ' kg · ' + (r.date ? formatDateFR(r.date) : '') + '</div></div>' +
+      '<div style="text-align:right;"><b style="color:var(--red);">' + r.poids + ' kg</b>' +
+        '<div style="font-size:11px;color:var(--red);font-weight:700;">+' + r.ecart + ' kg</div></div>' +
+    '</div>'
+  ).join('');
+}
+
+// Ouvre la vue Testing → Visualisation sur la courbe de poids d'un joueur
+function openPlayerWeightTest(nom) {
+  const navBtn = document.querySelector('.nav-btn[data-view="testing"]');
+  if (!navBtn) return;
+  navBtn.click(); // active la vue Testing (renderTesting)
+  if (typeof switchTestingTab === 'function') switchTestingTab('viz');
+  const weightIds = (state.bdd_test_types || [])
+    .filter(t => String(t.unite || '').trim().toLowerCase() === 'kg' || /poids/i.test(t.nom || ''))
+    .map(t => t.id);
+  const forNom = (state.bdd_test_results || [])
+    .filter(r => weightIds.indexOf(r.test_type_id) >= 0 && r.joueur === nom && r.valeur != null && r.valeur !== '')
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const chosenId = forNom.length ? forNom[0].test_type_id : (weightIds[0] || '');
+  const tsel = document.getElementById('tv-test');
+  if (tsel && chosenId) tsel.value = chosenId;
+  const gsel = document.getElementById('tv-group');
+  if (gsel) gsel.value = '';
+  renderTestingViz(); // (re)peuple la liste des joueurs pour ce test
+  const psel = document.getElementById('tv-player');
+  if (psel) { psel.value = nom; renderTestingViz(); }
+}
+
 function renderOverviewActivity() {
+  // Le graphique "activité quotidienne" a été retiré de la vue d'ensemble.
+  if (!document.getElementById('chart-activity-stacked')) return;
   let dates = getDatesUpToToday();
   const fromVal = document.getElementById('overview-activity-from') ? document.getElementById('overview-activity-from').value : '';
   const toVal = document.getElementById('overview-activity-to') ? document.getElementById('overview-activity-to').value : '';
@@ -23367,7 +23434,7 @@ function renderTestingIndividual(player, t, unite, timeTest, rows) {
   const isWeightTest = t && (String(unite || '').trim().toLowerCase() === 'kg' || /poids/i.test(t.nom || ''));
   const poidsForme = (info && info.poids_forme != null && !isNaN(Number(info.poids_forme))) ? Number(info.poids_forme) : null;
   const showBand = isWeightTest && poidsForme != null && rows.length > 0;
-  const bandMargin = 1; // ± 1 kg autour du poids de forme
+  const bandMargin = 1.5; // ± 1,5 kg autour du poids de forme
 
   const header = document.getElementById('tv-indiv-header');
   if (header) header.innerHTML =
