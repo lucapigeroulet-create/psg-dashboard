@@ -1267,8 +1267,10 @@
 
     <!-- Graphique : note de plaisir (SECONDE LIGUE uniquement) -->
     <div class="card" id="rpe-plaisir-card" style="display:none;">
-      <h2>😊 Plaisir ressenti (moyenne par jour)</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Note de plaisir déclarée par les joueuses à la fin de leur RPE, de -5 (aucun) à +5 (maximal).</p>
+      <h2>😊 Plaisir ressenti</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Note de plaisir déclarée par les joueuses pour chaque séance Live, de -5 (aucun) à +5 (maximal).</p>
+      <div id="rpe-plaisir-summary"></div>
+      <div style="font-size:12px; font-weight:600; color:var(--text-dim); margin:6px 0 8px;">Moyenne par jour</div>
       <div class="chart-container tall"><canvas id="chart-rpe-plaisir"></canvas></div>
     </div>
 
@@ -6821,6 +6823,50 @@ async function savePlaisir(date, joueur, value) {
 }
 function setPlaisirValue(date, joueur, v) { savePlaisir(date, joueur, v); }
 
+// ---- Plaisir PAR SÉANCE (SECONDE LIGUE) : stocké dans l'entrée RPE { seance, rpe, plaisir } ----
+function getPlaisirSeance(date, joueur, seance) {
+  const r = (state.bdd_rpe || []).find(x => x.date === date && x.joueur === joueur);
+  if (!r || !r.rpe) return null;
+  const m = r.rpe.find(x => x.seance === seance);
+  return (m && m.plaisir != null) ? m.plaisir : null;
+}
+async function setPlaisirSeance(date, joueur, seance, value) {
+  if (!canWriteRPE(joueur)) {
+    toast(tr('You can only rate your own sessions', 'Tu ne peux noter que tes propres séances'), 'error');
+    return;
+  }
+  const v = (value === null || value === undefined || value === '') ? null : parseInt(value, 10);
+  let r = state.bdd_rpe.find(x => x.date === date && x.joueur === joueur);
+  if (!r) { r = { date, joueur, rpe: [] }; state.bdd_rpe.push(r); }
+  if (!r.rpe) r.rpe = [];
+  let m = r.rpe.find(x => x.seance === seance);
+  if (!m) { m = { seance }; r.rpe.push(m); }
+  if (v === null) {
+    delete m.plaisir;
+    // Entrée devenue vide (ni RPE ni plaisir) → on la retire
+    const noRpe = m.rpe === undefined || m.rpe === null || (Array.isArray(m.rpe) && m.rpe.every(x => x == null || isNaN(x)));
+    if (noRpe) r.rpe = r.rpe.filter(x => x !== m);
+  } else {
+    m.plaisir = v;
+  }
+  const ok = await saveRPEToSupabase(date, joueur, r.rpe);
+  if (ok && currentRole === 'lecteur') renderPlayerRPE();
+}
+// Collecte toutes les notes de plaisir (par séance + héritage par jour), filtrables par date/joueur.
+function collectPlaisirValues(dateSet, playerSet) {
+  const out = [];
+  (state.bdd_rpe || []).forEach(r => {
+    if (dateSet && !dateSet.has(r.date)) return;
+    if (playerSet && !playerSet.has(r.joueur)) return;
+    let hadSeance = false;
+    (r.rpe || []).forEach(it => {
+      if (it && it.plaisir != null) { out.push({ date: r.date, joueur: r.joueur, value: it.plaisir }); hadSeance = true; }
+    });
+    if (!hadSeance && r.plaisir != null) out.push({ date: r.date, joueur: r.joueur, value: r.plaisir });
+  });
+  return out;
+}
+
 // Carte de saisie de la note de plaisir pour le joueur (SECONDE LIGUE)
 function renderPlaisirCard(date, joueur) {
   const cur = getPlaisir(date, joueur);
@@ -10233,12 +10279,51 @@ function renderRPEPlaisirChart(dates, players) {
   card.style.display = show ? '' : 'none';
   if (!show) { destroyChart('chart-rpe-plaisir'); return; }
   const playerSet = new Set(players);
-  const rowsForDay = (d) => (state.bdd_rpe || []).filter(r => r.date === d && r.plaisir != null && playerSet.has(r.joueur));
+  const dateSet = new Set(dates);
+  const values = collectPlaisirValues(dateSet, playerSet);
+
+  // ===== Résumé : plaisir moyen + répartition des notes (-5..+5) =====
+  const summaryEl = document.getElementById('rpe-plaisir-summary');
+  if (summaryEl) {
+    if (!values.length) {
+      summaryEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; margin-bottom:12px;">Aucune note de plaisir sur la période.</div>';
+    } else {
+      const n = values.length;
+      const avg = +(values.reduce((s, x) => s + x.value, 0) / n).toFixed(2);
+      const dist = {}; for (let v = -5; v <= 5; v++) dist[v] = 0;
+      values.forEach(x => { const k = Math.max(-5, Math.min(5, Math.round(x.value))); dist[k]++; });
+      const maxc = Math.max.apply(null, Object.values(dist)) || 1;
+      let bars = '';
+      for (let v = 5; v >= -5; v--) {
+        const c = dist[v]; const pct = Math.round(100 * c / maxc);
+        bars += '<div style="display:flex; align-items:center; gap:8px; margin-bottom:3px;">' +
+          '<div style="width:28px; text-align:right; font-size:12px; font-weight:700; color:' + plaisirColor(v) + ';">' + (v > 0 ? '+' + v : v) + '</div>' +
+          '<div style="flex:1; height:12px; background:var(--bg-card); border-radius:3px; overflow:hidden;"><div style="height:100%; width:' + pct + '%; background:' + plaisirColor(v) + ';"></div></div>' +
+          '<div style="width:26px; text-align:right; font-size:12px; color:var(--text-dim);">' + c + '</div>' +
+        '</div>';
+      }
+      summaryEl.innerHTML =
+        '<div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:14px;">' +
+          '<div style="flex:0 0 auto; min-width:140px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:10px; padding:14px 18px; text-align:center;">' +
+            '<div style="font-size:12px; color:var(--text-dim);">Plaisir moyen</div>' +
+            '<div style="font-size:34px; font-weight:800; color:' + plaisirColor(Math.round(avg)) + ';">' + (avg > 0 ? '+' + avg : avg) + '</div>' +
+            '<div style="font-size:11px; color:var(--text-dim);">sur ' + n + ' note' + (n > 1 ? 's' : '') + '</div>' +
+          '</div>' +
+          '<div style="flex:1; min-width:220px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:10px; padding:12px 14px;">' +
+            '<div style="font-size:12px; font-weight:600; margin-bottom:8px;">Répartition des notes</div>' + bars +
+          '</div>' +
+        '</div>';
+    }
+  }
+
+  // ===== Graphique : moyenne par jour =====
+  const byDate = {};
+  values.forEach(x => { (byDate[x.date] = byDate[x.date] || []).push(x.value); });
   const perDay = dates.map(d => {
-    const vals = rowsForDay(d).map(r => r.plaisir);
+    const vals = byDate[d] || [];
     return vals.length ? +(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2) : null;
   });
-  const counts = dates.map(d => rowsForDay(d).length);
+  const counts = dates.map(d => (byDate[d] || []).length);
   const jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
   const labels = dates.map((d, i) => jours[i] + ' ' + d.slice(8) + '/' + d.slice(5, 7));
   const colors = perDay.map(v => v == null ? 'rgba(148,163,184,0.35)' : plaisirColor(Math.round(v)));
@@ -10250,7 +10335,7 @@ function renderRPEPlaisirChart(dates, players) {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (c) => { const i = c.dataIndex; return perDay[i] == null ? 'Aucune donnée' : ('Moyenne : ' + perDay[i] + ' (' + counts[i] + ' joueuse' + (counts[i] > 1 ? 's' : '') + ')'); } } }
+        tooltip: { callbacks: { label: (c) => { const i = c.dataIndex; return perDay[i] == null ? 'Aucune donnée' : ('Moyenne : ' + perDay[i] + ' (' + counts[i] + ' note' + (counts[i] > 1 ? 's' : '') + ')'); } } }
       },
       scales: {
         y: { min: -5, max: 5, ticks: { stepSize: 1, color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
@@ -21248,12 +21333,8 @@ function renderPlayerRPE() {
     totalNotes += 1;
     if (getMyMatchPerfNote(m.id) != null) doneNotes += 1;
   });
-  // Note de plaisir (SECONDE LIGUE) — demandée à la fin de la saisie RPE
-  if (currentOrg === 'D2F') {
-    html += renderPlaisirCard(date, currentJoueurNom);
-    totalNotes += 1;
-    if (getPlaisir(date, currentJoueurNom) !== null) doneNotes += 1;
-  }
+  // Note de plaisir (SECONDE LIGUE) : désormais demandée PAR SÉANCE (voir
+  // renderPlaisirSeanceBlock, affiché sous chaque séance) et non plus une fois par jour.
   const pct = totalNotes > 0 ? Math.round(doneNotes * 100 / totalNotes) : 0;
   html += '<div class="card" style="text-align:center; background:var(--bg-elevated);">';
   html += '<div style="color:var(--text-dim); font-size:12px; text-transform:uppercase; letter-spacing:0.5px;">' + tr("Today's progress", 'Progression du jour') + '</div>';
@@ -21453,8 +21534,44 @@ function renderPlayerSeanceNotation(date, joueur, seance) {
     });
   }
 
+  // Plaisir de la séance (SECONDE LIGUE) : une note -5..+5 par séance Live
+  if (currentOrg === 'D2F') {
+    html += renderPlaisirSeanceBlock(date, joueur, seance, locked);
+  }
+
   html += '</div>';
   return html;
+}
+
+// Bloc « plaisir de la séance » (-5 à +5) affiché sous chaque séance — SECONDE LIGUE
+function renderPlaisirSeanceBlock(date, joueur, seance, locked) {
+  const cur = getPlaisirSeance(date, joueur, seance);
+  const joueurEsc = joueur.replace(/'/g, "\\'");
+  const seanceEsc = seance.replace(/'/g, "\\'");
+  let h = '<div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border);">';
+  h += '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">😊 ' + tr('How much did you enjoy this session? (-5 to +5)', 'Quel plaisir as-tu pris à cette séance ? (-5 à +5)') + '</div>';
+  if (locked) {
+    h += (cur !== null)
+      ? '<div style="text-align:center;font-weight:800;font-size:18px;color:' + plaisirColor(cur) + ';">' + (cur > 0 ? '+' + cur : cur) + '</div>'
+      : '<div style="color:var(--text-dim);font-size:12px;text-align:center;">' + tr('No rating', 'Aucune note') + '</div>';
+  } else {
+    h += '<div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;">';
+    for (let v = -5; v <= 5; v++) {
+      const sel = cur === v;
+      const col = plaisirColor(v);
+      h += '<button type="button" onclick="setPlaisirSeance(\'' + date + '\',\'' + joueurEsc + '\',\'' + seanceEsc + '\',' + v + ')" ' +
+        'style="width:38px;height:38px;border-radius:9px;border:1px solid var(--border);background:' + (sel ? col : 'var(--bg-elevated)') + ';' +
+        'color:' + (sel ? '#fff' : 'var(--text)') + ';font-weight:700;cursor:pointer;' + (sel ? 'box-shadow:0 0 0 3px rgba(255,255,255,0.55);' : '') + '">' + (v > 0 ? '+' + v : v) + '</button>';
+    }
+    h += '</div>';
+    if (cur !== null) {
+      h += '<div style="text-align:center;margin-top:6px;font-size:11px;color:var(--text-dim);">' + tr('Your rating: ', 'Ta note : ') +
+        '<b style="color:' + plaisirColor(cur) + ';">' + (cur > 0 ? '+' + cur : cur) + '</b> · ' +
+        '<button class="btn btn-secondary" style="padding:2px 8px;font-size:10px;" onclick="setPlaisirSeance(\'' + date + '\',\'' + joueurEsc + '\',\'' + seanceEsc + '\',null)">' + tr('Clear', 'Effacer') + '</button></div>';
+    }
+  }
+  h += '</div>';
+  return h;
 }
 
 // ============================================================================
