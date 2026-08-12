@@ -2220,6 +2220,10 @@
             <label>Numéro</label>
             <input type="number" id="new-player-num" min="1" max="99" placeholder="N°" />
           </div>
+          <div>
+            <label>Poids de forme (kg)</label>
+            <input type="number" id="new-player-poids" min="30" max="150" step="0.1" placeholder="kg" />
+          </div>
           <div style="display:flex; align-items:end;">
             <button class="btn" onclick="addPlayer()">+ Ajouter</button>
           </div>
@@ -2238,7 +2242,7 @@
         </div>
         <div class="table-wrap" style="max-height:600px;">
           <table id="players-table">
-            <thead><tr><th>Nom</th><th>Groupe</th><th>Poste</th><th>N°</th><th>Activité</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Nom</th><th>Groupe</th><th>Poste</th><th>N°</th><th>Poids forme</th><th>Activité</th><th>Actions</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -2394,7 +2398,7 @@
       <div class="mj-sub" id="mj-cumul-range" style="margin-bottom:8px;"></div>
       <div id="minijeu-cumul"></div>
     </div>
-    <!-- Gestion des résultats (admin/staff uniquement) -->
+    <!-- Gestion des résultats (admin uniquement) -->
     <div class="card" id="minijeu-admin-card" style="display:none;">
       <h2>🛠️ Gestion des résultats</h2>
       <p class="mj-sub" style="margin-bottom:10px;">Corrige un score ou supprime un résultat (org courante : <b id="mj-admin-org"></b>).</p>
@@ -6514,7 +6518,7 @@ async function loadState() {
   try {
     setLoad('Chargement des joueurs...');
     const { data: joueurs } = await sb.from('joueurs').select('*').eq('org', currentOrg).order('nom');
-    const allJoueurs = (joueurs || []).map(j => ({ nom: j.nom, groupe: j.groupe, poste: j.poste, numero: j.numero, photo: j.photo || null, archived: !!j.archived }));
+    const allJoueurs = (joueurs || []).map(j => ({ nom: j.nom, groupe: j.groupe, poste: j.poste, numero: j.numero, photo: j.photo || null, archived: !!j.archived, poids_forme: (j.poids_forme != null ? Number(j.poids_forme) : null) }));
     // L'effectif actif (state.joueurs) exclut les joueurs archivés → ils disparaissent
     // automatiquement des sélecteurs, compositions, Hooper, etc. Données conservées en base.
     state.joueurs = allJoueurs.filter(j => !j.archived);
@@ -6835,6 +6839,7 @@ async function saveJoueurToSupabase(joueur, oldNom) {
   const payload = {
     nom: joueur.nom, groupe: joueur.groupe || null,
     poste: joueur.poste || null, numero: joueur.numero || null,
+    poids_forme: (joueur.poids_forme != null && joueur.poids_forme !== '' ? Number(joueur.poids_forme) : null),
     org: currentOrg
   };
   // N'inclure `photo` que lors d'un renommage (sinon on écraserait la photo existante par null)
@@ -7039,7 +7044,7 @@ function handleRealtimeChange(table, payload) {
       state.joueurs = state.joueurs.filter(j => j.nom !== oldRow.nom);
       state.joueurs_archived = (state.joueurs_archived || []).filter(j => j.nom !== oldRow.nom);
     } else {
-      const obj = { nom: newRow.nom, groupe: newRow.groupe, poste: newRow.poste, numero: newRow.numero, photo: newRow.photo || null, archived: !!newRow.archived };
+      const obj = { nom: newRow.nom, groupe: newRow.groupe, poste: newRow.poste, numero: newRow.numero, photo: newRow.photo || null, archived: !!newRow.archived, poids_forme: (newRow.poids_forme != null ? Number(newRow.poids_forme) : null) };
       // On retire l'ancienne occurrence des deux listes, puis on reclasse selon `archived`
       // (sinon un joueur archivé via l'écho realtime réapparaît dans l'effectif actif)
       state.joueurs = state.joueurs.filter(j => j.nom !== obj.nom);
@@ -16338,9 +16343,9 @@ async function renderMinijeux() {
   }
   renderMinijeuxLeaderboard();
   mjSetCumul(mjCumulMode); // classement cumulé (semaine/mois/plage)
-  // Gestion des résultats : admin (toutes org) et staff (son org)
+  // Gestion des résultats : admin uniquement (le staff ne peut plus corriger/supprimer un score)
   const adminCard = document.getElementById('minijeu-admin-card');
-  const canManage = (currentRole === 'admin' || currentRole === 'staff');
+  const canManage = (currentRole === 'admin');
   if (adminCard) {
     adminCard.style.display = canManage ? '' : 'none';
     if (canManage) {
@@ -22040,7 +22045,7 @@ function renderPlayersSettings() {
 
   const tbody = document.querySelector('#players-table tbody');
   if (joueurs.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px;">Aucun joueur.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:20px;">Aucun joueur.</td></tr>';
     return;
   }
 
@@ -22052,6 +22057,7 @@ function renderPlayersSettings() {
       '<td>' + escapeHtml(j.groupe || '') + '</td>' +
       '<td>' + escapeHtml(j.poste || '') + '</td>' +
       '<td>' + (j.numero || '') + '</td>' +
+      '<td>' + (j.poids_forme != null ? j.poids_forme + ' kg' : '<span style="color:var(--text-dim);">—</span>') + '</td>' +
       '<td>' + nbSeances + ' jour(s)</td>' +
       '<td style="white-space:nowrap;">' +
         '<button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;" onclick="editPlayer(\'' + nomEsc + '\')">✏️ Modifier</button> ' +
@@ -22097,6 +22103,7 @@ async function addPlayer() {
   const groupe = document.getElementById('new-player-group').value;
   const poste = document.getElementById('new-player-poste').value;
   const numero = document.getElementById('new-player-num').value;
+  const poidsForme = document.getElementById('new-player-poids').value;
   if (!nom) { toast('Nom requis', 'error'); return; }
   if (state.joueurs.some(j => j.nom === nom)) { toast('Joueur déjà existant', 'error'); return; }
   if ((state.joueurs_archived || []).some(j => j.nom === nom)) { toast('Un joueur archivé porte ce nom — restaure-le depuis « Joueurs archivés »', 'error'); return; }
@@ -22104,13 +22111,15 @@ async function addPlayer() {
     nom,
     groupe: groupe || null,
     poste: poste || null,
-    numero: numero ? parseInt(numero) : null
+    numero: numero ? parseInt(numero) : null,
+    poids_forme: poidsForme ? Number(poidsForme) : null
   };
   const ok = await saveJoueurToSupabase(joueur);
   if (!ok) return;
   state.joueurs.push(joueur);
   document.getElementById('new-player-name').value = '';
   document.getElementById('new-player-num').value = '';
+  document.getElementById('new-player-poids').value = '';
   renderPlayersSettings();
   refreshAllSelectors();
   toast('Joueur "' + nom + '" ajouté', 'success');
@@ -22134,12 +22143,15 @@ async function editPlayer(oldName) {
   if (newPoste === null) return;
   const newNum = prompt('Numéro :', j.numero || '');
   if (newNum === null) return;
+  const newPoids = prompt('Poids de forme en kg (laisser vide pour aucun) :', j.poids_forme != null ? j.poids_forme : '');
+  if (newPoids === null) return;
 
   const updated = {
     nom: trimmed,
     groupe: (newGroupe || '').trim() || null,
     poste: (newPoste || '').trim() || null,
-    numero: newNum ? parseInt(newNum) : null
+    numero: newNum ? parseInt(newNum) : null,
+    poids_forme: (String(newPoids).trim() !== '' ? Number(String(newPoids).replace(',', '.')) : null)
   };
   // Persister sur Supabase
   const ok = await saveJoueurToSupabase(updated, oldName);
@@ -23351,22 +23363,40 @@ function renderTestingIndividual(player, t, unite, timeTest, rows) {
   const info = getJoueurInfo(player);
   const vals = rows.map(r => Number(r.valeur));
 
+  // Test de poids ? (unité "kg" ou nom du test contenant "poids")
+  const isWeightTest = t && (String(unite || '').trim().toLowerCase() === 'kg' || /poids/i.test(t.nom || ''));
+  const poidsForme = (info && info.poids_forme != null && !isNaN(Number(info.poids_forme))) ? Number(info.poids_forme) : null;
+  const showBand = isWeightTest && poidsForme != null && rows.length > 0;
+  const bandMargin = 1; // ± 1 kg autour du poids de forme
+
   const header = document.getElementById('tv-indiv-header');
   if (header) header.innerHTML =
     '<div style="font-size:18px; font-weight:700;">' + escapeHtml(player) + '</div>' +
     '<div style="color:var(--text-dim); font-size:12px;">' + escapeHtml(info.groupe || '—') +
-      (info.poste ? ' · ' + escapeHtml(info.poste) : '') + ' — ' + rows.length + ' résultat(s) sur ce test</div>';
+      (info.poste ? ' · ' + escapeHtml(info.poste) : '') + ' — ' + rows.length + ' résultat(s) sur ce test</div>' +
+    (showBand
+      ? '<div style="font-size:12px; margin-top:4px;"><span style="color:#34d399; font-weight:600;">◼︎ Poids de forme : ' + poidsForme + ' kg</span> <span style="color:var(--text-dim);">(zone verte ' + (poidsForme - bandMargin) + '–' + (poidsForme + bandMargin) + ' kg)</span></div>'
+      : (isWeightTest && poidsForme == null ? '<div style="font-size:11px; margin-top:4px; color:var(--text-dim);">Renseigne un poids de forme dans Paramètres → Joueurs pour afficher la zone cible.</div>' : ''));
   const tn = document.getElementById('tv-indiv-testname');
   if (tn) tn.textContent = (t ? t.nom : '') + (unite ? ' (' + unite + ')' : '');
 
   // Courbe d'évolution (un seul joueur)
+  const indivDatasets = [];
+  // Bande "poids de forme" : dessinée derrière la courbe (zone verte target ± marge)
+  if (showBand) {
+    const n = rows.length;
+    indivDatasets.push({ label: 'zone-bas', data: Array(n).fill(poidsForme - bandMargin), borderColor: 'transparent', backgroundColor: 'transparent', pointRadius: 0, fill: false });
+    indivDatasets.push({ label: 'Zone poids de forme', data: Array(n).fill(poidsForme + bandMargin), borderColor: 'transparent', backgroundColor: 'rgba(52,211,153,0.15)', pointRadius: 0, fill: '-1' });
+    indivDatasets.push({ label: 'Poids de forme', data: Array(n).fill(poidsForme), borderColor: 'rgba(52,211,153,0.85)', borderDash: [6, 4], borderWidth: 1.5, backgroundColor: 'transparent', pointRadius: 0, fill: false });
+  }
+  indivDatasets.push({ label: player, data: vals, borderColor: '#00a3ff', backgroundColor: '#00a3ff', tension: 0.25, pointRadius: 4, borderWidth: 2, fill: false });
   destroyChart('tv-indiv-trend');
   charts['tv-indiv-trend'] = new Chart(document.getElementById('tv-indiv-trend'), {
     type: 'line',
-    data: { labels: rows.map(r => formatDateFR(r.date)), datasets: [{ label: player, data: vals, borderColor: '#00a3ff', backgroundColor: '#00a3ff', tension: 0.25, pointRadius: 4, borderWidth: 2, fill: false }] },
+    data: { labels: rows.map(r => formatDateFR(r.date)), datasets: indivDatasets },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => fmt(ctx.parsed.y) } } },
+      plugins: { legend: { display: false }, tooltip: { filter: ctx => ctx.dataset.label === player || ctx.dataset.label === 'Poids de forme', callbacks: { label: ctx => ctx.dataset.label === 'Poids de forme' ? 'Poids de forme : ' + poidsForme + ' kg' : fmt(ctx.parsed.y) } } },
       scales: {
         x: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { color: '#1f3a5f' } },
         y: { ticks: { color: '#8ba3c1', callback: v => timeTest ? formatTimeValue(v) : v }, grid: { color: '#1f3a5f' } }
