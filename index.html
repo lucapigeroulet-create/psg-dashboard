@@ -7987,14 +7987,33 @@ function renderOverviewSurpoids() {
   }
 
   rows.sort((a, b) => b.ecart - a.ecart);
-  cont.innerHTML = rows.map(r =>
+  const rowHtml = r =>
     '<div onclick="openPlayerWeightTest(\'' + r.nom.replace(/'/g, "\\'") + '\')" title="Voir la courbe de poids" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);">' +
       '<div><b>' + escapeHtml(r.nom) + '</b> <span style="font-size:11px;color:var(--text-dim);">' + escapeHtml(r.groupe) + '</span>' +
         '<div style="font-size:11px;color:var(--text-dim);">Forme ' + r.cible + ' kg · ' + (r.date ? formatDateFR(r.date) : '') + '</div></div>' +
       '<div style="text-align:right;"><b style="color:var(--red);">' + r.poids + ' kg</b>' +
         '<div style="font-size:11px;color:var(--red);font-weight:700;">+' + r.ecart + ' kg</div></div>' +
-    '</div>'
-  ).join('');
+    '</div>';
+
+  const TOP = 3;
+  const shown = rows.slice(0, TOP);
+  const hidden = rows.slice(TOP);
+  let html = shown.map(rowHtml).join('');
+  if (hidden.length) {
+    html += '<div id="overview-surpoids-more" style="display:none;">' + hidden.map(rowHtml).join('') + '</div>';
+    html += '<button onclick="toggleSurpoidsMore(this)" data-count="' + hidden.length + '" style="width:100%;margin-top:8px;padding:8px;background:var(--bg-elevated);color:var(--accent-light);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">▾ Voir les ' + hidden.length + ' autres</button>';
+  }
+  cont.innerHTML = html;
+}
+
+// Déroule / replie la liste complète des joueurs en surpoids
+function toggleSurpoidsMore(btn) {
+  const more = document.getElementById('overview-surpoids-more');
+  if (!more) return;
+  const isOpen = more.style.display !== 'none';
+  more.style.display = isOpen ? 'none' : 'block';
+  const n = btn.dataset.count;
+  btn.innerHTML = isOpen ? ('▾ Voir les ' + n + ' autres') : '▴ Réduire';
 }
 
 // Ouvre la vue Testing → Visualisation sur la courbe de poids d'un joueur
