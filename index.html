@@ -11321,6 +11321,11 @@ function openGpsSessionEdit(date, seance) {
         formatDateFR(date) + ' · ' + escapeHtml(seance) +
         ' — renomme un découpage, corrige son type et sa durée : le changement s\'applique à tous les joueurs, et le m/min est recalculé.' +
       '</div>' +
+      '<datalist id="gps-split-name-suggestions">' +
+        '<option value="Échauffement"></option>' +
+        '<option value="1ère MT"></option>' +
+        '<option value="2ème MT"></option>' +
+      '</datalist>' +
       '<div style="margin-bottom:16px;">' +
         '<label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;">Type d\'enregistrement</label>' +
         '<select id="gps-se-cat" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:14px;">' +
@@ -11340,7 +11345,7 @@ function openGpsSessionEdit(date, seance) {
     const nameCell = isAll
       ? '<span style="font-weight:600;">Séance entière</span>'
       : '<input type="text" id="gps-se-name-' + i + '" value="' + escapeHtml(entry.split) + '" ' +
-        'placeholder="Nom du découpage" ' +
+        'list="gps-split-name-suggestions" placeholder="Nom du découpage" ' +
         'style="width:160px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:13px; font-weight:600;">';
     inner +=
       '<tr style="border-top:1px solid var(--border);">' +
@@ -11909,6 +11914,19 @@ function onGPSReportChange() {
   renderGPS();
 }
 
+// Détecte si un nom de découpage correspond à une mi-temps de match.
+// Retourne 1 (1ère MT), 2 (2ème MT) ou 0 (autre : échauffement, saisie libre, split brut…).
+function gpsHalfIndex(name) {
+  const s = gpsStripAccents(String(name || '').toLowerCase()).replace(/[^a-z0-9]+/g, ' ').trim();
+  if (/\b(mt1|h1|p1)\b/.test(s)) return 1;
+  if (/\b(mt2|h2|p2)\b/.test(s)) return 2;
+  const hasHalfWord = /\b(mt|mi temps|half|periode|period)\b/.test(s);
+  if (!hasHalfWord) return 0;
+  if (/\b(1|1e|1er|1re|1ere|1st|premiere|premier|first)\b/.test(s)) return 1;
+  if (/\b(2|2e|2eme|2nd|deuxieme|second)\b/.test(s)) return 2;
+  return 0;
+}
+
 // Remplit le sélecteur de split selon la séance/date sélectionnée
 function populateGPSSplitSelect() {
   const sessionVal = document.getElementById('gps-session-select').value;
@@ -11917,6 +11935,11 @@ function populateGPSSplitSelect() {
   const sepIdx = sessionVal.indexOf('||');
   const date = sepIdx >= 0 ? sessionVal.slice(0, sepIdx) : sessionVal;
   const seanceTitle = sepIdx >= 0 ? sessionVal.slice(sepIdx + 2) : '';
+  // Détecter un changement de séance : sur une nouvelle séance on réapplique le défaut,
+  // sinon on conserve la sélection courante (l'utilisateur a pu la modifier).
+  const sessionKey = date + '||' + seanceTitle;
+  const sessionChanged = splitSel.dataset.sessionKey !== sessionKey;
+  splitSel.dataset.sessionKey = sessionKey;
   const rows = state.bdd_gps.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
   // Splits disponibles pour cette séance
   const splits = uniqueSorted(rows.map(x => (x.split_name || 'all')));
@@ -11940,10 +11963,28 @@ function populateGPSSplitSelect() {
     optionsHTML += '<option value="__cumul__">🟰 Cumul de procédés…</option>';
     optionVals.push('__cumul__');
   }
+  // Défaut match : cumul automatique 1ère MT + 2ème MT si les deux mi-temps sont détectées.
+  // Le staff peut ensuite ajouter/retirer d'autres découpages via les puces du mode Cumul.
+  const isMatch = rows.length > 0 && gpsCategorie(rows[0]) === 'match';
+  let matchHalves = null;
+  if (isMatch) {
+    const firsts = nonAll.filter(s => gpsHalfIndex(s) === 1);
+    const seconds = nonAll.filter(s => gpsHalfIndex(s) === 2);
+    if (firsts.length && seconds.length) matchHalves = firsts.concat(seconds);
+  }
+
   splitSel.innerHTML = optionsHTML;
-  // Conserver la sélection si elle existe encore, sinon défaut "all"
-  if (optionVals.indexOf(cur) >= 0) splitSel.value = cur;
-  else { const allOpt = splits.find(s => s.toLowerCase() === 'all'); splitSel.value = allOpt || splits[0]; }
+  // Même séance : conserver la sélection courante. Nouvelle séance : réappliquer le défaut
+  // (cumul des mi-temps pour un match, sinon « Séance entière »).
+  if (!sessionChanged && optionVals.indexOf(cur) >= 0) {
+    splitSel.value = cur;
+  } else if (matchHalves) {
+    gpsCumulSplits = matchHalves.slice();
+    splitSel.value = '__cumul__';
+  } else {
+    const allOpt = splits.find(s => s.toLowerCase() === 'all');
+    splitSel.value = allOpt || splits[0];
+  }
   // Si la séance n'a qu'un seul niveau (pas de procédés découpés), masquer le filtre d'affichage
   const splitWrap = document.getElementById('gps-split-wrap');
   if (splitWrap) splitWrap.style.display = (splits.length <= 1) ? 'none' : '';
