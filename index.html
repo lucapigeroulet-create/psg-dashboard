@@ -865,6 +865,7 @@
       <div class="card">
         <h2>💚 Hooper à surveiller</h2>
         <p id="overview-hooper-watch-desc" style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs avec un Hooper moyen élevé (≥ 17) sur leurs 3 dernières saisies.</p>
+        <div id="overview-hooper-trend" style="display:none; height:200px; margin-bottom:12px;"><canvas id="chart-overview-hooper-team"></canvas></div>
         <div id="overview-hooper-watch"></div>
       </div>
     </div>
@@ -8261,17 +8262,25 @@ function renderOverviewCharges() {
 // Hooper à surveiller (réutilise computePlayersToWatch de la vue staff)
 function renderOverviewHooperWatch() {
   const container = document.getElementById('overview-hooper-watch');
+  const trendMode = (currentOrg === 'D2F');
+  const desc = document.getElementById('overview-hooper-watch-desc');
+  if (desc) desc.textContent = trendMode
+    ? "Tendance de l'état de forme de l'équipe (▲ hausse / ▼ baisse) et joueuses qui varient nettement sur les derniers jours."
+    : 'Joueurs avec un Hooper moyen élevé (≥ 17) sur leurs 3 dernières saisies.';
+
+  // Seconde Ligue : même visuel que le menu « État de forme » — courbe de tendance équipe.
+  const trendWrap = document.getElementById('overview-hooper-trend');
+  if (trendWrap) {
+    if (trendMode) { trendWrap.style.display = ''; renderStaffHooperTeamChart('chart-overview-hooper-team'); }
+    else { trendWrap.style.display = 'none'; destroyChart('chart-overview-hooper-team'); }
+  }
+
   if (typeof computePlayersToWatch !== 'function') { container.innerHTML = '<div style="color:var(--text-dim);font-size:13px;">—</div>'; return; }
   const watch = computePlayersToWatch();
   if (watch.length === 0) {
     container.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px;">😊 Aucun joueur en alerte. Tout l\'effectif est en bon état de forme.</div>';
     return;
   }
-  const trendMode = (currentOrg === 'D2F');
-  const desc = document.getElementById('overview-hooper-watch-desc');
-  if (desc) desc.textContent = trendMode
-    ? "Joueuses dont l'état de forme monte ou baisse nettement sur les derniers jours."
-    : 'Joueurs avec un Hooper moyen élevé (≥ 17) sur leurs 3 dernières saisies.';
   container.innerHTML = watch.slice(0, 8).map(w => {
     const interp = interpretHooper(parseFloat(w.avg));
     const right = trendMode
@@ -20202,7 +20211,10 @@ function hooperFlagFromLast3(last3) {
   return { flag: avg !== null && avg >= 17, delta: null, dir: null };
 }
 
-function renderStaffHooperTeamChart() {
+function renderStaffHooperTeamChart(canvasId) {
+  canvasId = canvasId || 'chart-staff-hooper-team';
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
   // Moyenne équipe par jour
   const byDate = {};
   hooperData.forEach(h => {
@@ -20213,9 +20225,9 @@ function renderStaffHooperTeamChart() {
   });
   const dates = Object.keys(byDate).sort();
   const avgs = dates.map(d => +(byDate[d].reduce((a,b)=>a+b,0) / byDate[d].length).toFixed(1));
-  destroyChart('chart-staff-hooper-team');
+  destroyChart(canvasId);
   if (dates.length === 0) return;
-  charts['chart-staff-hooper-team'] = new Chart(document.getElementById('chart-staff-hooper-team'), {
+  charts[canvasId] = new Chart(canvas, {
     type: 'line',
     data: {
       labels: dates.map(formatDateFR),
