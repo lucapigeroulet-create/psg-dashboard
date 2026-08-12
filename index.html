@@ -1653,6 +1653,18 @@
             <option value="autre">Autre / bilatéral</option>
           </select>
         </div>
+        <div>
+          <label>Type de blessure</label>
+          <select id="bl-type">
+            <option value="">—</option>
+            <option value="musculaire">Musculaire</option>
+            <option value="articulaire">Articulaire</option>
+            <option value="ligamentaire">Ligamentaire</option>
+            <option value="tendineux">Tendineux</option>
+            <option value="osseuse">Osseuse</option>
+            <option value="autre">Autre</option>
+          </select>
+        </div>
       </div>
 
       <h3 style="margin-top:16px;">6 — Description</h3>
@@ -1663,7 +1675,7 @@
         </div>
       </div>
 
-      <h3 style="margin-top:16px;">7 — Indisponibilité</h3>
+      <h3 style="margin-top:16px;">7 — Indisponibilité & réathlétisation</h3>
       <div class="form-row">
         <div>
           <label>Durée d'indispo. prévisionnelle</label>
@@ -1680,24 +1692,39 @@
         <div>
           <label>Statut actuel</label>
           <select id="bl-statut">
-            <option value="en_cours">En cours</option>
+            <option value="en_cours">Blessé (en cours)</option>
             <option value="reathle">Réathlétisation</option>
-            <option value="disponible">Disponible</option>
+            <option value="disponible">Disponible (retour)</option>
           </select>
         </div>
       </div>
-      <div class="form-row">
-        <div>
-          <label>Début réathlétisation</label>
-          <input type="date" id="bl-debut-reathle" />
+      <p style="color:var(--text-dim); font-size:12px; margin:8px 0 12px;">Si le joueur ne passe pas par la réathlétisation, laisse les dates de réathlé vides et passe le statut directement à <b>Disponible (retour)</b> en indiquant la <b>date de retour</b>.</p>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:16px;">
+        <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:12px;">
+          <div style="font-weight:600; color:#d8b4fe; font-size:13px; margin-bottom:8px;">🏃 Réathlétisation prévisionnelle</div>
+          <div class="form-row" style="margin:0;">
+            <div>
+              <label>Début prévu</label>
+              <input type="date" id="bl-reathle-debut-prev" />
+            </div>
+            <div>
+              <label>Fin prévue</label>
+              <input type="date" id="bl-fin-reathle" />
+            </div>
+          </div>
         </div>
-        <div>
-          <label>Fin réathlé. prévisionnelle</label>
-          <input type="date" id="bl-fin-reathle" />
-        </div>
-        <div>
-          <label>Date de fin réelle <span style="color:var(--text-dim);">(si terminée)</span></label>
-          <input type="date" id="bl-date-fin" />
+        <div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:12px;">
+          <div style="font-weight:600; color:#a855f7; font-size:13px; margin-bottom:8px;">✅ Réathlétisation réelle</div>
+          <div class="form-row" style="margin:0;">
+            <div>
+              <label>Début réel</label>
+              <input type="date" id="bl-debut-reathle" />
+            </div>
+            <div>
+              <label>Fin réelle / retour dispo.</label>
+              <input type="date" id="bl-date-fin" />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -3362,6 +3389,11 @@
             <tbody id="med-avail-tbody"></tbody>
           </table>
         </div>
+      </div>
+      <div class="card">
+        <h2>📊 Synthèse des blessures</h2>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Jours de blessure par joueur, répartition des membres touchés et du type de blessure (articulaire / musculaire / ligamentaire…).</p>
+        <div id="med-injury-summary"></div>
       </div>
       <div class="card">
         <h2>🩹 Blessures en cours</h2>
@@ -14295,10 +14327,10 @@ function clearBlessureForm() {
   document.getElementById('bl-editing').value = '';
   document.getElementById('bl-form-title').textContent = '🩹 Déclaration d\'une blessure';
   ['bl-categorie','bl-date','bl-minute-prec','bl-nb-ent','bl-repos','bl-lieu','bl-meca-autre',
-   'bl-zone-autre','bl-description','bl-duree','bl-debut-reathle','bl-fin-reathle','bl-date-fin'].forEach(id => {
+   'bl-zone-autre','bl-description','bl-duree','bl-reathle-debut-prev','bl-debut-reathle','bl-fin-reathle','bl-date-fin'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
-  ['bl-contexte','bl-minute','bl-choc','bl-surface','bl-chaussures','bl-domicile','bl-zone','bl-cote','bl-reblessure'].forEach(id => {
+  ['bl-contexte','bl-minute','bl-choc','bl-surface','bl-chaussures','bl-domicile','bl-zone','bl-cote','bl-type','bl-reblessure'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   const st = document.getElementById('bl-statut'); if (st) st.value = 'en_cours';
@@ -14402,12 +14434,14 @@ function editBlessure(id) {
   document.getElementById('bl-zone').value = b.zone || '';
   document.getElementById('bl-zone-autre').value = d.zone_autre || '';
   document.getElementById('bl-cote').value = b.cote || '';
+  document.getElementById('bl-type').value = d.type_blessure || '';
   document.getElementById('bl-description').value = d.description || '';
   document.getElementById('bl-duree').value = b.duree_indispo || '';
   document.getElementById('bl-reblessure').value = d.re_blessure || '';
   document.getElementById('bl-statut').value = b.statut || 'en_cours';
-  document.getElementById('bl-debut-reathle').value = d.debut_reathle || '';
+  document.getElementById('bl-reathle-debut-prev').value = d.reathle_debut_prev || '';
   document.getElementById('bl-fin-reathle').value = d.fin_reathle || '';
+  document.getElementById('bl-debut-reathle').value = d.debut_reathle || '';
   document.getElementById('bl-date-fin').value = d.date_fin || '';
   const mecas = d.mecanismes || [];
   document.querySelectorAll('#bl-mecanismes .bl-meca').forEach(cb => cb.checked = mecas.indexOf(cb.value) !== -1);
@@ -14432,6 +14466,8 @@ async function saveBlessure() {
     date_repos: val('bl-repos'), surface: val('bl-surface'), chaussures: val('bl-chaussures'),
     domicile: val('bl-domicile'), lieu: val('bl-lieu'), mecanismes: mecanismes, meca_autre: val('bl-meca-autre'),
     zone_autre: val('bl-zone-autre'), description: val('bl-description'), re_blessure: val('bl-reblessure'),
+    type_blessure: val('bl-type'),
+    reathle_debut_prev: val('bl-reathle-debut-prev'),
     debut_reathle: val('bl-debut-reathle'), fin_reathle: val('bl-fin-reathle'), date_fin: val('bl-date-fin')
   };
   const row = {
@@ -14828,6 +14864,7 @@ function openFicheResume(id) {
   html += '<div style="height:8px;"></div>';
   html += line('Zone', zone ? escapeHtml(zone) : '');
   html += line('Côté', mapCote[b.cote] || '');
+  html += line('Type de blessure', d.type_blessure ? (d.type_blessure.charAt(0).toUpperCase() + d.type_blessure.slice(1)) : '');
   html += line('Mécanismes', mecaLabels.length ? escapeHtml(mecaLabels.join(', ')) : '');
   html += '<div style="height:8px;"></div>';
   html += line('Surface', mapSurf[d.surface] || '');
@@ -14835,9 +14872,8 @@ function openFicheResume(id) {
   html += line('Lieu', (mapDom[d.domicile] || '') + (d.lieu ? (mapDom[d.domicile] ? ' — ' : '') + escapeHtml(d.lieu) : ''));
   html += '<div style="height:8px;"></div>';
   html += line('Début blessure', b.date_blessure ? formatDateFR(b.date_blessure) : '');
-  html += line('Début réathlétisation', d.debut_reathle ? formatDateFR(d.debut_reathle) : '');
-  html += line('Fin réathlé. prévue', d.fin_reathle ? formatDateFR(d.fin_reathle) : '');
-  html += line('Fin réelle (terminée)', d.date_fin ? formatDateFR(d.date_fin) : '');
+  html += line('Réathlé. prévue', (d.reathle_debut_prev || d.fin_reathle) ? ((d.reathle_debut_prev ? formatDateFR(d.reathle_debut_prev) : '?') + ' → ' + (d.fin_reathle ? formatDateFR(d.fin_reathle) : '?')) : '');
+  html += line('Réathlé. réelle', (d.debut_reathle || d.date_fin) ? ((d.debut_reathle ? formatDateFR(d.debut_reathle) : '?') + ' → ' + (d.date_fin ? formatDateFR(d.date_fin) : '?')) : '');
   html += line('Durée indispo. prév.', b.duree_indispo ? escapeHtml(b.duree_indispo) : '');
   html += line('Re-blessure', d.re_blessure ? (d.re_blessure === 'oui' ? 'Oui' : 'Non') : '');
   if (d.description) {
@@ -18344,9 +18380,18 @@ function renderAffectation() {
 
   const tbody = document.querySelector('#affect-table tbody');
   tbody.innerHTML = players.map(p => {
-    const seances = getSeancesJoueur(date, p.nom);
+    const planned = getSeancesJoueur(date, p.nom);
+    // État dérivé des fiches blessure (🩹 blessé / 🏃 réathlétisation) : affiché même
+    // sans saisie manuelle dans le planning, pour que la saisie séance reflète l'état réel.
+    const blStatus = getBlessureStatusForDay(p.nom, date);
+    const derived = (blStatus && !planned.includes(blStatus)) ? blStatus : null;
+    const seances = derived ? planned.concat([derived]) : planned;
     const badges = seances.map(s => {
       const pEsc = escapeHtml(p.nom);
+      // État issu d'une fiche blessure : badge informatif non supprimable ici
+      if (s === derived) {
+        return '<span class="badge ' + getSeanceBadgeClass(s) + '" title="État issu de la fiche blessure — se modifie dans Saisie blessures">' + escapeHtml(getStatutLabel(s)) + '</span>';
+      }
       // Un match (préfixe ⚽) vient de la saisie match : badge informatif, non supprimable ici
       if (s && s.indexOf('⚽') === 0) {
         return '<span class="badge ' + getSeanceBadgeClass(s) + '" title="Match (modifiable dans Saisie match)">' + escapeHtml(s) + '</span>';
@@ -22750,6 +22795,8 @@ function renderMedicalAvailability() {
   });
   tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:20px;">Aucun joueur</td></tr>';
 
+  renderMedicalInjurySummary(group);
+
   const activeBox = document.getElementById('med-injuries-active');
   if (!activeBox) return;
   const active = (state.bdd_blessures || []).filter(b => b.statut !== 'disponible' && (!group || getJoueurInfo(b.joueur).groupe === group));
@@ -22778,6 +22825,82 @@ function renderMedicalAvailability() {
   }).join('');
 }
 
+
+// ---------- SYNTHÈSE DES BLESSURES (onglet Disponibilités) ----------
+const BLESSURE_ZONE_MUSCLES = ['Ischio-jambier', 'Quadriceps', 'Fessiers', 'Adducteur', 'Mollet'];
+const BLESSURE_ZONE_ARTICULATIONS = ['Hanche', 'Genou', 'Cheville', 'Épaule', 'Coude'];
+const BLESSURE_TYPE_LABELS = { musculaire: 'Musculaire', articulaire: 'Articulaire', ligamentaire: 'Ligamentaire', tendineux: 'Tendineux', osseuse: 'Osseuse', autre: 'Autre', non_precise: 'Non précisé' };
+const BLESSURE_TYPE_COLORS = { musculaire: '#f97316', articulaire: '#00a3ff', ligamentaire: '#a855f7', tendineux: '#14b8a6', osseuse: '#eab308', autre: '#94a3b8', non_precise: '#64748b' };
+
+// Type de blessure : valeur saisie, sinon inférée d'après la zone touchée (rétro-compat).
+function blessureType(b) {
+  const t = (b.details && b.details.type_blessure) || '';
+  if (t) return t;
+  if (BLESSURE_ZONE_MUSCLES.indexOf(b.zone) >= 0) return 'musculaire';
+  if (BLESSURE_ZONE_ARTICULATIONS.indexOf(b.zone) >= 0) return 'articulaire';
+  return 'non_precise';
+}
+
+function renderMedicalInjurySummary(group) {
+  const cont = document.getElementById('med-injury-summary');
+  if (!cont) return;
+  let fiches = (state.bdd_blessures || []);
+  if (group) fiches = fiches.filter(b => getJoueurInfo(b.joueur).groupe === group);
+  if (!fiches.length) {
+    cont.innerHTML = '<p style="color:var(--text-dim); font-size:13px;">Aucune fiche blessure ' + (group ? 'pour ce groupe.' : 'enregistrée.') + '</p>';
+    return;
+  }
+
+  const daysByPlayer = {};
+  const zoneCount = {};
+  const typeCount = {};
+  let totalDays = 0;
+  const injuredSet = new Set();
+  fiches.forEach(b => {
+    const ind = computeFicheIndispo(b);
+    const j = (ind && ind.jours) ? ind.jours : 0;
+    daysByPlayer[b.joueur] = (daysByPlayer[b.joueur] || 0) + j;
+    totalDays += j;
+    if (j > 0) injuredSet.add(b.joueur);
+    let zone = b.zone || '?';
+    if (zone === 'Autre' && b.details && b.details.zone_autre) zone = b.details.zone_autre;
+    zoneCount[zone] = (zoneCount[zone] || 0) + j;   // pondéré par jours (impact réel)
+    typeCount[blessureType(b)] = (typeCount[blessureType(b)] || 0) + j;
+  });
+
+  const kpis = [
+    { label: 'Jours de blessure (cumul)', val: totalDays },
+    { label: 'Joueurs concernés', val: injuredSet.size },
+    { label: 'Fiches', val: fiches.length }
+  ].map(k => '<div class="stat"><div class="stat-label">' + k.label + '</div><div class="stat-value">' + k.val + '</div></div>').join('');
+
+  const barBlock = (title, entries, colorFn, fmtLabel) => {
+    const sorted = Object.entries(entries).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+    const max = sorted.length ? sorted[0][1] : 0;
+    const rows = sorted.length ? sorted.map(([k, n]) => {
+      const pct = max ? Math.round(100 * n / max) : 0;
+      const col = colorFn ? colorFn(k) : 'var(--accent)';
+      return '<div style="display:flex; align-items:center; gap:8px; margin-bottom:5px;">' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(fmtLabel ? fmtLabel(k) : k) + '</div>' +
+          '<div style="height:6px; background:var(--bg-card); border-radius:3px; overflow:hidden;"><div style="height:100%; width:' + pct + '%; background:' + col + ';"></div></div>' +
+        '</div>' +
+        '<div style="font-weight:700; font-size:13px; min-width:52px; text-align:right;">' + n + ' j</div>' +
+      '</div>';
+    }).join('') : '<div style="color:var(--text-dim); font-size:12px;">—</div>';
+    return '<div style="flex:1; min-width:220px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:12px;">' +
+      '<div style="font-weight:700; margin-bottom:8px;">' + title + '</div>' + rows + '</div>';
+  };
+
+  cont.innerHTML =
+    '<div class="stats-grid" style="margin-bottom:14px;">' + kpis + '</div>' +
+    '<div style="display:flex; gap:12px; flex-wrap:wrap;">' +
+      barBlock('👤 Jours par joueur', daysByPlayer, null, null) +
+      barBlock('🦵 Membres touchés', zoneCount, null, null) +
+      barBlock('🩹 Type de blessure', typeCount, k => BLESSURE_TYPE_COLORS[k] || 'var(--accent)', k => BLESSURE_TYPE_LABELS[k] || k) +
+    '</div>' +
+    '<div style="font-size:11px; color:var(--text-dim); margin-top:10px;">Jours pondérés par la durée réelle de chaque blessure (début → retour, ou aujourd\'hui si en cours). Les fiches sans « type » renseigné sont classées d\'après la zone touchée.</div>';
+}
 
 // ---------- ONGLET ÉTAT DE FORME ----------
 function renderMedicalHooper() {
