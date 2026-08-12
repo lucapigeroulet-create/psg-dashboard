@@ -2075,6 +2075,7 @@
       <div style="margin-bottom:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <button class="btn" onclick="saveAllRPE()">💾 Enregistrer tous les RPE</button>
         <span id="rpe-progress" style="color:var(--text-dim); font-size:12px;"></span>
+        <span id="rpe-plaisir-progress" style="color:var(--text-dim); font-size:12px;"></span>
         <span id="rpe-perf-progress" style="color:var(--text-dim); font-size:12px;"></span>
       </div>
 
@@ -18799,6 +18800,24 @@ function updateRPEProgress(date, groupFilter) {
   const pct = total > 0 ? Math.round(done * 100 / total) : 0;
   document.getElementById('rpe-progress').textContent =
     total > 0 ? '✅ ' + done + ' / ' + total + ' note(s) saisie(s) (' + pct + '%)' : '';
+
+  // Ratio des notes de plaisir (SECONDE LIGUE) : une note attendue par séance notable
+  const plaisirEl = document.getElementById('rpe-plaisir-progress');
+  if (plaisirEl) {
+    if (currentOrg === 'D2F') {
+      let pTotal = 0, pDone = 0;
+      rows.forEach(e => {
+        rateableSeancesOf(date, e.seances).forEach(s => {
+          pTotal += 1;
+          if (getPlaisirSeance(date, e.joueur, s) !== null) pDone += 1;
+        });
+      });
+      const pPct = pTotal > 0 ? Math.round(pDone * 100 / pTotal) : 0;
+      plaisirEl.textContent = pTotal > 0 ? '😊 ' + pDone + ' / ' + pTotal + ' plaisir(s) saisi(s) (' + pPct + '%)' : '';
+    } else {
+      plaisirEl.textContent = '';
+    }
+  }
 }
 
 // Section de saisie RPE des matchs (staff) — pour chaque match du jour, noter chaque joueur ayant joué
