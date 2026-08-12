@@ -3930,6 +3930,7 @@ async function loadProfileAndStart() {
   updateSeancesBadge();
   applyPlayerLanguage();  // Applique la langue lecteur (EN pour PSG, FR pour TEGG)
   setupRealtime();
+  setupD2FFeminization();  // Seconde Ligue : féminise les textes ("joueur" → "joueuse")
 }
 
 // Rafraîchir l'app pour un joueur en mode "écran d'accueil" (PWA standalone),
@@ -6220,6 +6221,90 @@ function renderMessages() {
 // ============================================================
 // MULTI-ORG : bascule entre PSG et TEGG (admin uniquement)
 // ============================================================
+// ============================================================================
+// SECONDE LIGUE (D2F) : féminisation automatique des textes ("joueur" → "joueuse")
+// L'interface est partagée entre les entités ; on ne fige donc pas le féminin dans
+// les gabarits. On applique une passe de féminisation sur le DOM rendu, uniquement
+// pour l'entité D2F, + un MutationObserver pour couvrir toutes les vues re-rendues.
+// ============================================================================
+const D2F_CANDIDATE = /joueur|bless[eé]|absent|suspendu|concern[eé]|s[eé]lectionn[eé]|touch[eé]/i;
+// Frontière de fin tolérant les lettres accentées (le \b natif casse après « é »).
+function d2fRule(pattern, rep) { return [new RegExp('\\b' + pattern + '(?![A-Za-zÀ-ÿ])', 'g'), rep]; }
+const D2F_FEM_RULES = [
+  // Déterminants singuliers (accord de l'article) — à traiter avant « joueur » générique
+  d2fRule('Le joueur', 'La joueuse'), d2fRule('le joueur', 'la joueuse'),
+  d2fRule('Un joueur', 'Une joueuse'), d2fRule('un joueur', 'une joueuse'),
+  d2fRule('Aucun joueur', 'Aucune joueuse'), d2fRule('aucun joueur', 'aucune joueuse'),
+  d2fRule('du joueur', 'de la joueuse'),
+  d2fRule('au joueur', 'à la joueuse'),
+  d2fRule('Ce joueur', 'Cette joueuse'), d2fRule('ce joueur', 'cette joueuse'),
+  d2fRule('chaque joueur', 'chaque joueuse'),
+  // « joueur(s) » générique (les/des/aux/par sont épicènes → seul le nom change)
+  d2fRule('Joueurs', 'Joueuses'), d2fRule('joueurs', 'joueuses'),
+  d2fRule('Joueur', 'Joueuse'), d2fRule('joueur', 'joueuse'),
+  // Adjectifs d'état fréquents
+  d2fRule('Blessés', 'Blessées'), d2fRule('blessés', 'blessées'),
+  d2fRule('Blessé', 'Blessée'), d2fRule('blessé', 'blessée'),
+  d2fRule('Absents', 'Absentes'), d2fRule('absents', 'absentes'),
+  d2fRule('Absent', 'Absente'), d2fRule('absent', 'absente'),
+  d2fRule('Suspendus', 'Suspendues'), d2fRule('suspendus', 'suspendues'),
+  d2fRule('Suspendu', 'Suspendue'), d2fRule('suspendu', 'suspendue'),
+  d2fRule('concernés', 'concernées'), d2fRule('concerné', 'concernée'),
+  d2fRule('sélectionnés', 'sélectionnées'), d2fRule('sélectionné', 'sélectionnée'),
+  d2fRule('touchés', 'touchées'), d2fRule('touché', 'touchée')
+];
+function d2fFemApply(str) {
+  let out = str;
+  for (const [re, rep] of D2F_FEM_RULES) out = out.replace(re, rep);
+  return out;
+}
+function feminizeD2FNode(node) {
+  if (!node) return;
+  if (node.nodeType === 3) { // texte
+    const t = node.nodeValue;
+    if (!t || !D2F_CANDIDATE.test(t)) return;
+    const nt = d2fFemApply(t);
+    if (nt !== t) node.nodeValue = nt;
+    return;
+  }
+  if (node.nodeType !== 1) return; // éléments seulement
+  const tag = node.tagName;
+  if (tag === 'SCRIPT' || tag === 'STYLE') return;
+  if (node.hasAttribute) {
+    ['placeholder', 'title'].forEach(attr => {
+      const av = node.getAttribute(attr);
+      if (av && D2F_CANDIDATE.test(av)) {
+        const nv = d2fFemApply(av);
+        if (nv !== av) node.setAttribute(attr, nv);
+      }
+    });
+  }
+  if (tag === 'TEXTAREA' || tag === 'INPUT') return; // pas de contenu texte (placeholder déjà traité)
+  for (let c = node.firstChild; c; c = c.nextSibling) feminizeD2FNode(c);
+}
+let d2fFemObserver = null;
+function setupD2FFeminization() {
+  const root = document.body;
+  if (!root) return;
+  if (currentOrg !== 'D2F') {
+    if (d2fFemObserver) { d2fFemObserver.disconnect(); d2fFemObserver = null; }
+    return;
+  }
+  feminizeD2FNode(root); // passe initiale sur le DOM déjà rendu
+  if (d2fFemObserver) return;
+  d2fFemObserver = new MutationObserver(muts => {
+    for (const m of muts) {
+      if (m.type === 'childList') {
+        m.addedNodes.forEach(n => feminizeD2FNode(n));
+      } else if (m.type === 'characterData') {
+        const n = m.target;
+        if (n && n.nodeType === 3 && D2F_CANDIDATE.test(n.nodeValue || '')) feminizeD2FNode(n);
+      }
+    }
+  });
+  d2fFemObserver.observe(root, { subtree: true, childList: true, characterData: true });
+}
+
 async function switchOrg(org) {
   if (!ORGS.includes(org)) return;
   if (currentOrg === org) return;
@@ -6234,6 +6319,7 @@ async function switchOrg(org) {
   document.getElementById('data-loading-overlay').style.display = 'none';
   initAll();
   setupRealtime();
+  setupD2FFeminization();  // Seconde Ligue : féminise / restaure selon l'entité active
 
   // Réinitialiser les filtres qui dépendent de l'organisation
   // (sinon ils gardent leur valeur entre les orgs et peuvent vider l'affichage)
@@ -6714,6 +6800,21 @@ async function loadState() {
 
     setLoad('Chargement des check-ins Hooper...');
     await loadHooperFromSupabase();
+
+    // Purger des PLANNINGS les séances orphelines (fiche supprimée mais affectation
+    // encore présente en base) pour que l'état de l'effectif et les vues dérivées du
+    // planning restent cohérents après un rechargement. On ne touche pas au GPS ici
+    // (des données GPS peuvent exister sans fiche séance associée).
+    try {
+      const _validSeances = {};
+      state.bdd_ent2.forEach(s => { (_validSeances[s.date] = _validSeances[s.date] || new Set()).add(s.nom); });
+      state.bdd_ent.forEach(e => {
+        e.seances = (e.seances || []).filter(s =>
+          STATUTS_NON_ENT.includes(s) || (_validSeances[e.date] && _validSeances[e.date].has(s))
+        );
+      });
+      state.bdd_ent = state.bdd_ent.filter(e => e.seances.length > 0);
+    } catch (e) {}
 
     loadBestMatchData();
     setStatus('☁️ ' + state.joueurs.length + ' joueurs, ' + state.bdd_ent2.length + ' séances', false);
