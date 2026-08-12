@@ -6850,8 +6850,32 @@ async function setPlaisirSeance(date, joueur, seance, value) {
     m.plaisir = v;
   }
   const ok = await saveRPEToSupabase(date, joueur, r.rpe);
-  if (ok && currentRole === 'lecteur') renderPlayerRPE();
+  if (ok) { if (currentRole === 'lecteur') renderPlayerRPE(); else renderRPEEntry(); }
 }
+// Saisie compacte du plaisir (staff, mode Tableau) : petit champ -5..+5 sous les notes RPE.
+function renderPlaisirSeanceInput(date, joueur, seance) {
+  const cur = getPlaisirSeance(date, joueur, seance);
+  const filled = cur !== null;
+  const joueurEsc = escapeHtml(joueur);
+  const seanceEsc = escapeHtml(seance);
+  const style = 'width:64px;' + (filled
+    ? 'border:2px solid ' + plaisirColor(cur) + ';background:rgba(255,255,255,0.04);color:var(--text);font-weight:700;'
+    : 'border:1px solid var(--border);background:var(--bg-card);color:var(--text);');
+  return '<div style="display:flex;align-items:center;gap:6px;margin-top:6px;">' +
+    '<span style="font-size:11px;color:var(--text-dim);">😊 Plaisir</span>' +
+    '<input type="number" min="-5" max="5" step="1" style="' + style + '" ' +
+      'data-plaisir-date="' + date + '" data-plaisir-player="' + joueurEsc + '" data-plaisir-seance="' + seanceEsc + '" ' +
+      'value="' + (filled ? cur : '') + '" placeholder="-5..5" onchange="setPlaisirFromInput(this)">' +
+    (filled ? '<span style="color:' + plaisirColor(cur) + ';font-size:12px;font-weight:700;">' + (cur > 0 ? '+' + cur : cur) + '</span>' : '') +
+    '</div>';
+}
+function setPlaisirFromInput(inp) {
+  const raw = (inp.value || '').trim();
+  let v = raw === '' ? null : parseInt(raw, 10);
+  if (v !== null) { if (isNaN(v)) v = null; else v = Math.max(-5, Math.min(5, v)); }
+  setPlaisirSeance(inp.dataset.plaisirDate, inp.dataset.plaisirPlayer, inp.dataset.plaisirSeance, v);
+}
+
 // Collecte toutes les notes de plaisir (par séance + héritage par jour), filtrables par date/joueur.
 function collectPlaisirValues(dateSet, playerSet) {
   const out = [];
@@ -18894,6 +18918,8 @@ function renderRPETable(date, groupFilter) {
         }
         block += '</div>';
       }
+      // Plaisir de la séance (SECONDE LIGUE) — sous les notes RPE
+      if (currentOrg === 'D2F') block += renderPlaisirSeanceInput(date, e.joueur, s);
       block += '</div>';
       return block;
     }).join('');
@@ -19179,6 +19205,12 @@ function renderSeanceNotation(date, joueur, seance) {
       html += '<div style="font-size:11px;color:var(--text-dim);">Somme des sRPE de chaque procédé noté</div>';
       html += '</div>';
     }
+  }
+
+  // Plaisir de la séance (SECONDE LIGUE) : même échelle -5..+5 que côté joueuse,
+  // saisissable ici par le staff pour chaque séance Live.
+  if (currentOrg === 'D2F') {
+    html += renderPlaisirSeanceBlock(date, joueur, seance, false);
   }
 
   html += '</div>'; // .rpe-session-card
