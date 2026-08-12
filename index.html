@@ -23756,6 +23756,20 @@ function renderPlayerGPS() {
     const availSplits = uniqueSorted(rows.map(r => r.split_name || 'all')).filter(s => s.toLowerCase() !== 'all');
     availSplits.sort((a, b) => (parseInt((a.match(/\d+/) || [999])[0])) - (parseInt((b.match(/\d+/) || [999])[0])));
 
+    // Détecter un changement de séance : sur une nouvelle séance on réapplique le défaut,
+    // sinon on conserve le choix courant du joueur.
+    const sessionChanged = splitSelEl ? (splitSelEl.dataset.sessionKey !== sel) : true;
+    if (splitSelEl) splitSelEl.dataset.sessionKey = sel;
+
+    // Défaut match : cumul 1ère MT + 2ème MT si les deux mi-temps sont détectées.
+    const isMatchSel = rows.length > 0 && gpsCategorie(rows[0]) === 'match';
+    let matchHalves = null;
+    if (isMatchSel && availSplits.length >= 2) {
+      const firsts = availSplits.filter(s => gpsHalfIndex(s) === 1);
+      const seconds = availSplits.filter(s => gpsHalfIndex(s) === 2);
+      if (firsts.length && seconds.length) matchHalves = firsts.concat(seconds);
+    }
+
     let splitChoice = 'all';
     if (availSplits.length && splitSelEl) {
       const cur = splitSelEl.value;
@@ -23764,7 +23778,16 @@ function renderPlayerGPS() {
       if (availSplits.length >= 2) optsHTML += '<option value="__cumul__">' + tr('Sum of periods…', 'Cumul de temps…') + '</option>';
       splitSelEl.innerHTML = optsHTML;
       const validVals = ['all'].concat(availSplits, availSplits.length >= 2 ? ['__cumul__'] : []);
-      splitChoice = validVals.indexOf(cur) >= 0 ? cur : 'all';
+      // Même séance : conserver le choix. Nouvelle séance : défaut = cumul des mi-temps
+      // pour un match, sinon « Séance entière ».
+      if (!sessionChanged && validVals.indexOf(cur) >= 0) {
+        splitChoice = cur;
+      } else if (matchHalves) {
+        pgpsCumulSplits = matchHalves.slice();
+        splitChoice = '__cumul__';
+      } else {
+        splitChoice = 'all';
+      }
       splitSelEl.value = splitChoice;
       if (splitGroupEl) splitGroupEl.style.display = '';
     } else if (splitGroupEl) {
