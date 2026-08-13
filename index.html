@@ -225,6 +225,9 @@
   .btn-secondary:hover { background: var(--bg-elevated); color: var(--text); transform: none; filter: none; box-shadow: none; border-color: rgba(56, 182, 255, 0.4); }
   .btn-danger { background: var(--red); }
   .btn-success { background: var(--green); color: #08111e; }
+  /* Bouton Rafraîchir (vue joueur) : couleur distincte du bouton Déconnexion */
+  #btn-refresh-player { background: var(--green); color: #08111e; border: none; font-weight: 700; box-shadow: 0 2px 8px -2px rgba(52, 211, 153, 0.5); }
+  #btn-refresh-player:hover { background: var(--green); color: #08111e; border: none; filter: brightness(1.06); transform: translateY(-1px); }
 
   select, input, textarea {
     background: var(--bg-elevated);
@@ -536,6 +539,9 @@
   }
   /* Mobile : échelle RPE sur 2 rangées (0-5 / 6-10) pour éviter le débordement horizontal */
   @media (max-width: 560px) {
+    /* Vue mobile joueur : Rafraîchir et Déconnexion empilés pleine largeur, Rafraîchir au-dessus */
+    .header-actions #btn-refresh-player,
+    .header-actions #logout-btn { width: 100%; text-align: center; justify-content: center; }
     .rpe-scale {
       grid-template-columns: repeat(6, 1fr) !important;
       gap: 6px !important;
