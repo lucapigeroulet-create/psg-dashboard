@@ -13076,8 +13076,16 @@ function renderGPSSession() {
     }
     return gpsSessionSortDir * (va - vb);
   });
-  rows.forEach(r => {
-    html += '<tr><td style="text-align:left;font-weight:600;">' + escapeHtml(r.joueur) + '</td>';
+  let prevPoste = null;
+  rows.forEach((r, idx) => {
+    // Séparateur visuel entre postes quand le classement par poste est actif :
+    // trait épais + libellé du poste sur la 1re ligne de chaque groupe.
+    const rowPoste = posteOfPlayer(r.joueur);
+    const newGroup = gpsSortByPoste && rowPoste !== prevPoste;
+    prevPoste = rowPoste;
+    const trStyle = (newGroup && idx > 0) ? ' style="border-top:3px solid var(--accent);"' : '';
+    const posteTag = newGroup ? '<div style="font-size:9px;font-weight:700;color:var(--accent-light);text-transform:uppercase;letter-spacing:0.4px;">' + escapeHtml(rowPoste) + '</div>' : '';
+    html += '<tr' + trStyle + '><td style="text-align:left;font-weight:600;">' + posteTag + escapeHtml(r.joueur) + '</td>';
     if (showBestPct) {
       const vol = getVolumeScore(r.joueur, r);
       const inten = getIntensityScore(r.joueur, r);
