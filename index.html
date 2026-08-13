@@ -11500,7 +11500,7 @@ let gpsSessionPctMode = 'all'; // 'all' | 'best' | 'ratio' | 'none'
 let gpsTriageThr = 1; // 0.8 | 1 | 1.5
 function gpsSetTriageThr(v) { gpsTriageThr = parseFloat(v); renderGPSSession(); }
 // Vue active du détail par joueur dans le rapport de séance
-let gpsSessionView = 'triage'; // 'triage' | 'heatmap' | 'plots' | 'table'
+let gpsSessionView = 'table'; // 'triage' | 'heatmap' | 'plots' | 'table' (tableau détaillé par défaut)
 function gpsSetSessionView(v) { gpsSessionView = v; renderGPSSession(); }
 
 // Classement des joueurs par poste (bouton "Classer par poste" du rapport de séance).
@@ -13063,6 +13063,12 @@ function renderGPSSession() {
   html += '</tr></thead><tbody>';
 
   rows.sort((a, b) => {
+    // Si "Classer par poste" est actif, le poste prime ; la colonne cliquée
+    // (tri de l'en-tête) devient le tri secondaire à l'intérieur de chaque poste.
+    if (gpsSortByPoste) {
+      const ra = gpsPosteRank(posteOfPlayer(a.joueur)), rb = gpsPosteRank(posteOfPlayer(b.joueur));
+      if (ra !== rb) return ra - rb;
+    }
     const va = gpsSessionSortValue(a, gpsSessionSortKey);
     const vb = gpsSessionSortValue(b, gpsSessionSortKey);
     if (typeof va === 'string' || typeof vb === 'string') {
@@ -13268,8 +13274,12 @@ function exportGPSSessionPDF() {
   const titles = uniqueSorted(allRows.map(x => x.seance || x.session_title || '')).filter(Boolean);
   const splitLabel = _res.splitLabel;
 
-  // Tri identique à l'écran
+  // Tri identique à l'écran (poste primaire si "Classer par poste" est actif)
   rows.sort((a, b) => {
+    if (gpsSortByPoste) {
+      const ra = gpsPosteRank(posteOfPlayer(a.joueur)), rb = gpsPosteRank(posteOfPlayer(b.joueur));
+      if (ra !== rb) return ra - rb;
+    }
     const va = gpsSessionSortValue(a, gpsSessionSortKey);
     const vb = gpsSessionSortValue(b, gpsSessionSortKey);
     if (typeof va === 'string' || typeof vb === 'string') return gpsSessionSortDir * String(va).localeCompare(String(vb));
