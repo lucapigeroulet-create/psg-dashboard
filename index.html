@@ -3739,7 +3739,7 @@ function initSupabase() {
 // En cas de moindre erreur, on retombe sur un chargement complet classique.
 // ============================================================================
 const CACHE_ENABLED = true;       // false pour désactiver entièrement le cache
-const CACHE_VERSION = 'v1';       // à bumper si le schéma des tables cachées change
+const CACHE_VERSION = 'v2';       // à bumper si le schéma des tables cachées change (v2 : purge des caches tronqués à 1000 lignes, cf. pagination _fullFetch)
 const CACHE_MAX_BYTES = 4000000;  // ne cache pas au-delà de ~4 Mo (quota localStorage)
 
 function _cacheKey(t, org) { return 'sfcache_' + CACHE_VERSION + '_' + t + '_' + (org || ''); }
@@ -3760,10 +3760,25 @@ function _writeCache(t, org, rows) {
 function invalidateCache(t, org) { try { localStorage.removeItem(_cacheKey(t, org)); } catch (e) {} }
 
 async function _fullFetch(t, org, orderCol) {
-  let q = sb.from(t).select('*').eq('org', org);
-  if (orderCol) q = q.order(orderCol);
-  const { data } = await q;
-  return data || [];
+  // PostgREST plafonne chaque réponse à 1000 lignes. Sans pagination, au-delà
+  // de 1000 relevés (ex : GPS TEGG) seule la 1re page revenait → il fallait
+  // recharger pour voir le reste. On pagine sur "id" (colonne unique = ordre
+  // stable, pas de doublon/saut entre pages), puis on retrie sur orderCol.
+  const PAGE = 1000;
+  let from = 0, all = [];
+  for (;;) {
+    const { data, error } = await sb.from(t).select('*').eq('org', org)
+      .order('id', { ascending: true }).range(from, from + PAGE - 1);
+    if (error) break;                 // erreur réseau : on renvoie ce qu'on a (fallback souple)
+    const batch = data || [];
+    all = all.concat(batch);
+    if (batch.length < PAGE) break;   // dernière page atteinte
+    from += PAGE;
+  }
+  if (orderCol && orderCol !== 'id') {
+    all.sort((a, b) => { const x = a[orderCol] || '', y = b[orderCol] || ''; return x < y ? -1 : x > y ? 1 : 0; });
+  }
+  return all;
 }
 async function _count(t, org) {
   const h = await sb.from(t).select('id', { count: 'exact', head: true }).eq('org', org);
@@ -11161,9 +11176,8 @@ async function doGPSImport() {
       players: uniqueSorted(gpsImportRows.map(r => r.joueur)).length
     });
 
-    // Recharger les données GPS
-    const { data: gps } = await sb.from('gps_data').select('*').eq('org', currentOrg).order('date');
-    state.bdd_gps = gps || [];
+    // Recharger les données GPS (paginé → gère les orgs > 1000 relevés)
+    state.bdd_gps = await _fullFetch('gps_data', currentOrg, 'date');
     _writeCache('gps_data', currentOrg, state.bdd_gps);
     gpsImportRows = null;
     gpsNameResolutions = {};
@@ -11267,9 +11281,8 @@ async function deleteGPSSession(date, seance) {
     // Supprimer par date + seance (et session_title en secours)
     let q = sb.from('gps_data').delete().eq('date', date);
     const r = await q.or('seance.eq.' + seance + ',session_title.eq.' + seance);
-    // Recharger
-    const { data: gps } = await sb.from('gps_data').select('*').eq('org', currentOrg).order('date');
-    state.bdd_gps = gps || [];
+    // Recharger (paginé → gère les orgs > 1000 relevés)
+    state.bdd_gps = await _fullFetch('gps_data', currentOrg, 'date');
     _writeCache('gps_data', currentOrg, state.bdd_gps);
     renderGPSHistory();
     renderGPS();
