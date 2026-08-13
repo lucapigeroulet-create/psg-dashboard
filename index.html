@@ -11502,6 +11502,22 @@ function gpsSetTriageThr(v) { gpsTriageThr = parseFloat(v); renderGPSSession(); 
 // Vue active du détail par joueur dans le rapport de séance
 let gpsSessionView = 'triage'; // 'triage' | 'heatmap' | 'plots' | 'table'
 function gpsSetSessionView(v) { gpsSessionView = v; renderGPSSession(); }
+
+// Classement des joueurs par poste (bouton "Classer par poste" du rapport de séance).
+// Ordre demandé : défenseur central, latéral, milieu, ailier, attaquant.
+// Le gardien est placé en tête (convention foot), un poste inconnu part en fin.
+// Le matching se fait par mot-clé sans accents pour gérer les variantes
+// d'orthographe entre orgs ("Défenseur central" TEGG vs "Défenseur" PSG).
+let gpsSortByPoste = false;
+const GPS_POSTE_ORDER = ['gardien', 'defenseur', 'lateral', 'milieu', 'ailier', 'attaquant'];
+function gpsPosteRank(poste) {
+  const p = gpsStripAccents(String(poste || '').toLowerCase());
+  for (let i = 0; i < GPS_POSTE_ORDER.length; i++) {
+    if (p.indexOf(GPS_POSTE_ORDER[i]) >= 0) return i;
+  }
+  return 99; // sans poste / inconnu → à la fin
+}
+function gpsToggleSortByPoste() { gpsSortByPoste = !gpsSortByPoste; renderGPSSession(); }
 // Métriques de charge suivies dans le triage (valeur en unité d'affichage)
 const GPS_TRIAGE_METRICS = [
   { key: 'distance_km', label: 'Distance', unit: 'm', dec: 0, mult: 1000 },
@@ -12894,6 +12910,17 @@ function renderGPSSession() {
   // Appliquer le filtre joueurs + le filtre poste
   const rows = allRows.filter(r => gpsSelectedPlayers.indexOf(r.joueur) >= 0 && postePlayers.indexOf(r.joueur) >= 0);
 
+  // Classement par poste (bouton) : défenseur central → latéral → milieu → ailier → attaquant.
+  // À poste égal, on garde l'ordre alphabétique du joueur pour la stabilité.
+  if (gpsSortByPoste) {
+    const byPoste = (a, b) => {
+      const ra = gpsPosteRank(posteOfPlayer(a)), rb = gpsPosteRank(posteOfPlayer(b));
+      return ra !== rb ? ra - rb : String(a).localeCompare(String(b));
+    };
+    rows.sort((r1, r2) => byPoste(r1.joueur, r2.joueur));
+    postePlayers.sort(byPoste); // les pills "Filtrer les joueurs" suivent le même ordre
+  }
+
   // Moyennes (recalculées sur les joueurs filtrés)
   const n = rows.length || 1;
   const avgDist = rows.reduce((s, r) => s + gpsVal(r, 'distance_km') * 1000, 0) / n;
@@ -12904,7 +12931,12 @@ function renderGPSSession() {
   let html = '<div class="card">';
   html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:6px;">';
   html += '<h2 style="margin:0;">Rapport de séance — ' + formatDateFR(date) + (titles.length ? ' · ' + escapeHtml(titles[0]) : '') + escapeHtml(splitLabel) + '</h2>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+  html += '<button class="btn btn-secondary" onclick="gpsToggleSortByPoste()" style="white-space:nowrap;' +
+    (gpsSortByPoste ? 'background:var(--accent);color:#fff;border-color:var(--accent);' : '') + '">🧩 ' +
+    (gpsSortByPoste ? 'Classé par poste ✓' : 'Classer par poste') + '</button>';
   html += '<button class="btn btn-secondary" onclick="exportGPSSessionPDF()" style="white-space:nowrap;">📄 Exporter en PDF</button>';
+  html += '</div>';
   html += '</div>';
 
   // Sélecteur des procédés cumulés (mode « Cumul » : ex. 1re + 2e mi-temps)
