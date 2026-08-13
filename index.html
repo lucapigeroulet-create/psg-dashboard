@@ -770,6 +770,7 @@
       <button class="nav-btn" data-view="medical-planning" id="nav-medical-planning-btn">📅 Planning soins</button>
       <button class="nav-btn" data-view="medical-fiche" id="nav-medical-fiche-btn">👤 Fiche joueur</button>
       <button class="nav-btn" data-view="medical-notes" id="nav-medical-notes-btn">📋 Notes médicales</button>
+      <button class="nav-btn" data-view="medical-questionnaire" id="nav-medical-questionnaire-btn">📝 Questionnaire</button>
     </div>
   </div>
   <button class="nav-btn médical-only-btn" data-view="injury-entry" style="display:none;">🩹 Saisie blessures</button>
@@ -3533,6 +3534,66 @@
     </div>
   </div>
   <!-- ===== FIN VUE NOTES MÉDICALES =====  -->
+
+  <!-- ===== VUE QUESTIONNAIRE DE SUIVI BLESSÉ ===== -->
+  <div class="view" id="view-medical-questionnaire">
+    <div class="card" id="med-quest-form-card">
+      <h2>📝 Questionnaire de suivi blessé</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:14px;">Évalue l'état d'un joueur blessé pour suivre son évolution jour après jour. Une saisie par joueur et par date (une nouvelle saisie le même jour écrase la précédente). Visible uniquement par le staff.</p>
+      <div class="form-row">
+        <div style="flex:1; min-width:150px;">
+          <label>Joueur *</label>
+          <select id="med-quest-joueur"><option value="">— Sélectionner —</option></select>
+        </div>
+        <div>
+          <label>Date *</label>
+          <input type="date" id="med-quest-date" />
+        </div>
+      </div>
+      <div id="med-quest-sliders">
+        <div class="form-row"><div style="flex:1;">
+          <label>Douleur : <b id="med-quest-douleur-val" style="color:#f87171;">5</b>/10 <span style="color:var(--text-dim); font-weight:400; font-size:11px;">(0 = aucune · 10 = maximale)</span></label>
+          <input type="range" min="0" max="10" value="5" id="med-quest-douleur" oninput="document.getElementById('med-quest-douleur-val').textContent=this.value" style="width:100%;" />
+        </div></div>
+        <div class="form-row"><div style="flex:1;">
+          <label>Gonflement : <b id="med-quest-gonflement-val" style="color:#fb923c;">5</b>/10 <span style="color:var(--text-dim); font-weight:400; font-size:11px;">(0 = aucun · 10 = important)</span></label>
+          <input type="range" min="0" max="10" value="5" id="med-quest-gonflement" oninput="document.getElementById('med-quest-gonflement-val').textContent=this.value" style="width:100%;" />
+        </div></div>
+        <div class="form-row"><div style="flex:1;">
+          <label>Mobilité / amplitude : <b id="med-quest-mobilite-val" style="color:#34d399;">5</b>/10 <span style="color:var(--text-dim); font-weight:400; font-size:11px;">(0 = très limitée · 10 = complète)</span></label>
+          <input type="range" min="0" max="10" value="5" id="med-quest-mobilite" oninput="document.getElementById('med-quest-mobilite-val').textContent=this.value" style="width:100%;" />
+        </div></div>
+        <div class="form-row"><div style="flex:1;">
+          <label>Capacité à charger : <b id="med-quest-charge-val" style="color:#38b6ff;">5</b>/10 <span style="color:var(--text-dim); font-weight:400; font-size:11px;">(0 = nulle · 10 = totale)</span></label>
+          <input type="range" min="0" max="10" value="5" id="med-quest-charge" oninput="document.getElementById('med-quest-charge-val').textContent=this.value" style="width:100%;" />
+        </div></div>
+        <div class="form-row"><div style="flex:1;">
+          <label>Ressenti global : <b id="med-quest-ressenti-val" style="color:#a78bfa;">5</b>/10 <span style="color:var(--text-dim); font-weight:400; font-size:11px;">(0 = très mauvais · 10 = excellent)</span></label>
+          <input type="range" min="0" max="10" value="5" id="med-quest-ressenti" oninput="document.getElementById('med-quest-ressenti-val').textContent=this.value" style="width:100%;" />
+        </div></div>
+      </div>
+      <div class="form-row">
+        <div style="flex:1;">
+          <label>Note libre (optionnel)</label>
+          <textarea id="med-quest-note" rows="3" placeholder="Observations du jour, exercices réalisés, prochaine étape…" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:13px; resize:vertical;"></textarea>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <button class="btn" onclick="saveMedicalQuestionnaire()">💾 Enregistrer la saisie</button>
+        <button class="btn btn-secondary" onclick="clearMedQuestForm()">✕ Réinitialiser</button>
+        <input type="hidden" id="med-quest-editing-id" value="" />
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+        <h2 style="margin:0;">📈 Évolution</h2>
+        <select id="med-quest-view-joueur" onchange="renderMedicalQuestionnaire()" style="min-width:180px;"><option value="">— Choisir un joueur —</option></select>
+      </div>
+      <div id="med-quest-chart-wrap" style="height:300px; position:relative;"><canvas id="med-quest-chart"></canvas></div>
+      <div id="med-quest-history" style="margin-top:14px;"></div>
+    </div>
+  </div>
+  <!-- ===== FIN VUE QUESTIONNAIRE ===== -->
 
   <!-- ===== VUE PLANNING SOINS (kiné) ===== -->
   <div class="view" id="view-medical-planning">
@@ -6652,6 +6713,7 @@ async function loadState() {
     bdd_blessures: [],
     bdd_best_match: {},
     bdd_medical_notes: [],
+    bdd_medical_questionnaires: [],
     bdd_creneaux_medicaux: [],
     bdd_fiches: [],
     bdd_test_types: [],
@@ -6807,6 +6869,12 @@ async function loadState() {
       const { data: mednotes } = await sb.from('medical_notes').select('*').eq('org', currentOrg).order('date', { ascending: false });
       state.bdd_medical_notes = mednotes || [];
     } catch(e) { state.bdd_medical_notes = []; }
+
+    setLoad('Chargement des questionnaires de suivi...');
+    try {
+      const { data: medq } = await sb.from('medical_questionnaires').select('*').eq('org', currentOrg).order('date', { ascending: false });
+      state.bdd_medical_questionnaires = medq || [];
+    } catch(e) { state.bdd_medical_questionnaires = []; }
 
     // Créneaux de soins kiné : joueur → son org active ; staff/médical/admin → tous les clubs autorisés
     setLoad('Chargement des créneaux de soins...');
@@ -7888,7 +7956,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
       else gestionToggle.classList.remove('has-active');
     }
     // Gérer l'état visuel du menu déroulant Médical
-    const medicalViews = ['medical', 'medical-planning', 'medical-fiche', 'medical-notes'];
+    const medicalViews = ['medical', 'medical-planning', 'medical-fiche', 'medical-notes', 'medical-questionnaire'];
     const medicalToggle = document.getElementById('nav-medical-toggle');
     if (medicalToggle) {
       if (medicalViews.includes(view)) medicalToggle.classList.add('has-active');
@@ -7933,6 +8001,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'medical-planning') renderMedicalPlanning();
     else if (view === 'medical-fiche') renderMedicalFiche();
     else if (view === 'medical-notes') renderMedicalNotes();
+    else if (view === 'medical-questionnaire') renderMedicalQuestionnaire();
     else if (view === 'player-soins') renderPlayerSoins();
     else if (view === 'player-fiche') renderPlayerFiche();
     else if (view === 'testing') renderTesting();
@@ -23554,6 +23623,198 @@ function renderMedicalHooper() {
       '<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">Dernière saisie : ' + formatDateDMY(last.date) + ' · Sommeil: ' + (last.sleep_quality||'?') + ' · Fatigue: ' + (last.fatigue||'?') + ' · Stress: ' + (last.stress||'?') + ' · Courbatures: ' + (last.muscle_soreness||'?') + '</div></div>' +
       '<div>' + right + '</div></div>';
   }).join('');
+}
+
+// ---------- ONGLET QUESTIONNAIRE DE SUIVI BLESSÉ ----------
+const MED_QUEST_ITEMS = [
+  { key:'douleur',    label:'Douleur',              color:'#f87171' },
+  { key:'gonflement', label:'Gonflement',           color:'#fb923c' },
+  { key:'mobilite',   label:'Mobilité / amplitude', color:'#34d399' },
+  { key:'charge',     label:'Capacité à charger',   color:'#38b6ff' },
+  { key:'ressenti',   label:'Ressenti global',      color:'#a78bfa' },
+];
+
+// Joueurs actuellement blessés (statut en_cours ou reathle) → priorisés dans les listes.
+function medQuestInjuredSet() {
+  const s = new Set();
+  (state.bdd_blessures || []).forEach(b => {
+    if (b && b.joueur && (b.statut === 'en_cours' || b.statut === 'reathle')) s.add(b.joueur);
+  });
+  return s;
+}
+
+function populateMedQuestPlayers() {
+  const injured = medQuestInjuredSet();
+  const all = (state.joueurs || []).map(j => j.nom).filter(Boolean);
+  const injuredList = all.filter(n => injured.has(n)).sort((a,b)=>a.localeCompare(b));
+  const others = all.filter(n => !injured.has(n)).sort((a,b)=>a.localeCompare(b));
+  const opt = (n) => '<option value="' + escapeHtml(n) + '">' + (injured.has(n) ? '🩹 ' : '') + escapeHtml(n) + '</option>';
+  const build = (placeholder) => {
+    let h = '<option value="">' + placeholder + '</option>';
+    if (injuredList.length) h += '<optgroup label="Blessés">' + injuredList.map(opt).join('') + '</optgroup>';
+    h += '<optgroup label="' + (injuredList.length ? 'Autres joueurs' : 'Joueurs') + '">' + others.map(opt).join('') + '</optgroup>';
+    return h;
+  };
+  const sel1 = document.getElementById('med-quest-joueur');
+  if (sel1) { const cur = sel1.value; sel1.innerHTML = build('— Sélectionner —'); sel1.value = cur; }
+  const sel2 = document.getElementById('med-quest-view-joueur');
+  if (sel2) { const cur = sel2.value; sel2.innerHTML = build('— Choisir un joueur —'); sel2.value = cur; }
+}
+
+function clearMedQuestForm() {
+  const j = document.getElementById('med-quest-joueur'); if (j) j.value = '';
+  const d = document.getElementById('med-quest-date'); if (d) d.value = toLocalISO(new Date());
+  MED_QUEST_ITEMS.forEach(it => {
+    const inp = document.getElementById('med-quest-' + it.key);
+    const val = document.getElementById('med-quest-' + it.key + '-val');
+    if (inp) inp.value = 5; if (val) val.textContent = '5';
+  });
+  const note = document.getElementById('med-quest-note'); if (note) note.value = '';
+  const ei = document.getElementById('med-quest-editing-id'); if (ei) ei.value = '';
+}
+
+async function saveMedicalQuestionnaire() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const joueur = (document.getElementById('med-quest-joueur') || {}).value || '';
+  const date   = (document.getElementById('med-quest-date') || {}).value || '';
+  if (!joueur) { toast('Sélectionne un joueur', 'error'); return; }
+  if (!date)   { toast('Indique une date', 'error'); return; }
+  const editingId = (document.getElementById('med-quest-editing-id') || {}).value || '';
+  const note = ((document.getElementById('med-quest-note') || {}).value || '').trim();
+  const row = { org: currentOrg, joueur, date, note: note || null, auteur: currentUser ? currentUser.email : null };
+  MED_QUEST_ITEMS.forEach(it => {
+    const inp = document.getElementById('med-quest-' + it.key);
+    row[it.key] = inp ? parseInt(inp.value, 10) : null;
+  });
+
+  // Une saisie par joueur/date : si une existe déjà (même date), on la met à jour.
+  const existing = (state.bdd_medical_questionnaires || []).find(q => q.joueur === joueur && q.date === date);
+  const targetId = editingId || (existing ? existing.id : '');
+
+  if (!sb) {
+    if (targetId) {
+      const idx = state.bdd_medical_questionnaires.findIndex(q => q.id === targetId);
+      if (idx !== -1) state.bdd_medical_questionnaires[idx] = Object.assign({}, state.bdd_medical_questionnaires[idx], row);
+    } else {
+      state.bdd_medical_questionnaires.unshift(Object.assign({ id:'local-'+Date.now() }, row, { created_at:new Date().toISOString() }));
+    }
+    toast('Saisie enregistrée', 'success'); clearMedQuestForm();
+    const vj = document.getElementById('med-quest-view-joueur'); if (vj) vj.value = joueur;
+    renderMedicalQuestionnaire(); return;
+  }
+
+  try {
+    let saved;
+    if (targetId && !String(targetId).startsWith('local-')) {
+      const upd = Object.assign({}, row, { updated_at: new Date().toISOString() });
+      const { data, error } = await sb.from('medical_questionnaires').update(upd).eq('id', targetId).select().single();
+      if (error) throw error;
+      saved = data;
+      const idx = state.bdd_medical_questionnaires.findIndex(q => q.id === targetId);
+      if (idx !== -1) state.bdd_medical_questionnaires[idx] = saved; else state.bdd_medical_questionnaires.unshift(saved);
+      toast('Saisie mise à jour', 'success');
+    } else {
+      const { data, error } = await sb.from('medical_questionnaires').insert(row).select().single();
+      if (error) throw error;
+      saved = data;
+      state.bdd_medical_questionnaires.unshift(saved);
+      toast('Saisie enregistrée', 'success');
+    }
+    clearMedQuestForm();
+    const vj = document.getElementById('med-quest-view-joueur'); if (vj) vj.value = joueur;
+    renderMedicalQuestionnaire();
+  } catch(e) {
+    toast('Erreur : ' + (e.message || e), 'error');
+  }
+}
+
+async function deleteMedicalQuestionnaire(id) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  if (!confirm('Supprimer cette saisie ?')) return;
+  if (sb && !String(id).startsWith('local-')) {
+    try { await sb.from('medical_questionnaires').delete().eq('id', id); } catch(e) {}
+  }
+  state.bdd_medical_questionnaires = state.bdd_medical_questionnaires.filter(q => q.id !== id);
+  toast('Saisie supprimée', 'success');
+  renderMedicalQuestionnaire();
+}
+
+function editMedicalQuestionnaire(id) {
+  const q = (state.bdd_medical_questionnaires || []).find(x => x.id === id);
+  if (!q) return;
+  const j = document.getElementById('med-quest-joueur'); if (j) j.value = q.joueur;
+  const d = document.getElementById('med-quest-date'); if (d) d.value = q.date;
+  MED_QUEST_ITEMS.forEach(it => {
+    const inp = document.getElementById('med-quest-' + it.key);
+    const val = document.getElementById('med-quest-' + it.key + '-val');
+    const v = (q[it.key] === null || q[it.key] === undefined) ? 5 : q[it.key];
+    if (inp) inp.value = v; if (val) val.textContent = String(v);
+  });
+  const note = document.getElementById('med-quest-note'); if (note) note.value = q.note || '';
+  const ei = document.getElementById('med-quest-editing-id'); if (ei) ei.value = id;
+  const card = document.getElementById('med-quest-form-card'); if (card) card.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function renderMedicalQuestionnaire() {
+  const fd = document.getElementById('med-quest-date'); if (fd && !fd.value) fd.value = toLocalISO(new Date());
+  populateMedQuestPlayers();
+
+  const viewJoueur = (document.getElementById('med-quest-view-joueur') || {}).value || '';
+  let entries = (state.bdd_medical_questionnaires || []).slice();
+  if (viewJoueur) entries = entries.filter(q => q.joueur === viewJoueur);
+  entries.sort((a,b) => (a.date||'').localeCompare(b.date||''));
+
+  // --- Courbe d'évolution ---
+  const wrap = document.getElementById('med-quest-chart-wrap');
+  destroyChart('med-quest-chart');
+  if (!viewJoueur) {
+    if (wrap) wrap.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-dim); font-size:13px; text-align:center;">Choisis un joueur pour voir sa courbe d\'évolution.</div>';
+  } else if (!entries.length) {
+    if (wrap) wrap.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-dim); font-size:13px; text-align:center;">Aucune saisie pour ' + escapeHtml(viewJoueur) + ' pour le moment.</div>';
+  } else {
+    if (wrap) wrap.innerHTML = '<canvas id="med-quest-chart"></canvas>';
+    const labels = entries.map(q => formatDateFR(q.date));
+    const datasets = MED_QUEST_ITEMS.map(it => ({
+      label: it.label,
+      data: entries.map(q => (q[it.key] === null || q[it.key] === undefined) ? null : q[it.key]),
+      borderColor: it.color, backgroundColor: it.color,
+      tension: 0.3, spanGaps: true, pointRadius: 3, borderWidth: 2
+    }));
+    charts['med-quest-chart'] = new Chart(document.getElementById('med-quest-chart'), {
+      type: 'line',
+      data: { labels, datasets },
+      options: { responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ labels:{ color:'#8ba3c1', boxWidth:12, font:{ size:11 } } } },
+        scales:{ y:{ min:0, max:10, ticks:{ color:'#8ba3c1', stepSize:2 }, grid:{ color:'#1f3a5f' } },
+                 x:{ ticks:{ color:'#8ba3c1', font:{ size:10 } }, grid:{ display:false } } } }
+    });
+  }
+
+  // --- Historique (tableau) ---
+  const hist = document.getElementById('med-quest-history');
+  if (!hist) return;
+  let list = (state.bdd_medical_questionnaires || []).slice();
+  if (viewJoueur) list = list.filter(q => q.joueur === viewJoueur);
+  list.sort((a,b) => (b.date||'').localeCompare(a.date||'') || (b.created_at||'').localeCompare(a.created_at||''));
+  if (!list.length) { hist.innerHTML = ''; return; }
+
+  const head = '<tr><th style="text-align:left;">Date</th>' + (viewJoueur ? '' : '<th style="text-align:left;">Joueur</th>') +
+    MED_QUEST_ITEMS.map(it => '<th>' + escapeHtml(it.label.split(' ')[0]) + '</th>').join('') + '<th style="text-align:left;">Note</th><th></th></tr>';
+  const rows = list.map(q => {
+    const cells = MED_QUEST_ITEMS.map(it => {
+      const v = (q[it.key] === null || q[it.key] === undefined) ? '—' : q[it.key];
+      return '<td style="text-align:center; color:' + it.color + '; font-weight:700;">' + v + '</td>';
+    }).join('');
+    return '<tr>' +
+      '<td style="text-align:left; white-space:nowrap;">' + formatDateFR(q.date) + '</td>' +
+      (viewJoueur ? '' : '<td style="text-align:left;">' + escapeHtml(q.joueur) + '</td>') +
+      cells +
+      '<td style="max-width:220px; font-size:11px; color:var(--text-dim);">' + escapeHtml(q.note || '') + '</td>' +
+      '<td style="white-space:nowrap; text-align:right;"><button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="editMedicalQuestionnaire(\'' + q.id + '\')">✏️</button> ' +
+      '<button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="deleteMedicalQuestionnaire(\'' + q.id + '\')">🗑️</button></td>' +
+      '</tr>';
+  }).join('');
+  hist.innerHTML = '<div class="table-wrap" style="max-height:340px;"><table style="font-size:12px; width:100%;"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table></div>';
 }
 
 // ---------- ONGLET NOTES MÉDICALES ----------
