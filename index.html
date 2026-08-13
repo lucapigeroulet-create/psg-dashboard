@@ -13296,6 +13296,17 @@ function exportGPSSessionPDF() {
 
   const hasBestMatch = rows.some(r => getBestMatchRow(r.joueur) !== null);
 
+  // Débuts de groupe de poste (pour le séparateur PDF, si "Classer par poste" actif) :
+  // 1re ligne de chaque poste → libellé dans la cellule Joueur + trait épais au-dessus.
+  const posteGroupStart = {}, posteGroupLabel = {};
+  if (gpsSortByPoste) {
+    let _prevP = null;
+    rows.forEach((r, ri) => {
+      const pr = posteOfPlayer(r.joueur);
+      if (pr !== _prevP) { posteGroupStart[ri] = true; posteGroupLabel[ri] = pr; _prevP = pr; }
+    });
+  }
+
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -13396,7 +13407,7 @@ function exportGPSSessionPDF() {
   const barPct = {};
   const body = rows.map((r, ri) => cols.map((c, ci) => {
     let text = '', color = null;
-    if (c.type === 'player') text = r.joueur;
+    if (c.type === 'player') { text = r.joueur; if (gpsSortByPoste && posteGroupStart[ri]) text = String(posteGroupLabel[ri] || '').toUpperCase() + '\n' + r.joueur; }
     else if (c.type === 'poste') text = posteOfPlayer(r);
     else if (c.type === 'volume') { const v = getVolumeScore(r.joueur, r); text = v !== null ? v + '%' : '—'; color = v !== null ? cssRgb(scoreColor(v)) : RGB.dim; }
     else if (c.type === 'intensity') { const v = getIntensityScore(r.joueur, r); text = v !== null ? v + '%' : '—'; color = v !== null ? cssRgb(scoreColor(v)) : RGB.dim; }
@@ -13458,6 +13469,14 @@ function exportGPSSessionPDF() {
       const w = Math.max(1.6, (cell.width - pad * 2) * Math.min(pct, 1));
       doc.setFillColor(tint[0], tint[1], tint[2]);
       doc.rect(cell.x + pad, cell.y + pad, w, cell.height - pad * 2, 'F');
+    },
+    didDrawCell: function (d) {
+      // Trait de séparation épais (accent) en haut de la 1re ligne de chaque groupe de poste.
+      // Dessiné après la cellule (donc par-dessus la grille) pour rester bien visible.
+      if (d.section === 'body' && gpsSortByPoste && posteGroupStart[d.row.index] && d.row.index > 0) {
+        doc.setDrawColor.apply(doc, P.accent); doc.setLineWidth(1.6);
+        doc.line(d.cell.x, d.cell.y, d.cell.x + d.cell.width, d.cell.y);
+      }
     },
     didDrawPage: function (data) {
       if (data.pageNumber > 1) {
