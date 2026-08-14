@@ -871,7 +871,7 @@
       </div>
       <div class="card">
         <h2>💚 Hooper à surveiller</h2>
-        <p id="overview-hooper-watch-desc" style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs avec un Hooper moyen élevé (≥ 17) sur leurs 3 dernières saisies.</p>
+        <p id="overview-hooper-watch-desc" style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">Joueurs avec un Hooper moyen élevé (≥ 15) sur leurs 3 dernières saisies.</p>
         <div id="overview-hooper-trend" style="display:none; height:200px; margin-bottom:12px;"><canvas id="chart-overview-hooper-team"></canvas></div>
         <div id="overview-hooper-watch"></div>
       </div>
@@ -3407,7 +3407,7 @@
             <div id="med-ov-injuries"></div>
           </div>
           <div class="card">
-            <h2 style="margin-bottom:10px;">🚨 Alertes Hooper <span id="med-ov-hooper-alerts-desc" style="font-size:11px; color:var(--text-dim); font-weight:400;">(moy ≥ 17 sur 3 der. saisies)</span></h2>
+            <h2 style="margin-bottom:10px;">🚨 Alertes Hooper <span id="med-ov-hooper-alerts-desc" style="font-size:11px; color:var(--text-dim); font-weight:400;">(moy ≥ 15 sur 3 der. saisies)</span></h2>
             <div id="med-ov-hooper-alerts"></div>
           </div>
         </div>
@@ -3460,7 +3460,7 @@
     <div id="medical-pane-hooper" style="display:none;">
       <div class="card">
         <h2>💚 Indices Hooper par joueur</h2>
-        <p id="med-hooper-desc" style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Synthèse des derniers check-ins Hooper. Score &gt; 17 = joueur à surveiller.</p>
+        <p id="med-hooper-desc" style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Synthèse des derniers check-ins Hooper. Score ≥ 15 = joueur à surveiller.</p>
         <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px;">
           <select id="med-hooper-group" onchange="renderMedicalHooper()" style="min-width:140px;"><option value="">Tous les groupes</option></select>
           <select id="med-hooper-period" onchange="renderMedicalHooper()">
@@ -3483,7 +3483,7 @@
       </div>
       <div class="card">
         <h2>🚨 Joueurs à surveiller</h2>
-        <p id="med-hooper-alerts-desc" style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Moyenne Hooper ≥ 17 sur les 3 dernières saisies.</p>
+        <p id="med-hooper-alerts-desc" style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Moyenne Hooper ≥ 15 sur les 3 dernières saisies.</p>
         <div id="med-hooper-alerts"></div>
       </div>
     </div>
@@ -8572,7 +8572,7 @@ function renderOverviewHooperWatch() {
   const desc = document.getElementById('overview-hooper-watch-desc');
   if (desc) desc.textContent = trendMode
     ? "Tendance de l'état de forme de l'équipe (▲ hausse / ▼ baisse) et joueuses qui varient nettement sur les derniers jours."
-    : 'Joueurs avec un Hooper moyen élevé (≥ 17) sur leurs 3 dernières saisies.';
+    : 'Joueurs avec un Hooper moyen élevé (≥ 15) sur leurs 3 dernières saisies.';
 
   // Seconde Ligue : même visuel que le menu « État de forme » — courbe de tendance équipe.
   const trendWrap = document.getElementById('overview-hooper-trend');
@@ -20868,7 +20868,7 @@ async function renderStaffHooper() {
   const avg = validIndices.length > 0 ? (validIndices.reduce((a,b)=>a+b,0) / validIndices.length).toFixed(1) : '—';
   document.getElementById('hooper-stat-avg').textContent = avg;
 
-  // Joueurs à surveiller : Hooper >= 17 sur 3 saisies (ou tendance hausse/baisse pour SECONDE LIGUE)
+  // Joueurs à surveiller : Hooper >= 15 sur 3 saisies (ou tendance hausse/baisse pour SECONDE LIGUE)
   const playersToWatch = computePlayersToWatch();
   document.getElementById('hooper-stat-alerts').textContent = playersToWatch.length;
   const alertsTitle = document.getElementById('hooper-alerts-title');
@@ -20913,7 +20913,7 @@ function computePlayersToWatch() {
     byPlayer[h.joueur].push({ date: h.date, idx, h });
   });
   // SECONDE LIGUE : on fait ressortir les joueuses dont la TENDANCE monte OU baisse
-  // sur les derniers jours (écart >= seuil), et non plus le simple niveau >= 17.
+  // sur les derniers jours (écart >= seuil), et non plus le simple niveau >= 15.
   const isTrendMode = (currentOrg === 'D2F');
   const result = [];
   Object.entries(byPlayer).forEach(([joueur, entries]) => {
@@ -20932,7 +20932,7 @@ function computePlayersToWatch() {
         flag = false; // pas assez de points pour dégager une tendance
       }
     } else {
-      flag = avg >= 17;
+      flag = avg >= 15;
     }
     if (flag) {
       const lastEntry = last3[0].h;
@@ -20964,7 +20964,7 @@ function hooperTrendBadge(w) {
 
 // Détermine si une série (index du plus RÉCENT au plus ANCIEN) doit être mise en alerte.
 // SECONDE LIGUE (D2F) : alerte si la tendance monte OU baisse nettement (écart >= seuil).
-// Autres entités : alerte si la moyenne des 3 dernières saisies >= 17.
+// Autres entités : alerte si la moyenne des 3 dernières saisies >= 15.
 function hooperFlagFromLast3(last3) {
   if (currentOrg === 'D2F') {
     if (last3.length >= 2) {
@@ -20974,7 +20974,7 @@ function hooperFlagFromLast3(last3) {
     return { flag: false, delta: null, dir: null };
   }
   const avg = last3.length ? last3.reduce((a, b) => a + b, 0) / last3.length : null;
-  return { flag: avg !== null && avg >= 17, delta: null, dir: null };
+  return { flag: avg !== null && avg >= 15, delta: null, dir: null };
 }
 
 function renderStaffHooperTeamChart(canvasId) {
@@ -23569,12 +23569,12 @@ function renderMedicalOverview() {
     }).join('');
   }
 
-  // Alertes Hooper — aligné sur computePlayersToWatch (tendance hausse/baisse pour SECONDE LIGUE, sinon niveau >= 17)
+  // Alertes Hooper — aligné sur computePlayersToWatch (tendance hausse/baisse pour SECONDE LIGUE, sinon niveau >= 15)
   const hAlert = document.getElementById('med-ov-hooper-alerts');
   if (hAlert) {
     const trendMode = (currentOrg === 'D2F');
     const desc = document.getElementById('med-ov-hooper-alerts-desc');
-    if (desc) desc.textContent = trendMode ? '(tendance hausse/baisse sur les derniers jours)' : '(moy ≥ 17 sur 3 der. saisies)';
+    if (desc) desc.textContent = trendMode ? '(tendance hausse/baisse sur les derniers jours)' : '(moy ≥ 15 sur 3 der. saisies)';
     const watch = computePlayersToWatch();
     if (!watch.length) { hAlert.innerHTML = '<p style="color:var(--green); font-size:13px;">✅ Aucune alerte Hooper.</p>'; }
     else hAlert.innerHTML = watch.map(w => {
@@ -23840,11 +23840,11 @@ function renderMedicalHooper() {
   const dTop = document.getElementById('med-hooper-desc');
   if (dTop) dTop.textContent = trendMode
     ? "Synthèse des derniers check-ins Hooper. Alerte quand la tendance monte ou baisse nettement sur les derniers jours."
-    : 'Synthèse des derniers check-ins Hooper. Score > 17 = joueur à surveiller.';
+    : 'Synthèse des derniers check-ins Hooper. Score ≥ 15 = joueur à surveiller.';
   const dAlert = document.getElementById('med-hooper-alerts-desc');
   if (dAlert) dAlert.textContent = trendMode
     ? 'Tendance en hausse ou baisse sur les dernières saisies.'
-    : 'Moyenne Hooper ≥ 17 sur les 3 dernières saisies.';
+    : 'Moyenne Hooper ≥ 15 sur les 3 dernières saisies.';
   const rows = allPlayers.map(p => {
     const entries = (byPlayer[p] || []).sort((a,b) => b.date.localeCompare(a.date));
     if (!entries.length) return '<tr><td><b>' + escapeHtml(p) + '</b></td><td>' + escapeHtml(getJoueurInfo(p).groupe || '—') + '</td><td colspan="7" style="color:var(--text-dim); font-size:12px;">Aucune saisie</td></tr>';
@@ -23856,7 +23856,7 @@ function renderMedicalHooper() {
     const flagInfo = hooperFlagFromLast3(last3);
     const isAlert = flagInfo.flag;
     if (isAlert) alertsCount++;
-    const idxColor = idx === null ? 'var(--text-dim)' : idx >= 17 ? '#f87171' : idx >= 14 ? '#fbbf24' : 'var(--green)';
+    const idxColor = idx === null ? 'var(--text-dim)' : idx >= 15 ? '#f87171' : idx >= 12 ? '#fbbf24' : 'var(--green)';
     const trendArrow = last3.length >= 2 ? (last3[0] > last3[1] ? '↑' : last3[0] < last3[1] ? '↓' : '→') : '—';
     const trendColor = last3.length >= 2 ? (last3[0] > last3[1] ? '#f87171' : last3[0] < last3[1] ? 'var(--green)' : 'var(--text-dim)') : 'var(--text-dim)';
     const fmt = v => v != null ? v : '—';
@@ -23879,7 +23879,7 @@ function renderMedicalHooper() {
   if (kpiEl) kpiEl.innerHTML = [
     { label:'Joueurs avec saisie', val: cntIdx },
     { label:'Index moyen', val: avgIdx },
-    { label: isTrend ? 'Alertes (tendance)' : 'Alertes (≥17)', val: alertsCount, color: alertsCount > 0 ? '#f87171' : 'var(--green)' }
+    { label: isTrend ? 'Alertes (tendance)' : 'Alertes (≥15)', val: alertsCount, color: alertsCount > 0 ? '#f87171' : 'var(--green)' }
   ].map(k => '<div class="stat"><div class="stat-label">' + k.label + '</div><div class="stat-value"' + (k.color ? ' style="color:' + k.color + ';"' : '') + '>' + k.val + '</div></div>').join('');
 
   const alertBox = document.getElementById('med-hooper-alerts');
