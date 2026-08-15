@@ -4007,6 +4007,10 @@ async function loadProfileAndStart() {
   if (MEDICAL_EMAILS.includes((currentUser.email || '').toLowerCase())) currentRole = 'médical';
   // Le rôle 'direction' et l'org viennent désormais directement de la table profiles
   // (role='direction', org='TEGG'), garantis par les policies RLS. Plus de hardcode d'UID ici.
+  // Vue direction élargie ("direction 1.0") : pierre@tegg.fr voit tous les onglets admin
+  // SAUF Paramètres, en lecture seule (role reste 'direction' → canWrite() = false, RLS = SELECT).
+  // Les autres comptes 'direction' (ex. olivierc@tegg.fr) gardent la vue restreinte d'origine.
+  window.isDirectionPlus = (currentRole === 'direction' && (currentUser.email || '').toLowerCase() === 'pierre@tegg.fr');
   currentJoueurNom = profile.joueur_nom;
   // Normaliser le nom (supprimer espaces superflus) pour fiabiliser le lien compte ↔ joueur
   if (currentJoueurNom) currentJoueurNom = String(currentJoueurNom).trim();
@@ -4043,7 +4047,9 @@ async function loadProfileAndStart() {
   const userInfo = document.getElementById('user-info');
   const roleBadge = isCoachAccount
     ? '<span class="role-badge role-coach">COACH</span>'
-    : '<span class="role-badge role-' + currentRole + '">' + currentRole.toUpperCase() + '</span>';
+    : window.isDirectionPlus
+      ? '<span class="role-badge role-direction">DIRECTION 1.0</span>'
+      : '<span class="role-badge role-' + currentRole + '">' + currentRole.toUpperCase() + '</span>';
   const displayName = currentUser.email.replace(EMAIL_DOMAIN, '');
   userInfo.innerHTML = '👤 ' + displayName + roleBadge;
 
@@ -6783,7 +6789,7 @@ function applyRoleRestrictions() {
       if (ovView) ovView.classList.add('active');
       renderPlayerOverview();
     }
-  } else if (currentRole === 'direction') {
+  } else if (currentRole === 'direction' && !window.isDirectionPlus) {
     // Direction sportive : calendrier des séances + données GPS uniquement, lecture seule
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
     if (gestionDropdown) gestionDropdown.style.display = 'none';
@@ -6845,7 +6851,8 @@ function applyRoleRestrictions() {
     const medNotesBtn = document.getElementById('nav-medical-notes-btn');
     if (medNotesBtn) medNotesBtn.style.display = (staffLimited && !isFullMedical) ? 'none' : '';
     const settingsBtn = document.querySelector('.nav-btn[data-view="settings"]');
-    if (settingsBtn) settingsBtn.style.display = staffLimited ? 'none' : '';
+    // 'direction 1.0' (pierre@tegg.fr) : tous les onglets admin SAUF Paramètres.
+    if (settingsBtn) settingsBtn.style.display = (staffLimited || window.isDirectionPlus) ? 'none' : '';
   }
 }
 
