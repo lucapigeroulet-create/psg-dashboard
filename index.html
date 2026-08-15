@@ -3652,11 +3652,11 @@
     <div id="mp-push-banner"></div>
     <div class="card">
       <h2>📅 Planning soins — <span id="mp-club-label">—</span></h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:14px;">Crée des créneaux individuels (10 à 30 min). Les joueurs/euses réservent un créneau libre depuis leur compte pour venir se faire soigner. Sélectionne le club concerné.</p>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:14px;">Crée des créneaux individuels (10 à 30 min). Les joueurs/euses réservent un créneau libre depuis leur compte. Un créneau <b>partagé</b> proposé à plusieurs entités est <b>bloqué automatiquement</b> sur les autres dès qu'une personne le réserve — pratique pour 2 kinés couvrant PSG / National 2 / Seconde Ligue. Chaque joueur ne peut réserver qu'<b>un créneau par jour</b>.</p>
       <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
-        <div class="filter-group" id="mp-club-wrap" style="display:none;">
-          <label style="font-size:11px; color:var(--text-dim);">Club</label>
-          <select id="mp-club" onchange="renderMedicalPlanning()" style="min-width:150px;"></select>
+        <div class="filter-group" id="mp-entities-wrap" style="display:none;">
+          <label style="font-size:11px; color:var(--text-dim);">Proposer aux entités</label>
+          <div id="mp-entities" style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; padding:6px 0 2px;"></div>
         </div>
         <div class="filter-group">
           <label style="font-size:11px; color:var(--text-dim);">Date</label>
@@ -3695,6 +3695,9 @@
       <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
         <h2 style="margin:0;">🗓️ Créneaux à venir</h2>
         <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+          <label id="mp-club-wrap" style="font-size:12px; color:var(--text-dim); display:none; align-items:center; gap:6px;">
+            Afficher : <select id="mp-club" onchange="renderMedicalPlanning()" style="min-width:150px;"></select>
+          </label>
           <label id="mp-cols-wrap" style="font-size:12px; color:var(--text-dim); display:none; align-items:center; gap:6px; cursor:pointer;">
             <input type="checkbox" id="mp-cols-toggle" onchange="renderMedicalPlanning()" /> 🗂️ Vue par club (colonnes)
           </label>
@@ -4253,10 +4256,55 @@ function mpFmtDuree(min) {
   return m === 0 ? (h + 'h') : (h + 'h' + String(m).padStart(2, '0'));
 }
 
-// HTML d'un créneau (ligne + panneaux compte-rendu / placement). optsPlayers = <option> des joueurs du club.
-function mpSlotRowHtml(s, optsPlayers) {
+// Couleurs par entité (partagées entre la vue colonnes et les pastilles)
+const CM_ORG_COLORS = { PSG: '#00a3ff', TEGG: '#2563eb', D2F: '#1e3a8a' };
+
+// Entités auxquelles un créneau est proposé. orgs (nouvelle colonne) = liste
+// explicite ; sinon fallback sur org (créneaux mono-club historiques).
+function _cmSlotOrgs(s) {
+  const arr = (Array.isArray(s.orgs) && s.orgs.length) ? s.orgs : (s.org ? [s.org] : []);
+  return arr.filter(o => o && o !== 'individuel');
+}
+function _cmIsShared(s) { return _cmSlotOrgs(s).length > 1; }
+
+// Pastille colorée d'une entité
+function _cmOrgBadge(o) {
+  const color = CM_ORG_COLORS[o] || 'var(--accent)';
+  return '<span style="display:inline-block; font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; background:' + color + '; color:#fff; white-space:nowrap;">' + escapeHtml(orgLabelText(o)) + '</span>';
+}
+function _cmOrgBadges(orgs) { return (orgs || []).map(_cmOrgBadge).join(' '); }
+
+// Séparateur valeur du <select> de placement : "ORG␟Nom" (permet de rattacher
+// le créneau partagé à l'entité du joueur placé).
+const CM_ASSIGN_SEP = '␟';
+function _cmAssignOptions(slot, playersByOrg) {
+  return _cmSlotOrgs(slot).map(o => {
+    const names = (playersByOrg && playersByOrg[o]) || [];
+    if (!names.length) return '';
+    const opts = names.map(n => '<option value="' + escapeHtml(o + CM_ASSIGN_SEP + n) + '">' + escapeHtml(n) + '</option>').join('');
+    return _cmIsShared(slot) ? ('<optgroup label="' + escapeHtml(orgLabelText(o)) + '">' + opts + '</optgroup>') : opts;
+  }).join('');
+}
+
+// Noms des joueurs actifs par entité : { org: [noms] }
+async function _cmPlayersByOrg(clubs) {
+  const map = {};
+  await Promise.all(clubs.map(async (o) => {
+    try {
+      const { data: js } = await sb.from('joueurs').select('nom').eq('org', o).eq('archived', false).order('nom');
+      map[o] = (js || []).map(j => j.nom);
+    } catch (e) { map[o] = []; }
+  }));
+  return map;
+}
+
+// HTML d'un créneau (ligne + panneaux compte-rendu / placement).
+// playersByOrg = map { org: [noms] } pour le placement direct par le staff.
+function mpSlotRowHtml(s, playersByOrg) {
   const fin = _cmAddMinutes(s.heure, s.duree_min || 15);
   const libre = !s.joueur;
+  const orgs = _cmSlotOrgs(s);
+  const shared = orgs.length > 1;
   let html = '';
   html += '<div style="border:1px solid var(--border); border-left:3px solid ' + (libre ? 'var(--green)' : (s.realise ? 'var(--green)' : 'var(--accent)')) + '; border-radius:8px; margin-bottom:5px; background:var(--bg-elevated); overflow:hidden;">';
   html += '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px;">';
@@ -4266,12 +4314,17 @@ function mpSlotRowHtml(s, optsPlayers) {
     html += '<span style="font-size:12px; color:var(--green);">Libre</span>';
     html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="toggleAssign(\'' + s.id + '\')">➕ Placer un joueur</button>';
   } else {
-    html += '<span style="font-size:12px; color:var(--accent-light);">🔒 ' + escapeHtml(s.joueur) + '</span>';
+    html += '<span style="font-size:12px; color:var(--accent-light);">🔒 ' + escapeHtml(s.joueur) + ' <span style="color:var(--text-dim);">(' + escapeHtml(orgLabelText(s.org)) + ')</span></span>';
     html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="toggleCompteRendu(\'' + s.id + '\')">' + (s.realise ? '✍️ Modifier le CR' : '✍️ Compte-rendu') + '</button>';
     html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="libererCreneauMedical(\'' + s.id + '\')">Libérer</button>';
   }
   html += '<button class="btn btn-secondary" style="padding:3px 8px; font-size:11px; color:var(--red);" onclick="deleteCreneauMedical(\'' + s.id + '\')" title="Supprimer">🗑</button>';
   html += '</div></div>';
+  // Ligne pastilles entités : partagé = proposé à plusieurs clubs (bloque les autres dès qu\'un joueur réserve)
+  html += '<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:0 10px 8px;">';
+  if (libre && shared) html += '<span style="font-size:10px; font-weight:700; color:#22d3ee;">🔗 Partagé</span>';
+  html += _cmOrgBadges(orgs);
+  html += '</div>';
   if (!libre) {
     html += '<div id="cr-panel-' + s.id + '" style="display:none; padding:0 10px 10px;">';
     html += '<div style="border-top:1px solid var(--border); padding-top:8px;">';
@@ -4287,7 +4340,7 @@ function mpSlotRowHtml(s, optsPlayers) {
   } else {
     html += '<div id="assign-panel-' + s.id + '" style="display:none; padding:0 10px 10px;">';
     html += '<div style="border-top:1px solid var(--border); padding-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">';
-    html += '<select id="assign-sel-' + s.id + '" style="flex:1; min-width:160px;"><option value="">— Choisir un joueur —</option>' + (optsPlayers || '') + '</select>';
+    html += '<select id="assign-sel-' + s.id + '" style="flex:1; min-width:160px;"><option value="">— Choisir un joueur —</option>' + _cmAssignOptions(s, playersByOrg) + '</select>';
     html += '<button class="btn" style="padding:5px 12px; font-size:12px;" onclick="assignerCreneau(\'' + s.id + '\')">Placer</button>';
     html += '</div></div>';
   }
@@ -4307,18 +4360,13 @@ async function renderMpColumns(clubs, showPast, today) {
   const slots = data || [];
   mpSlotsById = {};
   slots.forEach(s => { mpSlotsById[s.id] = s; });
-  const optsByOrg = {};
-  await Promise.all(clubs.map(async (o) => {
-    try {
-      const { data: js } = await sb.from('joueurs').select('nom').eq('org', o).eq('archived', false).order('nom');
-      optsByOrg[o] = (js || []).map(j => '<option value="' + escapeHtml(j.nom) + '">' + escapeHtml(j.nom) + '</option>').join('');
-    } catch (e) { optsByOrg[o] = ''; }
-  }));
-  const colColors = { PSG: '#00a3ff', TEGG: '#2563eb', D2F: '#1e3a8a' };
+  const playersByOrg = await _cmPlayersByOrg(clubs);
+  const colColors = CM_ORG_COLORS;
   const joursC = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
   let html = '<div style="display:grid; grid-template-columns:repeat(' + clubs.length + ', minmax(250px,1fr)); gap:12px; overflow-x:auto; align-items:start;">';
   clubs.forEach(o => {
-    const col = slots.filter(s => s.org === o);
+    // Un créneau partagé apparaît dans chaque entité éligible (le réserver le bloque partout).
+    const col = slots.filter(s => _cmSlotOrgs(s).includes(o));
     const color = colColors[o] || 'var(--accent)';
     html += '<div style="min-width:250px;">';
     html += '<div style="font-weight:700; font-size:13px; padding:8px 10px; border-radius:8px 8px 0 0; background:' + color + '; color:#fff; text-align:center;">' + escapeHtml(orgLabelText(o)) + ' <span style="opacity:.85; font-weight:400;">· ' + col.length + '</span></div>';
@@ -4332,7 +4380,7 @@ async function renderMpColumns(clubs, showPast, today) {
         const [yy, mm, dd] = d.split('-');
         const jour = joursC[new Date(d + 'T00:00:00').getDay()];
         html += '<div style="font-size:11px; font-weight:700; color:var(--accent-light); margin:8px 0 4px;">' + jour + ' ' + dd + '/' + mm + '</div>';
-        byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => { html += mpSlotRowHtml(s, optsByOrg[s.org] || ''); });
+        byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => { html += mpSlotRowHtml(s, playersByOrg); });
       });
     }
     html += '</div></div>';
@@ -4341,19 +4389,36 @@ async function renderMpColumns(clubs, showPast, today) {
   listEl.innerHTML = html;
 }
 
+// Peuple les cases à cocher « Proposer aux entités » (création de créneaux partagés)
+function _cmRenderEntityChecks(clubs) {
+  const box = document.getElementById('mp-entities');
+  const wrap = document.getElementById('mp-entities-wrap');
+  if (!box || !wrap) return;
+  wrap.style.display = (clubs.length > 1) ? '' : 'none';
+  // Conserver les cases déjà cochées si la liste des clubs n'a pas changé
+  const sig = clubs.join(',');
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
+  box.innerHTML = clubs.map(o =>
+    '<label style="display:inline-flex; align-items:center; gap:5px; cursor:pointer; font-size:12px;">' +
+    '<input type="checkbox" class="mp-entity-check" value="' + o + '" checked /> ' + _cmOrgBadge(o) + '</label>'
+  ).join('');
+}
+
 async function renderMedicalPlanning() {
   const listEl = document.getElementById('mp-list');
   if (!listEl) return;
-  // Sélecteur de club (clubs autorisés du compte)
   const clubs = _cmClubs();
+  // Sélecteur d'affichage : « Toutes les entités » + un filtre par club
   const sel = document.getElementById('mp-club');
   const wrap = document.getElementById('mp-club-wrap');
   if (sel) {
     const prev = sel.value;
-    sel.innerHTML = clubs.map(o => '<option value="' + o + '">' + escapeHtml(orgLabelText(o)) + '</option>').join('');
-    if (prev && clubs.includes(prev)) sel.value = prev;
-    else if (clubs.includes(currentOrg)) sel.value = currentOrg;
+    sel.innerHTML = '<option value="">🌐 Toutes les entités</option>' + clubs.map(o => '<option value="' + o + '">' + escapeHtml(orgLabelText(o)) + '</option>').join('');
+    if (prev && (prev === '' || clubs.includes(prev))) sel.value = prev;
+    else sel.value = '';
   }
+  _cmRenderEntityChecks(clubs);
   renderPushBanner('mp-push-banner');            // permet au kiné d'activer les notifs push
   mpBookingAlerts = 0; updateMedicalBookingBadge(); // on consulte le planning → on efface le compteur
   const dateEl = document.getElementById('mp-date');
@@ -4365,31 +4430,28 @@ async function renderMedicalPlanning() {
   if (colsWrap) colsWrap.style.display = (clubs.length > 1) ? 'flex' : 'none';
   const colsToggle = document.getElementById('mp-cols-toggle');
   const colsMode = clubs.length > 1 && colsToggle && colsToggle.checked;
-  if (wrap) wrap.style.display = (!colsMode && clubs.length > 1) ? '' : 'none';
+  if (wrap) wrap.style.display = (!colsMode && clubs.length > 1) ? 'inline-flex' : 'none';
   if (colsMode) { await renderMpColumns(clubs, showPast, today); return; }
-  // ---- Mode club unique ----
-  const org = mpActiveOrg();
+
+  // ---- Vue combinée (toutes les entités autorisées, filtrable) ----
+  const filterOrg = (sel && sel.value) ? sel.value : '';
   const lbl = document.getElementById('mp-club-label');
-  if (lbl) lbl.textContent = orgLabelText(org);
-  let q = sb.from('creneaux_medicaux').select('*').eq('org', org);
+  if (lbl) lbl.textContent = filterOrg ? orgLabelText(filterOrg) : (clubs.length > 1 ? 'Toutes les entités' : orgLabelText(clubs[0] || currentOrg));
+  let q = sb.from('creneaux_medicaux').select('*').in('org', clubs);
   if (!showPast) q = q.gte('date', today);
   const { data, error } = await q.order('date').order('heure');
   if (error) { listEl.innerHTML = '<div style="color:var(--red);">Erreur : ' + escapeHtml(error.message) + '</div>'; return; }
-  const slots = data || [];
-  if (slots.length === 0) {
-    listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px 0;">Aucun créneau ' + (showPast ? '' : 'à venir ') + 'pour ' + escapeHtml(orgLabelText(org)) + '.</div>';
-    return;
-  }
-  const byDate = {};
-  slots.forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
+  let slots = data || [];
+  if (filterOrg) slots = slots.filter(s => _cmSlotOrgs(s).includes(filterOrg));
   mpSlotsById = {};
   slots.forEach(s => { mpSlotsById[s.id] = s; });
-  // Joueurs du club actif — pour placer directement un joueur sur un créneau libre
-  let optsPlayers = '';
-  try {
-    const { data: js } = await sb.from('joueurs').select('nom').eq('org', org).eq('archived', false).order('nom');
-    optsPlayers = (js || []).map(j => '<option value="' + escapeHtml(j.nom) + '">' + escapeHtml(j.nom) + '</option>').join('');
-  } catch (e) { optsPlayers = ''; }
+  if (slots.length === 0) {
+    listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px 0;">Aucun créneau ' + (showPast ? '' : 'à venir ') + (filterOrg ? 'pour ' + escapeHtml(orgLabelText(filterOrg)) : '') + '.</div>';
+    return;
+  }
+  const playersByOrg = await _cmPlayersByOrg(clubs);
+  const byDate = {};
+  slots.forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
   const jours = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
   let html = '';
   Object.keys(byDate).sort().forEach(d => {
@@ -4398,7 +4460,7 @@ async function renderMedicalPlanning() {
     const libres = byDate[d].filter(s => !s.joueur).length;
     html += '<div style="margin-bottom:14px;">';
     html += '<div style="font-weight:700; font-size:13px; margin-bottom:6px; color:var(--accent-light);">' + jour + ' ' + dd + '/' + m + '/' + y + ' <span style="color:var(--text-dim); font-weight:400;">· ' + libres + '/' + byDate[d].length + ' libres</span></div>';
-    byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => { html += mpSlotRowHtml(s, optsPlayers); });
+    byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => { html += mpSlotRowHtml(s, playersByOrg); });
     html += '</div>';
   });
   listEl.innerHTML = html;
@@ -4532,11 +4594,18 @@ function toggleAssign(id) {
 // Placer directement un joueur sur un créneau libre (compte admin / médical)
 async function assignerCreneau(id) {
   if (!canWrite()) { toast('Action non autorisée', 'error'); return; }
-  const joueur = ((document.getElementById('assign-sel-' + id) || {}).value || '').trim();
-  if (!joueur) { toast('Choisis un joueur', 'error'); return; }
+  const raw = ((document.getElementById('assign-sel-' + id) || {}).value || '').trim();
+  if (!raw) { toast('Choisis un joueur', 'error'); return; }
+  // Valeur = "ORG␟Nom" : on rattache le créneau à l'entité du joueur placé
+  // (utile pour un créneau partagé, sans effet pour un créneau mono-club).
+  const sepIdx = raw.indexOf(CM_ASSIGN_SEP);
+  const joueurOrg = sepIdx >= 0 ? raw.slice(0, sepIdx) : null;
+  const joueur = sepIdx >= 0 ? raw.slice(sepIdx + 1) : raw;
+  const upd = { joueur: joueur, booked_at: new Date().toISOString() };
+  if (joueurOrg) upd.org = joueurOrg;
   window._mpSelfActionUntil = Date.now() + 4000; // évite l'auto-alerte realtime pour son propre placement
   const { data, error } = await sb.from('creneaux_medicaux')
-    .update({ joueur: joueur, booked_at: new Date().toISOString() })
+    .update(upd)
     .eq('id', id).is('joueur', null).select();
   if (error) { toast('Erreur : ' + error.message, 'error'); return; }
   if (!data || data.length === 0) { toast('Ce créneau vient d\'être pris', 'error'); renderMedicalPlanning(); return; }
@@ -4749,7 +4818,15 @@ async function saveCompteRendu(id) {
 
 async function addCreneauxMedicaux() {
   if (!canWrite()) { toast('Action non autorisée', 'error'); return; }
-  const org = mpActiveOrg();
+  const clubs = _cmClubs();
+  // Entités choisies (cases à cocher). Compte mono-club → sa seule entité.
+  let entities;
+  if (clubs.length > 1) {
+    entities = Array.from(document.querySelectorAll('.mp-entity-check:checked')).map(c => c.value);
+    if (!entities.length) { toast('Choisis au moins une entité', 'error'); return; }
+  } else {
+    entities = [clubs[0] || currentOrg];
+  }
   const date = document.getElementById('mp-date').value;
   const heure = document.getElementById('mp-heure').value;
   const duree = parseInt(document.getElementById('mp-duree').value, 10);
@@ -4757,16 +4834,18 @@ async function addCreneauxMedicaux() {
   if (!date || !heure) { toast('Date et heure de début requises', 'error'); return; }
   if (!(duree >= 10 && duree <= 120)) { toast('Durée entre 10 min et 2h', 'error'); return; }
   const kine = (currentUser && currentUser.email) ? currentUser.email : null;
+  const owner = entities[0]; // entité « propriétaire » (bascule vers l'entité du joueur qui réserve)
   const rows = [];
   let h = heure;
   for (let i = 0; i < count; i++) {
-    rows.push({ org: org, kine: kine, date: date, heure: h, duree_min: duree });
+    rows.push({ org: owner, orgs: entities, kine: kine, date: date, heure: h, duree_min: duree });
     h = _cmAddMinutes(h, duree);
   }
   const { data, error } = await sb.from('creneaux_medicaux').insert(rows).select();
   if (error) { toast('Erreur : ' + error.message, 'error'); return; }
   if (data) state.bdd_creneaux_medicaux = (state.bdd_creneaux_medicaux || []).concat(data);
-  toast(count > 1 ? (count + ' créneaux ajoutés') : 'Créneau ajouté', 'success');
+  const shared = entities.length > 1;
+  toast((count > 1 ? (count + ' créneaux ajoutés') : 'Créneau ajouté') + (shared ? ' · partagé ' + entities.map(orgLabelText).join(' / ') : ''), 'success');
   renderMedicalPlanning();
 }
 
@@ -4800,7 +4879,10 @@ async function renderPlayerSoins() {
   const listEl = document.getElementById('player-soins-list');
   if (!listEl || !currentJoueurNom) return;
   const today = toLocalISO(new Date());
-  const { data, error } = await sb.from('creneaux_medicaux').select('*').eq('org', currentOrg).gte('date', today).order('date').order('heure');
+  // Créneaux de son org OU créneaux partagés proposés à son org (bloqués dès qu'un joueur réserve).
+  // La RLS SELECT restreint déjà aux créneaux éligibles (org = son org OU son org ∈ orgs).
+  const { data, error } = await sb.from('creneaux_medicaux').select('*')
+    .gte('date', today).order('date').order('heure');
   if (error) { listEl.innerHTML = '<div style="color:var(--red);">' + escapeHtml(error.message) + '</div>'; return; }
   const slots = data || [];
   state.bdd_creneaux_medicaux = slots;
@@ -4810,6 +4892,8 @@ async function renderPlayerSoins() {
     listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px 0;">' + tr('No slot available right now.', 'Aucun créneau disponible pour le moment.') + '</div>';
     return;
   }
+  // Limite 1 créneau/jour : dates où le joueur a déjà une réservation
+  const myBookedDates = new Set(slots.filter(s => s.joueur === currentJoueurNom).map(s => s.date));
   const byDate = {};
   visibles.forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
   const joursFr = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
@@ -4819,15 +4903,20 @@ async function renderPlayerSoins() {
   Object.keys(byDate).sort().forEach(d => {
     const [y, m, dd] = d.split('-');
     const jour = jours[new Date(d + 'T00:00:00').getDay()];
+    const hasMine = myBookedDates.has(d);
     html += '<div style="margin-bottom:14px;">';
-    html += '<div style="font-weight:700; font-size:13px; margin-bottom:6px; color:var(--accent-light);">' + jour + ' ' + dd + '/' + m + '</div>';
+    html += '<div style="font-weight:700; font-size:13px; margin-bottom:6px; color:var(--accent-light);">' + jour + ' ' + dd + '/' + m + (hasMine ? ' <span style="font-weight:400; color:var(--text-dim);">· ' + tr('booked', 'réservé') + '</span>' : '') + '</div>';
     byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => {
       const fin = _cmAddMinutes(s.heure, s.duree_min || 15);
       const mine = (s.joueur === currentJoueurNom);
-      const clickFn = mine ? ('annulerReservation(\'' + s.id + '\')') : ('reserverCreneau(\'' + s.id + '\')');
-      html += '<div onclick="' + clickFn + '" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px; border-radius:8px; padding:9px 11px; margin-bottom:5px; background:' + (mine ? 'rgba(22,101,52,0.25)' : 'var(--bg-elevated)') + '; border-left:3px solid ' + (mine ? 'var(--green)' : 'var(--accent)') + ';">';
+      // Créneau libre un jour où le joueur a déjà réservé → non réservable (1/jour max)
+      const locked = !mine && hasMine;
+      const clickFn = mine ? ('annulerReservation(\'' + s.id + '\')') : (locked ? '' : ('reserverCreneau(\'' + s.id + '\')'));
+      const bg = mine ? 'rgba(22,101,52,0.25)' : (locked ? 'transparent' : 'var(--bg-elevated)');
+      const bord = mine ? 'var(--green)' : (locked ? 'var(--border)' : 'var(--accent)');
+      html += '<div ' + (clickFn ? 'onclick="' + clickFn + '"' : '') + ' style="' + (clickFn ? 'cursor:pointer;' : 'opacity:.5;') + ' display:flex; align-items:center; justify-content:space-between; gap:10px; border-radius:8px; padding:9px 11px; margin-bottom:5px; background:' + bg + '; border-left:3px solid ' + bord + ';">';
       html += '<div style="font-size:13px;"><b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b> <span style="color:var(--text-dim);">· ' + mpFmtDuree(s.duree_min || 15) + '</span></div>';
-      html += '<span style="font-size:12px; font-weight:600; color:' + (mine ? 'var(--green)' : 'var(--accent-light)') + ';">' + (mine ? ('✓ ' + tr('Booked — tap to cancel', 'Réservé — clique pour annuler')) : tr('Book', 'Réserver')) + '</span>';
+      html += '<span style="font-size:12px; font-weight:600; color:' + (mine ? 'var(--green)' : 'var(--accent-light)') + ';">' + (mine ? ('✓ ' + tr('Booked — tap to cancel', 'Réservé — clique pour annuler')) : (locked ? '<span style="color:var(--text-dim);">' + tr('1 slot/day max', '1 créneau/jour max') + '</span>' : tr('Book', 'Réserver'))) + '</span>';
       html += '</div>';
     });
     html += '</div>';
@@ -4837,10 +4926,26 @@ async function renderPlayerSoins() {
 
 async function reserverCreneau(id) {
   if (!currentJoueurNom) return;
+  const slot = (state.bdd_creneaux_medicaux || []).find(s => s.id === id);
+  // Limite 1 créneau/jour (vérif appli ; le trigger DB reste le garde-fou)
+  if (slot) {
+    const already = (state.bdd_creneaux_medicaux || []).some(s => s.id !== id && s.joueur === currentJoueurNom && s.date === slot.date);
+    if (already) {
+      toast(tr('You already booked a slot that day (1/day max).', 'Tu as déjà réservé un créneau ce jour-là (1 max).'), 'error');
+      return;
+    }
+  }
+  // org = son org : rattache le créneau (partagé) à son entité et le bloque pour les autres.
   const { data, error } = await sb.from('creneaux_medicaux')
-    .update({ joueur: currentJoueurNom, booked_at: new Date().toISOString() })
+    .update({ joueur: currentJoueurNom, org: currentOrg, booked_at: new Date().toISOString() })
     .eq('id', id).is('joueur', null).select();
-  if (error) { toast(tr('Error: ', 'Erreur : ') + error.message, 'error'); return; }
+  if (error) {
+    const msg = /cr[ée]neau de soin par jour/i.test(error.message || '')
+      ? tr('Only one slot per day.', 'Un seul créneau de soin par jour.')
+      : (tr('Error: ', 'Erreur : ') + error.message);
+    toast(msg, 'error');
+    return;
+  }
   if (!data || data.length === 0) {
     toast(tr('This slot was just taken.', 'Ce créneau vient d\'être pris.'), 'error');
     renderPlayerSoins();
