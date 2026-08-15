@@ -4463,13 +4463,9 @@ function closeKineDetail() {
   if (modal) modal.style.display = 'none';
 }
 
-// Liste des passages kiné d'un joueur sur la fenêtre choisie (colonne Disponibilités).
-// Réutilise la modale kiné : une carte par passage avec son compte-rendu.
-function openKineVisits(player) {
-  const modal = document.getElementById('kine-detail-modal');
-  const titleEl = document.getElementById('kine-detail-title');
-  const contentEl = document.getElementById('kine-detail-content');
-  if (!modal || !contentEl) return;
+// Bulle flottante au survol du nombre de passages kiné (colonne Disponibilités).
+// Bulle attachée à <body> pour ne pas être rognée par l'overflow du tableau.
+function _kineVisitsTipHtml(player) {
   const kineDays = parseInt((document.getElementById('med-avail-kine-days') || {}).value, 10) || 7;
   const today = todayYMD();
   const startDt = new Date(today + 'T00:00:00');
@@ -4478,31 +4474,49 @@ function openKineVisits(player) {
   const visites = (state.bdd_creneaux_medicaux || [])
     .filter(s => s.org === currentOrg && s.joueur === player && s.date >= startIso && s.date <= today)
     .sort((a, b) => (b.date + (b.heure || '')).localeCompare(a.date + (a.heure || '')));
-  if (titleEl) titleEl.textContent = '🩺 Passages kiné — ' + player;
   const periodTxt = kineDays >= 365 ? 'la saison' : ('les ' + kineDays + ' derniers jours');
-  let h = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">' + visites.length + ' passage' + (visites.length > 1 ? 's' : '') + ' sur ' + periodTxt + '.</div>';
+  let h = '<div style="font-weight:700; margin-bottom:6px;">🩺 ' + escapeHtml(player) + '</div>';
+  h += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">' + visites.length + ' passage' + (visites.length > 1 ? 's' : '') + ' sur ' + periodTxt + '</div>';
+  if (!visites.length) return h + '<div style="color:var(--text-dim);">Aucun passage.</div>';
   visites.forEach(s => {
     const fin = _cmAddMinutes(s.heure, s.duree_min || 15);
     const dfmt = s.date ? String(s.date).split('-').reverse().join('/') : '';
-    const accent = s.realise ? '#0891b2' : 'var(--text-dim)';
-    h += '<div style="border:1px solid var(--border); border-left:3px solid ' + accent + '; border-radius:8px; padding:10px 12px; margin-bottom:10px; background:var(--bg-elevated);">';
-    h += '<div style="display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12px; color:var(--text-dim); margin-bottom:' + ((s.realise && (s.compte_rendu || s.restrictions)) ? '8px' : '0') + ';">';
-    h += '<span>📅 <b style="color:var(--text);">' + escapeHtml(dfmt) + '</b></span>';
-    h += '<span>🕒 <b style="color:var(--text);">' + escapeHtml(s.heure || '') + '–' + escapeHtml(fin) + '</b></span>';
-    h += '<span>' + escapeHtml(_cmTypeLabel(s.soin_type)) + '</span>';
-    h += '<span>' + (s.realise ? '<span style="color:#22d3ee;">✓ réalisé</span>' : '⏳ sans compte-rendu') + '</span>';
-    h += '</div>';
-    if (s.realise && s.compte_rendu) {
-      h += '<div style="font-size:13px; white-space:pre-wrap;">' + escapeHtml(s.compte_rendu) + '</div>';
-    }
-    if (s.restrictions) {
-      h += '<div style="margin-top:6px; font-size:12px; color:#fca5a5;">⛔ ' + escapeHtml(s.restrictions) + '</div>';
-    }
+    h += '<div style="border-top:1px solid var(--border); padding-top:6px; margin-top:6px;">';
+    h += '<div style="color:var(--text-dim);">📅 <b style="color:var(--text);">' + escapeHtml(dfmt) + '</b> · 🕒 ' + escapeHtml(s.heure || '') + '–' + escapeHtml(fin) + ' · ' + escapeHtml(_cmTypeLabel(s.soin_type)) + ' · ' + (s.realise ? '<span style="color:#22d3ee;">✓</span>' : '⏳') + '</div>';
+    if (s.realise && s.compte_rendu) h += '<div style="white-space:pre-wrap; margin-top:2px;">' + escapeHtml(s.compte_rendu) + '</div>';
+    if (s.restrictions) h += '<div style="color:#fca5a5; margin-top:2px;">⛔ ' + escapeHtml(s.restrictions) + '</div>';
     h += '</div>';
   });
-  if (!visites.length) h += '<div style="color:var(--text-dim); font-size:13px;">Aucun passage sur la période.</div>';
-  contentEl.innerHTML = h;
-  modal.style.display = 'flex';
+  return h;
+}
+
+function kineTipShow(ev, player) {
+  let tip = document.getElementById('kine-hover-tip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'kine-hover-tip';
+    tip.style.cssText = 'position:fixed; z-index:9999; max-width:360px; background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:10px 12px; box-shadow:0 12px 40px rgba(0,0,0,0.5); font-size:12px; color:var(--text); pointer-events:none; display:none;';
+    document.body.appendChild(tip);
+  }
+  tip.innerHTML = _kineVisitsTipHtml(player);
+  tip.style.display = 'block';
+  kineTipMove(ev);
+}
+
+function kineTipMove(ev) {
+  const tip = document.getElementById('kine-hover-tip');
+  if (!tip || tip.style.display === 'none') return;
+  const r = tip.getBoundingClientRect();
+  let x = ev.clientX + 14, y = ev.clientY + 14;
+  if (x + r.width > window.innerWidth - 8) x = ev.clientX - r.width - 14;
+  if (y + r.height > window.innerHeight - 8) y = Math.max(8, window.innerHeight - r.height - 8);
+  tip.style.left = Math.max(8, x) + 'px';
+  tip.style.top = y + 'px';
+}
+
+function kineTipHide() {
+  const tip = document.getElementById('kine-hover-tip');
+  if (tip) tip.style.display = 'none';
 }
 
 function toggleCompteRendu(id) {
@@ -23831,7 +23845,7 @@ function renderMedicalAvailability() {
     const kineCount = kineVisites.length;
     const pAttr = String(p).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const kineCell = kineCount
-      ? '<span onclick="openKineVisits(\'' + pAttr + '\')" style="cursor:pointer; font-weight:700; color:#22d3ee; text-decoration:underline;" title="Voir le détail des passages">' + kineCount + '</span>'
+      ? '<span onmouseenter="kineTipShow(event, \'' + pAttr + '\')" onmousemove="kineTipMove(event)" onmouseleave="kineTipHide()" style="cursor:default; font-weight:700; color:#22d3ee; text-decoration:underline dotted;">' + kineCount + '</span>'
       : '<span style="color:var(--text-dim);">0</span>';
     return '<tr><td><b>' + escapeHtml(p) + '</b></td><td>' + escapeHtml(info.groupe || '—') + '</td>' +
       '<td style="color:' + statutColor + '; font-weight:600;">' + statutLabel + '</td>' +
