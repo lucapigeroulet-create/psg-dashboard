@@ -343,6 +343,11 @@
   /* Séance planifiée non validée depuis plus de 48h : alerte rouge */
   .cal-planned.overdue { background:#7f1d1d; color:#fecaca; border:1px solid #ef4444; box-shadow:0 0 0 1px rgba(239,68,68,0.5) inset; }
   .cal-planned.overdue:hover { background:#991b1b; }
+  /* Passage chez le kiné (créneau de soin réservé) — pastille cyan cliquable */
+  .cal-kine { background:#155e75; color:#cffafe; border-radius:4px; padding:2px 4px; margin:1px 0; cursor:pointer; font-size:11px; font-weight:600; border:1px solid #22d3ee; }
+  .cal-kine:hover { background:#0e7490; }
+  .cal-kine.done { background:#0891b2; box-shadow:0 0 0 1px rgba(34,211,238,0.45) inset; }
+  .cal-kine.done:hover { background:#0e7490; }
   .cal-cell.rest { background: #37415188; border-left: 3px solid #6b7280; }
   .cal-cell.injury { background: #7f1d1d88; border-left: 3px solid #ef4444; }
   .cal-cell.reathle { background: #4c1d9588; border-left: 3px solid #a855f7; }
@@ -352,7 +357,7 @@
   /* Encadré autour de chaque séance / état du joueur dans la cellule (lecture plus claire).
      (Les séances planifiées .cal-planned ont déjà leur propre encadré, on ne les double pas.
       La cellule "nom du joueur" est exclue.) */
-  .cal-cell:not(.player-name) > div:not(.cal-planned) {
+  .cal-cell:not(.player-name) > div:not(.cal-planned):not(.cal-kine) {
     border: 1px solid rgba(255,255,255,0.22);
     border-radius: 5px;
     padding: 3px 6px;
@@ -362,7 +367,7 @@
   }
   .cal-cell:not(.player-name) > div:last-child { margin-bottom: 0; }
   /* Cadre un peu plus marqué quand il y a plusieurs séances empilées */
-  .cal-cell.multi > div:not(.cal-planned) { border-color: rgba(255,255,255,0.32); }
+  .cal-cell.multi > div:not(.cal-planned):not(.cal-kine) { border-color: rgba(255,255,255,0.32); }
   /* Petit signe "annotée" (vignette ou note sur la séance) */
   .cal-anno-mark { font-size: 10px; vertical-align: baseline; }
   /* Signe distinct "remarque individuelle sur ce joueur" */
@@ -3324,6 +3329,17 @@
     </div>
   </div>
 
+  <!-- Modal : détail d'un passage chez le kiné (créneau de soin + compte-rendu) -->
+  <div id="kine-detail-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9000; align-items:center; justify-content:center; padding:20px;" onclick="if(event.target===this) closeKineDetail()">
+    <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:14px; max-width:540px; width:100%; max-height:85vh; overflow-y:auto; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+      <div style="display:flex; justify-content:space-between; align-items:start; gap:10px; margin-bottom:14px;">
+        <h2 id="kine-detail-title" style="margin:0; font-size:18px;">🩺 Passage kiné</h2>
+        <button class="btn btn-secondary" style="padding:4px 12px;" onclick="closeKineDetail()">✕</button>
+      </div>
+      <div id="kine-detail-content"></div>
+    </div>
+  </div>
+
   <!-- Modal : résumé d'une fiche blessure -->
   <div id="bl-resume-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9000; align-items:center; justify-content:center; padding:20px;" onclick="if(event.target===this) closeFicheResume()">
     <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:14px; max-width:600px; width:100%; max-height:85vh; overflow-y:auto; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
@@ -4384,6 +4400,60 @@ function _cmTypeOptions(selected) {
   return opts.map(o => '<option value="' + o[0] + '"' + (o[0] === selected ? ' selected' : '') + '>' + o[1] + '</option>').join('');
 }
 
+// Libellé lisible d'un type de soin (miroir de _cmTypeOptions)
+function _cmTypeLabel(t) {
+  const m = { soin:'🩹 Soin', bilan:'📋 Bilan', manipulation:'🤲 Manipulation', 'kiné':'💆 Kiné', 'médecin':'🩺 Médecin', autre:'📌 Autre' };
+  return m[t] || (t || '💆 Kiné');
+}
+
+// Créneaux de soins réservés par un joueur pour un jour donné (org active).
+// Utilisé par le calendrier des séances (staff) pour signaler les passages kiné.
+function getKineCreneaux(dateIso, joueur) {
+  return (state.bdd_creneaux_medicaux || [])
+    .filter(s => s.org === currentOrg && s.joueur === joueur && s.date === dateIso)
+    .sort((a, b) => (a.heure || '').localeCompare(b.heure || ''));
+}
+
+// Ouvre le détail d'un passage kiné : compte-rendu (ce qui a été réalisé), type, restrictions.
+function openKineDetail(id) {
+  const s = (state.bdd_creneaux_medicaux || []).find(x => x.id === id);
+  const modal = document.getElementById('kine-detail-modal');
+  const titleEl = document.getElementById('kine-detail-title');
+  const contentEl = document.getElementById('kine-detail-content');
+  if (!modal || !contentEl) return;
+  if (!s) { toast('Créneau introuvable', 'error'); return; }
+  const fin = _cmAddMinutes(s.heure, s.duree_min || 15);
+  const dfmt = s.date ? String(s.date).split('-').reverse().join('/') : '';
+  if (titleEl) titleEl.textContent = '🩺 ' + (s.joueur || 'Passage kiné');
+  let h = '';
+  h += '<div style="display:flex; flex-wrap:wrap; gap:8px 16px; font-size:13px; color:var(--text-dim); margin-bottom:14px;">';
+  h += '<div>📅 <b style="color:var(--text);">' + escapeHtml(dfmt) + '</b></div>';
+  h += '<div>🕒 <b style="color:var(--text);">' + escapeHtml(s.heure || '') + '–' + escapeHtml(fin) + '</b> · ' + mpFmtDuree(s.duree_min || 15) + '</div>';
+  h += '<div>' + escapeHtml(_cmTypeLabel(s.soin_type)) + '</div>';
+  h += '</div>';
+  if (s.realise && (s.compte_rendu || s.restrictions)) {
+    h += '<div style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--accent-light); margin-bottom:4px;">Compte-rendu — ce qui a été réalisé</div>';
+    h += '<div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:13px; white-space:pre-wrap; margin-bottom:' + (s.restrictions ? '12px' : '0') + ';">' + (s.compte_rendu ? escapeHtml(s.compte_rendu) : '<span style="color:var(--text-dim);">Aucun détail saisi.</span>') + '</div>';
+    if (s.restrictions) {
+      h += '<div style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--red); margin-bottom:4px;">⛔ Restrictions</div>';
+      h += '<div style="background:rgba(127,29,29,0.18); border:1px solid #ef4444; border-radius:8px; padding:10px 12px; font-size:13px; white-space:pre-wrap;">' + escapeHtml(s.restrictions) + '</div>';
+    }
+  } else {
+    h += '<div style="background:var(--bg-elevated); border:1px dashed var(--border); border-radius:8px; padding:14px; font-size:13px; color:var(--text-dim); text-align:center;">⏳ Rendez-vous réservé — le compte-rendu n\'a pas encore été saisi par le kiné.</div>';
+  }
+  const canManage = ['admin', 'staff', 'médical'].includes(currentRole);
+  if (canManage) {
+    h += '<div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border); font-size:12px; color:var(--text-dim);">Le compte-rendu se saisit dans <b>🩺 Médical → Planning soins</b>.</div>';
+  }
+  contentEl.innerHTML = h;
+  modal.style.display = 'flex';
+}
+
+function closeKineDetail() {
+  const modal = document.getElementById('kine-detail-modal');
+  if (modal) modal.style.display = 'none';
+}
+
 function toggleCompteRendu(id) {
   const el = document.getElementById('cr-panel-' + id);
   if (el) el.style.display = (el.style.display === 'none') ? '' : 'none';
@@ -4597,8 +4667,16 @@ async function saveCompteRendu(id) {
       .update({ compte_rendu: contenu, soin_type: type, restrictions: restrictions || null, realise: true, note_id: noteId })
       .eq('id', id);
     if (cErr) throw cErr;
+    // Garder l'état local à jour (le realtime ne resynchronise pas creneaux_medicaux)
+    // pour que le calendrier des séances affiche aussitôt le passage kiné réalisé.
+    const cidx = (state.bdd_creneaux_medicaux || []).findIndex(s => s.id === id);
+    if (cidx >= 0) {
+      state.bdd_creneaux_medicaux[cidx] = Object.assign({}, state.bdd_creneaux_medicaux[cidx],
+        { compte_rendu: contenu, soin_type: type, restrictions: restrictions || null, realise: true, note_id: noteId });
+    }
     toast(slot.note_id ? 'Compte-rendu mis à jour · fiche médicale actualisée' : 'Compte-rendu enregistré · fiche médicale créée', 'success');
     renderMedicalPlanning();
+    if (getCurrentView() === 'calendar') renderCalendar();
   } catch (e) {
     toast('Erreur : ' + (e.message || e), 'error');
   }
@@ -9709,9 +9787,18 @@ function renderCalendar() {
         }
         return '<div>' + escapeHtml(s) + '</div>';
       }).join('');
+      // Passage chez le kiné : créneau de soin réservé par ce joueur ce jour-là.
+      // Pastille cliquable → détail du compte-rendu (ce qui a été réalisé).
+      const kineContent = getKineCreneaux(d, p).map(s => {
+        const done = !!s.realise;
+        const heure = s.heure ? (' ' + escapeHtml(s.heure)) : '';
+        const title = done ? 'Passage kiné — voir le compte-rendu' : 'Rendez-vous kiné (compte-rendu pas encore saisi)';
+        return '<div class="cal-kine' + (done ? ' done' : '') + '" onclick="openKineDetail(\'' + s.id + '\')" title="' + title + '">🩺 Kiné' + heure + (done ? '' : ' ⏳') + '</div>';
+      }).join('');
+      const cellInner = content + kineContent;
       const todayCls = (d === todayIso) ? (' cal-today' + (isLastRow ? ' cal-today-last' : '')) : '';
       const multiCls = (seances.length > 1) ? ' multi' : '';
-      html += '<div class="cal-cell ' + cls + todayCls + multiCls + rowAlt + '">' + (content || '<span style="color:var(--text-dim)">—</span>') + '</div>';
+      html += '<div class="cal-cell ' + cls + todayCls + multiCls + rowAlt + '">' + (cellInner || '<span style="color:var(--text-dim)">—</span>') + '</div>';
     });
   });
   html += '</div>';
