@@ -4001,7 +4001,7 @@ async function loadProfileAndStart() {
   }
   currentRole = profile.role;
   currentLang = profile.lang || null; // langue forcée par compte (fr/en), sinon défaut org
-  // Comptes en rôle 'médical' pur (vue médicale restreinte). lou@tegg.fr et lucasm@psg.fr
+  // Comptes en rôle 'médical' pur (vue médicale restreinte). lou@tegg.fr et lucam@psg.fr
   // sont désormais staff multi-club (vue médicale + tous les onglets) — voir FULL_MEDICAL_EMAILS.
   const MEDICAL_EMAILS = ['christian@tegg.fr'];
   if (MEDICAL_EMAILS.includes((currentUser.email || '').toLowerCase())) currentRole = 'médical';
@@ -6844,7 +6844,7 @@ function applyRoleRestrictions() {
     // pas d'export JSON, pas de Notes médicales, pas de Paramètres.
     const staffLimited = (currentRole === 'staff');
     // Comptes médicaux staff : conservent la vue médicale COMPLÈTE (Notes médicales incluses)
-    const FULL_MEDICAL_EMAILS = ['lou@tegg.fr', 'lucasm@psg.fr'];
+    const FULL_MEDICAL_EMAILS = ['lou@tegg.fr', 'lucam@psg.fr'];
     const isFullMedical = FULL_MEDICAL_EMAILS.includes((currentUser && currentUser.email || '').toLowerCase());
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = staffLimited ? 'none' : '';
