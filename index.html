@@ -6869,13 +6869,14 @@ function canWriteRPE(joueur) {
 }
 
 // ============================================================================
-// VERROUS DE SAISIE RPE (lecteurs uniquement, staff/admin jamais verrouillés)
-// Verrou A : 48h après la PUBLICATION de la séance (created_at de la séance)
-// Verrou B : 2h après la PREMIÈRE saisie de la note (created_at du RPE, figé)
-// Le plus restrictif s'applique.
+// VERROU DE SAISIE RPE (lecteurs uniquement, staff/admin jamais verrouillés)
+// Fenêtre UNIQUE : 3h après la PUBLICATION/affectation de la séance (created_at).
+// Pendant ces 3h le joueur peut saisir ET modifier librement sa note.
+// Passé ce délai → verrou total : il doit contacter Lucas P. (le staff saisit à sa place).
+// S'applique aux séances live 🟢 et aux matchs ⚽.
 // ============================================================================
-const RPE_EDIT_HOURS = 2;       // fenêtre de modification après 1ère saisie
-const SESSION_WINDOW_HOURS = 48; // fenêtre de saisie après publication de la séance
+const RPE_EDIT_HOURS = 2;       // (obsolète) ancien sous-verrou de modif — plus utilisé
+const SESSION_WINDOW_HOURS = 3; // fenêtre unique de saisie/modif après publication
 
 // Timestamp (ms) de publication de la séance, ou null si inconnu
 function getSeancePublishedMs(date, seanceNom) {
@@ -6906,7 +6907,7 @@ function hasRPEEntry(date, joueur) {
   return !!(r && r.rpe && r.rpe.length > 0);
 }
 
-// Verrou A : la fenêtre de 48h depuis publication est-elle dépassée ?
+// La fenêtre unique de 3h depuis la publication/affectation est-elle dépassée ?
 // Si la séance n'a pas de created_at connu, on ne verrouille pas via ce critère.
 function isSessionWindowClosed(date, seanceNom) {
   if (currentRole !== 'lecteur') return false;
@@ -6916,7 +6917,7 @@ function isSessionWindowClosed(date, seanceNom) {
   return ageHours >= SESSION_WINDOW_HOURS;
 }
 
-// Verrou B : la fenêtre de modification de 2h depuis 1ère saisie est-elle dépassée ?
+// (OBSOLÈTE) Ancien sous-verrou de modif 2h — plus appelé depuis le passage à la règle unique 3h.
 function isEditWindowClosed(date, joueur) {
   if (currentRole !== 'lecteur') return false;
   const createdMs = getRPECreatedMs(date, joueur);
@@ -6925,14 +6926,12 @@ function isEditWindowClosed(date, joueur) {
   return ageHours >= RPE_EDIT_HOURS;
 }
 
-// Verrou global pour une séance précise : combinaison A + B
+// Verrou global pour une séance précise : fenêtre unique de 3h
 // 'date' = jour, 'joueur' = nom, 'seanceNom' = nom de la séance concernée
 function isRPELockedForSession(date, joueur, seanceNom) {
   if (currentRole !== 'lecteur') return false;
-  // A : fenêtre de séance fermée (48h) → verrou total
+  // Fenêtre de séance fermée (3h après affectation) → verrou total
   if (isSessionWindowClosed(date, seanceNom)) return true;
-  // B : si déjà saisi et fenêtre de modif fermée (2h) → verrou
-  if (hasRPEEntry(date, joueur) && isEditWindowClosed(date, joueur)) return true;
   return false;
 }
 
@@ -6945,28 +6944,15 @@ function rpeLockInfo(date, joueur, seanceNom) {
   if (isRPELockedForSession(date, joueur, seanceNom)) return null;
 
   const now = Date.now();
-  const candidates = [];
 
-  // Fenêtre de séance (48h) si on connaît la date de publication
+  // Fenêtre unique de séance (3h) depuis la publication/affectation
   const pubMs = getSeancePublishedMs(date, seanceNom);
   if (pubMs !== null) {
     const remainMin = Math.ceil((pubMs + SESSION_WINDOW_HOURS * 3600000 - now) / 60000);
-    if (remainMin > 0) candidates.push({ type: 'session', minutes: remainMin });
+    if (remainMin > 0) return { type: 'session', minutes: remainMin };
   }
 
-  // Fenêtre de modification (2h) si déjà saisi
-  if (hasRPEEntry(date, joueur)) {
-    const createdMs = getRPECreatedMs(date, joueur);
-    if (createdMs !== null) {
-      const remainMin = Math.ceil((createdMs + RPE_EDIT_HOURS * 3600000 - now) / 60000);
-      if (remainMin > 0) candidates.push({ type: 'edit', minutes: remainMin });
-    }
-  }
-
-  if (candidates.length === 0) return null;
-  // Le plus restrictif = le plus petit temps restant
-  candidates.sort((a, b) => a.minutes - b.minutes);
-  return candidates[0];
+  return null;
 }
 
 // ============================================================================
@@ -7269,12 +7255,8 @@ async function saveRPEToSupabase(date, joueur, rpeArray) {
     const msg = (currentRole === 'lecteur') ? 'You can only rate your own sessions' : 'Tu ne peux saisir que tes propres RPE';
     toast(msg, 'error'); return false;
   }
-  // Verrou de modification (2h après 1ère saisie) — vérifié ici pour toute écriture lecteur.
-  // Le verrou 48h (par séance) est vérifié en amont dans setRPECardValue/setRPEProcedeValue.
-  if (currentRole === 'lecteur' && hasRPEEntry(date, joueur) && isEditWindowClosed(date, joueur)) {
-    toast(tr('Your rating is locked and can no longer be edited (locked 2h after your first submission)', 'Ta note est verrouillée et ne peut plus être modifiée (verrouillage 2 h après ta première saisie)'), 'error');
-    return false;
-  }
+  // Fenêtre unique de 3h (par séance) : vérifiée en amont dans setRPECardValue/setRPEProcedeValue.
+  // Pendant ces 3h la saisie ET la modification sont libres — plus de sous-verrou de 2h.
   if (!rpeArray || rpeArray.length === 0) {
     const { error } = await sb.from('rpe_declarations').delete().match({ date, joueur });
     if (error) { toast('Erreur RPE : ' + error.message, 'error'); return false; }
@@ -20151,7 +20133,7 @@ function renderRPEScale(date, joueurEsc, seanceEsc, procIndex, currentValue) {
 // Handler pour la notation par procédé
 async function setRPEProcedeValue(date, joueur, seance, procIndex, value) {
   if (currentRole === 'lecteur' && isSessionWindowClosed(date, seance)) {
-    toast(tr('The 48h window to rate this session has closed. Please contact your coach.', 'Le délai de 48 h pour évaluer cette séance est passé. Contacte ton coach.'), 'error');
+    toast(tr('The 3h window to enter this rating has closed. Please contact Lucas P.', 'Le délai de 3 h pour saisir cette note est dépassé. Contacte Lucas P.'), 'error');
     return;
   }
   setRPEProcedeJoueurSeance(date, joueur, seance, procIndex, value);
@@ -20162,9 +20144,9 @@ async function setRPEProcedeValue(date, joueur, seance, procIndex, value) {
 }
 
 async function setRPECardValue(date, joueur, seance, value) {
-  // Verrou 48h : si la fenêtre de séance est fermée, on bloque (lecteur uniquement)
+  // Verrou 3h : si la fenêtre de séance est fermée, on bloque (lecteur uniquement)
   if (currentRole === 'lecteur' && isSessionWindowClosed(date, seance)) {
-    toast(tr('The 48h window to rate this session has closed. Please contact your coach.', 'Le délai de 48 h pour évaluer cette séance est passé. Contacte ton coach.'), 'error');
+    toast(tr('The 3h window to enter this rating has closed. Please contact Lucas P.', 'Le délai de 3 h pour saisir cette note est dépassé. Contacte Lucas P.'), 'error');
     return;
   }
   setRPEJoueurSeance(date, joueur, seance, value);
@@ -22100,7 +22082,7 @@ async function renderPlayerOverview() {
       return getValidationWindowStatus(sp.date) === 'open';
     });
 
-    // ── Séances live (équipe) : dans le planning, non notées, fenêtre (48 h) encore ouverte ──
+    // ── Séances live (équipe) : dans le planning, non notées, fenêtre (3 h) encore ouverte ──
     const cutoff = toLocalISO(new Date(Date.now() - 14 * 86400000)); // on ne remonte pas au-delà de 14 j
     const liveANoter = [];
     (state.bdd_ent || []).forEach(pl => {
@@ -22111,13 +22093,13 @@ async function renderPlayerOverview() {
         if (STATUTS_NON_ENT.includes(s)) return;                                  // statut, pas une séance
         if (!state.bdd_ent2.some(f => f.date === pl.date && f.nom === s)) return;   // fiche supprimée → référence orpheline
         if (getRPEJoueurSeance(pl.date, currentJoueurNom, s) !== null) return;      // déjà notée
-        if (isSessionWindowClosed(pl.date, s)) return;                             // fenêtre 48 h fermée
+        if (isSessionWindowClosed(pl.date, s)) return;                             // fenêtre 3 h fermée
         liveANoter.push({ date: pl.date, seance: s });
       });
     });
     liveANoter.sort((a, b) => b.date.localeCompare(a.date));
 
-    // ── Matchs joués (48 h) : temps de jeu > 0, non notés, fenêtre encore ouverte ──
+    // ── Matchs joués (3 h) : temps de jeu > 0, non notés, fenêtre encore ouverte ──
     const matchsANoter = [];
     (state.bdd_matchs || []).forEach(m => {
       if (!m || !m.date) return;
@@ -22126,7 +22108,7 @@ async function renderPlayerOverview() {
       if (!compo || (compo.total_min || 0) <= 0) return;                          // non joué → rien à noter
       const seanceNom = matchSeanceNom(m);
       if (getRPEJoueurSeance(m.date, currentJoueurNom, seanceNom) !== null) return; // déjà noté
-      if (isSessionWindowClosed(m.date, seanceNom)) return;                       // fenêtre 48 h fermée
+      if (isSessionWindowClosed(m.date, seanceNom)) return;                       // fenêtre 3 h fermée
       matchsANoter.push({ date: m.date, seance: seanceNom, adversaire: m.adversaire || '', minutes: compo.total_min || 0 });
     });
     matchsANoter.sort((a, b) => b.date.localeCompare(a.date));
@@ -22141,7 +22123,7 @@ async function renderPlayerOverview() {
       // Séances live (équipe)
       const liveHtml = liveANoter.map(it => {
         const badge = '<span style="display:inline-block; font-size:10px; font-weight:700; color:#86efac; background:rgba(34,197,94,0.15); border:1px solid #16a34a; border-radius:4px; padding:1px 6px; margin-right:6px;">🟢 LIVE</span>';
-        const msg = isFR ? "Séance d'équipe — à noter avant fermeture (48 h)" : 'Team session — rate before the 48h window closes';
+        const msg = isFR ? "Séance d'équipe — à noter avant fermeture (3 h)" : 'Team session — rate before the 3h window closes';
         const pubMs = getSeancePublishedMs(it.date, it.seance);
         const chip = (pubMs !== null) ? aNoterCountdownChip(pubMs + SESSION_WINDOW_HOURS * 3600000, isFR) : '';
         return '<div onclick="playerRateLiveDate(\'' + it.date + '\')" style="' + itemStyle + '" ' + hover + '>' +
@@ -22155,7 +22137,7 @@ async function renderPlayerOverview() {
       // Matchs joués
       const matchHtml = matchsANoter.map(it => {
         const badge = '<span style="display:inline-block; font-size:10px; font-weight:700; color:#1a1a1a; background:#fbbf24; border:1px solid #d97706; border-radius:4px; padding:1px 6px; margin-right:6px;">\u26bd MATCH</span>';
-        const msg = isFR ? 'Match jou\u00e9 — \u00e0 noter avant fermeture (48 h)' : 'Match played — rate before the 48h window closes';
+        const msg = isFR ? 'Match jou\u00e9 — \u00e0 noter avant fermeture (3 h)' : 'Match played — rate before the 3h window closes';
         const pubMs = getSeancePublishedMs(it.date, it.seance);
         const chip = (pubMs !== null) ? aNoterCountdownChip(pubMs + SESSION_WINDOW_HOURS * 3600000, isFR) : '';
         const titre = it.adversaire ? ((isFR ? 'Match vs ' : 'Match vs ') + it.adversaire) : (isFR ? 'Match' : 'Match');
@@ -22443,26 +22425,22 @@ function renderPlayerSeanceNotation(date, joueur, seance) {
   html += '<span class="badge ' + getSeanceBadgeClass(sType) + '">' + escapeHtml(sType) + '</span>';
   html += '</div>';
 
-  // Bandeau de statut verrou / éditable
+  // Bandeau de statut verrou / éditable — fenêtre unique de 3h depuis l'affectation
   if (locked) {
-    if (sessionClosed && !hasEntry) {
-      // 48h dépassées sans aucune saisie → fenêtre fermée, contacter le coach
-      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:#fca5a5;">🔒 ' + tr('The 48h window to rate this session has closed. Please ask your coach to enter your rating.', 'Le délai de 48 h pour évaluer cette séance est passé. Demande à ton coach de saisir ta note.') + '</div>';
-    } else if (sessionClosed) {
-      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:#fca5a5;">🔒 ' + tr('The 48h window has closed. Your rating can no longer be edited.', 'Le délai de 48 h est passé. Tu ne peux plus modifier ta note.') + '</div>';
+    if (!hasEntry) {
+      // 3h dépassées sans aucune saisie → verrou total, contacter Lucas P.
+      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:#fca5a5;">🔒 ' + tr('The 3h window has closed. Please contact Lucas P. to enter your rating.', 'Le délai de 3 h est dépassé. Contacte Lucas P. pour saisir ta note.') + '</div>';
     } else {
-      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(251,146,60,0.12);border-left:3px solid #fb923c;border-radius:4px;font-size:12px;color:#fed7aa;">🔒 ' + tr("This rating is locked. You can't edit it anymore (locked 2 hours after your first submission).", "Cette note est verrouillée. Tu ne peux plus la modifier (verrouillage 2 h après ta première saisie).") + '</div>';
+      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:#fca5a5;">🔒 ' + tr('The 3h window has closed. Your rating can no longer be edited — contact Lucas P.', 'Le délai de 3 h est dépassé. Ta note ne peut plus être modifiée — contacte Lucas P.') + '</div>';
     }
   } else if (lockInfo !== null) {
     const hrs = Math.floor(lockInfo.minutes / 60);
     const mins = lockInfo.minutes % 60;
     const timeStr = hrs > 0 ? (hrs + 'h ' + mins + 'min') : (mins + ' min');
-    if (lockInfo.type === 'session' && !hasEntry) {
+    if (!hasEntry) {
       html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ ' + tr('You have ', 'Tu as ') + timeStr + tr(' left to rate this session', ' pour évaluer cette séance') + '</div>';
-    } else if (lockInfo.type === 'edit') {
-      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ ' + tr('Editable for ', 'Modifiable encore ') + timeStr + tr(' more', '') + '</div>';
     } else {
-      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ ' + timeStr + ' left</div>';
+      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);">⏱ ' + tr('Editable for ', 'Modifiable encore ') + timeStr + tr(' more', '') + '</div>';
     }
   }
 
