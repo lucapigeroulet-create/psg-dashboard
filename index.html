@@ -1394,6 +1394,16 @@
                  onchange="renderGPSDistHSR()"
                  style="width:110px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:13px;">
         </div>
+        <div class="filter-group" id="gps-disthsr-range-wrap" style="display:none;">
+          <label>Plage de dates (optionnel)</label>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="date" id="gps-disthsr-from" onchange="renderGPSDistHSR()"
+                   style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:7px; font-size:13px;">
+            <span style="color:var(--text-dim);">→</span>
+            <input type="date" id="gps-disthsr-to" onchange="renderGPSDistHSR()"
+                   style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:7px; font-size:13px;">
+          </div>
+        </div>
       </div>
     </div>
 
@@ -12691,6 +12701,8 @@ function onGPSReportChange() {
   document.getElementById('gps-player-wrap').style.display = (type === 'week-indiv' || (type === 'distance-hsr' && gpsDistHsrMode === 'player')) ? '' : 'none';
   document.getElementById('gps-disthsr-wrap').style.display = (type === 'distance-hsr') ? '' : 'none';
   document.getElementById('gps-disthsr-reftime-wrap').style.display = (type === 'distance-hsr' && (gpsDistHsrMode === 'cumul' || gpsDistHsrMode === 'player')) ? '' : 'none';
+  const dhRange = document.getElementById('gps-disthsr-range-wrap');
+  if (dhRange) dhRange.style.display = (type === 'distance-hsr' && (gpsDistHsrMode === 'cumul' || gpsDistHsrMode === 'player')) ? '' : 'none';
   if (type === 'session') populateGPSSplitSelect();
   renderGPS();
 }
@@ -14854,6 +14866,8 @@ function renderGPSWeekIndiv() {
 // ===== DISTANCE VS INTENSITÉ (HSR) =====
 let gpsDistHsrMode = 'cumul'; // 'cumul' (un point par joueur, cumul saison) | 'match' (un point par joueur, un seul match) | 'player' (un point par match, un seul joueur)
 let gpsLogoMapOpen = false; // état déplié/replié du panneau d'association des logos
+let gpsDistHsrSelMatches = []; // clés "date||titre" de matchs précis sélectionnés (vide = tous ceux de la plage)
+let gpsDistHsrMatchesOpen = false; // état déplié/replié du panneau "matchs précis"
 
 // Devine le nom de l'adversaire à partir du titre de séance Catapult (ex: "MATCH N3 VS BELFORT / 11 AVRIL 2026" -> "BELFORT")
 const GPS_KNOWN_COMPETITION_TOKENS = ['MATCH', 'N3', 'N2', 'N1', 'R1', 'R2', 'R3', 'CDF', 'RESERVE', 'U19', 'U18', 'U17', 'U15', 'J1'];
@@ -14972,8 +14986,24 @@ async function handleAdversaireLogoUpload(input, adversaire) {
 
 function gpsSetDistHsrMode(mode) {
   gpsDistHsrMode = mode;
+  gpsDistHsrSelMatches = []; // repartir sans filtre "matchs précis" en changeant de vue
   onGPSReportChange();
 }
+
+// Lecture des bornes de la plage de dates (rapport Distance vs Intensité)
+function gpsGetDistHsrRange() {
+  const f = document.getElementById('gps-disthsr-from');
+  const t = document.getElementById('gps-disthsr-to');
+  return { from: (f && f.value) || '', to: (t && t.value) || '' };
+}
+function gpsToggleDistHsrMatch(key, checked) {
+  key = String(key);
+  const i = gpsDistHsrSelMatches.indexOf(key);
+  if (checked && i === -1) gpsDistHsrSelMatches.push(key);
+  else if (!checked && i !== -1) gpsDistHsrSelMatches.splice(i, 1);
+  renderGPSDistHSR();
+}
+function gpsClearDistHsrMatches() { gpsDistHsrSelMatches = []; renderGPSDistHSR(); }
 
 // Temps de jeu de référence (min) pour comparer des joueurs/matchs à niveau égal :
 // projette chaque valeur au prorata du temps réellement joué (ex: 100m en 5 min -> 160m projetées sur 8 min)
@@ -14991,7 +15021,15 @@ function gpsNormalizeMetric(raw, duree, refTime) {
 
 function gpsResetDistHsrZoom() {
   const chart = charts['gps-dist-hsr-scatter'];
-  if (chart && chart.resetZoom) chart.resetZoom();
+  if (!chart) return;
+  // Efface aussi l'échelle ajustée au cliquer-glisser sur les axes (min/max forcés)
+  ['x', 'y'].forEach(a => {
+    if (chart.options.scales && chart.options.scales[a]) {
+      delete chart.options.scales[a].min;
+      delete chart.options.scales[a].max;
+    }
+  });
+  if (chart.resetZoom) chart.resetZoom(); else chart.update();
 }
 
 // Mode de zoom/déplacement : 'xy' (les deux axes ensemble), 'x' (abscisse seule) ou 'y' (ordonnée seule)
@@ -15102,6 +15140,29 @@ function renderGPSDistHSR() {
     });
   }
 
+  // ── Filtres additionnels (plage de dates + matchs précis) — modes cumul & joueur ──
+  let availableMatches = [];
+  if (gpsDistHsrMode !== 'match') {
+    const { from, to } = gpsGetDistHsrRange();
+    if (from) points = points.filter(p => p.date >= from);
+    if (to) points = points.filter(p => p.date <= to);
+    const seen = {};
+    points.forEach(p => {
+      const key = p.date + '||' + (p.title || '');
+      if (!seen[key]) { seen[key] = true; availableMatches.push({ key, date: p.date, label: (gpsGuessOpponent(p.title) || p.title || formatDateFR(p.date)) }); }
+    });
+    availableMatches.sort((a, b) => b.date.localeCompare(a.date));
+    // Purge des clés devenues hors-plage puis application du filtre "matchs précis"
+    if (gpsDistHsrSelMatches.length) {
+      const valid = new Set(availableMatches.map(m => m.key));
+      gpsDistHsrSelMatches = gpsDistHsrSelMatches.filter(k => valid.has(k));
+    }
+    if (gpsDistHsrSelMatches.length) {
+      const sel = new Set(gpsDistHsrSelMatches);
+      points = points.filter(p => sel.has(p.date + '||' + (p.title || '')));
+    }
+  }
+
   html += '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">';
   html += '<h2 style="margin:0;">' + title + '</h2>';
   html += '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">';
@@ -15110,17 +15171,39 @@ function renderGPSDistHSR() {
   html += '<button class="btn btn-secondary" id="gps-disthsr-zoomaxis-x" onclick="gpsSetDistHsrZoomAxis(\'x\')" style="padding:4px 10px; font-size:11px;">X seule</button>';
   html += '<button class="btn btn-secondary" id="gps-disthsr-zoomaxis-y" onclick="gpsSetDistHsrZoomAxis(\'y\')" style="padding:4px 10px; font-size:11px;">Y seule</button>';
   html += '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="gpsResetDistHsrZoom()">🔍 Réinitialiser</button>';
+  html += '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="gpsExportDistHsrPDF()">🖨️ PDF</button>';
   html += '</div>';
   html += '</div>';
-  html += '<p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">' + subtitle + ' Molette / pincement pour zoomer, glisser pour déplacer la zone visible (choisis l\'axe à gauche ci-dessus).</p>';
+  html += '<p style="color:var(--text-dim); font-size:12px; margin-bottom:8px;">' + subtitle + ' Molette / pincement pour zoomer, glisser dans le graphe pour déplacer, <b>glisser sur un axe</b> (X en bas, Y à gauche) pour ajuster son échelle.</p>';
+
+  // ── Sélecteur "matchs précis" (cumul & joueur) ──
+  if (gpsDistHsrMode !== 'match' && availableMatches.length > 1) {
+    const selSet = new Set(gpsDistHsrSelMatches);
+    html += '<details id="gps-disthsr-matches"' + (gpsDistHsrMatchesOpen ? ' open' : '') + ' style="margin:2px 0 10px;">';
+    html += '<summary style="cursor:pointer; font-size:13px; font-weight:600; color:var(--accent-light);">🎯 Matchs précis (' + (selSet.size ? selSet.size + ' sélectionné(s)' : 'tous') + ')</summary>';
+    html += '<div style="font-size:12px; color:var(--text-dim); margin:8px 0;">Coche des matchs pour n\'afficher que ceux-là. Rien de coché = tous les matchs de la plage.</div>';
+    html += '<div style="display:flex; flex-wrap:wrap; gap:6px;">';
+    availableMatches.forEach(m => {
+      const kEsc = m.key.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      html += '<label style="display:inline-flex; align-items:center; gap:5px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:14px; padding:4px 10px; font-size:12px; cursor:pointer;">' +
+        '<input type="checkbox"' + (selSet.has(m.key) ? ' checked' : '') + ' onchange="gpsToggleDistHsrMatch(\'' + kEsc + '\', this.checked)" style="margin:0;"> ' +
+        escapeHtml(formatDateFR(m.date)) + ' · ' + escapeHtml(m.label) + '</label>';
+    });
+    html += '</div>';
+    if (selSet.size) html += '<button class="btn btn-secondary" style="margin-top:8px; padding:4px 10px; font-size:11px;" onclick="gpsClearDistHsrMatches()">✕ Effacer la sélection</button>';
+    html += '</details>';
+  }
 
   if (points.length === 0) {
     html += '<div class="empty-state">Aucune donnée GPS pour cette sélection.</div></div>';
     document.getElementById('gps-content').innerHTML = html;
+    const dhm0 = document.getElementById('gps-disthsr-matches');
+    if (dhm0) dhm0.addEventListener('toggle', () => { gpsDistHsrMatchesOpen = dhm0.open; });
     return;
   }
 
-  html += '<div class="chart-container" style="height:auto; width:100%; max-width:820px; aspect-ratio:1/1; margin:12px auto;"><canvas id="gps-dist-hsr-scatter"></canvas></div>';
+  // Pleine largeur, hauteur fixe (conserve une hauteur de lecture confortable)
+  html += '<div class="chart-container" style="height:600px; width:100%; margin:12px 0;"><canvas id="gps-dist-hsr-scatter"></canvas></div>';
 
   // Association point → logo : dans les modes avec adversaire, permet de remplacer
   // un point bleu par le logo du club de son choix (piochés dans la bibliothèque).
@@ -15154,8 +15237,110 @@ function renderGPSDistHSR() {
   // Mémorise l'état déplié/replié du panneau d'association entre deux rendus
   const gpsLm = document.getElementById('gps-logomap');
   if (gpsLm) gpsLm.addEventListener('toggle', () => { gpsLogoMapOpen = gpsLm.open; });
+  const gpsDhm = document.getElementById('gps-disthsr-matches');
+  if (gpsDhm) gpsDhm.addEventListener('toggle', () => { gpsDistHsrMatchesOpen = gpsDhm.open; });
 
   gpsRenderDistHsrChart(points);
+}
+
+// Export PDF du nuage Distance vs Intensité (paysage A4, fond sombre conservé)
+function gpsExportDistHsrPDF() {
+  const chart = charts['gps-dist-hsr-scatter'];
+  if (!chart) { toast('Graphique indisponible', 'error'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non disponible (vérifie ta connexion).', 'error'); return; }
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 36;
+    const titleEl = document.querySelector('#gps-content h2');
+    const title = (titleEl ? titleEl.textContent : 'Distance vs Intensité (Sprint)');
+    doc.setFontSize(14); doc.setTextColor(20, 30, 50);
+    doc.text(title, margin, margin);
+
+    const img = chart.toBase64Image('image/png', 1);
+    const cw = chart.width || 1000, ch = chart.height || 600;
+    const availW = pageW - margin * 2;
+    const availH = pageH - margin - 54;
+    const scale = Math.min(availW / cw, availH / ch);
+    const w = cw * scale, h = ch * scale;
+    const x = (pageW - w) / 2, y = margin + 16;
+    // Fond sombre derrière le graphe (les libellés/points sont clairs)
+    doc.setFillColor(10, 22, 40);
+    doc.rect(x - 6, y - 6, w + 12, h + 12, 'F');
+    doc.addImage(img, 'PNG', x, y, w, h);
+    doc.setFontSize(9); doc.setTextColor(120, 130, 150);
+    doc.text('StatField · ' + orgLabelText(currentOrg) + ' · export du ' + formatDateFR(new Date().toISOString().slice(0, 10)), margin, pageH - 18);
+
+    const safe = title.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'distance-intensite';
+    doc.save(safe + '.pdf');
+  } catch (e) {
+    toast('Erreur export PDF : ' + (e && e.message || e), 'error');
+  }
+}
+
+// Ajuste l'échelle d'un axe par cliquer-glisser SUR l'axe (X sous le graphe, Y à gauche).
+// On garde le min courant fixe et on étire/comprime le max autour de l'origine.
+function gpsAttachAxisDrag(chart, canvas) {
+  let drag = null; // { axis:'x'|'y', min, startVal, area }
+  const zoomOpts = () => (chart.options.plugins && chart.options.plugins.zoom) || null;
+
+  canvas.addEventListener('pointerdown', (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    const px = ev.clientX - rect.left, py = ev.clientY - rect.top;
+    const area = chart.chartArea;
+    if (!area) return;
+    const onX = (py > area.bottom && px >= area.left && px <= area.right);
+    const onY = (px < area.left && py >= area.top && py <= area.bottom);
+    if (!onX && !onY) return; // dans le graphe → laisser le pan du plugin agir
+    const axis = onX ? 'x' : 'y';
+    const sc = chart.scales[axis];
+    if (!sc) return;
+    // Désactive temporairement le pan du plugin pour éviter les conflits
+    const z = zoomOpts();
+    if (z && z.pan) { drag = { restorePan: z.pan.enabled }; z.pan.enabled = false; } else { drag = {}; }
+    drag.axis = axis; drag.min = sc.min; drag.area = area;
+    drag.startVal = sc.getValueForPixel(axis === 'x' ? px : py);
+    canvas.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+  });
+
+  canvas.addEventListener('pointermove', (ev) => {
+    if (!drag || !drag.axis) return;
+    const rect = canvas.getBoundingClientRect();
+    const area = drag.area;
+    const axis = drag.axis;
+    const sc = chart.scales[axis];
+    const min = (drag.min != null) ? drag.min : sc.min;
+    // max_new = min + (startVal - min) * (longueur de l'axe / distance du curseur à l'origine)
+    // → la valeur saisie au départ reste "sous le doigt", l'origine (min) ne bouge pas.
+    let axisLen, distCursor;
+    if (axis === 'x') {
+      axisLen = area.right - area.left;
+      distCursor = (ev.clientX - rect.left) - area.left;
+    } else {
+      axisLen = area.bottom - area.top;
+      distCursor = area.bottom - (ev.clientY - rect.top);
+    }
+    distCursor = Math.max(8, distCursor); // évite division par ~0
+    let newMax = min + (drag.startVal - min) * (axisLen / distCursor);
+    if (!isFinite(newMax) || newMax <= min) return;
+    chart.options.scales[axis].min = min;
+    chart.options.scales[axis].max = newMax;
+    chart.update('none');
+    ev.preventDefault();
+  });
+
+  const endDrag = (ev) => {
+    if (!drag) return;
+    const z = zoomOpts();
+    if (z && z.pan && drag.restorePan !== undefined) z.pan.enabled = drag.restorePan;
+    drag = null;
+    try { canvas.releasePointerCapture(ev.pointerId); } catch (e) {}
+  };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
 }
 
 let gpsDistHsrRenderToken = 0;
@@ -15218,6 +15403,7 @@ async function gpsRenderDistHsrChart(points) {
       }
     }
   });
+  gpsAttachAxisDrag(charts['gps-dist-hsr-scatter'], canvas);
 }
 
 // ============================================================================
@@ -16828,7 +17014,8 @@ const MJ_EN = {
   'Hambourg': 'Hamburg SV', 'Steaua Bucarest': 'Steaua Bucharest', 'Valence CF': 'Valencia CF',
   'Séville FC': 'Sevilla FC', 'Werder Brême': 'Werder Bremen', 'Deportivo La Corogne': 'Deportivo La Coruña',
   'Naples': 'Napoli', 'Eintracht Francfort': 'Eintracht Frankfurt', 'CSKA Moscou': 'CSKA Moscow',
-  'Bâle': 'Basel', 'Parme': 'Parma', 'Palerme': 'Palermo'
+  'Bâle': 'Basel', 'Parme': 'Parma', 'Palerme': 'Palermo',
+  'Zénith': 'Zenit', 'Spartak Moscou': 'Spartak Moscow', 'Lokomotiv Moscou': 'Lokomotiv Moscow'
 };
 function mjEn(s) { return MJ_EN[s] || s; }
 // ---- Palmarès vérifiés (faits avant 2026) ----------------------------------
@@ -17195,7 +17382,161 @@ const MJ_CAREERS = [
   ['Samuel Eto\'o', ['Mallorca', 'Barcelone', 'Inter Milan', 'Chelsea'], 'eto\'o|etoo|eto o'],
   ['Rivaldo', ['Palmeiras', 'Barcelone', 'Milan AC'], 'rivaldo'],
   ['Andrés Iniesta', ['Barcelone', 'Vissel Kobe'], 'iniesta'],
-  ['Xavi', ['Barcelone', 'Al-Sadd'], 'xavi|xavi hernandez']
+  ['Xavi', ['Barcelone', 'Al-Sadd'], 'xavi|xavi hernandez'],
+  // --- Gardiens ---
+  ['Manuel Neuer', ['Schalke 04', 'Bayern Munich'], 'neuer'],
+  ['Petr Čech', ['Rennes', 'Chelsea', 'Arsenal'], 'cech|petr cech'],
+  ['Edwin van der Sar', ['Ajax', 'Juventus', 'Fulham', 'Manchester United'], 'van der sar'],
+  ['Oliver Kahn', ['Karlsruhe', 'Bayern Munich'], 'kahn'],
+  ['Jan Oblak', ['Benfica', 'Atlético Madrid'], 'oblak'],
+  ['Marc-André ter Stegen', ['Borussia Mönchengladbach', 'Barcelone'], 'ter stegen'],
+  ['Thibaut Courtois', ['Genk', 'Atlético Madrid', 'Chelsea', 'Real Madrid'], 'courtois'],
+  ['Alisson', ['Internacional', 'Roma', 'Liverpool'], 'alisson'],
+  ['Ederson', ['Benfica', 'Manchester City'], 'ederson'],
+  ['Hugo Lloris', ['Nice', 'Lyon', 'Tottenham', 'Los Angeles FC'], 'lloris'],
+  ['Gianluigi Donnarumma', ['Milan AC', 'PSG'], 'donnarumma'],
+  ['Peter Schmeichel', ['Brøndby', 'Manchester United', 'Manchester City'], 'schmeichel'],
+  ['Dino Zoff', ['Naples', 'Juventus'], 'zoff'],
+  ['Wojciech Szczęsny', ['Arsenal', 'Roma', 'Juventus', 'Barcelone'], 'szczesny'],
+  // --- Défenseurs ---
+  ['Fabio Cannavaro', ['Naples', 'Parme', 'Inter Milan', 'Juventus', 'Real Madrid'], 'cannavaro'],
+  ['Alessandro Nesta', ['Lazio', 'Milan AC'], 'nesta'],
+  ['Sergio Ramos', ['Séville FC', 'Real Madrid', 'PSG'], 'ramos|sergio ramos'],
+  ['Gerard Piqué', ['Manchester United', 'Barcelone'], 'pique'],
+  ['Rio Ferdinand', ['West Ham', 'Leeds', 'Manchester United'], 'rio ferdinand|ferdinand'],
+  ['John Terry', ['Chelsea', 'Aston Villa'], 'terry|john terry'],
+  ['Nemanja Vidić', ['Spartak Moscou', 'Manchester United', 'Inter Milan'], 'vidic'],
+  ['Ashley Cole', ['Arsenal', 'Chelsea', 'Roma'], 'ashley cole'],
+  ['Dani Alves', ['Séville FC', 'Barcelone', 'Juventus', 'PSG'], 'dani alves|alves'],
+  ['Jordi Alba', ['Valence CF', 'Barcelone', 'Inter Miami'], 'jordi alba'],
+  ['Marcelo', ['Fluminense', 'Real Madrid'], 'marcelo'],
+  ['Thiago Silva', ['Milan AC', 'PSG', 'Chelsea'], 'thiago silva'],
+  ['David Luiz', ['Benfica', 'Chelsea', 'PSG', 'Arsenal'], 'david luiz'],
+  ['Kalidou Koulibaly', ['Genk', 'Naples', 'Chelsea', 'Al-Hilal'], 'koulibaly'],
+  ['Raphaël Varane', ['Lens', 'Real Madrid', 'Manchester United'], 'varane'],
+  ['Giorgio Chiellini', ['Juventus', 'Los Angeles FC'], 'chiellini'],
+  ['Cafu', ['São Paulo', 'Roma', 'Milan AC'], 'cafu'],
+  ['Javier Zanetti', ['Banfield', 'Inter Milan'], 'zanetti'],
+  ['Lilian Thuram', ['Monaco', 'Parme', 'Juventus', 'Barcelone'], 'thuram|lilian thuram'],
+  ['Marcel Desailly', ['Marseille', 'Milan AC', 'Chelsea'], 'desailly'],
+  ['Kyle Walker', ['Tottenham', 'Manchester City'], 'kyle walker'],
+  ['Andrew Robertson', ['Dundee United', 'Hull City', 'Liverpool'], 'robertson'],
+  ['Aymeric Laporte', ['Athletic Bilbao', 'Manchester City', 'Al-Nassr'], 'laporte'],
+  ['João Cancelo', ['Benfica', 'Valence CF', 'Juventus', 'Manchester City'], 'cancelo'],
+  ['Achraf Hakimi', ['Real Madrid', 'Borussia Dortmund', 'Inter Milan', 'PSG'], 'hakimi'],
+  ['Éric Abidal', ['Lille', 'Lyon', 'Barcelone'], 'abidal'],
+  ['Rafael Márquez', ['Monaco', 'Barcelone', 'New York Red Bulls'], 'marquez|rafa marquez'],
+  ['Sol Campbell', ['Tottenham', 'Arsenal', 'Portsmouth'], 'sol campbell'],
+  ['Pepe', ['Porto', 'Real Madrid', 'Beşiktaş'], 'pepe'],
+  ['Ricardo Carvalho', ['Porto', 'Chelsea', 'Real Madrid', 'Monaco'], 'ricardo carvalho'],
+  ['David Alaba', ['Bayern Munich', 'Real Madrid'], 'alaba'],
+  ['Jérôme Boateng', ['Hambourg', 'Manchester City', 'Bayern Munich', 'Lyon'], 'boateng|jerome boateng'],
+  ['Antonio Rüdiger', ['Stuttgart', 'Roma', 'Chelsea', 'Real Madrid'], 'rudiger'],
+  ['Mats Hummels', ['Borussia Dortmund', 'Bayern Munich', 'Roma'], 'hummels'],
+  ['Rúben Dias', ['Benfica', 'Manchester City'], 'ruben dias'],
+  ['Matthijs de Ligt', ['Ajax', 'Juventus', 'Bayern Munich', 'Manchester United'], 'de ligt'],
+  ['Trent Alexander-Arnold', ['Liverpool', 'Real Madrid'], 'trent|alexander-arnold'],
+  ['Branislav Ivanović', ['Lokomotiv Moscou', 'Chelsea', 'Zénith'], 'ivanovic'],
+  // --- Milieux ---
+  ['Sergio Busquets', ['Barcelone', 'Inter Miami'], 'busquets'],
+  ['Toni Kroos', ['Bayern Munich', 'Real Madrid'], 'kroos'],
+  ['Roy Keane', ['Nottingham Forest', 'Manchester United', 'Celtic'], 'roy keane|keane'],
+  ['Michael Essien', ['Bastia', 'Lyon', 'Chelsea', 'Real Madrid'], 'essien'],
+  ['Clarence Seedorf', ['Ajax', 'Real Madrid', 'Inter Milan', 'Milan AC'], 'seedorf'],
+  ['Edgar Davids', ['Ajax', 'Milan AC', 'Juventus', 'Barcelone', 'Tottenham'], 'davids'],
+  ['Pavel Nedvěd', ['Sparta Prague', 'Lazio', 'Juventus'], 'nedved'],
+  ['Michael Carrick', ['West Ham', 'Tottenham', 'Manchester United'], 'carrick'],
+  ['Yaya Touré', ['Monaco', 'Barcelone', 'Manchester City'], 'yaya toure'],
+  ['Bastian Schweinsteiger', ['Bayern Munich', 'Manchester United', 'Chicago Fire'], 'schweinsteiger'],
+  ['Mesut Özil', ['Werder Brême', 'Real Madrid', 'Arsenal', 'Fenerbahçe'], 'ozil'],
+  ['David Silva', ['Valence CF', 'Manchester City', 'Real Sociedad'], 'david silva'],
+  ['Cesc Fàbregas', ['Arsenal', 'Barcelone', 'Chelsea', 'Monaco'], 'fabregas|cesc'],
+  ['N\'Golo Kanté', ['Leicester', 'Chelsea', 'Al-Ittihad'], 'kante|ngolo kante'],
+  ['Paul Pogba', ['Le Havre', 'Manchester United', 'Juventus'], 'pogba'],
+  ['İlkay Gündoğan', ['Borussia Dortmund', 'Manchester City', 'Barcelone'], 'gundogan'],
+  ['Marco Verratti', ['Pescara', 'PSG', 'Al-Arabi'], 'verratti'],
+  ['Arturo Vidal', ['Bayer Leverkusen', 'Juventus', 'Bayern Munich', 'Barcelone', 'Inter Milan'], 'arturo vidal|vidal'],
+  ['Bruno Fernandes', ['Sampdoria', 'Sporting', 'Manchester United'], 'bruno fernandes'],
+  ['Rodri', ['Villarreal', 'Atlético Madrid', 'Manchester City'], 'rodri'],
+  ['Frenkie de Jong', ['Ajax', 'Barcelone'], 'de jong|frenkie'],
+  ['Jude Bellingham', ['Birmingham City', 'Borussia Dortmund', 'Real Madrid'], 'bellingham'],
+  ['Declan Rice', ['West Ham', 'Arsenal'], 'declan rice|rice'],
+  ['Martin Ødegaard', ['Real Madrid', 'Arsenal'], 'odegaard'],
+  ['Riyad Mahrez', ['Le Havre', 'Leicester', 'Manchester City', 'Al-Ahli'], 'mahrez'],
+  ['Thiago Alcântara', ['Barcelone', 'Bayern Munich', 'Liverpool'], 'thiago alcantara|thiago'],
+  ['Casemiro', ['São Paulo', 'Real Madrid', 'Manchester United'], 'casemiro'],
+  ['Fabinho', ['Monaco', 'Liverpool', 'Al-Ittihad'], 'fabinho'],
+  ['Bernardo Silva', ['Benfica', 'Monaco', 'Manchester City'], 'bernardo silva'],
+  ['Fernandinho', ['Shakhtar Donetsk', 'Manchester City'], 'fernandinho'],
+  ['Miralem Pjanić', ['Lyon', 'Roma', 'Juventus', 'Barcelone'], 'pjanic'],
+  ['Henrikh Mkhitaryan', ['Shakhtar Donetsk', 'Borussia Dortmund', 'Manchester United', 'Roma', 'Inter Milan'], 'mkhitaryan'],
+  ['Juan Mata', ['Valence CF', 'Chelsea', 'Manchester United', 'Galatasaray'], 'juan mata|mata'],
+  ['Isco', ['Málaga', 'Real Madrid', 'Séville FC'], 'isco'],
+  ['Gennaro Gattuso', ['Rangers', 'Milan AC'], 'gattuso'],
+  ['Daniele De Rossi', ['Roma', 'Boca Juniors'], 'de rossi'],
+  ['Christian Eriksen', ['Ajax', 'Tottenham', 'Inter Milan', 'Manchester United'], 'eriksen'],
+  ['Jordan Henderson', ['Sunderland', 'Liverpool', 'Ajax'], 'henderson|jordan henderson'],
+  ['Jack Grealish', ['Aston Villa', 'Manchester City'], 'grealish'],
+  ['Rafael van der Vaart', ['Ajax', 'Hambourg', 'Real Madrid', 'Tottenham'], 'van der vaart'],
+  ['Pelé', ['Santos', 'New York Cosmos'], 'pele'],
+  ['Ivan Rakitić', ['Schalke 04', 'Séville FC', 'Barcelone'], 'rakitic'],
+  ['Marc Overmars', ['Ajax', 'Arsenal', 'Barcelone'], 'overmars'],
+  ['Park Ji-sung', ['PSV Eindhoven', 'Manchester United', 'QPR'], 'park ji-sung|park'],
+  ['Michael Laudrup', ['Juventus', 'Barcelone', 'Real Madrid'], 'michael laudrup|laudrup'],
+  ['Mikel Arteta', ['Rangers', 'Real Sociedad', 'Everton', 'Arsenal'], 'arteta'],
+  ['Nani', ['Sporting', 'Manchester United', 'Fenerbahçe'], 'nani'],
+  ['Marco Asensio', ['Real Madrid', 'PSG'], 'asensio'],
+  // --- Attaquants ---
+  ['Robin van Persie', ['Feyenoord', 'Arsenal', 'Manchester United', 'Fenerbahçe'], 'van persie'],
+  ['Diego Forlán', ['Independiente', 'Manchester United', 'Villarreal', 'Atlético Madrid', 'Inter Milan'], 'forlan'],
+  ['Ruud van Nistelrooy', ['PSV Eindhoven', 'Manchester United', 'Real Madrid', 'Hambourg'], 'van nistelrooy|ruud'],
+  ['Michael Owen', ['Liverpool', 'Real Madrid', 'Newcastle', 'Manchester United'], 'owen|michael owen'],
+  ['Alan Shearer', ['Southampton', 'Blackburn', 'Newcastle'], 'shearer'],
+  ['Dennis Bergkamp', ['Ajax', 'Inter Milan', 'Arsenal'], 'bergkamp'],
+  ['Patrick Kluivert', ['Ajax', 'Milan AC', 'Barcelone', 'Newcastle'], 'kluivert'],
+  ['Ruud Gullit', ['PSV Eindhoven', 'Milan AC', 'Sampdoria', 'Chelsea'], 'gullit'],
+  ['Marco van Basten', ['Ajax', 'Milan AC'], 'van basten'],
+  ['Gabriel Batistuta', ['Boca Juniors', 'Fiorentina', 'Roma', 'Inter Milan'], 'batistuta|batigol'],
+  ['Hernán Crespo', ['River Plate', 'Parme', 'Lazio', 'Inter Milan', 'Chelsea', 'Milan AC'], 'crespo'],
+  ['Filippo Inzaghi', ['Atalanta', 'Juventus', 'Milan AC'], 'inzaghi|pippo inzaghi'],
+  ['Alessandro Del Piero', ['Juventus', 'Sydney FC'], 'del piero'],
+  ['Roberto Baggio', ['Fiorentina', 'Juventus', 'Milan AC', 'Inter Milan'], 'baggio|roberto baggio'],
+  ['Gianluca Vialli', ['Sampdoria', 'Juventus', 'Chelsea'], 'vialli'],
+  ['Christian Vieri', ['Juventus', 'Atlético Madrid', 'Lazio', 'Inter Milan', 'Milan AC'], 'vieri'],
+  ['Raúl', ['Real Madrid', 'Schalke 04'], 'raul'],
+  ['David Villa', ['Valence CF', 'Barcelone', 'Atlético Madrid', 'New York City'], 'david villa'],
+  ['Alexis Sánchez', ['Udinese', 'Barcelone', 'Arsenal', 'Manchester United', 'Inter Milan'], 'alexis sanchez|alexis'],
+  ['Franz Beckenbauer', ['Bayern Munich', 'New York Cosmos'], 'beckenbauer|der kaiser'],
+  ['Radamel Falcao', ['River Plate', 'Porto', 'Atlético Madrid', 'Monaco'], 'falcao'],
+  ['Gonzalo Higuaín', ['River Plate', 'Real Madrid', 'Naples', 'Juventus', 'Inter Miami'], 'higuain|pipita'],
+  ['Mauro Icardi', ['Sampdoria', 'Inter Milan', 'PSG', 'Galatasaray'], 'icardi'],
+  ['Paulo Dybala', ['Palerme', 'Juventus', 'Roma'], 'dybala'],
+  ['Lautaro Martínez', ['Racing Club', 'Inter Milan'], 'lautaro'],
+  ['Ciro Immobile', ['Torino', 'Borussia Dortmund', 'Séville FC', 'Lazio'], 'immobile'],
+  ['Romelu Lukaku', ['Anderlecht', 'Everton', 'Manchester United', 'Inter Milan'], 'lukaku'],
+  ['Pierre-Emerick Aubameyang', ['Saint-Étienne', 'Borussia Dortmund', 'Arsenal', 'Barcelone', 'Marseille'], 'aubameyang|auba'],
+  ['Son Heung-min', ['Hambourg', 'Bayer Leverkusen', 'Tottenham'], 'son|son heung-min'],
+  ['Raheem Sterling', ['Liverpool', 'Manchester City', 'Chelsea'], 'sterling'],
+  ['Vinícius Júnior', ['Flamengo', 'Real Madrid'], 'vinicius|vini jr'],
+  ['Rodrygo', ['Santos', 'Real Madrid'], 'rodrygo'],
+  ['Rafael Leão', ['Sporting', 'Lille', 'Milan AC'], 'leao|rafael leao'],
+  ['Victor Osimhen', ['Lille', 'Naples', 'Galatasaray'], 'osimhen'],
+  ['Khvicha Kvaratskhelia', ['Rubin Kazan', 'Naples', 'PSG'], 'kvaratskhelia|kvara'],
+  ['Julián Álvarez', ['River Plate', 'Manchester City', 'Atlético Madrid'], 'julian alvarez'],
+  ['Darwin Núñez', ['Benfica', 'Liverpool'], 'darwin nunez'],
+  ['Gabriel Jesus', ['Palmeiras', 'Manchester City', 'Arsenal'], 'gabriel jesus'],
+  ['Roberto Firmino', ['Hoffenheim', 'Liverpool', 'Al-Ahli'], 'firmino'],
+  ['Olivier Giroud', ['Montpellier', 'Arsenal', 'Chelsea', 'Milan AC', 'Los Angeles FC'], 'giroud'],
+  ['Álvaro Morata', ['Real Madrid', 'Juventus', 'Chelsea', 'Atlético Madrid', 'Milan AC'], 'morata'],
+  ['Eric Cantona', ['Auxerre', 'Marseille', 'Leeds', 'Manchester United'], 'cantona|king eric'],
+  ['Philippe Coutinho', ['Inter Milan', 'Liverpool', 'Barcelone', 'Aston Villa'], 'coutinho|philippe coutinho'],
+  ['Michel Platini', ['Nancy', 'Saint-Étienne', 'Juventus'], 'platini'],
+  ['Christian Pulisic', ['Borussia Dortmund', 'Chelsea', 'Milan AC'], 'pulisic'],
+  ['Memphis Depay', ['PSV Eindhoven', 'Manchester United', 'Lyon', 'Barcelone', 'Atlético Madrid'], 'depay|memphis'],
+  ['Georginio Wijnaldum', ['PSV Eindhoven', 'Newcastle', 'Liverpool', 'PSG'], 'wijnaldum'],
+  ['James Rodríguez', ['Porto', 'Monaco', 'Real Madrid', 'Bayern Munich', 'Everton'], 'james rodriguez|james'],
+  ['Diego Maradona', ['Argentinos Juniors', 'Boca Juniors', 'Barcelone', 'Naples'], 'maradona|diego maradona'],
+  ['Johan Cruyff', ['Ajax', 'Barcelone', 'Feyenoord'], 'cruyff']
 ];
 // Construit le jeu "devine le joueur" du jour : 7 parcours tirés de MJ_CAREERS,
 // tournant chaque semaine pour varier. Réponse en saisie libre.
