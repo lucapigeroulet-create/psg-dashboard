@@ -3296,6 +3296,13 @@
       </div>
     </div>
 
+    <!-- État des notifications push par joueur (staff uniquement) -->
+    <div class="card" id="notif-status-card" style="display:none;">
+      <h2>🔔 Notifications push — état des joueurs</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Qui recevra les notifications push (rappels automatiques, séance affectée, messages). Chaque joueur doit les activer lui-même depuis son téléphone.</p>
+      <div id="notif-status-content"></div>
+    </div>
+
     <!-- Bandeau notifications push (joueur uniquement) -->
     <div id="push-banner"></div>
 
@@ -6528,6 +6535,11 @@ function renderMessages() {
   if (notifsCard) notifsCard.style.display = isStaff ? '' : 'none';
   if (isStaff) renderNotifsAuto();
 
+  // État des notifications push par joueur (reçoivent / ne reçoivent pas) : staff seulement
+  const notifStatusCard = document.getElementById('notif-status-card');
+  if (notifStatusCard) notifStatusCard.style.display = isStaff ? '' : 'none';
+  if (isStaff) renderNotifStatus();
+
   const pushBannerEl = document.getElementById('push-banner');
   if (pushBannerEl) { pushBannerEl.style.display = isStaff ? 'none' : ''; if (!isStaff) renderPushBanner(); }
 
@@ -6596,6 +6608,52 @@ function renderMessages() {
       '</div>';
     }
   }).join('');
+}
+
+// Affiche l'état des notifications push des joueurs de l'org courante :
+// deux colonnes « reçoivent » / « ne reçoivent pas ». Staff/admin uniquement.
+// Les abonnements sont lisibles par le staff (RLS push_subscriptions) ; on matche
+// sur joueur_nom + org. Un joueur "reçoit" s'il a ≥ 1 appareil abonné.
+async function renderNotifStatus() {
+  const content = document.getElementById('notif-status-content');
+  if (!content) return;
+  content.innerHTML = '<div style="color:var(--text-dim); font-size:13px;">Chargement…</div>';
+
+  let subs = [];
+  try {
+    const { data } = await sb.from('push_subscriptions')
+      .select('joueur_nom, user_id, endpoint').eq('org', currentOrg);
+    subs = data || [];
+  } catch (e) { subs = []; }
+
+  // Joueurs abonnés (au moins un appareil) — match par nom normalisé
+  const subbedNames = new Set(subs.map(s => (s.joueur_nom || '').trim()).filter(Boolean));
+  // Abonnements sans joueur_nom = comptes staff/médical abonnés
+  const staffDevices = subs.filter(s => !s.joueur_nom).length;
+
+  const players = getAllPlayers();
+  const withNotif = players.filter(p => subbedNames.has(p));
+  const without   = players.filter(p => !subbedNames.has(p));
+
+  const col = (title, arr, color, emptyMsg) =>
+    '<div style="flex:1; min-width:220px;">' +
+      '<div style="font-weight:700; font-size:13px; margin-bottom:8px; color:' + color + ';">' + title + ' (' + arr.length + ')</div>' +
+      (arr.length
+        ? '<div style="display:flex; flex-direction:column; gap:4px;">' +
+            arr.map(n => '<div style="font-size:13px; padding:5px 9px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px;">' + escapeHtml(n) + '</div>').join('') +
+          '</div>'
+        : '<div style="font-size:12px; color:var(--text-dim); padding:5px 0;">' + emptyMsg + '</div>') +
+    '</div>';
+
+  content.innerHTML =
+    '<div style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">' +
+      '<b style="color:var(--green);">' + withNotif.length + '</b> joueur(s) sur ' + players.length + ' recevront les notifications push.' +
+      (staffDevices > 0 ? ' · ' + staffDevices + ' appareil(s) staff abonné(s).' : '') +
+    '</div>' +
+    '<div style="display:flex; gap:20px; flex-wrap:wrap;">' +
+      col('✅ Reçoivent les notifications', withNotif, 'var(--green)', 'Aucun joueur abonné pour l\'instant.') +
+      col('🔕 Ne reçoivent pas', without, 'var(--text-dim)', 'Tous les joueurs sont abonnés 🎉') +
+    '</div>';
 }
 
 // ============================================================
@@ -11861,6 +11919,9 @@ function renderGPSHistory() {
     const editBtn = canWrite()
       ? '<button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="openGpsSessionEdit(\'' + s.date + '\', \'' + seanceEsc + '\')">✏️ Modifier</button> '
       : '';
+    const reassignBtn = canWrite()
+      ? '<button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="openGpsReassign(\'' + s.date + '\', \'' + seanceEsc + '\')">👤 Réattribuer</button> '
+      : '';
     html += '<tr>' +
       '<td style="text-align:left;">' + formatDateFR(s.date) + '</td>' +
       '<td style="text-align:left;">' + escapeHtml(s.seance) + '</td>' +
@@ -11868,7 +11929,7 @@ function renderGPSHistory() {
       '<td style="text-align:center;">' + s.players.size + '</td>' +
       '<td style="text-align:center;">' + splitLabel + '</td>' +
       '<td style="text-align:center;">' + s.rows + '</td>' +
-      '<td style="text-align:center;white-space:nowrap;">' + editBtn +
+      '<td style="text-align:center;white-space:nowrap;">' + editBtn + reassignBtn +
         '<button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;color:var(--red);" onclick="deleteGPSSession(\'' + s.date + '\', \'' + seanceEsc + '\')">🗑 Supprimer</button></td>' +
       '</tr>';
   });
@@ -12073,6 +12134,95 @@ async function saveGpsSessionEdit() {
   }
   _writeCache('gps_data', currentOrg, state.bdd_gps);
   closeGpsSessionEdit();
+  renderGPSHistory();
+  renderGPS();
+}
+
+// ── Réattribuer une séance GPS d'un joueur à un autre ──
+// Cas typique : un joueur a porté le GPS d'un autre → toutes ses lignes GPS de la
+// séance (tous les découpages) sont transférées vers le vrai joueur.
+let gpsReassignData = null;
+function openGpsReassign(date, seance) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const rows = state.bdd_gps.filter(g => g.date === date && (g.seance || g.session_title || '') === seance);
+  if (rows.length === 0) { toast('Séance GPS introuvable', 'error'); return; }
+  const players = [...new Set(rows.map(r => r.joueur))].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  gpsReassignData = { date, seance, rows };
+
+  let ov = document.getElementById('gps-reassign-modal');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'gps-reassign-modal';
+    ov.style.cssText = 'display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; padding:20px;';
+    ov.addEventListener('click', (e) => { if (e.target === ov) closeGpsReassign(); });
+    document.body.appendChild(ov);
+  }
+
+  const roster = getAllPlayers();
+  const wrongOpts = players.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('');
+  const rightOpts = ['<option value="">— Choisir le vrai joueur —</option>']
+    .concat(roster.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>')).join('');
+
+  ov.innerHTML =
+    '<div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:480px; width:100%;">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
+        '<h3 style="margin:0; color:var(--accent-light); font-size:16px;">👤 Réattribuer une séance GPS</h3>' +
+        '<button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="closeGpsReassign()">✕</button>' +
+      '</div>' +
+      '<div style="font-size:12px; color:var(--text-dim); margin-bottom:16px;">' + formatDateFR(date) + ' · ' + escapeHtml(seance) +
+        ' — transfère toutes les données GPS d\'un joueur vers un autre (GPS porté par la mauvaise personne).</div>' +
+      '<div style="margin-bottom:14px;">' +
+        '<label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;">Données actuellement au nom de</label>' +
+        '<select id="gps-reassign-from" onchange="gpsReassignPreview()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:14px;">' + wrongOpts + '</select>' +
+      '</div>' +
+      '<div style="margin-bottom:6px;">' +
+        '<label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;">Vrai joueur (destinataire)</label>' +
+        '<select id="gps-reassign-to" onchange="gpsReassignPreview()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:14px;">' + rightOpts + '</select>' +
+      '</div>' +
+      '<div id="gps-reassign-warn" style="font-size:12px; color:#fca5a5; min-height:16px; margin-bottom:10px;"></div>' +
+      '<div style="display:flex; justify-content:flex-end; gap:10px;">' +
+        '<button type="button" class="btn btn-secondary" onclick="closeGpsReassign()">Annuler</button>' +
+        '<button type="button" class="btn" onclick="saveGpsReassign()">💾 Réattribuer</button>' +
+      '</div>' +
+    '</div>';
+  ov.style.display = 'flex';
+  gpsReassignPreview();
+}
+function gpsReassignPreview() {
+  if (!gpsReassignData) return;
+  const from = (document.getElementById('gps-reassign-from') || {}).value;
+  const to = (document.getElementById('gps-reassign-to') || {}).value;
+  const warn = document.getElementById('gps-reassign-warn');
+  if (!warn) return;
+  let msg = '';
+  if (to && from && to === from) msg = '⚠️ Le joueur source et le destinataire sont identiques.';
+  else if (to && gpsReassignData.rows.some(r => r.joueur === to)) msg = '⚠️ ' + to + ' a déjà des données GPS sur cette séance : elles seront fusionnées.';
+  warn.textContent = msg;
+}
+function closeGpsReassign() {
+  const ov = document.getElementById('gps-reassign-modal');
+  if (ov) ov.style.display = 'none';
+  gpsReassignData = null;
+}
+async function saveGpsReassign() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  if (!gpsReassignData) return;
+  const from = (document.getElementById('gps-reassign-from') || {}).value;
+  const to = (document.getElementById('gps-reassign-to') || {}).value;
+  if (!to) { toast('Choisis le vrai joueur', 'error'); return; }
+  if (to === from) { toast('Source et destinataire identiques', 'error'); return; }
+  const rows = gpsReassignData.rows.filter(r => r.joueur === from);
+  if (rows.length === 0) { toast('Aucune donnée à réattribuer', 'info'); return; }
+  if (!confirm('Réattribuer ' + rows.length + ' ligne(s) GPS de « ' + from + ' » vers « ' + to + ' » pour la séance du ' + formatDateFR(gpsReassignData.date) + ' ?')) return;
+
+  const results = await Promise.all(rows.map(r => sb.from('gps_data').update({ joueur: to }).eq('id', r.id)));
+  let failed = 0;
+  results.forEach((res, idx) => { if (res && res.error) failed++; else rows[idx].joueur = to; });
+
+  if (failed > 0) { toast(failed + ' ligne(s) en erreur sur ' + rows.length, 'error'); }
+  else { toast('Séance GPS réattribuée : ' + from + ' → ' + to, 'success'); }
+  _writeCache('gps_data', currentOrg, state.bdd_gps);
+  closeGpsReassign();
   renderGPSHistory();
   renderGPS();
 }
@@ -16677,7 +16827,8 @@ const MJ_EN = {
   'Barcelone': 'Barcelona', 'Milan AC': 'AC Milan', 'Étoile Rouge de Belgrade': 'Red Star Belgrade',
   'Hambourg': 'Hamburg SV', 'Steaua Bucarest': 'Steaua Bucharest', 'Valence CF': 'Valencia CF',
   'Séville FC': 'Sevilla FC', 'Werder Brême': 'Werder Bremen', 'Deportivo La Corogne': 'Deportivo La Coruña',
-  'Naples': 'Napoli', 'Eintracht Francfort': 'Eintracht Frankfurt', 'CSKA Moscou': 'CSKA Moscow'
+  'Naples': 'Napoli', 'Eintracht Francfort': 'Eintracht Frankfurt', 'CSKA Moscou': 'CSKA Moscow',
+  'Bâle': 'Basel', 'Parme': 'Parma', 'Palerme': 'Palermo'
 };
 function mjEn(s) { return MJ_EN[s] || s; }
 // ---- Palmarès vérifiés (faits avant 2026) ----------------------------------
@@ -17010,17 +17161,59 @@ const MJ_CAREERS = [
   ['Gareth Bale', ['Southampton', 'Tottenham', 'Real Madrid'], 'bale'],
   ['Carlos Tevez', ['Boca Juniors', 'Corinthians', 'West Ham', 'Manchester United', 'Manchester City', 'Juventus'], 'tevez|carlitos'],
   ['George Weah', ['Monaco', 'PSG', 'Milan AC', 'Chelsea'], 'weah'],
-  ['Zlatan Ibrahimović', ['Ajax', 'Juventus', 'Inter Milan', 'Barcelone', 'Milan AC', 'PSG', 'Manchester United'], 'zlatan|ibrahimovic|ibra']
+  ['Zlatan Ibrahimović', ['Ajax', 'Juventus', 'Inter Milan', 'Barcelone', 'Milan AC', 'PSG', 'Manchester United'], 'zlatan|ibrahimovic|ibra'],
+  ['Lionel Messi', ['Barcelone', 'PSG', 'Inter Miami'], 'messi|leo messi|la pulga'],
+  ['Karim Benzema', ['Lyon', 'Real Madrid', 'Al-Ittihad'], 'benzema'],
+  ['Antoine Griezmann', ['Real Sociedad', 'Atlético Madrid', 'Barcelone'], 'griezmann|grizou'],
+  ['Eden Hazard', ['Lille', 'Chelsea', 'Real Madrid'], 'hazard'],
+  ['Mohamed Salah', ['Bâle', 'Chelsea', 'Roma', 'Liverpool'], 'salah|mo salah'],
+  ['Kevin De Bruyne', ['Genk', 'Chelsea', 'Wolfsburg', 'Manchester City'], 'de bruyne|kdb'],
+  ['Sadio Mané', ['Metz', 'Southampton', 'Liverpool', 'Bayern Munich'], 'mane|sadio mane'],
+  ['Virgil van Dijk', ['Celtic', 'Southampton', 'Liverpool'], 'van dijk'],
+  ['Harry Kane', ['Tottenham', 'Bayern Munich'], 'kane'],
+  ['Erling Haaland', ['Molde', 'Salzburg', 'Borussia Dortmund', 'Manchester City'], 'haaland'],
+  ['Luis Suárez', ['Ajax', 'Liverpool', 'Barcelone', 'Atlético Madrid'], 'luis suarez|suarez'],
+  ['Sergio Agüero', ['Independiente', 'Atlético Madrid', 'Manchester City', 'Barcelone'], 'aguero|kun aguero|kun'],
+  ['Edinson Cavani', ['Palerme', 'Naples', 'PSG', 'Manchester United'], 'cavani|el matador'],
+  ['Ángel Di María', ['Benfica', 'Real Madrid', 'Manchester United', 'PSG', 'Juventus'], 'di maria|el fideo'],
+  ['Gianluigi Buffon', ['Parme', 'Juventus', 'PSG'], 'buffon|gigi buffon'],
+  ['Andriy Shevchenko', ['Dynamo Kyiv', 'Milan AC', 'Chelsea'], 'shevchenko|sheva'],
+  ['Kaká', ['São Paulo', 'Milan AC', 'Real Madrid', 'Orlando City'], 'kaka'],
+  ['Fernando Torres', ['Atlético Madrid', 'Liverpool', 'Chelsea', 'Milan AC'], 'torres|el nino'],
+  ['Didier Drogba', ['Marseille', 'Chelsea', 'Galatasaray'], 'drogba'],
+  ['Frank Lampard', ['West Ham', 'Chelsea', 'Manchester City'], 'lampard'],
+  ['Steven Gerrard', ['Liverpool', 'LA Galaxy'], 'gerrard'],
+  ['Wayne Rooney', ['Everton', 'Manchester United', 'DC United'], 'rooney'],
+  ['Xabi Alonso', ['Real Sociedad', 'Liverpool', 'Real Madrid', 'Bayern Munich'], 'xabi alonso|xabi'],
+  ['Iker Casillas', ['Real Madrid', 'Porto'], 'casillas|san iker'],
+  ['Arjen Robben', ['PSV Eindhoven', 'Chelsea', 'Real Madrid', 'Bayern Munich'], 'robben'],
+  ['Franck Ribéry', ['Marseille', 'Bayern Munich', 'Fiorentina'], 'ribery'],
+  ['Roberto Carlos', ['Inter Milan', 'Real Madrid', 'Fenerbahçe'], 'roberto carlos'],
+  ['Patrick Vieira', ['Milan AC', 'Arsenal', 'Juventus', 'Inter Milan', 'Manchester City'], 'vieira'],
+  ['Deco', ['Porto', 'Barcelone', 'Chelsea'], 'deco'],
+  ['Wesley Sneijder', ['Ajax', 'Real Madrid', 'Inter Milan', 'Galatasaray'], 'sneijder'],
+  ['Samuel Eto\'o', ['Mallorca', 'Barcelone', 'Inter Milan', 'Chelsea'], 'eto\'o|etoo|eto o'],
+  ['Rivaldo', ['Palmeiras', 'Barcelone', 'Milan AC'], 'rivaldo'],
+  ['Andrés Iniesta', ['Barcelone', 'Vissel Kobe'], 'iniesta'],
+  ['Xavi', ['Barcelone', 'Al-Sadd'], 'xavi|xavi hernandez']
 ];
 // Construit le jeu "devine le joueur" du jour : 7 parcours tirés de MJ_CAREERS,
 // tournant chaque semaine pour varier. Réponse en saisie libre.
 function mjDevineGame(week) {
-  const order = mjShuffled(MJ_CAREERS.map((_, i) => i), 424242);
-  const N = Math.min(7, MJ_CAREERS.length);
-  const off = ((week % order.length) + order.length) % order.length;
+  const total = MJ_CAREERS.length;
+  const N = Math.min(7, total);
+  // Nombre de semaines pleines avant qu'un joueur puisse revenir.
+  const cycleLen = Math.max(1, Math.floor(total / N));
+  const cycle = Math.floor(week / cycleLen);
+  const step = ((week % cycleLen) + cycleLen) % cycleLen;
+  // Nouveau mélange à chaque cycle : les semaines d'un même cycle piochent des
+  // tranches DISJOINTES de l'ordre → aucun joueur ne revient pendant cycleLen
+  // semaines, et les regroupements changent d'un cycle à l'autre.
+  const order = mjShuffled(MJ_CAREERS.map((_, i) => i), 424242 + cycle * 7919);
+  const off = step * N;
   const qs = [];
   for (let k = 0; k < N; k++) {
-    const c = MJ_CAREERS[order[(off + k) % order.length]];
+    const c = MJ_CAREERS[order[(off + k) % total]];
     qs.push({
       q: { fr: c[1].join(' → '), en: c[1].map(mjEn).join(' → ') },
       reponse: c[0],
