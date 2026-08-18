@@ -15057,6 +15057,17 @@ function gpsSetDistHsrZoomAxis(axis) {
   }
 }
 
+// Une ligne GPS compte-t-elle comme un MATCH pour le rapport Distance vs Intensité ?
+// 1) catégorie explicite prioritaire : 'match' → oui, 'seance'/'individuel' → non.
+// 2) données anciennes sans catégorie : on se fie au titre Catapult ("MATCH ..." = match).
+function gpsIsMatchRow(r) {
+  const c = (r && r.categorie ? String(r.categorie) : '').toLowerCase();
+  if (c === 'match') return true;
+  if (c === 'seance' || c === 'individuel') return false;
+  const t = ((r && (r.seance || r.session_title)) || '').toUpperCase();
+  return /\bMATCH\b/.test(t);
+}
+
 function renderGPSDistHSR() {
   ['cumul', 'match', 'player'].forEach(mode => {
     const btn = document.getElementById('gps-disthsr-mode-' + mode);
@@ -15098,6 +15109,7 @@ function renderGPSDistHSR() {
       return;
     }
     rows = rows.filter(x => x.joueur === player);
+    rows = rows.filter(gpsIsMatchRow); // rapport = matchs uniquement (exclut les entraînements)
     title = '👤 ' + escapeHtml(player) + ' — Distance vs Intensité (Sprint)';
     subtitle = 'Chaque point = un match de ' + escapeHtml(player) + '. Le logo affiché est celui de l\'adversaire.';
     const refTimePlayer = gpsGetDistHsrRefTime();
@@ -15115,6 +15127,7 @@ function renderGPSDistHSR() {
       };
     });
   } else {
+    rows = rows.filter(gpsIsMatchRow); // rapport = matchs uniquement (exclut les entraînements)
     const group = document.getElementById('gps-group-select').value;
     if (group) {
       const groupPlayers = getAllPlayers().filter(p => getJoueurInfo(p).groupe === group);
