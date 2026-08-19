@@ -7449,6 +7449,53 @@ async function saveRPEToSupabase(date, joueur, rpeArray) {
   return true;
 }
 
+// Aligne l'état local sur la ligne RPE renvoyée par le serveur (vérité fusionnée,
+// incluant les modifications concurrentes d'un autre appareil). row = null => ligne supprimée.
+function syncRpeRowLocal(date, joueur, row) {
+  state.bdd_rpe = state.bdd_rpe || [];
+  const idx = state.bdd_rpe.findIndex(x => x.date === date && x.joueur === joueur);
+  if (!row) { if (idx >= 0) state.bdd_rpe.splice(idx, 1); return; }
+  const plaisir = (row.plaisir === null || row.plaisir === undefined) ? null : row.plaisir;
+  if (idx >= 0) {
+    state.bdd_rpe[idx].rpe = row.rpe || [];
+    state.bdd_rpe[idx].plaisir = plaisir;
+    state.bdd_rpe[idx].updated_at = row.updated_at || state.bdd_rpe[idx].updated_at || null;
+    if (!state.bdd_rpe[idx].created_at) state.bdd_rpe[idx].created_at = row.created_at || null;
+  } else {
+    state.bdd_rpe.push({ date, joueur, rpe: row.rpe || [], plaisir, created_at: row.created_at || null, updated_at: row.updated_at || null });
+  }
+}
+
+// Écriture RPE ANTI-CONFLIT : n'envoie que les séances modifiées à la RPC serveur
+// `rpe_merge`, qui les fusionne atomiquement (verrou FOR UPDATE) sur l'état frais —
+// deux appareils (ex. admin + joueuse) qui saisissent en même temps ne s'écrasent plus.
+// `seances` = noms des séances changées localement ; opts.setPlaisir/plaisir = note de plaisir du jour.
+async function saveRPEMerge(date, joueur, seances, opts) {
+  if (!canWriteRPE(joueur)) {
+    toast(tr('You can only rate your own sessions', 'Tu ne peux saisir que tes propres RPE'), 'error');
+    return false;
+  }
+  if (!sb) return false;
+  const r = (state.bdd_rpe || []).find(x => x.date === date && x.joueur === joueur);
+  const changes = (seances || []).map(s => {
+    const entry = (r && r.rpe) ? r.rpe.find(e => e.seance === s) : null;
+    return { seance: s, entry: entry || null };
+  });
+  const setPl = !!(opts && opts.setPlaisir);
+  const params = {
+    p_date: date, p_joueur: joueur, p_org: currentOrg, p_changes: changes,
+    p_set_plaisir: setPl, p_plaisir: setPl ? ((opts.plaisir === undefined) ? null : opts.plaisir) : null
+  };
+  const { data, error } = await sb.rpc('rpe_merge', params);
+  if (error) {
+    // Filet de sécurité : si la RPC est indisponible, on retombe sur l'écriture pleine.
+    console.warn('rpe_merge indisponible, fallback upsert :', error.message);
+    return await saveRPEToSupabase(date, joueur, r ? r.rpe : []);
+  }
+  syncRpeRowLocal(date, joueur, Array.isArray(data) ? (data[0] || null) : (data || null));
+  return true;
+}
+
 // ---- Note de plaisir (-5 à +5), une par joueur et par jour — SECONDE LIGUE uniquement ----
 function getPlaisir(date, joueur) {
   const row = (state.bdd_rpe || []).find(r => r.date === date && r.joueur === joueur);
@@ -7467,12 +7514,9 @@ async function savePlaisir(date, joueur, value) {
     return;
   }
   const v = (value === null || value === undefined || value === '') ? null : parseInt(value, 10);
-  const existing = (state.bdd_rpe || []).find(r => r.date === date && r.joueur === joueur);
-  const rpeArr = existing ? (existing.rpe || []) : [];
-  const { error } = await sb.from('rpe_declarations').upsert({ date, joueur, rpe: rpeArr, plaisir: v, org: currentOrg }, { onConflict: 'date,joueur' });
-  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
-  if (existing) existing.plaisir = v;
-  else (state.bdd_rpe = state.bdd_rpe || []).push({ date, joueur, rpe: [], plaisir: v, created_at: null, updated_at: null });
+  // Fusion atomique : ne met à jour que la colonne plaisir, sans réécrire le tableau rpe.
+  const ok = await saveRPEMerge(date, joueur, [], { setPlaisir: true, plaisir: v });
+  if (!ok) return;
   if (currentRole === 'lecteur') renderPlayerRPE(); else renderRPEEntry();
 }
 function setPlaisirValue(date, joueur, v) { savePlaisir(date, joueur, v); }
@@ -7503,7 +7547,7 @@ async function setPlaisirSeance(date, joueur, seance, value) {
   } else {
     m.plaisir = v;
   }
-  const ok = await saveRPEToSupabase(date, joueur, r.rpe);
+  const ok = await saveRPEMerge(date, joueur, [seance]);
   if (ok) { if (currentRole === 'lecteur') renderPlayerRPE(); else renderRPEEntry(); }
 }
 // Saisie compacte du plaisir (staff, mode Tableau) : petit champ -5..+5 sous les notes RPE.
@@ -20945,8 +20989,7 @@ async function setRPEProcedeValue(date, joueur, seance, procIndex, value) {
     return;
   }
   setRPEProcedeJoueurSeance(date, joueur, seance, procIndex, value);
-  const r = state.bdd_rpe.find(x => x.date === date && x.joueur === joueur);
-  const ok = await saveRPEToSupabase(date, joueur, r ? r.rpe : []);
+  await saveRPEMerge(date, joueur, [seance]);
   if (currentRole === 'lecteur') renderPlayerRPE();
   else renderRPEEntry();
 }
@@ -20958,8 +21001,7 @@ async function setRPECardValue(date, joueur, seance, value) {
     return;
   }
   setRPEJoueurSeance(date, joueur, seance, value);
-  const r = state.bdd_rpe.find(x => x.date === date && x.joueur === joueur);
-  const ok = await saveRPEToSupabase(date, joueur, r ? r.rpe : []);
+  await saveRPEMerge(date, joueur, [seance]);
   // Si on est en vue joueur, re-render pour refléter l'état (et démarrer le chrono 2h)
   if (currentRole === 'lecteur') renderPlayerRPE();
   else renderRPEEntry();
@@ -20994,9 +21036,8 @@ async function setRPEFromInput(inp) {
   rpeSuppressRefresh = true;
   clearTimeout(window._rpeRefreshTimer);
   window._rpeRefreshTimer = setTimeout(() => { rpeSuppressRefresh = false; }, 4000);
-  // Sauvegarde immédiate vers Supabase (comme côté joueur)
-  const r = state.bdd_rpe.find(x => x.date === d && x.joueur === p);
-  await saveRPEToSupabase(d, p, r ? r.rpe : []);
+  // Sauvegarde immédiate vers Supabase (fusion anti-conflit ; comme côté joueur)
+  await saveRPEMerge(d, p, [s]);
 
   // Mise à jour CIBLÉE (sans re-render → le scroll reste en place, navigation fluide)
   const filled = (v !== null && !isNaN(v));
@@ -21034,8 +21075,7 @@ async function setRPEProcFromInput(inp) {
   rpeSuppressRefresh = true;
   clearTimeout(window._rpeRefreshTimer);
   window._rpeRefreshTimer = setTimeout(() => { rpeSuppressRefresh = false; }, 4000);
-  const r = state.bdd_rpe.find(x => x.date === d && x.joueur === p);
-  await saveRPEToSupabase(d, p, r ? r.rpe : []);
+  await saveRPEMerge(d, p, [s]);
 
   // Mise à jour CIBLÉE sans re-render (scroll préservé)
   const filled = (v !== null && !isNaN(v));
@@ -21059,7 +21099,13 @@ async function setRPEProcFromInput(inp) {
 
 async function saveAllRPE() {
   let count = 0;
-  const touched = new Set(); // (date, joueur) pour la persistance
+  // (date, joueur) -> ensemble des séances modifiées, pour une fusion ciblée anti-conflit
+  const touched = new Map();
+  const addTouched = (d, p, s) => {
+    const k = d + '||' + p;
+    if (!touched.has(k)) touched.set(k, new Set());
+    touched.get(k).add(s);
+  };
 
   document.querySelectorAll('[data-rpe-date]').forEach(inp => {
     const d = inp.dataset.rpeDate;
@@ -21069,7 +21115,7 @@ async function saveAllRPE() {
     const v = raw === '' ? null : parseFloat(raw);
     setRPEJoueurSeance(d, p, s, (v === null || isNaN(v)) ? null : v);
     if (v !== null && !isNaN(v)) count++;
-    touched.add(d + '||' + p);
+    addTouched(d, p, s);
   });
 
   const procedeGroups = {};
@@ -21088,14 +21134,13 @@ async function saveAllRPE() {
   Object.values(procedeGroups).forEach(g => {
     setRPEJoueurSeance(g.d, g.p, g.s, g.values);
     count += g.values.filter(v => v !== null && !isNaN(v)).length;
-    touched.add(g.d + '||' + g.p);
+    addTouched(g.d, g.p, g.s);
   });
 
-  // Persister chaque (date, joueur) touché vers Supabase
-  for (const key of touched) {
+  // Persister chaque (date, joueur) touché via fusion atomique des séances modifiées
+  for (const [key, seancesSet] of touched) {
     const [d, p] = key.split('||');
-    const r = state.bdd_rpe.find(x => x.date === d && x.joueur === p);
-    await saveRPEToSupabase(d, p, r ? r.rpe : []);
+    await saveRPEMerge(d, p, [...seancesSet]);
   }
 
   toast(count + ' note(s) enregistrée(s)', 'success');
@@ -21365,7 +21410,7 @@ async function deleteSeance(date, nom) {
         const r = state.bdd_rpe.find(x => x.date === date && x.joueur === p);
         if (r && r.rpe) {
           r.rpe = r.rpe.filter(item => item.seance !== nom);
-          await saveRPEToSupabase(date, p, r.rpe);
+          await saveRPEMerge(date, p, [nom]);
         }
       }
       state.bdd_ent = state.bdd_ent.filter(e => e.seances.length > 0);
