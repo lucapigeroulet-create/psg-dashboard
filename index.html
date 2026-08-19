@@ -6998,7 +6998,7 @@ function applyRoleRestrictions() {
     // pas d'export JSON, pas de Notes médicales, pas de Paramètres.
     const staffLimited = (currentRole === 'staff');
     // Comptes médicaux staff : conservent la vue médicale COMPLÈTE (Notes médicales incluses)
-    const FULL_MEDICAL_EMAILS = ['lou@tegg.fr', 'lucam@psg.fr'];
+    const FULL_MEDICAL_EMAILS = ['lou@tegg.fr', 'lucam@psg.fr', 'alfred@tegg.fr'];
     const isFullMedical = FULL_MEDICAL_EMAILS.includes((currentUser && currentUser.email || '').toLowerCase());
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = staffLimited ? 'none' : '';
