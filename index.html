@@ -4526,9 +4526,12 @@ function getKineCreneaux(dateIso, joueur) {
 
 // Notes médicales d'un joueur pour un jour donné (affichées dans la case du calendrier,
 // réservées staff/médical/admin). Une note par ligne, plus récente en premier.
+// Les notes déjà rattachées à un créneau kiné sont exclues : le passage est déjà
+// affiché via la pastille 🩺 Kiné de la même case (pas de doublon).
 function getMedicalNotesForDay(dateIso, joueur) {
+  const linkedNoteIds = new Set((state.bdd_creneaux_medicaux || []).map(s => s.note_id).filter(Boolean));
   return (state.bdd_medical_notes || [])
-    .filter(n => n.org === currentOrg && n.joueur === joueur && n.date === dateIso)
+    .filter(n => n.org === currentOrg && n.joueur === joueur && n.date === dateIso && !linkedNoteIds.has(n.id))
     .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
 }
 
