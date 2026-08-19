@@ -4614,9 +4614,11 @@ function _kineVisitsTipHtml(player) {
   const visites = (state.bdd_creneaux_medicaux || [])
     .filter(s => s.org === currentOrg && s.joueur === player && s.date >= startIso && s.date <= today)
     .map(s => ({ kind: 'creneau', date: s.date, heure: s.heure || '', data: s }));
-  // Les notes médicales de la fenêtre comptent aussi comme un passage kiné.
+  // Les notes médicales de la fenêtre comptent aussi comme un passage kiné,
+  // sauf celles déjà rattachées à un créneau (déjà listées via le créneau).
+  const linkedNoteIds = new Set((state.bdd_creneaux_medicaux || []).map(s => s.note_id).filter(Boolean));
   const notes = (state.bdd_medical_notes || [])
-    .filter(n => n.org === currentOrg && n.joueur === player && n.date >= startIso && n.date <= today)
+    .filter(n => n.org === currentOrg && n.joueur === player && n.date >= startIso && n.date <= today && !linkedNoteIds.has(n.id))
     .map(n => ({ kind: 'note', date: n.date, heure: '', data: n }));
   const all = visites.concat(notes)
     .sort((a, b) => (b.date + b.heure).localeCompare(a.date + a.heure));
@@ -24495,6 +24497,9 @@ function renderMedicalAvailability() {
   const kineStart = toLocalISO(kineStartDt);
   const kineTh = document.getElementById('med-avail-kine-th');
   if (kineTh) kineTh.textContent = '🩺 Kiné (' + (kineDays >= 365 ? 'saison' : kineDays + ' j') + ')';
+  // Notes déjà rattachées à un créneau (compte-rendu) : ne pas les compter en double,
+  // le créneau représente déjà ce passage.
+  const kineLinkedNoteIds = new Set((state.bdd_creneaux_medicaux || []).map(s => s.note_id).filter(Boolean));
 
   const allPlayers = getAllPlayers().filter(p => !group || getJoueurInfo(p).groupe === group);
   const statuts = {};
@@ -24559,9 +24564,10 @@ function renderMedicalAvailability() {
     const kineVisites = (state.bdd_creneaux_medicaux || [])
       .filter(s => s.org === currentOrg && s.joueur === p && s.date >= kineStart && s.date <= kineToday)
       .sort((a, b) => (a.date + (a.heure || '')).localeCompare(b.date + (b.heure || '')));
-    // Les notes médicales de la fenêtre comptent aussi comme un passage kiné.
+    // Les notes médicales de la fenêtre comptent aussi comme un passage kiné,
+    // sauf celles déjà rattachées à un créneau (déjà comptées via le créneau).
     const medVisitesCount = (state.bdd_medical_notes || [])
-      .filter(n => n.org === currentOrg && n.joueur === p && n.date >= kineStart && n.date <= kineToday).length;
+      .filter(n => n.org === currentOrg && n.joueur === p && n.date >= kineStart && n.date <= kineToday && !kineLinkedNoteIds.has(n.id)).length;
     const kineCount = kineVisites.length + medVisitesCount;
     const pAttr = String(p).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const kineCell = kineCount
