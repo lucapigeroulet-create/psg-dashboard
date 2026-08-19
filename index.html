@@ -1307,6 +1307,17 @@
       <div class="chart-container tall"><canvas id="chart-rpe-plaisir"></canvas></div>
     </div>
 
+    <!-- Graphique : charge affective RPE-plaisir (SECONDE LIGUE uniquement) -->
+    <div class="card" id="rpe-charge-affective-card" style="display:none;">
+      <h2>❤️ Charge affective (RPE-plaisir)</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">
+        Charge affective = durée × plaisir ressenti (−5 à +5). Le volume d'entraînement est pondéré par le vécu émotionnel : <b style="color:var(--green);">positive</b> = charge vécue avec plaisir, <b style="color:var(--red);">négative</b> = charge subie. Exprimée en UA affectives.
+      </p>
+      <div id="rpe-charge-affective-summary"></div>
+      <div style="font-size:12px; font-weight:600; color:var(--text-dim); margin:6px 0 8px;">Charge affective moyenne par joueuse et par jour</div>
+      <div class="chart-container tall"><canvas id="chart-rpe-charge-affective"></canvas></div>
+    </div>
+
     <!-- Graphique : charge hebdo cumulée comparée -->
     <div class="card">
       <h2>Charge hebdomadaire totale par joueur</h2>
@@ -10929,6 +10940,9 @@ function renderRPE() {
   // Visuel note de plaisir (SECONDE LIGUE)
   renderRPEPlaisirChart(dates, players);
 
+  // Charge affective RPE-plaisir (SECONDE LIGUE)
+  renderRPEChargeAffective(dates, players);
+
   // Rafraîchir le bilan individuel si un joueur est déjà sélectionné
   renderBilanIndividuel();
 
@@ -11252,6 +11266,98 @@ function renderRPEPlaisirChart(dates, players) {
       },
       scales: {
         y: { min: -5, max: 5, ticks: { stepSize: 1, color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
+        x: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+// ---- Charge affective (RPE-plaisir) — SECONDE LIGUE uniquement ----
+// charge affective = durée × plaisir (−5..+5), même base de durée que le sRPE.
+function chargeAffColor(v) {
+  if (v == null) return 'rgba(148,163,184,0.35)';
+  if (v > 0) return '#10b981';   // vécu positivement
+  if (v < 0) return '#ef4444';   // subi
+  return '#8ba3c1';
+}
+function computeChargeAffective(dateSet, playerSet) {
+  const out = [];
+  computeSRPE().forEach(x => {
+    if (dateSet && !dateSet.has(x.date)) return;
+    if (playerSet && !playerSet.has(x.joueur)) return;
+    if (!x.duree || x.duree <= 0) return;
+    const pl = getPlaisirSeance(x.date, x.joueur, x.seance);
+    if (pl == null) return;
+    out.push({ date: x.date, joueur: x.joueur, seance: x.seance, duree: x.duree, plaisir: pl, chargeAff: x.duree * pl });
+  });
+  return out;
+}
+function renderRPEChargeAffective(dates, players) {
+  const card = document.getElementById('rpe-charge-affective-card');
+  if (!card) return;
+  const show = (currentOrg === 'D2F');
+  card.style.display = show ? '' : 'none';
+  if (!show) { destroyChart('chart-rpe-charge-affective'); return; }
+
+  const dateSet = new Set(dates), playerSet = new Set(players);
+  const rows = computeChargeAffective(dateSet, playerSet);
+
+  // ===== Résumé =====
+  const summaryEl = document.getElementById('rpe-charge-affective-summary');
+  if (summaryEl) {
+    if (!rows.length) {
+      summaryEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; margin-bottom:12px;">Aucune charge affective sur la période (nécessite une durée de séance et une note de plaisir).</div>';
+    } else {
+      const totalRaw = rows.reduce((s, x) => s + x.chargeAff, 0);
+      const total = Math.round(totalRaw);
+      const nbJ = new Set(rows.map(x => x.joueur)).size;
+      const moyJ = nbJ ? Math.round(total / nbJ) : 0;
+      const sumDuree = rows.reduce((s, x) => s + x.duree, 0);
+      const plaisirPondere = sumDuree ? +(totalRaw / sumDuree).toFixed(2) : 0;
+      const interp = plaisirPondere >= 1.5 ? 'Semaine très bien vécue'
+        : plaisirPondere > 0.3 ? 'Semaine plutôt bien vécue'
+        : plaisirPondere >= -0.3 ? 'Vécu neutre'
+        : plaisirPondere > -1.5 ? 'Semaine plutôt subie'
+        : 'Semaine subie';
+      const tile = (label, val, color, sub) =>
+        '<div style="flex:0 0 auto; min-width:150px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:10px; padding:14px 18px; text-align:center;">' +
+          '<div style="font-size:12px; color:var(--text-dim);">' + label + '</div>' +
+          '<div style="font-size:30px; font-weight:800; color:' + color + ';">' + val + '</div>' +
+          '<div style="font-size:11px; color:var(--text-dim);">' + sub + '</div>' +
+        '</div>';
+      summaryEl.innerHTML =
+        '<div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:14px;">' +
+          tile('Charge affective totale', (total > 0 ? '+' : '') + total, chargeAffColor(total), 'UA · ' + rows.length + ' séance' + (rows.length > 1 ? 's' : '')) +
+          tile('Moyenne / joueuse', (moyJ > 0 ? '+' : '') + moyJ, chargeAffColor(moyJ), 'UA · ' + nbJ + ' joueuse' + (nbJ > 1 ? 's' : '')) +
+          tile('Plaisir moyen pondéré', (plaisirPondere > 0 ? '+' : '') + plaisirPondere, plaisirColor(Math.round(plaisirPondere)), interp) +
+        '</div>';
+    }
+  }
+
+  // ===== Graphique : charge affective moyenne par joueuse et par jour =====
+  const byDate = {};
+  rows.forEach(x => { (byDate[x.date] = byDate[x.date] || {}); byDate[x.date][x.joueur] = (byDate[x.date][x.joueur] || 0) + x.chargeAff; });
+  const perDay = dates.map(d => {
+    const j = byDate[d]; if (!j) return null;
+    const vals = Object.values(j); if (!vals.length) return null;
+    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+  });
+  const counts = dates.map(d => byDate[d] ? Object.keys(byDate[d]).length : 0);
+  const jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  const labels = dates.map((d, i) => jours[i] + ' ' + d.slice(8) + '/' + d.slice(5, 7));
+  const colors = perDay.map(v => chargeAffColor(v));
+  destroyChart('chart-rpe-charge-affective');
+  charts['chart-rpe-charge-affective'] = new Chart(document.getElementById('chart-rpe-charge-affective'), {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Charge affective (UA)', data: perDay.map(v => v == null ? 0 : v), backgroundColor: colors, borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (c) => { const i = c.dataIndex; return perDay[i] == null ? 'Aucune donnée' : ((perDay[i] > 0 ? '+' : '') + perDay[i] + ' UA (' + counts[i] + ' joueuse' + (counts[i] > 1 ? 's' : '') + ')'); } } }
+      },
+      scales: {
+        y: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'UA affectives', color: '#8ba3c1' } },
         x: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } }
       }
     }
