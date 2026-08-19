@@ -1419,7 +1419,7 @@
         <button class="btn btn-secondary" onclick="toggleGPSImport()" style="padding:4px 12px;">✕ Fermer</button>
       </div>
       <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
-        Glisse ton export CSV Catapult. Les colonnes (Date, Player Name, Distance, HSR, zones de vitesse...) sont détectées automatiquement. Séparateur virgule ou point-virgule géré.
+        Glisse ton export CSV Catapult. Les colonnes (Date, Player Name, Distance, HSR, zones de vitesse...) sont détectées automatiquement. Séparateur virgule ou point-virgule géré. Les exports <b>CTR</b> (bloc d'en-tête Date/Start Time, durée hh:mm:ss, distance en mètres, périodes) sont reconnus tels quels — aucune conversion nécessaire.
       </p>
       <input type="file" id="gps-import-file" accept=".csv,text/csv" onchange="handleGPSCSV(event)"
              style="color:var(--text); margin-bottom:12px; font-size:13px;" />
@@ -11468,19 +11468,35 @@ function gpsImportLog(msg, type) {
 
 // Détection séparateur + parsing
 function gpsParseCSV(text) {
-  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-  if (lines.length < 2) throw new Error('CSV vide ou sans données');
-  const sep = (lines[0].split(';').length > lines[0].split(',').length) ? ';' : ',';
-  const headers = gpsSplitLine(lines[0], sep).map(h => h.trim());
+  const rawLines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (rawLines.length < 2) throw new Error('CSV vide ou sans données');
+  const sep = (rawLines[0].split(';').length > rawLines[0].split(',').length) ? ';' : ',';
+  // Export CTR/Catapult ("ctr-report") : un bloc de métadonnées (Date, Start Time…)
+  // précède l'en-tête. La vraie ligne d'en-tête est celle qui contient "Player Name".
+  let headerIdx = 0;
+  for (let i = 0; i < rawLines.length; i++) {
+    const cells = gpsSplitLine(rawLines[i], sep).map(c => c.trim().toLowerCase());
+    if (cells.indexOf('player name') !== -1) { headerIdx = i; break; }
+  }
+  // Récupère la date de séance dans le préambule (ex : "Date:;18/07/2026")
+  const meta = {};
+  for (let i = 0; i < headerIdx; i++) {
+    const cells = gpsSplitLine(rawLines[i], sep).map(c => c.trim());
+    if (cells.length >= 2 && /^date/i.test(cells[0])) {
+      const m = cells.slice(1).join(' ').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (m) meta.date = m[0];
+    }
+  }
+  const headers = gpsSplitLine(rawLines[headerIdx], sep).map(h => h.trim());
   const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = gpsSplitLine(lines[i], sep);
+  for (let i = headerIdx + 1; i < rawLines.length; i++) {
+    const cols = gpsSplitLine(rawLines[i], sep);
     if (cols.length < 3) continue;
     const obj = {};
     headers.forEach((h, j) => { obj[h] = cols[j] !== undefined ? cols[j].trim() : ''; });
     rows.push(obj);
   }
-  return { headers, rows, sep };
+  return { headers, rows, sep, meta, metaPreamble: headerIdx > 0 };
 }
 
 function gpsSplitLine(line, sep) {
@@ -11509,6 +11525,24 @@ function gpsNum(v) {
   return isNaN(n) ? null : n;
 }
 
+// Durée → minutes. Accepte "HH:MM:SS"/"MM:SS" (export CTR) ou un nombre de
+// secondes (Catapult standard).
+function gpsDurationToMin(v) {
+  if (v === undefined || v === null || String(v).trim() === '') return null;
+  const s = String(v).trim();
+  if (s.indexOf(':') !== -1) {
+    const p = s.split(':').map(x => parseInt(x, 10));
+    if (p.some(x => isNaN(x))) return null;
+    let sec = 0;
+    if (p.length === 3) sec = p[0] * 3600 + p[1] * 60 + p[2];
+    else if (p.length === 2) sec = p[0] * 60 + p[1];
+    else return null;
+    return Math.round(sec / 60);
+  }
+  const n = parseFloat(s.replace(',', '.'));
+  return isNaN(n) ? null : Math.round(n / 60);
+}
+
 function gpsNormalizeDate(v) {
   if (!v) return null;
   v = String(v).trim();
@@ -11535,7 +11569,8 @@ function gpsCapitalize(s) {
 // les rapports qui filtrent sur la séance complète retrouvent bien ces lignes.
 function gpsNormalizeSplitName(v) {
   const s = String(v === undefined || v === null ? '' : v).trim();
-  if (!s || s === '0') return 'all';
+  // "0"/vide (Catapult) et "Session" (export CTR) = ligne séance entière → "all"
+  if (!s || s === '0' || s.toLowerCase() === 'session') return 'all';
   return s;
 }
 
@@ -11712,7 +11747,7 @@ function handleGPSCSV(e) {
         sprint: gpsFindCol(headers, ['sprint distance', 'sprint']),
         hsr: gpsFindCol(headers, ['hsr', 'high speed']),
         playerload: gpsFindCol(headers, ['player load', 'playerload']),
-        topspeed: gpsFindCol(headers, ['top speed', 'vitesse max', 'vmax']),
+        topspeed: gpsFindCol(headers, ['top speed', 'vitesse max', 'vmax', 'max velocity']),
         energy: gpsFindCol(headers, ['energy', 'énergie', 'kcal']),
         distmin: gpsFindCol(headers, ['distance per min', 'm/min']),
         maxdecel: gpsFindCol(headers, ['max deceleration', 'deceleration', 'décél']),
@@ -11729,8 +11764,13 @@ function handleGPSCSV(e) {
         z4: gpsFindCol(headers, ['speed zone 4', 'zone 4']),
         z5: gpsFindCol(headers, ['speed zone 5', 'zone 5'])
       };
-      if (!cols.date || !cols.player) {
-        gpsImportLog('❌ Colonnes Date et/ou Player Name introuvables. En-têtes : ' + headers.join(', '), 'err');
+      // Date : colonne du tableau, sinon date lue dans le préambule CTR
+      const metaDate = (parsed.meta && parsed.meta.date) ? parsed.meta.date : null;
+      // Export CTR = préambule de métadonnées ou colonne "Max Velocity" (Catapult
+      // standard utilise "Top Speed" et des km) → distance en mètres à convertir.
+      const isCTR = parsed.metaPreamble || !!gpsFindCol(headers, ['max velocity']);
+      if (!cols.player || (!cols.date && !metaDate)) {
+        gpsImportLog('❌ Colonne Player Name et/ou Date introuvable. En-têtes : ' + headers.join(', '), 'err');
         return;
       }
       gpsNameResolutions = {};
@@ -11743,9 +11783,11 @@ function handleGPSCSV(e) {
             gpsNameResolutions[key] = { raw: resolution.raw, status: 'unmatched', suggestion: resolution.suggestion, chosen: null, remember: true };
           }
         }
-        const durRaw = gpsNum(r[cols.duration]);
-        // Catapult exporte la durée en SECONDES → toujours convertir en minutes
-        const durMin = durRaw !== null ? Math.round(durRaw / 60) : null;
+        // Durée : "HH:MM:SS" (CTR) ou secondes (Catapult standard) → minutes
+        const durMin = gpsDurationToMin(r[cols.duration]);
+        // Distance : mètres dans l'export CTR → km attendu par l'app
+        let distKmVal = gpsNum(r[cols.distance]);
+        if (distKmVal !== null && isCTR) distKmVal = distKmVal / 1000;
         // Zones de vitesse (en km dans l'export Catapult)
         const z3v = gpsNum(r[cols.z3]);
         const z4v = gpsNum(r[cols.z4]);
@@ -11757,13 +11799,13 @@ function handleGPSCSV(e) {
           hsrVal = sumZones > 0 ? Math.round(sumZones * 1000) : 0;
         }
         return {
-          date: gpsNormalizeDate(r[cols.date]),
+          date: gpsNormalizeDate(cols.date ? r[cols.date] : metaDate),
           joueur: resolution ? (resolution.resolved || gpsCapitalize(resolution.raw)) : null,
           _raw_joueur: rawJoueur ? String(rawJoueur).trim() : null,
           session_title: cols.session ? r[cols.session] : null,
           split_name: cols.split ? gpsNormalizeSplitName(r[cols.split]) : 'all',
           duree_min: durMin,
-          distance_km: gpsNum(r[cols.distance]),
+          distance_km: distKmVal,
           sprint_dist_m: gpsNum(r[cols.sprint]),
           hsr: hsrVal,
           hsr_m: hsrVal,
