@@ -348,6 +348,11 @@
   .cal-kine:hover { background:#0e7490; }
   .cal-kine.done { background:#0891b2; box-shadow:0 0 0 1px rgba(34,211,238,0.45) inset; }
   .cal-kine.done:hover { background:#0e7490; }
+  /* Note médicale du jour affichée dans la case du calendrier (staff/médical seulement) */
+  .cal-mednote { background:#5b21b6; color:#ede9fe; border-radius:4px; padding:2px 4px; margin:1px 0; cursor:pointer; font-size:11px; font-weight:600; border:1px solid #a78bfa; }
+  .cal-mednote:hover { background:#6d28d9; }
+  .cal-mednote.restrict { background:#7f1d1d; color:#fecaca; border:1px solid #ef4444; }
+  .cal-mednote.restrict:hover { background:#991b1b; }
   .cal-cell.rest { background: #37415188; border-left: 3px solid #6b7280; }
   .cal-cell.injury { background: #7f1d1d88; border-left: 3px solid #ef4444; }
   .cal-cell.reathle { background: #4c1d9588; border-left: 3px solid #a855f7; }
@@ -3357,6 +3362,17 @@
     </div>
   </div>
 
+  <!-- Modal : détail d'une note médicale (depuis la case du calendrier) -->
+  <div id="med-note-detail-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9000; align-items:center; justify-content:center; padding:20px;" onclick="if(event.target===this) closeMedNoteDetail()">
+    <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:14px; max-width:540px; width:100%; max-height:85vh; overflow-y:auto; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+      <div style="display:flex; justify-content:space-between; align-items:start; gap:10px; margin-bottom:14px;">
+        <h2 id="med-note-detail-title" style="margin:0; font-size:18px;">📋 Note médicale</h2>
+        <button class="btn btn-secondary" style="padding:4px 12px;" onclick="closeMedNoteDetail()">✕</button>
+      </div>
+      <div id="med-note-detail-content"></div>
+    </div>
+  </div>
+
   <!-- Modal : résumé d'une fiche blessure -->
   <div id="bl-resume-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9000; align-items:center; justify-content:center; padding:20px;" onclick="if(event.target===this) closeFicheResume()">
     <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:14px; max-width:600px; width:100%; max-height:85vh; overflow-y:auto; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
@@ -4508,6 +4524,45 @@ function getKineCreneaux(dateIso, joueur) {
     .sort((a, b) => (a.heure || '').localeCompare(b.heure || ''));
 }
 
+// Notes médicales d'un joueur pour un jour donné (affichées dans la case du calendrier,
+// réservées staff/médical/admin). Une note par ligne, plus récente en premier.
+function getMedicalNotesForDay(dateIso, joueur) {
+  return (state.bdd_medical_notes || [])
+    .filter(n => n.org === currentOrg && n.joueur === joueur && n.date === dateIso)
+    .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+}
+
+// Ouvre le détail d'une note médicale depuis la case du calendrier.
+function openMedNoteDetail(id) {
+  const n = (state.bdd_medical_notes || []).find(x => x.id === id);
+  const modal = document.getElementById('med-note-detail-modal');
+  const titleEl = document.getElementById('med-note-detail-title');
+  const contentEl = document.getElementById('med-note-detail-content');
+  if (!modal || !contentEl) return;
+  if (!n) { toast('Note introuvable', 'error'); return; }
+  const label = MED_NOTE_LABELS[n.type] || n.type || 'Note';
+  const auteurShort = n.auteur ? String(n.auteur).split('@')[0] : '—';
+  const dfmt = n.date ? String(n.date).split('-').reverse().join('/') : '';
+  if (titleEl) titleEl.textContent = '📋 ' + (n.joueur || 'Note médicale');
+  let h = '';
+  h += '<div style="display:flex; flex-wrap:wrap; gap:8px 16px; font-size:13px; color:var(--text-dim); margin-bottom:14px;">';
+  h += '<div>📅 <b style="color:var(--text);">' + escapeHtml(dfmt) + '</b></div>';
+  h += '<div><span style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; padding:2px 8px; font-size:11px; color:var(--accent-light);">' + escapeHtml(label) + '</span></div>';
+  h += '<div>✍️ <b style="color:var(--text);">' + escapeHtml(auteurShort) + '</b></div>';
+  h += '</div>';
+  h += '<div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:13px; white-space:pre-wrap; margin-bottom:' + (n.restrictions ? '12px' : '0') + ';">' + (n.contenu ? escapeHtml(n.contenu) : '<span style="color:var(--text-dim);">Aucun contenu saisi.</span>') + '</div>';
+  if (n.restrictions) {
+    h += '<div style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#fbbf24; margin-bottom:4px;">⚠️ Consignes staff</div>';
+    h += '<div style="background:rgba(251,191,36,0.1); border:1px solid rgba(251,191,36,0.3); border-radius:8px; padding:10px 12px; font-size:13px; white-space:pre-wrap; color:#fbbf24;">' + escapeHtml(n.restrictions) + '</div>';
+  }
+  contentEl.innerHTML = h;
+  modal.style.display = 'flex';
+}
+function closeMedNoteDetail() {
+  const modal = document.getElementById('med-note-detail-modal');
+  if (modal) modal.style.display = 'none';
+}
+
 // Ouvre le détail d'un passage kiné : compte-rendu (ce qui a été réalisé), type, restrictions.
 function openKineDetail(id) {
   const s = (state.bdd_creneaux_medicaux || []).find(x => x.id === id);
@@ -4558,18 +4613,33 @@ function _kineVisitsTipHtml(player) {
   const startIso = toLocalISO(startDt);
   const visites = (state.bdd_creneaux_medicaux || [])
     .filter(s => s.org === currentOrg && s.joueur === player && s.date >= startIso && s.date <= today)
-    .sort((a, b) => (b.date + (b.heure || '')).localeCompare(a.date + (a.heure || '')));
+    .map(s => ({ kind: 'creneau', date: s.date, heure: s.heure || '', data: s }));
+  // Les notes médicales de la fenêtre comptent aussi comme un passage kiné.
+  const notes = (state.bdd_medical_notes || [])
+    .filter(n => n.org === currentOrg && n.joueur === player && n.date >= startIso && n.date <= today)
+    .map(n => ({ kind: 'note', date: n.date, heure: '', data: n }));
+  const all = visites.concat(notes)
+    .sort((a, b) => (b.date + b.heure).localeCompare(a.date + a.heure));
   const periodTxt = kineDays >= 365 ? 'la saison' : ('les ' + kineDays + ' derniers jours');
   let h = '<div style="font-weight:700; margin-bottom:6px;">🩺 ' + escapeHtml(player) + '</div>';
-  h += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">' + visites.length + ' passage' + (visites.length > 1 ? 's' : '') + ' sur ' + periodTxt + '</div>';
-  if (!visites.length) return h + '<div style="color:var(--text-dim);">Aucun passage.</div>';
-  visites.forEach(s => {
-    const fin = _cmAddMinutes(s.heure, s.duree_min || 15);
-    const dfmt = s.date ? String(s.date).split('-').reverse().join('/') : '';
+  h += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">' + all.length + ' passage' + (all.length > 1 ? 's' : '') + ' sur ' + periodTxt + '</div>';
+  if (!all.length) return h + '<div style="color:var(--text-dim);">Aucun passage.</div>';
+  all.forEach(item => {
+    const dfmt = item.date ? String(item.date).split('-').reverse().join('/') : '';
     h += '<div style="border-top:1px solid var(--border); padding-top:6px; margin-top:6px;">';
-    h += '<div style="color:var(--text-dim);">📅 <b style="color:var(--text);">' + escapeHtml(dfmt) + '</b> · 🕒 ' + escapeHtml(s.heure || '') + '–' + escapeHtml(fin) + ' · ' + escapeHtml(_cmTypeLabel(s.soin_type)) + ' · ' + (s.realise ? '<span style="color:#22d3ee;">✓</span>' : '⏳') + '</div>';
-    if (s.realise && s.compte_rendu) h += '<div style="white-space:pre-wrap; margin-top:2px;">' + escapeHtml(s.compte_rendu) + '</div>';
-    if (s.restrictions) h += '<div style="color:#fca5a5; margin-top:2px;">⛔ ' + escapeHtml(s.restrictions) + '</div>';
+    if (item.kind === 'creneau') {
+      const s = item.data;
+      const fin = _cmAddMinutes(s.heure, s.duree_min || 15);
+      h += '<div style="color:var(--text-dim);">📅 <b style="color:var(--text);">' + escapeHtml(dfmt) + '</b> · 🕒 ' + escapeHtml(s.heure || '') + '–' + escapeHtml(fin) + ' · ' + escapeHtml(_cmTypeLabel(s.soin_type)) + ' · ' + (s.realise ? '<span style="color:#22d3ee;">✓</span>' : '⏳') + '</div>';
+      if (s.realise && s.compte_rendu) h += '<div style="white-space:pre-wrap; margin-top:2px;">' + escapeHtml(s.compte_rendu) + '</div>';
+      if (s.restrictions) h += '<div style="color:#fca5a5; margin-top:2px;">⛔ ' + escapeHtml(s.restrictions) + '</div>';
+    } else {
+      const n = item.data;
+      const label = MED_NOTE_LABELS[n.type] || n.type || 'Note';
+      h += '<div style="color:var(--text-dim);">📅 <b style="color:var(--text);">' + escapeHtml(dfmt) + '</b> · 📋 ' + escapeHtml(label) + '</div>';
+      if (n.contenu) h += '<div style="white-space:pre-wrap; margin-top:2px;">' + escapeHtml(n.contenu) + '</div>';
+      if (n.restrictions) h += '<div style="color:#fca5a5; margin-top:2px;">⛔ ' + escapeHtml(n.restrictions) + '</div>';
+    }
     h += '</div>';
   });
   return h;
@@ -9848,6 +9918,9 @@ function planifInjectStyle() {
 function renderCalendar() {
   const isStaff     = (currentRole === 'admin' || currentRole === 'staff');
   const isDirection = (currentRole === 'direction');
+  // Notes médicales dans les cases : réservées staff/médical/admin (données sensibles,
+  // jamais montrées à la direction ni aux joueurs).
+  const canSeeMed   = (currentRole === 'admin' || currentRole === 'staff' || currentRole === 'médical');
   // La liste des séances planifiées n'est plus affichée dans l'onglet Séance (ni staff ni direction) :
   // elle se consulte uniquement dans l'onglet "Historique séances" (staff/admin).
   // Bilan hebdomadaire des séances validées (staff + direction uniquement)
@@ -10022,7 +10095,14 @@ function renderCalendar() {
         const title = done ? 'Passage kiné — voir le compte-rendu' : 'Rendez-vous kiné (compte-rendu pas encore saisi)';
         return '<div class="cal-kine' + (done ? ' done' : '') + '" onclick="openKineDetail(\'' + s.id + '\')" title="' + title + '">🩺 Kiné' + heure + (done ? '' : ' ⏳') + '</div>';
       }).join('');
-      const cellInner = content + kineContent;
+      // Notes médicales du jour (staff/médical/admin uniquement) — même principe que les rdv kiné.
+      const medContent = canSeeMed ? getMedicalNotesForDay(d, p).map(n => {
+        const label = MED_NOTE_LABELS[n.type] || n.type || 'Note';
+        const hasR = !!(n.restrictions && String(n.restrictions).trim());
+        const tip = label + ' — ' + (n.contenu || '') + (hasR ? '\n⚠️ Consignes staff : ' + n.restrictions : '');
+        return '<div class="cal-mednote' + (hasR ? ' restrict' : '') + '" onclick="openMedNoteDetail(\'' + n.id + '\')" title="' + escapeHtml(tip) + '">📋 ' + escapeHtml(label) + (hasR ? ' ⚠️' : '') + '</div>';
+      }).join('') : '';
+      const cellInner = content + kineContent + medContent;
       const todayCls = (d === todayIso) ? (' cal-today' + (isLastRow ? ' cal-today-last' : '')) : '';
       const multiCls = (seances.length > 1) ? ' multi' : '';
       html += '<div class="cal-cell ' + cls + todayCls + multiCls + rowAlt + '">' + (cellInner || '<span style="color:var(--text-dim)">—</span>') + '</div>';
@@ -24479,7 +24559,10 @@ function renderMedicalAvailability() {
     const kineVisites = (state.bdd_creneaux_medicaux || [])
       .filter(s => s.org === currentOrg && s.joueur === p && s.date >= kineStart && s.date <= kineToday)
       .sort((a, b) => (a.date + (a.heure || '')).localeCompare(b.date + (b.heure || '')));
-    const kineCount = kineVisites.length;
+    // Les notes médicales de la fenêtre comptent aussi comme un passage kiné.
+    const medVisitesCount = (state.bdd_medical_notes || [])
+      .filter(n => n.org === currentOrg && n.joueur === p && n.date >= kineStart && n.date <= kineToday).length;
+    const kineCount = kineVisites.length + medVisitesCount;
     const pAttr = String(p).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const kineCell = kineCount
       ? '<span onmouseenter="kineTipShow(event, \'' + pAttr + '\')" onmousemove="kineTipMove(event)" onmouseleave="kineTipHide()" style="cursor:default; font-weight:700; color:#22d3ee; text-decoration:underline dotted;">' + kineCount + '</span>'
