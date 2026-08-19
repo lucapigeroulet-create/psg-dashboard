@@ -6798,7 +6798,10 @@ function feminizeD2FNode(node) {
     const t = node.nodeValue;
     if (!t || !D2F_CANDIDATE.test(t)) return;
     const nt = d2fFemApply(t);
-    if (nt !== t) node.nodeValue = nt;
+    if (nt !== t) {
+      if (node.__d2fOrig == null) node.__d2fOrig = t; // garder le masculin d'origine pour restauration
+      node.nodeValue = nt;
+    }
     return;
   }
   if (node.nodeType !== 1) return; // éléments seulement
@@ -6809,12 +6812,36 @@ function feminizeD2FNode(node) {
       const av = node.getAttribute(attr);
       if (av && D2F_CANDIDATE.test(av)) {
         const nv = d2fFemApply(av);
-        if (nv !== av) node.setAttribute(attr, nv);
+        if (nv !== av) {
+          node.__d2fAttrOrig = node.__d2fAttrOrig || {};
+          if (node.__d2fAttrOrig[attr] == null) node.__d2fAttrOrig[attr] = av;
+          node.setAttribute(attr, nv);
+        }
       }
     });
   }
   if (tag === 'TEXTAREA' || tag === 'INPUT') return; // pas de contenu texte (placeholder déjà traité)
   for (let c = node.firstChild; c; c = c.nextSibling) feminizeD2FNode(c);
+}
+// Restaure le masculin d'origine (retour de D2F vers une autre entité). Les textes
+// statiques (titres, descriptions, labels) sont mutés sur place lors de la féminisation ;
+// sans cette passe ils resteraient au féminin après un changement d'entité.
+function restoreD2FNode(node) {
+  if (!node) return;
+  if (node.nodeType === 3) {
+    if (node.__d2fOrig != null) { node.nodeValue = node.__d2fOrig; node.__d2fOrig = null; }
+    return;
+  }
+  if (node.nodeType !== 1) return;
+  const tag = node.tagName;
+  if (tag === 'SCRIPT' || tag === 'STYLE') return;
+  if (node.__d2fAttrOrig) {
+    for (const attr in node.__d2fAttrOrig) {
+      try { node.setAttribute(attr, node.__d2fAttrOrig[attr]); } catch(e) {}
+    }
+    node.__d2fAttrOrig = null;
+  }
+  for (let c = node.firstChild; c; c = c.nextSibling) restoreD2FNode(c);
 }
 let d2fFemObserver = null;
 function setupD2FFeminization() {
@@ -6822,6 +6849,7 @@ function setupD2FFeminization() {
   if (!root) return;
   if (currentOrg !== 'D2F') {
     if (d2fFemObserver) { d2fFemObserver.disconnect(); d2fFemObserver = null; }
+    restoreD2FNode(root); // rétablir le masculin sur les textes statiques déjà féminisés
     return;
   }
   feminizeD2FNode(root); // passe initiale sur le DOM déjà rendu
