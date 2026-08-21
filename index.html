@@ -9605,7 +9605,10 @@ function drawPlanification() {
       '<div class="pf-head">' +
         '<div><h2 style="margin:0;">🗓️ Planification saison</h2>' +
         '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">' + escapeHtml(PLANIF_CTX.org) + ' · ' + escapeHtml(PLANIF_CTX.categorie) + ' · ' + escapeHtml(PLANIF_CTX.saison) + ' — vision globale des séances, de la charge et des contenus athlétiques.</p></div>' +
-        '<button class="pf-btn" onclick="renderPlanification()">↻ Rafraîchir</button>' +
+        '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+          '<button class="pf-btn" onclick="planifExportPDF()">📄 Exporter PDF (A4 paysage)</button>' +
+          '<button class="pf-btn" onclick="renderPlanification()">↻ Rafraîchir</button>' +
+        '</div>' +
       '</div>' +
       planifCurveSVG(rows) +
       planifLegend() +
@@ -9743,6 +9746,14 @@ function planifTable(rows) {
 
   // Logos adversaires : 1 ou 2 selon le nombre de matchs
   body += '<tr>' + lbl('Logos') + rows.map(r => cell(planifLogoCell(r), 'pf-logocell')).join('') + '</tr>';
+
+  // Adversaire + Lieu (éditable texte, sous les logos)
+  body += '<tr>' + lbl('Adversaire') + rows.map(r =>
+    cell('<input class="pf-txt pf-ev" data-id="' + r.id + '" data-field="adversaire" value="' + escapeHtml(r.adversaire || '') + '" title="' + escapeHtml(r.adversaire || '') + '">')
+  ).join('') + '</tr>';
+  body += '<tr>' + lbl('Lieu') + rows.map(r =>
+    cell('<input class="pf-txt pf-ev" data-id="' + r.id + '" data-field="lieu" value="' + escapeHtml(r.lieu || '') + '" title="' + escapeHtml(r.lieu || '') + '">')
+  ).join('') + '</tr>';
 
   // Séances : entraînements + matchs (éditable numérique)
   body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl" colspan="' + (rows.length + 1) + '">SÉANCES</th></tr>';
@@ -9986,6 +9997,102 @@ async function planifSave(id, field, value, el) {
   } else if (el) {
     el.classList.add('pf-saved'); setTimeout(() => el.classList.remove('pf-saved'), 600);
   }
+}
+
+// Export PDF A4 paysage de toute la planification : entête = semaines (colonnes),
+// lignes = métriques (comme à l'écran). Les semaines sont découpées en blocs par page
+// pour rester lisibles. jsPDF + autotable (déjà chargés).
+function planifExportPDF() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { toast('Accès réservé au staff.', 'error'); return; }
+  if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non disponible (vérifie ta connexion).', 'error'); return; }
+  const rows = planifRows || [];
+  if (!rows.length) { toast('Aucune semaine à exporter.', 'error'); return; }
+
+  const hexToRgb = (hex) => {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(hex || '').trim());
+    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : null;
+  };
+  const n0 = (v) => (v ? String(v) : '');
+  const dshort = (r) => (r.date_debut ? r.date_debut.slice(8, 10) + '/' + r.date_debut.slice(5, 7) : '');
+
+  // Lignes du tableau (label + valeur par semaine), dans l'ordre de l'écran.
+  const metricRows = [
+    { label: 'Phase',         val: (r) => planifPhaseLabel(r) || '' },
+    { label: 'Événement',     val: (r) => r.evenement || '' },
+    { label: 'Adversaire',    val: (r) => r.adversaire || '' },
+    { label: 'Lieu',          val: (r) => r.lieu || '' },
+    { label: 'Entraînements', val: (r) => (r.nb_entrainements != null ? String(r.nb_entrainements) : '') },
+    { label: 'Matchs',        val: (r) => (r.nb_matchs != null ? String(r.nb_matchs) : '') },
+    { label: 'Volume',        val: (r) => n0(r.volume) },
+    { label: 'Intensité',     val: (r) => n0(r.intensite) },
+    { label: 'Charge (V+I)',  val: (r) => String(planifCharge(r)) }
+  ].concat(
+    PLANIF_BARS.filter((b) => b.sec === 'athle').map((b) => ({ label: b.label, val: (r) => n0(r[b.key]) }))
+  ).concat(
+    PLANIF_TEXTS.map((t) => ({ label: t.label, val: (r) => r[t.key] || '' }))
+  );
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 22;
+  const labelW = 92;
+  const weekW = 44;
+  const usable = pageW - margin * 2;
+  const perPage = Math.max(1, Math.floor((usable - labelW) / weekW));
+
+  const title = '🗓️ Planification saison — ' + PLANIF_CTX.org + ' · ' + PLANIF_CTX.categorie + ' · ' + PLANIF_CTX.saison;
+  let first = true;
+
+  for (let i = 0; i < rows.length; i += perPage) {
+    const chunk = rows.slice(i, i + perPage);
+    if (!first) doc.addPage();
+    first = false;
+
+    doc.setFontSize(12);
+    doc.setTextColor(20);
+    doc.text(title, margin, margin + 6);
+    doc.setFontSize(8);
+    doc.setTextColor(120);
+    doc.text('Semaines ' + (chunk[0].semaine_cal || (i + 1)) + ' → ' + (chunk[chunk.length - 1].semaine_cal || (i + chunk.length)), margin, margin + 20);
+
+    const head = [['Semaine'].concat(chunk.map((r) => (r.semaine_cal || '') + '\n' + dshort(r)))];
+    const body = metricRows.map((m) => [m.label].concat(chunk.map((r) => m.val(r))));
+
+    const columnStyles = { 0: { cellWidth: labelW, fontStyle: 'bold', halign: 'left', fillColor: [241, 245, 249], textColor: 20 } };
+    for (let c = 1; c <= chunk.length; c++) columnStyles[c] = { cellWidth: weekW, halign: 'center' };
+
+    doc.autoTable({
+      head: head,
+      body: body,
+      startY: margin + 28,
+      margin: { left: margin, right: margin },
+      theme: 'grid',
+      styles: { fontSize: 6, cellPadding: 2, overflow: 'linebreak', valign: 'middle', lineColor: [210, 214, 220], lineWidth: 0.5, textColor: 30 },
+      headStyles: { fontSize: 6.5, halign: 'center', valign: 'middle', fillColor: [51, 65, 85], textColor: 255 },
+      columnStyles: columnStyles,
+      didParseCell: (data) => {
+        // Entête : colorer chaque semaine avec la couleur de sa phase.
+        if (data.section === 'head' && data.column.index > 0) {
+          const r = chunk[data.column.index - 1];
+          const rgb = r ? hexToRgb(planifPhaseColor(r)) : null;
+          if (rgb) { data.cell.styles.fillColor = rgb; data.cell.styles.textColor = 255; }
+        }
+        // Ligne Charge (V+I) en gras.
+        if (data.section === 'body' && Array.isArray(data.row.raw) && data.row.raw[0] === 'Charge (V+I)') {
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+    });
+
+    doc.setFontSize(7);
+    doc.setTextColor(150);
+    doc.text('Page ' + doc.internal.getNumberOfPages() + ' · export du ' + toLocalISO(new Date()), margin, pageH - 10);
+  }
+
+  const safe = (PLANIF_CTX.org + '-' + PLANIF_CTX.categorie + '-' + PLANIF_CTX.saison).replace(/[^a-z0-9\-]+/gi, '_');
+  doc.save('planification-' + safe + '.pdf');
 }
 
 function planifInjectStyle() {
