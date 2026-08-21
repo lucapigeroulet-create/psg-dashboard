@@ -7709,7 +7709,7 @@ let realtimeChannels = [];
 
 function setupRealtime() {
   if (realtimeChannels.length > 0) return; // déjà configuré
-  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores', 'creneaux_medicaux'];
+  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores', 'creneaux_medicaux', 'medical_notes'];
 
   tables.forEach(table => {
     const channel = sb.channel('realtime-' + table)
@@ -7748,6 +7748,22 @@ function handleRealtimeChange(table, payload) {
       }
     }
     if (getCurrentView() === 'medical-planning') renderMedicalPlanning();
+    return;
+  }
+
+  // ===== Notes médicales : CR d'un kiné visible en direct chez le staff =====
+  if (table === 'medical_notes') {
+    const rowOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (rowOrg && rowOrg !== currentOrg) return; // autre club → ignorer
+    state.bdd_medical_notes = state.bdd_medical_notes || [];
+    if (eventType === 'DELETE') {
+      state.bdd_medical_notes = state.bdd_medical_notes.filter(n => n.id !== oldRow.id);
+    } else {
+      const idx = state.bdd_medical_notes.findIndex(n => n.id === newRow.id);
+      if (idx >= 0) state.bdd_medical_notes[idx] = newRow;
+      else state.bdd_medical_notes.unshift(newRow);
+    }
+    if (getCurrentView() === 'medical-notes') renderMedicalNotes();
     return;
   }
 
