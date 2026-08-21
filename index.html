@@ -10019,6 +10019,7 @@ function planifExportPDF() {
   const metricRows = [
     { label: 'Phase',         val: (r) => planifPhaseLabel(r) || '' },
     { label: 'Événement',     val: (r) => r.evenement || '' },
+    { label: 'Logos',         val: () => '', isLogo: true },
     { label: 'Adversaire',    val: (r) => r.adversaire || '' },
     { label: 'Lieu',          val: (r) => r.lieu || '' },
     { label: 'Entraînements', val: (r) => (r.nb_entrainements != null ? String(r.nb_entrainements) : '') },
@@ -10079,10 +10080,33 @@ function planifExportPDF() {
           const rgb = r ? hexToRgb(planifPhaseColor(r)) : null;
           if (rgb) { data.cell.styles.fillColor = rgb; data.cell.styles.textColor = 255; }
         }
+        // Ligne Logos : réserver de la hauteur pour les vignettes (dessinées dans didDrawCell).
+        if (data.section === 'body' && Array.isArray(data.row.raw) && data.row.raw[0] === 'Logos') {
+          data.cell.styles.minCellHeight = 24;
+        }
         // Ligne Charge (V+I) en gras.
         if (data.section === 'body' && Array.isArray(data.row.raw) && data.row.raw[0] === 'Charge (V+I)') {
           data.cell.styles.fontStyle = 'bold';
         }
+      },
+      didDrawCell: (data) => {
+        // Dessine les logos adversaires dans la cellule de la ligne « Logos ».
+        if (data.section !== 'body' || data.column.index === 0) return;
+        if (!Array.isArray(data.row.raw) || data.row.raw[0] !== 'Logos') return;
+        const r = chunk[data.column.index - 1];
+        if (!r) return;
+        const urls = (r.logos || []).map((k) => planifLogoLookup(k)).filter(Boolean);
+        if (!urls.length) return;
+        const cell = data.cell;
+        const gap = 2;
+        const size = Math.max(6, Math.min(18, cell.height - 4, (cell.width - 4 - (urls.length - 1) * gap) / urls.length));
+        const totalW = urls.length * size + (urls.length - 1) * gap;
+        let x = cell.x + (cell.width - totalW) / 2;
+        const y = cell.y + (cell.height - size) / 2;
+        urls.forEach((u) => {
+          try { doc.addImage(u, 'PNG', x, y, size, size); } catch (e) {}
+          x += size + gap;
+        });
       }
     });
 
