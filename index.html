@@ -10039,9 +10039,11 @@ function planifExportPDF() {
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 22;
   const labelW = 92;
-  const weekW = 44;
   const usable = pageW - margin * 2;
-  const perPage = Math.max(1, Math.floor((usable - labelW) / weekW));
+  // Exactement 3 pages max : on répartit les semaines en 3 blocs et on ajuste
+  // la largeur des colonnes pour remplir la page (cap à 90pt si peu de semaines).
+  const perPage = Math.max(1, Math.ceil(rows.length / 3));
+  const weekW = Math.min(90, (usable - labelW) / perPage);
 
   const title = '🗓️ Planification saison — ' + PLANIF_CTX.org + ' · ' + PLANIF_CTX.categorie + ' · ' + PLANIF_CTX.saison;
   let first = true;
@@ -10070,8 +10072,8 @@ function planifExportPDF() {
       startY: margin + 28,
       margin: { left: margin, right: margin },
       theme: 'grid',
-      styles: { fontSize: 6, cellPadding: 2, overflow: 'linebreak', valign: 'middle', lineColor: [210, 214, 220], lineWidth: 0.5, textColor: 30 },
-      headStyles: { fontSize: 6.5, halign: 'center', valign: 'middle', fillColor: [51, 65, 85], textColor: 255 },
+      styles: { fontSize: 5.5, cellPadding: 1.5, overflow: 'linebreak', valign: 'middle', lineColor: [210, 214, 220], lineWidth: 0.5, textColor: 30 },
+      headStyles: { fontSize: 6, halign: 'center', valign: 'middle', fillColor: [51, 65, 85], textColor: 255 },
       columnStyles: columnStyles,
       didParseCell: (data) => {
         // Entête : colorer chaque semaine avec la couleur de sa phase.
