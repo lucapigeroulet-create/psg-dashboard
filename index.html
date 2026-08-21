@@ -6342,12 +6342,20 @@ async function renderPushBanner(elId) {
   const status = pushEnvironmentStatus();
   if (status === 'ios-needs-install') {
     el.innerHTML = '<div class="card" style="border:1px solid var(--orange); margin-bottom:12px;">' +
-      '<div style="font-size:13px;">📲 Pour recevoir les rappels sur iPhone : appuie sur <b>Partager</b> puis <b>Sur l\'écran d\'accueil</b>, puis rouvre StatField depuis l\'icône ajoutée pour activer les notifications.</div></div>';
+      '<div style="font-size:14px; font-weight:600; margin-bottom:6px;">📲 Activer les notifications sur iPhone</div>' +
+      '<div style="font-size:13px; line-height:1.7;">Sur iPhone, Apple n\'autorise les notifications que si StatField est ouvert <b>depuis l\'icône de l\'écran d\'accueil</b> (et non dans Safari).<br>' +
+      '<b>1.</b> Dans Safari, touche <b>Partager</b> <span style="color:var(--text-dim);">(carré avec une flèche ↑)</span> puis <b>« Sur l\'écran d\'accueil »</b>.<br>' +
+      '<b>2.</b> Ferme cet onglet Safari et ouvre <b>StatField</b> depuis la nouvelle icône.<br>' +
+      '<b>3.</b> Reviens sur <b>Messages</b> : le bouton <b>« 🔔 Activer »</b> apparaîtra ici.</div>' +
+      '<div style="font-size:12px; color:var(--text-dim); margin-top:8px; border-top:1px solid var(--border); padding-top:8px;">✅ Déjà ajouté à l\'écran d\'accueil ? Il suffit d\'ouvrir l\'app par son <b>icône</b> (pas par Safari) — c\'est là que le bouton d\'activation apparaît.</div></div>';
     return;
   }
   if (status === 'unsupported') {
+    const iosHint = pushIsIOS()
+      ? ' Sur iPhone, les notifications web nécessitent <b>iOS 16.4 ou plus récent</b> : vérifie tes mises à jour (Réglages → Général → Mise à jour logicielle), puis rouvre StatField depuis l\'icône de l\'écran d\'accueil.'
+      : '';
     el.innerHTML = '<div class="card" style="border:1px solid var(--border); margin-bottom:12px;">' +
-      '<div style="font-size:13px; color:var(--text-dim);">🔕 Notifications non disponibles sur ce navigateur/appareil.</div></div>';
+      '<div style="font-size:13px; color:var(--text-dim);">🔕 Notifications non disponibles sur ce navigateur/appareil.' + iosHint + '</div></div>';
     return;
   }
   const sub = await getCurrentPushSubscription();
