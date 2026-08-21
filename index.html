@@ -3582,6 +3582,7 @@
             <option value="manipulation">🤲 Manipulation</option>
             <option value="kiné">💆 Kiné</option>
             <option value="médecin">🩺 Médecin</option>
+            <option value="a_prevoir">📌 À faire / à prévoir</option>
             <option value="autre">📌 Autre</option>
           </select>
         </div>
@@ -3598,12 +3599,6 @@
           <input type="text" id="med-note-restrictions" placeholder="Ex: Pas de contact 3 jours, activité allégée, éviter les sprints…" />
         </div>
       </div>
-      <div class="form-row">
-        <div style="flex:1;">
-          <label>📌 À faire / à prévoir (optionnel)</label>
-          <textarea id="med-note-aprevoir" rows="2" placeholder="Ex: prévoir une IRM, revoir dans 3 jours, commander une attelle, planifier un rendez-vous médecin…" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid rgba(96,165,250,0.4); border-radius:8px; padding:10px; font-size:13px; resize:vertical;"></textarea>
-        </div>
-      </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
         <button class="btn" onclick="saveMedicalNote()">💾 Enregistrer la note</button>
         <button class="btn btn-secondary" onclick="clearMedNoteForm()">✕ Annuler</button>
@@ -3615,7 +3610,7 @@
         <h2 style="margin:0;">📌 À faire / à prévoir</h2>
         <span id="med-aprevoir-count" style="font-size:12px; color:var(--text-dim);"></span>
       </div>
-      <p style="color:var(--text-dim); font-size:12px; margin:-6px 0 12px;">Notes médicales avec une action à planifier. Clique une ligne pour l'ouvrir et la traiter (vide le champ « à prévoir » une fois fait).</p>
+      <p style="color:var(--text-dim); font-size:12px; margin:-6px 0 12px;">Notes classées « à faire / à prévoir » et pas encore validées. Coche « Fait » quand c'est réglé pour la retirer de la liste.</p>
       <div id="med-aprevoir-list"></div>
     </div>
     <div class="card">
@@ -3632,14 +3627,15 @@
           <option value="manipulation">🤲 Manipulation</option>
           <option value="kiné">💆 Kiné</option>
           <option value="médecin">🩺 Médecin</option>
+          <option value="a_prevoir">📌 À faire / à prévoir</option>
           <option value="autre">📌 Autre</option>
         </select>
         <input type="date" id="med-notes-filter-start" onchange="renderMedicalNotes()" style="min-width:130px;" />
         <span style="color:var(--text-dim); font-size:12px;">→</span>
         <input type="date" id="med-notes-filter-end" onchange="renderMedicalNotes()" style="min-width:130px;" />
         <input type="text" id="med-notes-search" placeholder="Rechercher…" oninput="renderMedicalNotes()" style="min-width:160px;" />
-        <label style="display:inline-flex; align-items:center; gap:5px; font-size:12px; color:#93c5fd; cursor:pointer; white-space:nowrap;">
-          <input type="checkbox" id="med-notes-filter-aprevoir" onchange="renderMedicalNotes()" style="width:auto; margin:0;" /> 📌 À prévoir
+        <label style="display:inline-flex; align-items:center; gap:5px; font-size:12px; color:var(--text-dim); cursor:pointer; white-space:nowrap;">
+          <input type="checkbox" id="med-notes-hide-fait" onchange="renderMedicalNotes()" style="width:auto; margin:0;" /> Masquer les « fait »
         </label>
         <button class="btn btn-secondary" onclick="resetMedNotesFilters()" style="padding:5px 12px; font-size:12px;">↺ Réinitialiser</button>
       </div>
@@ -4401,8 +4397,6 @@ function mpSlotRowHtml(s, playersByOrg) {
     html += '<textarea id="cr-txt-' + s.id + '" rows="3" placeholder="Soin effectué, observations, prescriptions…" style="width:100%; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px; font-size:13px; resize:vertical; margin-bottom:6px;">' + escapeHtml(s.compte_rendu || '') + '</textarea>';
     html += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:2px;">Restrictions (optionnel)</div>';
     html += '<input type="text" id="cr-restr-' + s.id + '" value="' + escapeHtml(s.restrictions || '') + '" placeholder="Ex: pas de contact 3 jours…" style="width:100%; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px; font-size:13px; margin-bottom:8px;" />';
-    html += '<div style="font-size:11px; color:#93c5fd; margin-bottom:2px;">📌 À faire / à prévoir (optionnel)</div>';
-    html += '<textarea id="cr-prevoir-' + s.id + '" rows="2" placeholder="Ex: prévoir une IRM, revoir dans 3 jours, planifier un RDV médecin…" style="width:100%; background:var(--bg-card); color:var(--text); border:1px solid rgba(96,165,250,0.4); border-radius:8px; padding:8px; font-size:13px; resize:vertical; margin-bottom:8px;">' + escapeHtml((((state.bdd_medical_notes || []).find(function(n){ return n.id === s.note_id; }) || {}).a_prevoir) || '') + '</textarea>';
     html += '<button class="btn" style="padding:5px 12px; font-size:12px;" onclick="saveCompteRendu(\'' + s.id + '\')">💾 Enregistrer + créer la fiche médicale</button>';
     html += '<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">💡 Enregistrer crée (ou met à jour) automatiquement une fiche médicale pour ' + escapeHtml(s.joueur) + '.</div>';
     html += '</div></div>';
@@ -4587,10 +4581,6 @@ function openMedNoteDetail(id) {
   if (n.restrictions) {
     h += '<div style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#fbbf24; margin-bottom:4px;">⚠️ Consignes staff</div>';
     h += '<div style="background:rgba(251,191,36,0.1); border:1px solid rgba(251,191,36,0.3); border-radius:8px; padding:10px 12px; font-size:13px; white-space:pre-wrap; color:#fbbf24;">' + escapeHtml(n.restrictions) + '</div>';
-  }
-  if (n.a_prevoir) {
-    h += '<div style="font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:#93c5fd; margin:' + (n.restrictions ? '12px' : '0') + ' 0 4px;">📌 À faire / à prévoir</div>';
-    h += '<div style="background:rgba(96,165,250,0.1); border:1px solid rgba(96,165,250,0.35); border-radius:8px; padding:10px 12px; font-size:13px; white-space:pre-wrap; color:#93c5fd;">' + escapeHtml(n.a_prevoir) + '</div>';
   }
   contentEl.innerHTML = h;
   modal.style.display = 'flex';
@@ -4907,12 +4897,10 @@ async function saveCompteRendu(id) {
   const type = (document.getElementById('cr-type-' + id) || {}).value || 'kiné';
   const contenu = ((document.getElementById('cr-txt-' + id) || {}).value || '').trim();
   const restrictions = ((document.getElementById('cr-restr-' + id) || {}).value || '').trim();
-  const aprevoir = ((document.getElementById('cr-prevoir-' + id) || {}).value || '').trim();
   if (!contenu) { toast('Décris ce qui a été réalisé', 'error'); return; }
   const noteRow = {
     org: slot.org, joueur: slot.joueur, date: slot.date,
     type: type, contenu: contenu, restrictions: restrictions || null,
-    a_prevoir: aprevoir || null,
     auteur: currentUser ? currentUser.email : null
   };
   try {
@@ -25304,16 +25292,16 @@ function renderMedicalQuestionnaire() {
 }
 
 // ---------- ONGLET NOTES MÉDICALES ----------
-const MED_NOTE_LABELS = { soin:'🩹 Soin', bilan:'📋 Bilan', manipulation:'🤲 Manipulation', kiné:'💆 Kiné', médecin:'🩺 Médecin', autre:'📌 Autre' };
+const MED_NOTE_LABELS = { soin:'🩹 Soin', bilan:'📋 Bilan', manipulation:'🤲 Manipulation', kiné:'💆 Kiné', médecin:'🩺 Médecin', a_prevoir:'📌 À faire / à prévoir', autre:'📌 Autre' };
 
 function resetMedNotesFilters() {
   ['med-notes-filter-joueur','med-notes-filter-type','med-notes-filter-start','med-notes-filter-end','med-notes-search'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  const ap = document.getElementById('med-notes-filter-aprevoir'); if (ap) ap.checked = false;
+  const hf = document.getElementById('med-notes-hide-fait'); if (hf) hf.checked = false;
   renderMedicalNotes();
 }
 
 function clearMedNoteForm() {
-  ['med-note-joueur','med-note-contenu','med-note-restrictions','med-note-aprevoir','med-note-editing-id'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['med-note-joueur','med-note-contenu','med-note-restrictions','med-note-editing-id'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const t = document.getElementById('med-note-type'); if (t) t.value = 'soin';
   const d = document.getElementById('med-note-date'); if (d) d.value = toLocalISO(new Date());
 }
@@ -25325,14 +25313,13 @@ async function saveMedicalNote() {
   const type   = (document.getElementById('med-note-type') || {}).value || 'autre';
   const contenu = ((document.getElementById('med-note-contenu') || {}).value || '').trim();
   const restrictions = ((document.getElementById('med-note-restrictions') || {}).value || '').trim();
-  const aprevoir = ((document.getElementById('med-note-aprevoir') || {}).value || '').trim();
   const editingId = (document.getElementById('med-note-editing-id') || {}).value || '';
 
   if (!joueur) { toast('Sélectionne un joueur', 'error'); return; }
   if (!date) { toast('Indique une date', 'error'); return; }
   if (!contenu) { toast('Le contenu de la note est requis', 'error'); return; }
 
-  const row = { org: currentOrg, joueur, date, type, contenu, restrictions: restrictions || null, a_prevoir: aprevoir || null, auteur: currentUser ? currentUser.email : null };
+  const row = { org: currentOrg, joueur, date, type, contenu, restrictions: restrictions || null, auteur: currentUser ? currentUser.email : null };
 
   if (!sb) {
     if (editingId) {
@@ -25392,7 +25379,6 @@ function editMedicalNote(id) {
   const t = document.getElementById('med-note-type'); if (t) t.value = note.type || 'autre';
   const c = document.getElementById('med-note-contenu'); if (c) c.value = note.contenu || '';
   const r = document.getElementById('med-note-restrictions'); if (r) r.value = note.restrictions || '';
-  const ap = document.getElementById('med-note-aprevoir'); if (ap) ap.value = note.a_prevoir || '';
   const ei = document.getElementById('med-note-editing-id'); if (ei) ei.value = id;
   document.getElementById('med-notes-form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -25403,15 +25389,15 @@ function renderMedicalNotes() {
   const filterStart  = (document.getElementById('med-notes-filter-start') || {}).value || '';
   const filterEnd    = (document.getElementById('med-notes-filter-end') || {}).value || '';
   const search       = ((document.getElementById('med-notes-search') || {}).value || '').toLowerCase().trim();
-  const filterAprevoir = (document.getElementById('med-notes-filter-aprevoir') || {}).checked || false;
+  const hideFait = (document.getElementById('med-notes-hide-fait') || {}).checked || false;
 
   const fd = document.getElementById('med-note-date'); if (fd && !fd.value) fd.value = toLocalISO(new Date());
   populateMedicalFilters();
 
-  // Vue spéciale « à faire / à prévoir » : toutes les notes avec une action à planifier
-  // (indépendante des filtres de l'historique pour rester un pense-bête complet).
+  // Vue spéciale « à faire / à prévoir » : notes classées a_prevoir NON encore validées.
+  // (indépendante des filtres de l'historique pour rester un pense-bête complet.)
   const aprevoirAll = (state.bdd_medical_notes || [])
-    .filter(n => n.a_prevoir && String(n.a_prevoir).trim())
+    .filter(n => n.type === 'a_prevoir' && !n.fait)
     .sort((a,b) => b.date.localeCompare(a.date) || (b.created_at||'').localeCompare(a.created_at||''));
   const apCard = document.getElementById('med-aprevoir-card');
   const apList = document.getElementById('med-aprevoir-list');
@@ -25423,13 +25409,15 @@ function renderMedicalNotes() {
       if (apCount) apCount.textContent = aprevoirAll.length + ' à traiter';
       apList.innerHTML = aprevoirAll.map(n => {
         const auteurShort = n.auteur ? String(n.auteur).split('@')[0] : '—';
-        const lbl = MED_NOTE_LABELS[n.type] || n.type || '';
-        return '<div style="border:1px solid rgba(96,165,250,0.35); border-radius:8px; padding:10px 12px; margin-bottom:8px; background:var(--bg-elevated); cursor:pointer;" onclick="editMedicalNote(\'' + n.id + '\')">' +
+        return '<div style="border:1px solid rgba(96,165,250,0.35); border-radius:8px; padding:10px 12px; margin-bottom:8px; background:var(--bg-elevated); display:flex; gap:10px; align-items:flex-start;">' +
+          '<button title="Marquer comme fait" onclick="toggleMedNoteFait(\'' + n.id + '\')" style="flex:none; width:26px; height:26px; border-radius:6px; border:1px solid rgba(96,165,250,0.5); background:var(--bg-card); color:#93c5fd; cursor:pointer; font-size:14px;">✓</button>' +
+          '<div style="flex:1; cursor:pointer;" onclick="editMedicalNote(\'' + n.id + '\')">' +
           '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:4px;">' +
           '<b style="font-size:13px;">' + escapeHtml(n.joueur) + '</b>' +
-          '<span style="font-size:11px; color:var(--text-dim);">📅 ' + n.date + ' · ' + escapeHtml(lbl) + ' · ✍️ ' + escapeHtml(auteurShort) + '</span>' +
+          '<span style="font-size:11px; color:var(--text-dim);">📅 ' + n.date + ' · ✍️ ' + escapeHtml(auteurShort) + '</span>' +
           '</div>' +
-          '<div style="font-size:13px; color:#93c5fd; white-space:pre-wrap;">📌 ' + escapeHtml(n.a_prevoir) + '</div>' +
+          '<div style="font-size:13px; color:#93c5fd; white-space:pre-wrap;">' + escapeHtml(n.contenu) + '</div>' +
+          '</div>' +
         '</div>';
       }).join('');
     }
@@ -25440,8 +25428,8 @@ function renderMedicalNotes() {
   if (filterType)   notes = notes.filter(n => n.type === filterType);
   if (filterStart)  notes = notes.filter(n => n.date >= filterStart);
   if (filterEnd)    notes = notes.filter(n => n.date <= filterEnd);
-  if (filterAprevoir) notes = notes.filter(n => n.a_prevoir && String(n.a_prevoir).trim());
-  if (search)       notes = notes.filter(n => (n.joueur + ' ' + n.contenu + ' ' + (n.restrictions||'') + ' ' + (n.a_prevoir||'')).toLowerCase().includes(search));
+  if (hideFait)     notes = notes.filter(n => !n.fait);
+  if (search)       notes = notes.filter(n => (n.joueur + ' ' + n.contenu + ' ' + (n.restrictions||'')).toLowerCase().includes(search));
 
   notes.sort((a,b) => b.date.localeCompare(a.date) || (b.created_at||'').localeCompare(a.created_at||''));
 
@@ -25455,22 +25443,53 @@ function renderMedicalNotes() {
   listEl.innerHTML = notes.map(n => {
     const label = MED_NOTE_LABELS[n.type] || n.type;
     const auteurShort = n.auteur ? n.auteur.split('@')[0] : '—';
-    return '<div style="border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px; background:var(--bg-elevated);">' +
+    const isTodo = n.type === 'a_prevoir';
+    const done = isTodo && !!n.fait;
+    const faitBadge = done ? '<span style="background:rgba(34,197,94,0.15); border:1px solid #16a34a; border-radius:6px; padding:2px 8px; font-size:11px; color:#86efac;">✅ Fait</span>' : '';
+    const cardStyle = 'border:1px solid ' + (isTodo && !done ? 'rgba(96,165,250,0.45)' : 'var(--border)') + '; border-radius:10px; padding:14px; margin-bottom:10px; background:var(--bg-elevated);' + (done ? ' opacity:.6;' : '');
+    const faitToggle = isTodo
+      ? '<button class="btn btn-secondary" style="padding:3px 10px; font-size:11px; color:' + (done ? '#fbbf24' : '#86efac') + ';" onclick="toggleMedNoteFait(\'' + n.id + '\')">' + (done ? '↩︎ Rouvrir' : '✓ Marquer fait') + '</button>'
+      : '';
+    return '<div style="' + cardStyle + '">' +
       '<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:6px; margin-bottom:8px;">' +
-      '<div style="display:flex; align-items:center; gap:10px;">' +
-      '<b style="font-size:14px;">' + escapeHtml(n.joueur) + '</b>' +
+      '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">' +
+      '<b style="font-size:14px;' + (done ? ' text-decoration:line-through;' : '') + '">' + escapeHtml(n.joueur) + '</b>' +
       '<span style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:2px 8px; font-size:11px; color:var(--accent-light);">' + label + '</span>' +
+      faitBadge +
       '</div>' +
       '<div style="font-size:11px; color:var(--text-dim);">📅 ' + n.date + ' · ✍️ ' + escapeHtml(auteurShort) + '</div>' +
       '</div>' +
-      '<div style="font-size:13px; line-height:1.6; white-space:pre-wrap; margin-bottom:' + ((n.restrictions || n.a_prevoir) ? '8px' : '0') + ';">' + escapeHtml(n.contenu) + '</div>' +
+      '<div style="font-size:13px; line-height:1.6; white-space:pre-wrap; margin-bottom:' + (n.restrictions ? '8px' : '0') + ';">' + escapeHtml(n.contenu) + '</div>' +
       (n.restrictions ? '<div style="background:rgba(251,191,36,0.1); border:1px solid rgba(251,191,36,0.3); border-radius:6px; padding:8px 10px; font-size:12px; color:#fbbf24;"><b>⚠️ Consignes staff :</b> ' + escapeHtml(n.restrictions) + '</div>' : '') +
-      (n.a_prevoir ? '<div style="background:rgba(96,165,250,0.1); border:1px solid rgba(96,165,250,0.35); border-radius:6px; padding:8px 10px; font-size:12px; color:#93c5fd; margin-top:' + (n.restrictions ? '8px' : '0') + ';"><b>📌 À faire / à prévoir :</b> ' + escapeHtml(n.a_prevoir) + '</div>' : '') +
-      '<div style="display:flex; gap:8px; margin-top:10px;">' +
+      '<div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">' +
+      faitToggle +
       '<button class="btn btn-secondary" style="padding:3px 10px; font-size:11px;" onclick="editMedicalNote(\'' + n.id + '\')">✏️ Modifier</button>' +
       '<button class="btn btn-secondary" style="padding:3px 10px; font-size:11px; color:#f87171;" onclick="deleteMedicalNote(\'' + n.id + '\')">🗑 Supprimer</button>' +
       '</div></div>';
   }).join('');
+}
+
+// Bascule l'état « fait » d'une note « à faire / à prévoir » (validation).
+async function toggleMedNoteFait(id) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const note = (state.bdd_medical_notes || []).find(n => n.id === id);
+  if (!note) return;
+  const nv = !note.fait;
+  note.fait = nv;
+  note.fait_at = nv ? new Date().toISOString() : null;
+  renderMedicalNotes();
+  if (sb && !String(id).startsWith('local-')) {
+    try {
+      const { data, error } = await sb.from('medical_notes').update({ fait: nv, fait_at: note.fait_at }).eq('id', id).select().single();
+      if (error) throw error;
+      const idx = state.bdd_medical_notes.findIndex(n => n.id === id);
+      if (idx >= 0) state.bdd_medical_notes[idx] = data;
+    } catch(e) {
+      note.fait = !nv; note.fait_at = nv ? null : note.fait_at; // rollback
+      toast('Erreur : ' + (e.message || e), 'error');
+    }
+    renderMedicalNotes();
+  }
 }
 
 // ============================================================================
