@@ -1307,17 +1307,6 @@
       <div class="chart-container tall"><canvas id="chart-rpe-plaisir"></canvas></div>
     </div>
 
-    <!-- Graphique : charge affective RPE-plaisir (SECONDE LIGUE uniquement) -->
-    <div class="card" id="rpe-charge-affective-card" style="display:none;">
-      <h2>❤️ Charge affective (RPE-plaisir)</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">
-        Charge affective = durée × plaisir ressenti (−5 à +5). Le volume d'entraînement est pondéré par le vécu émotionnel : <b style="color:var(--green);">positive</b> = charge vécue avec plaisir, <b style="color:var(--red);">négative</b> = charge subie. Exprimée en UA affectives.
-      </p>
-      <div id="rpe-charge-affective-summary"></div>
-      <div style="font-size:12px; font-weight:600; color:var(--text-dim); margin:6px 0 8px;">Charge affective moyenne par joueuse et par jour</div>
-      <div class="chart-container tall"><canvas id="chart-rpe-charge-affective"></canvas></div>
-    </div>
-
     <!-- Graphique : charge hebdo cumulée comparée -->
     <div class="card">
       <h2>Charge hebdomadaire totale par joueur</h2>
@@ -1430,7 +1419,7 @@
         <button class="btn btn-secondary" onclick="toggleGPSImport()" style="padding:4px 12px;">✕ Fermer</button>
       </div>
       <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">
-        Glisse ton export CSV Catapult. Les colonnes (Date, Player Name, Distance, HSR, zones de vitesse...) sont détectées automatiquement. Séparateur virgule ou point-virgule géré. Les exports <b>CTR</b> (bloc d'en-tête Date/Start Time, durée hh:mm:ss, distance en mètres, périodes) sont reconnus tels quels — aucune conversion nécessaire.
+        Glisse ton export CSV Catapult. Les colonnes (Date, Player Name, Distance, HSR, zones de vitesse...) sont détectées automatiquement. Séparateur virgule ou point-virgule géré.
       </p>
       <input type="file" id="gps-import-file" accept=".csv,text/csv" onchange="handleGPSCSV(event)"
              style="color:var(--text); margin-bottom:12px; font-size:13px;" />
@@ -6798,10 +6787,7 @@ function feminizeD2FNode(node) {
     const t = node.nodeValue;
     if (!t || !D2F_CANDIDATE.test(t)) return;
     const nt = d2fFemApply(t);
-    if (nt !== t) {
-      if (node.__d2fOrig == null) node.__d2fOrig = t; // garder le masculin d'origine pour restauration
-      node.nodeValue = nt;
-    }
+    if (nt !== t) node.nodeValue = nt;
     return;
   }
   if (node.nodeType !== 1) return; // éléments seulement
@@ -6812,36 +6798,12 @@ function feminizeD2FNode(node) {
       const av = node.getAttribute(attr);
       if (av && D2F_CANDIDATE.test(av)) {
         const nv = d2fFemApply(av);
-        if (nv !== av) {
-          node.__d2fAttrOrig = node.__d2fAttrOrig || {};
-          if (node.__d2fAttrOrig[attr] == null) node.__d2fAttrOrig[attr] = av;
-          node.setAttribute(attr, nv);
-        }
+        if (nv !== av) node.setAttribute(attr, nv);
       }
     });
   }
   if (tag === 'TEXTAREA' || tag === 'INPUT') return; // pas de contenu texte (placeholder déjà traité)
   for (let c = node.firstChild; c; c = c.nextSibling) feminizeD2FNode(c);
-}
-// Restaure le masculin d'origine (retour de D2F vers une autre entité). Les textes
-// statiques (titres, descriptions, labels) sont mutés sur place lors de la féminisation ;
-// sans cette passe ils resteraient au féminin après un changement d'entité.
-function restoreD2FNode(node) {
-  if (!node) return;
-  if (node.nodeType === 3) {
-    if (node.__d2fOrig != null) { node.nodeValue = node.__d2fOrig; node.__d2fOrig = null; }
-    return;
-  }
-  if (node.nodeType !== 1) return;
-  const tag = node.tagName;
-  if (tag === 'SCRIPT' || tag === 'STYLE') return;
-  if (node.__d2fAttrOrig) {
-    for (const attr in node.__d2fAttrOrig) {
-      try { node.setAttribute(attr, node.__d2fAttrOrig[attr]); } catch(e) {}
-    }
-    node.__d2fAttrOrig = null;
-  }
-  for (let c = node.firstChild; c; c = c.nextSibling) restoreD2FNode(c);
 }
 let d2fFemObserver = null;
 function setupD2FFeminization() {
@@ -6849,7 +6811,6 @@ function setupD2FFeminization() {
   if (!root) return;
   if (currentOrg !== 'D2F') {
     if (d2fFemObserver) { d2fFemObserver.disconnect(); d2fFemObserver = null; }
-    restoreD2FNode(root); // rétablir le masculin sur les textes statiques déjà féminisés
     return;
   }
   feminizeD2FNode(root); // passe initiale sur le DOM déjà rendu
@@ -7026,7 +6987,7 @@ function applyRoleRestrictions() {
     // pas d'export JSON, pas de Notes médicales, pas de Paramètres.
     const staffLimited = (currentRole === 'staff');
     // Comptes médicaux staff : conservent la vue médicale COMPLÈTE (Notes médicales incluses)
-    const FULL_MEDICAL_EMAILS = ['lou@tegg.fr', 'lucam@psg.fr', 'alfred@tegg.fr'];
+    const FULL_MEDICAL_EMAILS = ['lou@tegg.fr', 'lucam@psg.fr'];
     const isFullMedical = FULL_MEDICAL_EMAILS.includes((currentUser && currentUser.email || '').toLowerCase());
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = staffLimited ? 'none' : '';
@@ -7060,8 +7021,11 @@ function canWriteRPE(joueur) {
 const RPE_EDIT_HOURS = 2;       // (obsolète) ancien sous-verrou de modif — plus utilisé
 const SESSION_WINDOW_HOURS = 4; // fenêtre unique de saisie/modif après publication
 
-// Timestamp (ms) de publication de la séance, ou null si inconnu
-function getSeancePublishedMs(date, seanceNom) {
+// Timestamp (ms) de début de la fenêtre 4h, ou null si inconnu.
+// Séance normale : moment où elle a été AFFECTÉE à ce joueur (seance_affectations).
+// Match : conserve la logique historique (création du match, pas d'affectation par joueur).
+// Fallback (aucune affectation connue) : ancien comportement basé sur seances.created_at.
+function getSeancePublishedMs(date, seanceNom, joueur) {
   // Cas match : la "séance virtuelle" commence par '⚽ MATCH'
   if (seanceNom && seanceNom.indexOf('⚽ MATCH') === 0) {
     const m = (state.bdd_matchs || []).find(x => x.date === date && matchSeanceNom(x) === seanceNom);
@@ -7069,6 +7033,15 @@ function getSeancePublishedMs(date, seanceNom) {
     const ms = new Date(m.created_at).getTime();
     return isNaN(ms) ? null : ms;
   }
+  // Séance normale : fenêtre = affectation au joueur
+  if (joueur) {
+    const a = (state.bdd_affectations || []).find(x => x.date === date && x.joueur === joueur && x.seance === seanceNom);
+    if (a && a.affected_at) {
+      const ms = new Date(a.affected_at).getTime();
+      if (!isNaN(ms)) return ms;
+    }
+  }
+  // Fallback : ancienne référence (création de la fiche séance)
   const s = state.bdd_ent2.find(x => x.date === date && x.nom === seanceNom);
   if (!s || !s.created_at) return null;
   const ms = new Date(s.created_at).getTime();
@@ -7091,9 +7064,9 @@ function hasRPEEntry(date, joueur) {
 
 // La fenêtre unique de 4h depuis la publication/affectation est-elle dépassée ?
 // Si la séance n'a pas de created_at connu, on ne verrouille pas via ce critère.
-function isSessionWindowClosed(date, seanceNom) {
+function isSessionWindowClosed(date, seanceNom, joueur) {
   if (currentRole !== 'lecteur') return false;
-  const pubMs = getSeancePublishedMs(date, seanceNom);
+  const pubMs = getSeancePublishedMs(date, seanceNom, joueur);
   if (pubMs === null) return false;
   const ageHours = (Date.now() - pubMs) / 3600000;
   return ageHours >= SESSION_WINDOW_HOURS;
@@ -7112,8 +7085,8 @@ function isEditWindowClosed(date, joueur) {
 // 'date' = jour, 'joueur' = nom, 'seanceNom' = nom de la séance concernée
 function isRPELockedForSession(date, joueur, seanceNom) {
   if (currentRole !== 'lecteur') return false;
-  // Fenêtre de séance fermée (4h après affectation) → verrou total
-  if (isSessionWindowClosed(date, seanceNom)) return true;
+  // Fenêtre de séance fermée (4h après affectation au joueur) → verrou total
+  if (isSessionWindowClosed(date, seanceNom, joueur)) return true;
   return false;
 }
 
@@ -7127,8 +7100,8 @@ function rpeLockInfo(date, joueur, seanceNom) {
 
   const now = Date.now();
 
-  // Fenêtre unique de séance (4h) depuis la publication/affectation
-  const pubMs = getSeancePublishedMs(date, seanceNom);
+  // Fenêtre unique de séance (4h) depuis l'affectation au joueur
+  const pubMs = getSeancePublishedMs(date, seanceNom, joueur);
   if (pubMs !== null) {
     const remainMin = Math.ceil((pubMs + SESSION_WINDOW_HOURS * 3600000 - now) / 60000);
     if (remainMin > 0) return { type: 'session', minutes: remainMin };
@@ -7147,6 +7120,7 @@ async function loadState() {
     bdd_ent: [],
     bdd_ent2: [],
     bdd_rpe: [],
+    bdd_affectations: [],
     bdd_gps: [],
     bdd_matchs: [],
     bdd_match_notes: [],
@@ -7223,6 +7197,17 @@ async function loadState() {
     const { data: plannings } = await sb.from('plannings').select('*').eq('org', currentOrg).order('date');
     state.bdd_ent = (plannings || []).map(p => ({
       date: p.date, joueur: p.joueur, seances: p.seances || []
+    }));
+
+    // Horodatage de l'affectation de chaque séance à chaque joueur (verrou RPE 4h).
+    // On ne charge que les affectations récentes : seule la fenêtre de 4h est pertinente
+    // (au-delà, getSeancePublishedMs retombe sur seances.created_at, déjà verrouillé).
+    // Borne aussi la réponse sous le plafond PostgREST de 1000 lignes et limite l'egress.
+    const affCutoff = new Date(Date.now() - 3 * 86400000).toISOString();
+    const { data: affectations } = await sb.from('seance_affectations')
+      .select('*').eq('org', currentOrg).gte('affected_at', affCutoff);
+    state.bdd_affectations = (affectations || []).map(a => ({
+      date: a.date, joueur: a.joueur, seance: a.seance, affected_at: a.affected_at || null
     }));
 
     setLoad('Chargement des RPE...');
@@ -7449,53 +7434,6 @@ async function saveRPEToSupabase(date, joueur, rpeArray) {
   return true;
 }
 
-// Aligne l'état local sur la ligne RPE renvoyée par le serveur (vérité fusionnée,
-// incluant les modifications concurrentes d'un autre appareil). row = null => ligne supprimée.
-function syncRpeRowLocal(date, joueur, row) {
-  state.bdd_rpe = state.bdd_rpe || [];
-  const idx = state.bdd_rpe.findIndex(x => x.date === date && x.joueur === joueur);
-  if (!row) { if (idx >= 0) state.bdd_rpe.splice(idx, 1); return; }
-  const plaisir = (row.plaisir === null || row.plaisir === undefined) ? null : row.plaisir;
-  if (idx >= 0) {
-    state.bdd_rpe[idx].rpe = row.rpe || [];
-    state.bdd_rpe[idx].plaisir = plaisir;
-    state.bdd_rpe[idx].updated_at = row.updated_at || state.bdd_rpe[idx].updated_at || null;
-    if (!state.bdd_rpe[idx].created_at) state.bdd_rpe[idx].created_at = row.created_at || null;
-  } else {
-    state.bdd_rpe.push({ date, joueur, rpe: row.rpe || [], plaisir, created_at: row.created_at || null, updated_at: row.updated_at || null });
-  }
-}
-
-// Écriture RPE ANTI-CONFLIT : n'envoie que les séances modifiées à la RPC serveur
-// `rpe_merge`, qui les fusionne atomiquement (verrou FOR UPDATE) sur l'état frais —
-// deux appareils (ex. admin + joueuse) qui saisissent en même temps ne s'écrasent plus.
-// `seances` = noms des séances changées localement ; opts.setPlaisir/plaisir = note de plaisir du jour.
-async function saveRPEMerge(date, joueur, seances, opts) {
-  if (!canWriteRPE(joueur)) {
-    toast(tr('You can only rate your own sessions', 'Tu ne peux saisir que tes propres RPE'), 'error');
-    return false;
-  }
-  if (!sb) return false;
-  const r = (state.bdd_rpe || []).find(x => x.date === date && x.joueur === joueur);
-  const changes = (seances || []).map(s => {
-    const entry = (r && r.rpe) ? r.rpe.find(e => e.seance === s) : null;
-    return { seance: s, entry: entry || null };
-  });
-  const setPl = !!(opts && opts.setPlaisir);
-  const params = {
-    p_date: date, p_joueur: joueur, p_org: currentOrg, p_changes: changes,
-    p_set_plaisir: setPl, p_plaisir: setPl ? ((opts.plaisir === undefined) ? null : opts.plaisir) : null
-  };
-  const { data, error } = await sb.rpc('rpe_merge', params);
-  if (error) {
-    // Filet de sécurité : si la RPC est indisponible, on retombe sur l'écriture pleine.
-    console.warn('rpe_merge indisponible, fallback upsert :', error.message);
-    return await saveRPEToSupabase(date, joueur, r ? r.rpe : []);
-  }
-  syncRpeRowLocal(date, joueur, Array.isArray(data) ? (data[0] || null) : (data || null));
-  return true;
-}
-
 // ---- Note de plaisir (-5 à +5), une par joueur et par jour — SECONDE LIGUE uniquement ----
 function getPlaisir(date, joueur) {
   const row = (state.bdd_rpe || []).find(r => r.date === date && r.joueur === joueur);
@@ -7514,9 +7452,12 @@ async function savePlaisir(date, joueur, value) {
     return;
   }
   const v = (value === null || value === undefined || value === '') ? null : parseInt(value, 10);
-  // Fusion atomique : ne met à jour que la colonne plaisir, sans réécrire le tableau rpe.
-  const ok = await saveRPEMerge(date, joueur, [], { setPlaisir: true, plaisir: v });
-  if (!ok) return;
+  const existing = (state.bdd_rpe || []).find(r => r.date === date && r.joueur === joueur);
+  const rpeArr = existing ? (existing.rpe || []) : [];
+  const { error } = await sb.from('rpe_declarations').upsert({ date, joueur, rpe: rpeArr, plaisir: v, org: currentOrg }, { onConflict: 'date,joueur' });
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (existing) existing.plaisir = v;
+  else (state.bdd_rpe = state.bdd_rpe || []).push({ date, joueur, rpe: [], plaisir: v, created_at: null, updated_at: null });
   if (currentRole === 'lecteur') renderPlayerRPE(); else renderRPEEntry();
 }
 function setPlaisirValue(date, joueur, v) { savePlaisir(date, joueur, v); }
@@ -7547,7 +7488,7 @@ async function setPlaisirSeance(date, joueur, seance, value) {
   } else {
     m.plaisir = v;
   }
-  const ok = await saveRPEMerge(date, joueur, [seance]);
+  const ok = await saveRPEToSupabase(date, joueur, r.rpe);
   if (ok) { if (currentRole === 'lecteur') renderPlayerRPE(); else renderRPEEntry(); }
 }
 // Saisie compacte du plaisir (staff, mode Tableau) : petit champ -5..+5 sous les notes RPE.
@@ -11012,9 +10953,6 @@ function renderRPE() {
   // Visuel note de plaisir (SECONDE LIGUE)
   renderRPEPlaisirChart(dates, players);
 
-  // Charge affective RPE-plaisir (SECONDE LIGUE)
-  renderRPEChargeAffective(dates, players);
-
   // Rafraîchir le bilan individuel si un joueur est déjà sélectionné
   renderBilanIndividuel();
 
@@ -11344,98 +11282,6 @@ function renderRPEPlaisirChart(dates, players) {
   });
 }
 
-// ---- Charge affective (RPE-plaisir) — SECONDE LIGUE uniquement ----
-// charge affective = durée × plaisir (−5..+5), même base de durée que le sRPE.
-function chargeAffColor(v) {
-  if (v == null) return 'rgba(148,163,184,0.35)';
-  if (v > 0) return '#10b981';   // vécu positivement
-  if (v < 0) return '#ef4444';   // subi
-  return '#8ba3c1';
-}
-function computeChargeAffective(dateSet, playerSet) {
-  const out = [];
-  computeSRPE().forEach(x => {
-    if (dateSet && !dateSet.has(x.date)) return;
-    if (playerSet && !playerSet.has(x.joueur)) return;
-    if (!x.duree || x.duree <= 0) return;
-    const pl = getPlaisirSeance(x.date, x.joueur, x.seance);
-    if (pl == null) return;
-    out.push({ date: x.date, joueur: x.joueur, seance: x.seance, duree: x.duree, plaisir: pl, chargeAff: x.duree * pl });
-  });
-  return out;
-}
-function renderRPEChargeAffective(dates, players) {
-  const card = document.getElementById('rpe-charge-affective-card');
-  if (!card) return;
-  const show = (currentOrg === 'D2F');
-  card.style.display = show ? '' : 'none';
-  if (!show) { destroyChart('chart-rpe-charge-affective'); return; }
-
-  const dateSet = new Set(dates), playerSet = new Set(players);
-  const rows = computeChargeAffective(dateSet, playerSet);
-
-  // ===== Résumé =====
-  const summaryEl = document.getElementById('rpe-charge-affective-summary');
-  if (summaryEl) {
-    if (!rows.length) {
-      summaryEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; margin-bottom:12px;">Aucune charge affective sur la période (nécessite une durée de séance et une note de plaisir).</div>';
-    } else {
-      const totalRaw = rows.reduce((s, x) => s + x.chargeAff, 0);
-      const total = Math.round(totalRaw);
-      const nbJ = new Set(rows.map(x => x.joueur)).size;
-      const moyJ = nbJ ? Math.round(total / nbJ) : 0;
-      const sumDuree = rows.reduce((s, x) => s + x.duree, 0);
-      const plaisirPondere = sumDuree ? +(totalRaw / sumDuree).toFixed(2) : 0;
-      const interp = plaisirPondere >= 1.5 ? 'Semaine très bien vécue'
-        : plaisirPondere > 0.3 ? 'Semaine plutôt bien vécue'
-        : plaisirPondere >= -0.3 ? 'Vécu neutre'
-        : plaisirPondere > -1.5 ? 'Semaine plutôt subie'
-        : 'Semaine subie';
-      const tile = (label, val, color, sub) =>
-        '<div style="flex:0 0 auto; min-width:150px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:10px; padding:14px 18px; text-align:center;">' +
-          '<div style="font-size:12px; color:var(--text-dim);">' + label + '</div>' +
-          '<div style="font-size:30px; font-weight:800; color:' + color + ';">' + val + '</div>' +
-          '<div style="font-size:11px; color:var(--text-dim);">' + sub + '</div>' +
-        '</div>';
-      summaryEl.innerHTML =
-        '<div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:14px;">' +
-          tile('Charge affective totale', (total > 0 ? '+' : '') + total, chargeAffColor(total), 'UA · ' + rows.length + ' séance' + (rows.length > 1 ? 's' : '')) +
-          tile('Moyenne / joueuse', (moyJ > 0 ? '+' : '') + moyJ, chargeAffColor(moyJ), 'UA · ' + nbJ + ' joueuse' + (nbJ > 1 ? 's' : '')) +
-          tile('Plaisir moyen pondéré', (plaisirPondere > 0 ? '+' : '') + plaisirPondere, plaisirColor(Math.round(plaisirPondere)), interp) +
-        '</div>';
-    }
-  }
-
-  // ===== Graphique : charge affective moyenne par joueuse et par jour =====
-  const byDate = {};
-  rows.forEach(x => { (byDate[x.date] = byDate[x.date] || {}); byDate[x.date][x.joueur] = (byDate[x.date][x.joueur] || 0) + x.chargeAff; });
-  const perDay = dates.map(d => {
-    const j = byDate[d]; if (!j) return null;
-    const vals = Object.values(j); if (!vals.length) return null;
-    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
-  });
-  const counts = dates.map(d => byDate[d] ? Object.keys(byDate[d]).length : 0);
-  const jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-  const labels = dates.map((d, i) => jours[i] + ' ' + d.slice(8) + '/' + d.slice(5, 7));
-  const colors = perDay.map(v => chargeAffColor(v));
-  destroyChart('chart-rpe-charge-affective');
-  charts['chart-rpe-charge-affective'] = new Chart(document.getElementById('chart-rpe-charge-affective'), {
-    type: 'bar',
-    data: { labels, datasets: [{ label: 'Charge affective (UA)', data: perDay.map(v => v == null ? 0 : v), backgroundColor: colors, borderRadius: 4 }] },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: (c) => { const i = c.dataIndex; return perDay[i] == null ? 'Aucune donnée' : ((perDay[i] > 0 ? '+' : '') + perDay[i] + ' UA (' + counts[i] + ' joueuse' + (counts[i] > 1 ? 's' : '') + ')'); } } }
-      },
-      scales: {
-        y: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'UA affectives', color: '#8ba3c1' } },
-        x: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } }
-      }
-    }
-  });
-}
-
 function formatDateRange(monday) {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
@@ -11646,35 +11492,19 @@ function gpsImportLog(msg, type) {
 
 // Détection séparateur + parsing
 function gpsParseCSV(text) {
-  const rawLines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-  if (rawLines.length < 2) throw new Error('CSV vide ou sans données');
-  const sep = (rawLines[0].split(';').length > rawLines[0].split(',').length) ? ';' : ',';
-  // Export CTR/Catapult ("ctr-report") : un bloc de métadonnées (Date, Start Time…)
-  // précède l'en-tête. La vraie ligne d'en-tête est celle qui contient "Player Name".
-  let headerIdx = 0;
-  for (let i = 0; i < rawLines.length; i++) {
-    const cells = gpsSplitLine(rawLines[i], sep).map(c => c.trim().toLowerCase());
-    if (cells.indexOf('player name') !== -1) { headerIdx = i; break; }
-  }
-  // Récupère la date de séance dans le préambule (ex : "Date:;18/07/2026")
-  const meta = {};
-  for (let i = 0; i < headerIdx; i++) {
-    const cells = gpsSplitLine(rawLines[i], sep).map(c => c.trim());
-    if (cells.length >= 2 && /^date/i.test(cells[0])) {
-      const m = cells.slice(1).join(' ').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-      if (m) meta.date = m[0];
-    }
-  }
-  const headers = gpsSplitLine(rawLines[headerIdx], sep).map(h => h.trim());
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) throw new Error('CSV vide ou sans données');
+  const sep = (lines[0].split(';').length > lines[0].split(',').length) ? ';' : ',';
+  const headers = gpsSplitLine(lines[0], sep).map(h => h.trim());
   const rows = [];
-  for (let i = headerIdx + 1; i < rawLines.length; i++) {
-    const cols = gpsSplitLine(rawLines[i], sep);
+  for (let i = 1; i < lines.length; i++) {
+    const cols = gpsSplitLine(lines[i], sep);
     if (cols.length < 3) continue;
     const obj = {};
     headers.forEach((h, j) => { obj[h] = cols[j] !== undefined ? cols[j].trim() : ''; });
     rows.push(obj);
   }
-  return { headers, rows, sep, meta, metaPreamble: headerIdx > 0 };
+  return { headers, rows, sep };
 }
 
 function gpsSplitLine(line, sep) {
@@ -11703,24 +11533,6 @@ function gpsNum(v) {
   return isNaN(n) ? null : n;
 }
 
-// Durée → minutes. Accepte "HH:MM:SS"/"MM:SS" (export CTR) ou un nombre de
-// secondes (Catapult standard).
-function gpsDurationToMin(v) {
-  if (v === undefined || v === null || String(v).trim() === '') return null;
-  const s = String(v).trim();
-  if (s.indexOf(':') !== -1) {
-    const p = s.split(':').map(x => parseInt(x, 10));
-    if (p.some(x => isNaN(x))) return null;
-    let sec = 0;
-    if (p.length === 3) sec = p[0] * 3600 + p[1] * 60 + p[2];
-    else if (p.length === 2) sec = p[0] * 60 + p[1];
-    else return null;
-    return Math.round(sec / 60);
-  }
-  const n = parseFloat(s.replace(',', '.'));
-  return isNaN(n) ? null : Math.round(n / 60);
-}
-
 function gpsNormalizeDate(v) {
   if (!v) return null;
   v = String(v).trim();
@@ -11747,8 +11559,7 @@ function gpsCapitalize(s) {
 // les rapports qui filtrent sur la séance complète retrouvent bien ces lignes.
 function gpsNormalizeSplitName(v) {
   const s = String(v === undefined || v === null ? '' : v).trim();
-  // "0"/vide (Catapult) et "Session" (export CTR) = ligne séance entière → "all"
-  if (!s || s === '0' || s.toLowerCase() === 'session') return 'all';
+  if (!s || s === '0') return 'all';
   return s;
 }
 
@@ -11925,7 +11736,7 @@ function handleGPSCSV(e) {
         sprint: gpsFindCol(headers, ['sprint distance', 'sprint']),
         hsr: gpsFindCol(headers, ['hsr', 'high speed']),
         playerload: gpsFindCol(headers, ['player load', 'playerload']),
-        topspeed: gpsFindCol(headers, ['top speed', 'vitesse max', 'vmax', 'max velocity']),
+        topspeed: gpsFindCol(headers, ['top speed', 'vitesse max', 'vmax']),
         energy: gpsFindCol(headers, ['energy', 'énergie', 'kcal']),
         distmin: gpsFindCol(headers, ['distance per min', 'm/min']),
         maxdecel: gpsFindCol(headers, ['max deceleration', 'deceleration', 'décél']),
@@ -11942,13 +11753,8 @@ function handleGPSCSV(e) {
         z4: gpsFindCol(headers, ['speed zone 4', 'zone 4']),
         z5: gpsFindCol(headers, ['speed zone 5', 'zone 5'])
       };
-      // Date : colonne du tableau, sinon date lue dans le préambule CTR
-      const metaDate = (parsed.meta && parsed.meta.date) ? parsed.meta.date : null;
-      // Export CTR = préambule de métadonnées ou colonne "Max Velocity" (Catapult
-      // standard utilise "Top Speed" et des km) → distance en mètres à convertir.
-      const isCTR = parsed.metaPreamble || !!gpsFindCol(headers, ['max velocity']);
-      if (!cols.player || (!cols.date && !metaDate)) {
-        gpsImportLog('❌ Colonne Player Name et/ou Date introuvable. En-têtes : ' + headers.join(', '), 'err');
+      if (!cols.date || !cols.player) {
+        gpsImportLog('❌ Colonnes Date et/ou Player Name introuvables. En-têtes : ' + headers.join(', '), 'err');
         return;
       }
       gpsNameResolutions = {};
@@ -11961,11 +11767,9 @@ function handleGPSCSV(e) {
             gpsNameResolutions[key] = { raw: resolution.raw, status: 'unmatched', suggestion: resolution.suggestion, chosen: null, remember: true };
           }
         }
-        // Durée : "HH:MM:SS" (CTR) ou secondes (Catapult standard) → minutes
-        const durMin = gpsDurationToMin(r[cols.duration]);
-        // Distance : mètres dans l'export CTR → km attendu par l'app
-        let distKmVal = gpsNum(r[cols.distance]);
-        if (distKmVal !== null && isCTR) distKmVal = distKmVal / 1000;
+        const durRaw = gpsNum(r[cols.duration]);
+        // Catapult exporte la durée en SECONDES → toujours convertir en minutes
+        const durMin = durRaw !== null ? Math.round(durRaw / 60) : null;
         // Zones de vitesse (en km dans l'export Catapult)
         const z3v = gpsNum(r[cols.z3]);
         const z4v = gpsNum(r[cols.z4]);
@@ -11977,13 +11781,13 @@ function handleGPSCSV(e) {
           hsrVal = sumZones > 0 ? Math.round(sumZones * 1000) : 0;
         }
         return {
-          date: gpsNormalizeDate(cols.date ? r[cols.date] : metaDate),
+          date: gpsNormalizeDate(r[cols.date]),
           joueur: resolution ? (resolution.resolved || gpsCapitalize(resolution.raw)) : null,
           _raw_joueur: rawJoueur ? String(rawJoueur).trim() : null,
           session_title: cols.session ? r[cols.session] : null,
           split_name: cols.split ? gpsNormalizeSplitName(r[cols.split]) : 'all',
           duree_min: durMin,
-          distance_km: distKmVal,
+          distance_km: gpsNum(r[cols.distance]),
           sprint_dist_m: gpsNum(r[cols.sprint]),
           hsr: hsrVal,
           hsr_m: hsrVal,
@@ -20984,24 +20788,26 @@ function renderRPEScale(date, joueurEsc, seanceEsc, procIndex, currentValue) {
 
 // Handler pour la notation par procédé
 async function setRPEProcedeValue(date, joueur, seance, procIndex, value) {
-  if (currentRole === 'lecteur' && isSessionWindowClosed(date, seance)) {
+  if (currentRole === 'lecteur' && isSessionWindowClosed(date, seance, joueur)) {
     toast(tr('The 4h window to enter this rating has closed. Please contact Lucas P.', 'Le délai de 4 h pour saisir cette note est dépassé. Contacte Lucas P.'), 'error');
     return;
   }
   setRPEProcedeJoueurSeance(date, joueur, seance, procIndex, value);
-  await saveRPEMerge(date, joueur, [seance]);
+  const r = state.bdd_rpe.find(x => x.date === date && x.joueur === joueur);
+  const ok = await saveRPEToSupabase(date, joueur, r ? r.rpe : []);
   if (currentRole === 'lecteur') renderPlayerRPE();
   else renderRPEEntry();
 }
 
 async function setRPECardValue(date, joueur, seance, value) {
   // Verrou 4h : si la fenêtre de séance est fermée, on bloque (lecteur uniquement)
-  if (currentRole === 'lecteur' && isSessionWindowClosed(date, seance)) {
+  if (currentRole === 'lecteur' && isSessionWindowClosed(date, seance, joueur)) {
     toast(tr('The 4h window to enter this rating has closed. Please contact Lucas P.', 'Le délai de 4 h pour saisir cette note est dépassé. Contacte Lucas P.'), 'error');
     return;
   }
   setRPEJoueurSeance(date, joueur, seance, value);
-  await saveRPEMerge(date, joueur, [seance]);
+  const r = state.bdd_rpe.find(x => x.date === date && x.joueur === joueur);
+  const ok = await saveRPEToSupabase(date, joueur, r ? r.rpe : []);
   // Si on est en vue joueur, re-render pour refléter l'état (et démarrer le chrono 2h)
   if (currentRole === 'lecteur') renderPlayerRPE();
   else renderRPEEntry();
@@ -21036,8 +20842,9 @@ async function setRPEFromInput(inp) {
   rpeSuppressRefresh = true;
   clearTimeout(window._rpeRefreshTimer);
   window._rpeRefreshTimer = setTimeout(() => { rpeSuppressRefresh = false; }, 4000);
-  // Sauvegarde immédiate vers Supabase (fusion anti-conflit ; comme côté joueur)
-  await saveRPEMerge(d, p, [s]);
+  // Sauvegarde immédiate vers Supabase (comme côté joueur)
+  const r = state.bdd_rpe.find(x => x.date === d && x.joueur === p);
+  await saveRPEToSupabase(d, p, r ? r.rpe : []);
 
   // Mise à jour CIBLÉE (sans re-render → le scroll reste en place, navigation fluide)
   const filled = (v !== null && !isNaN(v));
@@ -21075,7 +20882,8 @@ async function setRPEProcFromInput(inp) {
   rpeSuppressRefresh = true;
   clearTimeout(window._rpeRefreshTimer);
   window._rpeRefreshTimer = setTimeout(() => { rpeSuppressRefresh = false; }, 4000);
-  await saveRPEMerge(d, p, [s]);
+  const r = state.bdd_rpe.find(x => x.date === d && x.joueur === p);
+  await saveRPEToSupabase(d, p, r ? r.rpe : []);
 
   // Mise à jour CIBLÉE sans re-render (scroll préservé)
   const filled = (v !== null && !isNaN(v));
@@ -21099,13 +20907,7 @@ async function setRPEProcFromInput(inp) {
 
 async function saveAllRPE() {
   let count = 0;
-  // (date, joueur) -> ensemble des séances modifiées, pour une fusion ciblée anti-conflit
-  const touched = new Map();
-  const addTouched = (d, p, s) => {
-    const k = d + '||' + p;
-    if (!touched.has(k)) touched.set(k, new Set());
-    touched.get(k).add(s);
-  };
+  const touched = new Set(); // (date, joueur) pour la persistance
 
   document.querySelectorAll('[data-rpe-date]').forEach(inp => {
     const d = inp.dataset.rpeDate;
@@ -21115,7 +20917,7 @@ async function saveAllRPE() {
     const v = raw === '' ? null : parseFloat(raw);
     setRPEJoueurSeance(d, p, s, (v === null || isNaN(v)) ? null : v);
     if (v !== null && !isNaN(v)) count++;
-    addTouched(d, p, s);
+    touched.add(d + '||' + p);
   });
 
   const procedeGroups = {};
@@ -21134,13 +20936,14 @@ async function saveAllRPE() {
   Object.values(procedeGroups).forEach(g => {
     setRPEJoueurSeance(g.d, g.p, g.s, g.values);
     count += g.values.filter(v => v !== null && !isNaN(v)).length;
-    addTouched(g.d, g.p, g.s);
+    touched.add(g.d + '||' + g.p);
   });
 
-  // Persister chaque (date, joueur) touché via fusion atomique des séances modifiées
-  for (const [key, seancesSet] of touched) {
+  // Persister chaque (date, joueur) touché vers Supabase
+  for (const key of touched) {
     const [d, p] = key.split('||');
-    await saveRPEMerge(d, p, [...seancesSet]);
+    const r = state.bdd_rpe.find(x => x.date === d && x.joueur === p);
+    await saveRPEToSupabase(d, p, r ? r.rpe : []);
   }
 
   toast(count + ' note(s) enregistrée(s)', 'success');
@@ -21410,7 +21213,7 @@ async function deleteSeance(date, nom) {
         const r = state.bdd_rpe.find(x => x.date === date && x.joueur === p);
         if (r && r.rpe) {
           r.rpe = r.rpe.filter(item => item.seance !== nom);
-          await saveRPEMerge(date, p, [nom]);
+          await saveRPEToSupabase(date, p, r.rpe);
         }
       }
       state.bdd_ent = state.bdd_ent.filter(e => e.seances.length > 0);
@@ -22946,7 +22749,7 @@ async function renderPlayerOverview() {
         if (STATUTS_NON_ENT.includes(s)) return;                                  // statut, pas une séance
         if (!state.bdd_ent2.some(f => f.date === pl.date && f.nom === s)) return;   // fiche supprimée → référence orpheline
         if (getRPEJoueurSeance(pl.date, currentJoueurNom, s) !== null) return;      // déjà notée
-        if (isSessionWindowClosed(pl.date, s)) return;                             // fenêtre 4 h fermée
+        if (isSessionWindowClosed(pl.date, s, currentJoueurNom)) return;           // fenêtre 4 h fermée
         liveANoter.push({ date: pl.date, seance: s });
       });
     });
@@ -22977,7 +22780,7 @@ async function renderPlayerOverview() {
       const liveHtml = liveANoter.map(it => {
         const badge = '<span style="display:inline-block; font-size:10px; font-weight:700; color:#86efac; background:rgba(34,197,94,0.15); border:1px solid #16a34a; border-radius:4px; padding:1px 6px; margin-right:6px;">🟢 LIVE</span>';
         const msg = isFR ? "Séance d'équipe — à noter avant fermeture (4 h)" : 'Team session — rate before the 4h window closes';
-        const pubMs = getSeancePublishedMs(it.date, it.seance);
+        const pubMs = getSeancePublishedMs(it.date, it.seance, currentJoueurNom);
         const chip = (pubMs !== null) ? aNoterCountdownChip(pubMs + SESSION_WINDOW_HOURS * 3600000, isFR) : '';
         return '<div onclick="playerRateLiveDate(\'' + it.date + '\')" style="' + itemStyle + '" ' + hover + '>' +
           '<div>' +
@@ -23269,7 +23072,7 @@ function renderPlayerSeanceNotation(date, joueur, seance) {
 
   const locked = isRPELockedForSession(date, joueur, seance);
   const lockInfo = rpeLockInfo(date, joueur, seance);
-  const sessionClosed = isSessionWindowClosed(date, seance);
+  const sessionClosed = isSessionWindowClosed(date, seance, joueur);
   const hasEntry = hasRPEEntry(date, joueur);
 
   let html = '<div class="rpe-session-card' + (locked ? ' rpe-locked' : '') + '">';
