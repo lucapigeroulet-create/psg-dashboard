@@ -3244,9 +3244,61 @@
   <!-- ========== PERFORMANCE — RÉATHLÉTISATION (staff) ========== -->
   <div class="view" id="view-reathletisation">
     <div class="card">
-      <h2>🩼 Réathlétisation</h2>
-      <p style="color:var(--text-dim); font-size:13px; margin-top:4px;">Suivi du retour à l'entraînement / à la compétition après blessure.</p>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h2 style="margin:0;">🩼 Réathlétisation</h2>
+          <p style="color:var(--text-dim); font-size:13px; margin-top:4px;">Joueurs blessés / en retour : protocole par étapes, feux 🔴🟠🟢, notes du staff.</p>
+        </div>
+        <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--text-dim); cursor:pointer;">
+          <input type="checkbox" id="rea-show-closed" onchange="renderReathleList()"> Voir les dossiers clôturés
+        </label>
+      </div>
     </div>
+
+    <div class="card">
+      <h3 id="rea-form-title" style="margin:0 0 12px;">➕ Nouveau dossier</h3>
+      <input type="hidden" id="rea-edit-id" value="">
+      <div class="filters" style="margin-bottom:12px;">
+        <div class="filter-group">
+          <label>Joueur</label>
+          <select id="rea-joueur" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:160px;"></select>
+        </div>
+        <div class="filter-group">
+          <label>Blessure</label>
+          <input type="text" id="rea-blessure" placeholder="Ex : entorse cheville droite" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:200px;">
+        </div>
+        <div class="filter-group">
+          <label>Date de blessure</label>
+          <input type="date" id="rea-date-blessure" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;">
+        </div>
+        <div class="filter-group">
+          <label>Retour prévu</label>
+          <input type="date" id="rea-date-retour" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;">
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:6px;">Feu (disponibilité)</label>
+        <input type="hidden" id="rea-feu" value="rouge">
+        <div id="rea-feu-btns" style="display:flex; gap:8px;"></div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:6px;">Protocole par étapes</label>
+        <div id="rea-etapes" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:6px;">Notes du staff</label>
+        <textarea id="rea-notes" rows="3" placeholder="Observations, consignes, ressenti…" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+      </div>
+
+      <div style="display:flex; gap:8px;">
+        <button class="btn" onclick="saveReathle()">💾 Enregistrer</button>
+        <button class="btn btn-secondary" id="rea-cancel-btn" style="display:none;" onclick="resetReathleForm()">Annuler</button>
+      </div>
+    </div>
+
     <div id="reathletisation-content"></div>
   </div>
 
@@ -3254,10 +3306,85 @@
   <!-- ========== PERFORMANCE — MUSCULATION (staff) ========== -->
   <div class="view" id="view-musculation">
     <div class="card">
-      <h2>🏋️ Musculation</h2>
-      <p style="color:var(--text-dim); font-size:13px; margin-top:4px;">Suivi des programmes et séances de renforcement musculaire.</p>
+      <h2 style="margin:0;">🏋️ Musculation</h2>
+      <p style="color:var(--text-dim); font-size:13px; margin-top:4px;">Programmes par joueur ou groupe, charges (kg/séries/reps), historique et records 1RM.</p>
     </div>
-    <div id="musculation-content"></div>
+
+    <!-- ===== Programmes ===== -->
+    <div class="card">
+      <h3 id="muscu-prog-title" style="margin:0 0 12px;">➕ Nouveau programme</h3>
+      <input type="hidden" id="muscu-prog-id" value="">
+      <div class="filters" style="margin-bottom:12px;">
+        <div class="filter-group">
+          <label>Nom du programme</label>
+          <input type="text" id="muscu-prog-nom" placeholder="Ex : Force bas du corps" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:180px;">
+        </div>
+        <div class="filter-group">
+          <label>Cible</label>
+          <select id="muscu-prog-cible" onchange="onMuscuCibleChange()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;">
+            <option value="joueur">Joueur</option>
+            <option value="groupe">Groupe</option>
+          </select>
+        </div>
+        <div class="filter-group" id="muscu-prog-joueur-wrap">
+          <label>Joueur</label>
+          <select id="muscu-prog-joueur" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:150px;"></select>
+        </div>
+        <div class="filter-group" id="muscu-prog-groupe-wrap" style="display:none;">
+          <label>Groupe</label>
+          <select id="muscu-prog-groupe" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:150px;"></select>
+        </div>
+        <div class="filter-group">
+          <label>Date</label>
+          <input type="date" id="muscu-prog-date" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;">
+        </div>
+      </div>
+
+      <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:6px;">Exercices</label>
+      <div id="muscu-prog-exos" style="display:flex; flex-direction:column; gap:8px; margin-bottom:8px;"></div>
+      <button class="btn btn-secondary" style="padding:5px 12px; font-size:12px;" onclick="addMuscuExo()">➕ Ajouter un exercice</button>
+
+      <div style="margin:12px 0;">
+        <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:6px;">Notes</label>
+        <textarea id="muscu-prog-notes" rows="2" placeholder="Consignes, tempo, récup…" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+      </div>
+
+      <div style="display:flex; gap:8px;">
+        <button class="btn" onclick="saveMuscuProg()">💾 Enregistrer le programme</button>
+        <button class="btn btn-secondary" id="muscu-prog-cancel" style="display:none;" onclick="resetMuscuProgForm()">Annuler</button>
+      </div>
+    </div>
+
+    <div id="muscu-prog-content"></div>
+
+    <!-- ===== 1RM ===== -->
+    <div class="card">
+      <h3 style="margin:0 0 4px;">🏆 Records de force (1RM)</h3>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Ajoute une charge maximale (1RM) ; le meilleur par joueur/exercice s'affiche en haut, l'historique en dessous.</p>
+      <div class="filters" style="margin-bottom:12px;">
+        <div class="filter-group">
+          <label>Joueur</label>
+          <select id="muscu-1rm-joueur" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:150px;"></select>
+        </div>
+        <div class="filter-group">
+          <label>Exercice</label>
+          <input type="text" id="muscu-1rm-exercice" placeholder="Ex : Squat" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:150px;">
+        </div>
+        <div class="filter-group">
+          <label>Charge (kg)</label>
+          <input type="number" step="0.5" id="muscu-1rm-kg" placeholder="kg" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; width:90px;">
+        </div>
+        <div class="filter-group">
+          <label>Date</label>
+          <input type="date" id="muscu-1rm-date" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;">
+        </div>
+        <div class="filter-group" style="justify-content:flex-end;">
+          <label>&nbsp;</label>
+          <button class="btn" style="padding:6px 14px; font-size:13px;" onclick="saveMuscu1RM()">➕ Ajouter</button>
+        </div>
+      </div>
+      <div id="muscu-1rm-content"></div>
+    </div>
   </div>
 
 
@@ -26182,17 +26309,436 @@ function renderPlayerGPS() {
   content.innerHTML = html;
 }
 
-// Onglets Performance : Réathlétisation & Musculation (placeholders — contenu à définir)
-function renderReathletisation() {
-  const c = document.getElementById('reathletisation-content');
-  if (!c) return;
-  c.innerHTML = '<div class="card"><div class="empty-state">🚧 Module Réathlétisation en préparation. Le contenu (protocoles de retour, étapes, suivi joueur) sera ajouté ici.</div></div>';
+// ============================================================================
+// PERFORMANCE — helpers communs
+// ============================================================================
+function escapeAttr(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
-function renderMusculation() {
-  const c = document.getElementById('musculation-content');
-  if (!c) return;
-  c.innerHTML = '<div class="card"><div class="empty-state">🚧 Module Musculation en préparation. Le contenu (programmes, charges, séances) sera ajouté ici.</div></div>';
+// ============================================================================
+// PERFORMANCE — RÉATHLÉTISATION
+// ============================================================================
+const REA_STAGES = [
+  { cle: 'course',           label: '🏃 Course' },
+  { cle: 'reathle_terrain',  label: '🥅 Réathlé terrain' },
+  { cle: 'retour_collectif', label: '👥 Retour collectif' }
+];
+const REA_STATUTS = [
+  { v: 'a_venir',  label: 'À venir' },
+  { v: 'en_cours', label: 'En cours' },
+  { v: 'valide',   label: 'Validé' }
+];
+const REA_FEUX = [
+  { v: 'rouge',  emoji: '🔴', label: 'Indisponible' },
+  { v: 'orange', emoji: '🟠', label: 'Réathlé' },
+  { v: 'vert',   emoji: '🟢', label: 'Disponible' }
+];
+let reathleData = [];
+
+function reaFeuInfo(v)    { return REA_FEUX.find(f => f.v === v) || REA_FEUX[0]; }
+function reaStatutInfo(v) { return REA_STATUTS.find(s => s.v === v) || REA_STATUTS[0]; }
+
+async function renderReathletisation() {
+  const jsel = document.getElementById('rea-joueur');
+  if (jsel) jsel.innerHTML = getAllPlayers().map(p => '<option>' + escapeHtml(p) + '</option>').join('');
+  renderReaEtapesInputs();
+  resetReathleForm();
+  await loadReathle();
+  renderReathleList();
+}
+
+async function loadReathle() {
+  try {
+    const { data, error } = await sb.from('reathletisation').select('*').eq('org', currentOrg).order('updated_at', { ascending: false });
+    if (error) throw error;
+    reathleData = data || [];
+  } catch (e) { reathleData = []; toast('Erreur chargement réathlé : ' + (e.message || e), 'error'); }
+}
+
+function renderReaFeuButtons() {
+  const c = document.getElementById('rea-feu-btns'); if (!c) return;
+  const cur = (document.getElementById('rea-feu') || {}).value || 'rouge';
+  c.innerHTML = REA_FEUX.map(f => {
+    const on = f.v === cur;
+    return '<button type="button" class="btn" onclick="setReaFeu(\'' + f.v + '\')" style="border:1px solid ' + (on ? 'var(--accent)' : 'var(--border)') + '; background:' + (on ? 'var(--accent)' : 'var(--bg-elevated)') + '; color:' + (on ? '#fff' : 'var(--text)') + '; border-radius:16px; padding:6px 14px; font-size:13px; font-weight:600;">' + f.emoji + ' ' + f.label + '</button>';
+  }).join('');
+}
+function setReaFeu(v) { const h = document.getElementById('rea-feu'); if (h) h.value = v; renderReaFeuButtons(); }
+
+function renderReaEtapesInputs() {
+  const c = document.getElementById('rea-etapes'); if (!c) return;
+  c.innerHTML = REA_STAGES.map(s =>
+    '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:8px 10px;">' +
+      '<span style="min-width:150px; font-size:13px; font-weight:600;">' + s.label + '</span>' +
+      '<select id="rea-st-' + s.cle + '" style="background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:12px;">' +
+        REA_STATUTS.map(st => '<option value="' + st.v + '">' + st.label + '</option>').join('') +
+      '</select>' +
+      '<input type="date" id="rea-dt-' + s.cle + '" style="background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:12px;">' +
+    '</div>'
+  ).join('');
+}
+
+function resetReathleForm() {
+  document.getElementById('rea-edit-id').value = '';
+  document.getElementById('rea-form-title').textContent = '➕ Nouveau dossier';
+  document.getElementById('rea-cancel-btn').style.display = 'none';
+  document.getElementById('rea-blessure').value = '';
+  document.getElementById('rea-date-blessure').value = toLocalISO(new Date());
+  document.getElementById('rea-date-retour').value = '';
+  document.getElementById('rea-notes').value = '';
+  document.getElementById('rea-feu').value = 'rouge'; renderReaFeuButtons();
+  REA_STAGES.forEach(s => {
+    const st = document.getElementById('rea-st-' + s.cle); if (st) st.value = 'a_venir';
+    const dt = document.getElementById('rea-dt-' + s.cle); if (dt) dt.value = '';
+  });
+}
+
+async function saveReathle() {
+  const joueur = (document.getElementById('rea-joueur') || {}).value;
+  if (!joueur) { toast('Choisis un joueur.', 'error'); return; }
+  const etapes = REA_STAGES.map(s => ({
+    cle: s.cle, label: s.label,
+    statut: (document.getElementById('rea-st-' + s.cle) || {}).value || 'a_venir',
+    date: (document.getElementById('rea-dt-' + s.cle) || {}).value || null
+  }));
+  const row = {
+    org: currentOrg, joueur,
+    blessure: document.getElementById('rea-blessure').value.trim() || null,
+    date_blessure: document.getElementById('rea-date-blessure').value || null,
+    date_retour_prevue: document.getElementById('rea-date-retour').value || null,
+    feu: document.getElementById('rea-feu').value || 'rouge',
+    etapes,
+    notes: document.getElementById('rea-notes').value.trim() || null,
+    updated_at: new Date().toISOString(),
+    updated_by: (currentUser && currentUser.email) || null
+  };
+  const editId = document.getElementById('rea-edit-id').value;
+  try {
+    if (editId) {
+      const { error } = await sb.from('reathletisation').update(row).eq('id', Number(editId));
+      if (error) throw error;
+    } else {
+      row.actif = true;
+      const { error } = await sb.from('reathletisation').insert(row);
+      if (error) throw error;
+    }
+    toast('✅ Dossier enregistré.', 'success');
+    resetReathleForm();
+    await loadReathle(); renderReathleList();
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+
+function editReathle(id) {
+  const r = reathleData.find(x => x.id === id); if (!r) return;
+  document.getElementById('rea-edit-id').value = r.id;
+  document.getElementById('rea-form-title').textContent = '✏️ Modifier le dossier';
+  document.getElementById('rea-cancel-btn').style.display = '';
+  const jsel = document.getElementById('rea-joueur');
+  if (jsel) {
+    if (![...jsel.options].some(o => o.value === r.joueur)) jsel.insertAdjacentHTML('beforeend', '<option>' + escapeHtml(r.joueur) + '</option>');
+    jsel.value = r.joueur;
+  }
+  document.getElementById('rea-blessure').value = r.blessure || '';
+  document.getElementById('rea-date-blessure').value = r.date_blessure || '';
+  document.getElementById('rea-date-retour').value = r.date_retour_prevue || '';
+  document.getElementById('rea-feu').value = r.feu || 'rouge'; renderReaFeuButtons();
+  const et = Array.isArray(r.etapes) ? r.etapes : [];
+  REA_STAGES.forEach(s => {
+    const found = et.find(e => e.cle === s.cle) || {};
+    const st = document.getElementById('rea-st-' + s.cle); if (st) st.value = found.statut || 'a_venir';
+    const dt = document.getElementById('rea-dt-' + s.cle); if (dt) dt.value = found.date || '';
+  });
+  document.getElementById('rea-notes').value = r.notes || '';
+  const v = document.getElementById('view-reathletisation'); if (v) v.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function toggleReaClosed(id) {
+  const r = reathleData.find(x => x.id === id); if (!r) return;
+  try {
+    const { error } = await sb.from('reathletisation').update({ actif: (r.actif === false), updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) throw error;
+    await loadReathle(); renderReathleList();
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+
+async function deleteReathle(id) {
+  if (!confirm('Supprimer définitivement ce dossier de réathlétisation ?')) return;
+  try {
+    const { error } = await sb.from('reathletisation').delete().eq('id', id);
+    if (error) throw error;
+    await loadReathle(); renderReathleList();
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+
+function reaCardHTML(r) {
+  const f = reaFeuInfo(r.feu);
+  const et = Array.isArray(r.etapes) ? r.etapes : [];
+  const stColor = v => v === 'valide' ? 'var(--green)' : (v === 'en_cours' ? '#fbbf24' : 'var(--text-dim)');
+  const stages = REA_STAGES.map(s => {
+    const e = et.find(x => x.cle === s.cle) || {};
+    const si = reaStatutInfo(e.statut);
+    const dt = e.date ? ' · ' + formatDateFR(e.date) : '';
+    return '<span style="display:inline-block; background:var(--bg-elevated); border:1px solid var(--border); border-left:3px solid ' + stColor(e.statut) + '; border-radius:6px; padding:4px 8px; font-size:11px; margin:0 6px 6px 0;">' + s.label + ' : <b style="color:' + stColor(e.statut) + ';">' + si.label + '</b>' + dt + '</span>';
+  }).join('');
+  const dates = [];
+  if (r.date_blessure) dates.push('Blessé le ' + formatDateFR(r.date_blessure));
+  if (r.date_retour_prevue) dates.push('Retour prévu ' + formatDateFR(r.date_retour_prevue));
+  const closedTag = (r.actif === false) ? ' <span style="font-size:11px; color:var(--text-dim);">(clôturé)</span>' : '';
+  return '<div style="border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:10px; background:var(--bg-card);">' +
+    '<div style="display:flex; justify-content:space-between; align-items:start; gap:10px; flex-wrap:wrap;">' +
+      '<div><div style="font-size:15px; font-weight:700;">' + f.emoji + ' ' + escapeHtml(r.joueur) + closedTag + '</div>' +
+      (r.blessure ? '<div style="font-size:13px; color:var(--text); margin-top:2px;">' + escapeHtml(r.blessure) + '</div>' : '') +
+      (dates.length ? '<div style="font-size:12px; color:var(--text-dim); margin-top:2px;">' + dates.join(' · ') + '</div>' : '') +
+      '</div>' +
+      '<div style="display:flex; gap:6px; flex-wrap:wrap;">' +
+        '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="editReathle(' + r.id + ')">✏️ Modifier</button>' +
+        '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="toggleReaClosed(' + r.id + ')">' + (r.actif === false ? '↩️ Rouvrir' : '✅ Clôturer') + '</button>' +
+        '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px; color:#f87171;" onclick="deleteReathle(' + r.id + ')">🗑️</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="margin-top:10px;">' + stages + '</div>' +
+    (r.notes ? '<div style="margin-top:8px; font-size:12px; color:var(--text-dim); white-space:pre-wrap;">📝 ' + escapeHtml(r.notes) + '</div>' : '') +
+  '</div>';
+}
+
+function renderReathleList() {
+  const c = document.getElementById('reathletisation-content'); if (!c) return;
+  const showClosed = (document.getElementById('rea-show-closed') || {}).checked;
+  const active = reathleData.filter(r => r.actif !== false);
+  const closed = reathleData.filter(r => r.actif === false);
+  if (active.length === 0 && (!showClosed || closed.length === 0)) {
+    c.innerHTML = '<div class="card"><div class="empty-state">Aucun dossier de réathlétisation en cours.</div></div>';
+    return;
+  }
+  let html = '<div class="card"><h3 style="margin:0 0 10px;">Dossiers en cours (' + active.length + ')</h3>';
+  html += active.length ? active.map(reaCardHTML).join('') : '<div class="empty-state">Aucun dossier actif.</div>';
+  html += '</div>';
+  if (showClosed && closed.length) {
+    html += '<div class="card"><h3 style="margin:0 0 10px; color:var(--text-dim);">Dossiers clôturés (' + closed.length + ')</h3>' + closed.map(reaCardHTML).join('') + '</div>';
+  }
+  c.innerHTML = html;
+}
+
+// ============================================================================
+// PERFORMANCE — MUSCULATION
+// ============================================================================
+let muscuProgrammes = [];
+let muscu1RM = [];
+let muscuExos = [];   // exercices du programme en cours d'édition
+
+function muscuBlankExo() { return { nom: '', series: '', reps: '', charge_kg: '', notes: '' }; }
+
+async function renderMusculation() {
+  const players = getAllPlayers();
+  const pOpts = players.map(p => '<option>' + escapeHtml(p) + '</option>').join('');
+  ['muscu-prog-joueur', 'muscu-1rm-joueur'].forEach(id => { const s = document.getElementById(id); if (s) s.innerHTML = pOpts; });
+  const gsel = document.getElementById('muscu-prog-groupe'); if (gsel) gsel.innerHTML = getAllGroups().map(g => '<option>' + escapeHtml(g) + '</option>').join('');
+  const d1 = document.getElementById('muscu-prog-date'); if (d1 && !d1.value) d1.value = toLocalISO(new Date());
+  const d2 = document.getElementById('muscu-1rm-date'); if (d2 && !d2.value) d2.value = toLocalISO(new Date());
+  onMuscuCibleChange();
+  if (!muscuExos.length) muscuExos = [muscuBlankExo()];
+  renderMuscuExos();
+  await loadMuscu();
+  renderMuscuProgList();
+  renderMuscu1RM();
+}
+
+async function loadMuscu() {
+  try {
+    const [progRes, rmRes] = await Promise.all([
+      sb.from('muscu_programmes').select('*').eq('org', currentOrg).order('date', { ascending: false }),
+      sb.from('muscu_1rm').select('*').eq('org', currentOrg).order('date', { ascending: false })
+    ]);
+    muscuProgrammes = progRes.data || [];
+    muscu1RM = rmRes.data || [];
+  } catch (e) { toast('Erreur chargement musculation : ' + (e.message || e), 'error'); }
+}
+
+function onMuscuCibleChange() {
+  const c = (document.getElementById('muscu-prog-cible') || {}).value || 'joueur';
+  const jw = document.getElementById('muscu-prog-joueur-wrap');
+  const gw = document.getElementById('muscu-prog-groupe-wrap');
+  if (jw) jw.style.display = (c === 'joueur') ? '' : 'none';
+  if (gw) gw.style.display = (c === 'groupe') ? '' : 'none';
+}
+
+function muscuExoSet(i, field, val) { if (muscuExos[i]) muscuExos[i][field] = val; }
+function addMuscuExo() { muscuExos.push(muscuBlankExo()); renderMuscuExos(); }
+function removeMuscuExo(i) { muscuExos.splice(i, 1); if (!muscuExos.length) muscuExos.push(muscuBlankExo()); renderMuscuExos(); }
+
+function renderMuscuExos() {
+  const c = document.getElementById('muscu-prog-exos'); if (!c) return;
+  const inp = 'background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;';
+  c.innerHTML = muscuExos.map((ex, i) =>
+    '<div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">' +
+      '<input type="text" value="' + escapeAttr(ex.nom) + '" oninput="muscuExoSet(' + i + ',\'nom\',this.value)" placeholder="Exercice" style="flex:2; min-width:140px; ' + inp + '">' +
+      '<input type="text" value="' + escapeAttr(ex.series) + '" oninput="muscuExoSet(' + i + ',\'series\',this.value)" placeholder="Séries" style="width:70px; ' + inp + '">' +
+      '<input type="text" value="' + escapeAttr(ex.reps) + '" oninput="muscuExoSet(' + i + ',\'reps\',this.value)" placeholder="Reps" style="width:70px; ' + inp + '">' +
+      '<input type="text" value="' + escapeAttr(ex.charge_kg) + '" oninput="muscuExoSet(' + i + ',\'charge_kg\',this.value)" placeholder="Charge (kg)" style="width:100px; ' + inp + '">' +
+      '<input type="text" value="' + escapeAttr(ex.notes) + '" oninput="muscuExoSet(' + i + ',\'notes\',this.value)" placeholder="Notes" style="flex:1; min-width:100px; ' + inp + '">' +
+      '<button class="btn btn-secondary" style="padding:4px 9px; font-size:12px; color:#f87171;" onclick="removeMuscuExo(' + i + ')">✕</button>' +
+    '</div>'
+  ).join('');
+}
+
+function resetMuscuProgForm() {
+  document.getElementById('muscu-prog-id').value = '';
+  document.getElementById('muscu-prog-title').textContent = '➕ Nouveau programme';
+  document.getElementById('muscu-prog-cancel').style.display = 'none';
+  document.getElementById('muscu-prog-nom').value = '';
+  document.getElementById('muscu-prog-cible').value = 'joueur';
+  document.getElementById('muscu-prog-date').value = toLocalISO(new Date());
+  document.getElementById('muscu-prog-notes').value = '';
+  onMuscuCibleChange();
+  muscuExos = [muscuBlankExo()];
+  renderMuscuExos();
+}
+
+async function saveMuscuProg() {
+  const cible = document.getElementById('muscu-prog-cible').value;
+  const exercices = muscuExos.filter(e => (e.nom || '').trim() !== '');
+  const nom = document.getElementById('muscu-prog-nom').value.trim();
+  if (!nom && exercices.length === 0) { toast('Ajoute au moins un nom de programme ou un exercice.', 'error'); return; }
+  const row = {
+    org: currentOrg,
+    nom: nom || null,
+    cible,
+    joueur: cible === 'joueur' ? (document.getElementById('muscu-prog-joueur').value || null) : null,
+    groupe: cible === 'groupe' ? (document.getElementById('muscu-prog-groupe').value || null) : null,
+    date: document.getElementById('muscu-prog-date').value || null,
+    exercices,
+    notes: document.getElementById('muscu-prog-notes').value.trim() || null,
+    updated_at: new Date().toISOString(),
+    updated_by: (currentUser && currentUser.email) || null
+  };
+  const editId = document.getElementById('muscu-prog-id').value;
+  try {
+    if (editId) { const { error } = await sb.from('muscu_programmes').update(row).eq('id', Number(editId)); if (error) throw error; }
+    else { const { error } = await sb.from('muscu_programmes').insert(row); if (error) throw error; }
+    toast('✅ Programme enregistré.', 'success');
+    resetMuscuProgForm();
+    await loadMuscu(); renderMuscuProgList();
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+
+function editMuscuProg(id) {
+  const r = muscuProgrammes.find(x => x.id === id); if (!r) return;
+  document.getElementById('muscu-prog-id').value = r.id;
+  document.getElementById('muscu-prog-title').textContent = '✏️ Modifier le programme';
+  document.getElementById('muscu-prog-cancel').style.display = '';
+  document.getElementById('muscu-prog-nom').value = r.nom || '';
+  document.getElementById('muscu-prog-cible').value = r.cible || 'joueur';
+  onMuscuCibleChange();
+  const jsel = document.getElementById('muscu-prog-joueur');
+  const gsel = document.getElementById('muscu-prog-groupe');
+  if (r.cible === 'groupe' && gsel && r.groupe) {
+    if (![...gsel.options].some(o => o.value === r.groupe)) gsel.insertAdjacentHTML('beforeend', '<option>' + escapeHtml(r.groupe) + '</option>');
+    gsel.value = r.groupe;
+  } else if (jsel && r.joueur) {
+    if (![...jsel.options].some(o => o.value === r.joueur)) jsel.insertAdjacentHTML('beforeend', '<option>' + escapeHtml(r.joueur) + '</option>');
+    jsel.value = r.joueur;
+  }
+  document.getElementById('muscu-prog-date').value = r.date || '';
+  document.getElementById('muscu-prog-notes').value = r.notes || '';
+  muscuExos = (Array.isArray(r.exercices) && r.exercices.length) ? r.exercices.map(e => ({ nom: e.nom || '', series: e.series || '', reps: e.reps || '', charge_kg: e.charge_kg || '', notes: e.notes || '' })) : [muscuBlankExo()];
+  renderMuscuExos();
+  const v = document.getElementById('view-musculation'); if (v) v.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function deleteMuscuProg(id) {
+  if (!confirm('Supprimer ce programme de musculation ?')) return;
+  try {
+    const { error } = await sb.from('muscu_programmes').delete().eq('id', id);
+    if (error) throw error;
+    await loadMuscu(); renderMuscuProgList();
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+
+function renderMuscuProgList() {
+  const c = document.getElementById('muscu-prog-content'); if (!c) return;
+  if (!muscuProgrammes.length) {
+    c.innerHTML = '<div class="card"><div class="empty-state">Aucun programme enregistré.</div></div>';
+    return;
+  }
+  let html = '<div class="card"><h3 style="margin:0 0 10px;">📋 Programmes (' + muscuProgrammes.length + ')</h3>';
+  html += muscuProgrammes.map(p => {
+    const cibleTxt = (p.cible === 'groupe') ? ('👥 ' + escapeHtml(p.groupe || 'Groupe')) : ('👤 ' + escapeHtml(p.joueur || '—'));
+    const exos = Array.isArray(p.exercices) ? p.exercices : [];
+    const exoRows = exos.length
+      ? '<div class="table-wrap"><table style="width:100%; font-size:12px;"><thead><tr><th style="text-align:left;">Exercice</th><th>Séries</th><th>Reps</th><th>Charge</th><th style="text-align:left;">Notes</th></tr></thead><tbody>' +
+        exos.map(e => '<tr><td style="text-align:left; font-weight:600;">' + escapeHtml(e.nom || '') + '</td><td style="text-align:center;">' + escapeHtml(e.series || '—') + '</td><td style="text-align:center;">' + escapeHtml(e.reps || '—') + '</td><td style="text-align:center;">' + escapeHtml(e.charge_kg ? (e.charge_kg + ' kg') : '—') + '</td><td style="text-align:left; color:var(--text-dim);">' + escapeHtml(e.notes || '') + '</td></tr>').join('') +
+        '</tbody></table></div>'
+      : '<div style="font-size:12px; color:var(--text-dim);">Aucun exercice.</div>';
+    return '<div style="border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:10px; background:var(--bg-card);">' +
+      '<div style="display:flex; justify-content:space-between; align-items:start; gap:10px; flex-wrap:wrap; margin-bottom:8px;">' +
+        '<div><div style="font-size:15px; font-weight:700;">' + escapeHtml(p.nom || 'Programme') + '</div>' +
+        '<div style="font-size:12px; color:var(--text-dim); margin-top:2px;">' + cibleTxt + (p.date ? ' · ' + formatDateFR(p.date) : '') + '</div></div>' +
+        '<div style="display:flex; gap:6px;">' +
+          '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="editMuscuProg(' + p.id + ')">✏️ Modifier</button>' +
+          '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px; color:#f87171;" onclick="deleteMuscuProg(' + p.id + ')">🗑️</button>' +
+        '</div>' +
+      '</div>' + exoRows +
+      (p.notes ? '<div style="margin-top:8px; font-size:12px; color:var(--text-dim); white-space:pre-wrap;">📝 ' + escapeHtml(p.notes) + '</div>' : '') +
+    '</div>';
+  }).join('');
+  html += '</div>';
+  c.innerHTML = html;
+}
+
+async function saveMuscu1RM() {
+  const joueur = (document.getElementById('muscu-1rm-joueur') || {}).value;
+  const exercice = document.getElementById('muscu-1rm-exercice').value.trim();
+  const kg = parseFloat(document.getElementById('muscu-1rm-kg').value);
+  const date = document.getElementById('muscu-1rm-date').value || null;
+  if (!joueur) { toast('Choisis un joueur.', 'error'); return; }
+  if (!exercice) { toast('Indique l\'exercice.', 'error'); return; }
+  if (!(kg > 0)) { toast('Indique une charge valide (kg).', 'error'); return; }
+  try {
+    const { error } = await sb.from('muscu_1rm').insert({ org: currentOrg, joueur, exercice, valeur_kg: kg, date });
+    if (error) throw error;
+    document.getElementById('muscu-1rm-exercice').value = '';
+    document.getElementById('muscu-1rm-kg').value = '';
+    toast('✅ 1RM ajouté.', 'success');
+    await loadMuscu(); renderMuscu1RM();
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+
+async function deleteMuscu1RM(id) {
+  if (!confirm('Supprimer cette mesure 1RM ?')) return;
+  try {
+    const { error } = await sb.from('muscu_1rm').delete().eq('id', id);
+    if (error) throw error;
+    await loadMuscu(); renderMuscu1RM();
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+
+function renderMuscu1RM() {
+  const c = document.getElementById('muscu-1rm-content'); if (!c) return;
+  if (!muscu1RM.length) {
+    c.innerHTML = '<div class="empty-state">Aucun 1RM enregistré.</div>';
+    return;
+  }
+  // Meilleur par (joueur, exercice)
+  const best = {};
+  muscu1RM.forEach(r => {
+    const k = r.joueur + '||' + r.exercice;
+    if (!best[k] || Number(r.valeur_kg) > Number(best[k].valeur_kg)) best[k] = r;
+  });
+  const bestArr = Object.values(best).sort((a, b) => a.joueur.localeCompare(b.joueur) || a.exercice.localeCompare(b.exercice));
+  let html = '<div style="margin-bottom:6px; font-size:13px; font-weight:700;">🏆 Records actuels</div>';
+  html += '<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;">';
+  html += bestArr.map(r => '<div style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:10px; padding:8px 12px;">' +
+    '<div style="font-size:12px; color:var(--text-dim);">' + escapeHtml(r.joueur) + ' · ' + escapeHtml(r.exercice) + '</div>' +
+    '<div style="font-size:18px; font-weight:800; color:var(--accent-light);">' + Number(r.valeur_kg) + ' kg</div></div>').join('');
+  html += '</div>';
+  // Historique complet
+  const hist = muscu1RM.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.joueur.localeCompare(b.joueur));
+  html += '<div style="margin-bottom:6px; font-size:13px; font-weight:700;">📈 Historique</div>';
+  html += '<div class="table-wrap" style="max-height:360px;"><table style="width:100%; font-size:12px;"><thead><tr><th>Date</th><th style="text-align:left;">Joueur</th><th style="text-align:left;">Exercice</th><th>Charge</th><th></th></tr></thead><tbody>';
+  html += hist.map(r => '<tr><td>' + (r.date ? formatDateFR(r.date) : '—') + '</td><td style="text-align:left; font-weight:600;">' + escapeHtml(r.joueur) + '</td><td style="text-align:left;">' + escapeHtml(r.exercice) + '</td><td style="text-align:center; font-weight:700;">' + Number(r.valeur_kg) + ' kg</td><td style="text-align:center;"><button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#f87171;" onclick="deleteMuscu1RM(' + r.id + ')">🗑️</button></td></tr>').join('');
+  html += '</tbody></table></div>';
+  c.innerHTML = html;
 }
 
 function renderTesting() {
