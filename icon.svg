@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#111c33"/>
+      <stop offset="1" stop-color="#0a0f1e"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- terrain stylisé : ligne médiane + rond central -->
+  <rect x="96" y="96" width="320" height="320" rx="20" fill="none" stroke="#1e2b47" stroke-width="10"/>
+  <line x1="256" y1="96" x2="256" y2="416" stroke="#1e2b47" stroke-width="10"/>
+  <circle cx="256" cy="256" r="44" fill="none" stroke="#1e2b47" stroke-width="10"/>
+  <!-- barres de stats montantes -->
+  <g>
+    <rect x="150" y="300" width="44" height="86" rx="10" fill="#38b6ff"/>
+    <rect x="234" y="250" width="44" height="136" rx="10" fill="#34d399"/>
+    <rect x="318" y="196" width="44" height="190" rx="10" fill="#fbbf24"/>
+  </g>
+</svg>
