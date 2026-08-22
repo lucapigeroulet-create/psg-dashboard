@@ -92,7 +92,7 @@
   nav {
     background: var(--bg);
     border-bottom: 1px solid var(--border);
-    padding: 0 28px;
+    padding: 0 10px;
     display: flex;
     gap: 0;
     overflow-x: auto;
@@ -101,11 +101,11 @@
     background: transparent;
     color: var(--text-dim);
     border: none;
-    padding: 13px 18px;
+    padding: 11px 10px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.1px;
     border-bottom: 2px solid transparent;
     transition: all 0.15s;
     white-space: nowrap;
@@ -136,6 +136,7 @@
     padding: 10px 14px;
     text-align: left;
     width: 100%;
+    font-size: 13px;
   }
   .nav-dropdown-menu .nav-btn:hover { background: var(--bg-elevated); }
   .nav-dropdown-menu .nav-btn.active { background: var(--accent); color: #fff; }
@@ -2634,6 +2635,9 @@
       </div>
       <p id="am-groupe-hint" style="display:none; color:var(--text-dim); font-size:12px; margin:0;">Une amende sera créée pour chaque joueur du groupe sélectionné.</p>
     </div>
+
+    <!-- Total par joueur -->
+    <div id="amendes-par-joueur"></div>
 
     <!-- Récapitulatif mensuel -->
     <div id="amendes-content"></div>
@@ -26828,7 +26832,35 @@ async function renderAmendes() {
   onAmendeCibleChange();
   await loadAmendes();
   renderAmendesSummary();
+  renderAmendesParJoueur();
   renderAmendesRecap();
+}
+
+// Total des amendes par joueur (toutes périodes) : nb, total, à récupérer.
+function renderAmendesParJoueur() {
+  const c = document.getElementById('amendes-par-joueur'); if (!c) return;
+  if (!amendesData.length) { c.innerHTML = ''; return; }
+  const byJ = {};
+  amendesData.forEach(a => {
+    const j = a.joueur || '—';
+    const o = byJ[j] || (byJ[j] = { joueur: j, nb: 0, total: 0, du: 0 });
+    o.nb += 1;
+    const m = Number(a.montant) || 0;
+    o.total += m;
+    if (!a.paye) o.du += m;
+  });
+  const rows = Object.values(byJ).sort((a, b) => b.du - a.du || b.total - a.total || a.joueur.localeCompare(b.joueur));
+  let html = '<div class="card"><h3 style="margin:0 0 10px;">👥 Total par joueur</h3>';
+  html += '<div class="table-wrap" style="max-height:360px;"><table style="width:100%; font-size:13px;"><thead><tr>' +
+    '<th style="text-align:left;">Joueur</th><th>Nb</th><th>Total</th><th>À récupérer</th></tr></thead><tbody>';
+  html += rows.map(r => '<tr>' +
+    '<td style="text-align:left; font-weight:600;">' + escapeHtml(r.joueur) + '</td>' +
+    '<td style="text-align:center;">' + r.nb + '</td>' +
+    '<td style="text-align:center; font-weight:700;">' + amFmtEuro(r.total) + '</td>' +
+    '<td style="text-align:center; font-weight:700; color:' + (r.du > 0 ? '#f87171' : 'var(--text-dim)') + ';">' + amFmtEuro(r.du) + '</td>' +
+    '</tr>').join('');
+  html += '</tbody></table></div></div>';
+  c.innerHTML = html;
 }
 
 async function loadAmendes() {
@@ -26873,7 +26905,7 @@ async function saveAmende() {
     toast('✅ ' + rows.length + ' amende(s) ajoutée(s).', 'success');
     document.getElementById('am-motif').value = '';
     document.getElementById('am-montant').value = '';
-    await loadAmendes(); renderAmendesSummary(); renderAmendesRecap();
+    await loadAmendes(); renderAmendesSummary(); renderAmendesParJoueur(); renderAmendesRecap();
   } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
 }
 
@@ -26883,6 +26915,7 @@ async function toggleAmendePaye(id, checked) {
     if (error) throw error;
     const a = amendesData.find(x => x.id === id); if (a) a.paye = !!checked;
     renderAmendesSummary();
+    renderAmendesParJoueur();
     renderAmendesRecap();
   } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
 }
@@ -26892,7 +26925,7 @@ async function deleteAmende(id) {
   try {
     const { error } = await sb.from('amendes').delete().eq('id', id);
     if (error) throw error;
-    await loadAmendes(); renderAmendesSummary(); renderAmendesRecap();
+    await loadAmendes(); renderAmendesSummary(); renderAmendesParJoueur(); renderAmendesRecap();
   } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
 }
 
