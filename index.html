@@ -782,7 +782,14 @@
       <button class="nav-btn" data-view="competition" onclick="ciTab('interne')">🏆 Compétition interne</button>
     </div>
   </div>
-  <button class="nav-btn staff-only-btn" data-view="testing" id="nav-testing-btn">🧪 Testing</button>
+  <div class="nav-dropdown" id="nav-performance-dropdown">
+    <button type="button" class="nav-btn nav-dropdown-toggle staff-only-btn" id="nav-performance-toggle" onclick="togglePerformanceMenu(event)">📈 Performance <span style="font-size:10px;">▾</span></button>
+    <div class="nav-dropdown-menu" id="nav-performance-menu">
+      <button class="nav-btn" data-view="testing" id="nav-testing-btn">🧪 Testing</button>
+      <button class="nav-btn" data-view="reathletisation" id="nav-reathletisation-btn">🩼 Réathlétisation</button>
+      <button class="nav-btn" data-view="musculation" id="nav-musculation-btn">🏋️ Musculation</button>
+    </div>
+  </div>
   <div class="nav-dropdown" id="nav-medical-dropdown">
     <button type="button" class="nav-btn nav-dropdown-toggle staff-only-btn" id="nav-medical-toggle" onclick="toggleMedicalMenu(event)">🩺 Médical <span style="font-size:10px;">▾</span></button>
     <div class="nav-dropdown-menu" id="nav-medical-menu">
@@ -3231,6 +3238,26 @@
         </div>
       </div>
     </div><!-- /testing-viz -->
+  </div>
+
+
+  <!-- ========== PERFORMANCE — RÉATHLÉTISATION (staff) ========== -->
+  <div class="view" id="view-reathletisation">
+    <div class="card">
+      <h2>🩼 Réathlétisation</h2>
+      <p style="color:var(--text-dim); font-size:13px; margin-top:4px;">Suivi du retour à l'entraînement / à la compétition après blessure.</p>
+    </div>
+    <div id="reathletisation-content"></div>
+  </div>
+
+
+  <!-- ========== PERFORMANCE — MUSCULATION (staff) ========== -->
+  <div class="view" id="view-musculation">
+    <div class="card">
+      <h2>🏋️ Musculation</h2>
+      <p style="color:var(--text-dim); font-size:13px; margin-top:4px;">Suivi des programmes et séances de renforcement musculaire.</p>
+    </div>
+    <div id="musculation-content"></div>
   </div>
 
 
@@ -6994,8 +7021,11 @@ function applyRoleRestrictions() {
   // Le texte du bouton de déconnexion est géré par applyPlayerLanguage selon l'organisation
   const gestionDropdown = document.getElementById('nav-gestion-dropdown');
   const competitionDropdown = document.getElementById('nav-competition-dropdown');
-  // Par défaut le menu déroulant Compétition (staff) est masqué ; réaffiché dans la branche staff/admin.
+  const performanceDropdown = document.getElementById('nav-performance-dropdown');
+  // Par défaut les menus déroulants Compétition et Performance (staff) sont masqués ;
+  // réaffichés dans la branche staff/admin.
   if (competitionDropdown) competitionDropdown.style.display = 'none';
+  if (performanceDropdown) performanceDropdown.style.display = 'none';
   if (currentRole === 'lecteur') {
     // Pour un joueur : interface ultra-simplifiée avec seulement les onglets dédiés
     // Masquer TOUS les onglets staff et n'afficher que les onglets joueur
@@ -7080,6 +7110,7 @@ function applyRoleRestrictions() {
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
     if (gestionDropdown) gestionDropdown.style.display = '';
     if (competitionDropdown) competitionDropdown.style.display = '';
+    if (performanceDropdown) performanceDropdown.style.display = '';
     // Le rôle 'staff' a une interface allégée par rapport à l'admin :
     // pas d'export JSON, pas de Notes médicales, pas de Paramètres.
     const staffLimited = (currentRole === 'staff');
@@ -8507,6 +8538,28 @@ function closeMedicalMenu() {
   const menu = document.getElementById('nav-medical-menu');
   if (menu) menu.classList.remove('open');
 }
+function togglePerformanceMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('nav-performance-menu');
+  const toggle = document.getElementById('nav-performance-toggle');
+  if (!menu) return;
+  const willOpen = !menu.classList.contains('open');
+  menu.classList.toggle('open');
+  if (willOpen && toggle) {
+    const r = toggle.getBoundingClientRect();
+    menu.style.top = (r.bottom + 2) + 'px';
+    let left = r.left;
+    const menuWidth = menu.offsetWidth || 220;
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - menuWidth - 8);
+    }
+    menu.style.left = left + 'px';
+  }
+}
+function closePerformanceMenu() {
+  const menu = document.getElementById('nav-performance-menu');
+  if (menu) menu.classList.remove('open');
+}
 // Menu déroulant Compétition (même comportement que Gestion)
 function ciTab(t) { competitionTab = (t === 'interne') ? 'interne' : 'matchs'; }
 function toggleCompetitionMenu(e) {
@@ -8539,6 +8592,8 @@ document.addEventListener('click', (e) => {
   if (md && !md.contains(e.target)) closeMedicalMenu();
   const cd = document.getElementById('nav-competition-dropdown');
   if (cd && !cd.contains(e.target)) closeCompetitionMenu();
+  const pd = document.getElementById('nav-performance-dropdown');
+  if (pd && !pd.contains(e.target)) closePerformanceMenu();
 });
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -8572,9 +8627,17 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
       if (view === 'competition') competitionToggle.classList.add('has-active');
       else competitionToggle.classList.remove('has-active');
     }
+    // Gérer l'état visuel du menu déroulant Performance
+    const performanceViews = ['testing', 'reathletisation', 'musculation'];
+    const performanceToggle = document.getElementById('nav-performance-toggle');
+    if (performanceToggle) {
+      if (performanceViews.includes(view)) performanceToggle.classList.add('has-active');
+      else performanceToggle.classList.remove('has-active');
+    }
     closeGestionMenu();
     closeMedicalMenu();
     closeCompetitionMenu();
+    closePerformanceMenu();
     // Si on est lecteur, ré-appliquer la langue à chaque changement de vue (au cas où la vue contient du nouveau contenu)
     if (currentRole === 'lecteur') setTimeout(applyPlayerLanguage, 0);
     // Render on demand
@@ -8609,6 +8672,8 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'player-soins') renderPlayerSoins();
     else if (view === 'player-fiche') renderPlayerFiche();
     else if (view === 'testing') renderTesting();
+    else if (view === 'reathletisation') renderReathletisation();
+    else if (view === 'musculation') renderMusculation();
     else if (view === 'competition') renderCompetition();
     else if (view === 'minijeux') renderMinijeux();
   });
@@ -26115,6 +26180,19 @@ function renderPlayerGPS() {
   html += '</div>';
 
   content.innerHTML = html;
+}
+
+// Onglets Performance : Réathlétisation & Musculation (placeholders — contenu à définir)
+function renderReathletisation() {
+  const c = document.getElementById('reathletisation-content');
+  if (!c) return;
+  c.innerHTML = '<div class="card"><div class="empty-state">🚧 Module Réathlétisation en préparation. Le contenu (protocoles de retour, étapes, suivi joueur) sera ajouté ici.</div></div>';
+}
+
+function renderMusculation() {
+  const c = document.getElementById('musculation-content');
+  if (!c) return;
+  c.innerHTML = '<div class="card"><div class="empty-state">🚧 Module Musculation en préparation. Le contenu (programmes, charges, séances) sera ajouté ici.</div></div>';
 }
 
 function renderTesting() {
