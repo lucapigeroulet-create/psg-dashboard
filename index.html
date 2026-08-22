@@ -2997,6 +2997,22 @@
         </table>
       </div>
     </div>
+
+    <!-- SECONDE LIGUE (D2F) uniquement : bilan motivation/humeur + suivi cycle -->
+    <div class="card" id="d2f-bilan-card" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:6px;">
+        <h2 style="margin:0;">🔥 Bilan motivation &amp; humeur</h2>
+        <input type="date" id="d2f-bilan-date" onchange="renderD2FBilan(); renderD2FCycle();" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;" />
+      </div>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Motivation et humeur déclarées par les joueuses (échelle 1-7). Les valeurs basses (≤ 3) sont mises en évidence.</p>
+      <div id="d2f-bilan-content"></div>
+    </div>
+
+    <div class="card" id="d2f-cycle-card" style="display:none;">
+      <h2 style="margin:0 0 6px;">🩸 Joueuses en période de règles</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Joueuses ayant déclaré être en période de règles à la date sélectionnée ci-dessus.</p>
+      <div id="d2f-cycle-content"></div>
+    </div>
   </div>
 
 
@@ -22303,6 +22319,99 @@ async function renderStaffHooper() {
   if (hmDate && !hmDate.value) hmDate.value = toLocalISO(new Date());
   renderHooperMissing();
   renderStaffHooperAllTable();
+
+  // SECONDE LIGUE (D2F) : bilan motivation/humeur + suivi du cycle
+  const bilanDate = document.getElementById('d2f-bilan-date');
+  if (bilanDate && !bilanDate.value) bilanDate.value = toLocalISO(new Date());
+  renderD2FBilan();
+  renderD2FCycle();
+}
+
+// Bilan motivation & humeur des joueuses (SECONDE LIGUE / D2F) pour la date choisie.
+function renderD2FBilan() {
+  const card = document.getElementById('d2f-bilan-card');
+  if (!card) return;
+  const show = (currentOrg === 'D2F');
+  card.style.display = show ? '' : 'none';
+  if (!show) return;
+  const content = document.getElementById('d2f-bilan-content');
+  const dateEl = document.getElementById('d2f-bilan-date');
+  const date = (dateEl && dateEl.value) ? dateEl.value : toLocalISO(new Date());
+
+  // Saisies du jour ayant au moins une valeur motivation OU humeur
+  const rows = hooperData.filter(h => h.date === date &&
+    ((h.motivation !== null && h.motivation !== undefined) ||
+     (h.humeur_score !== null && h.humeur_score !== undefined)));
+
+  if (rows.length === 0) {
+    content.innerHTML = '<div class="empty-state">Aucune joueuse n\'a renseigné sa motivation / humeur à cette date.</div>';
+    return;
+  }
+  rows.sort((a, b) => a.joueur.localeCompare(b.joueur));
+
+  const motivs = rows.map(r => r.motivation).filter(v => v !== null && v !== undefined);
+  const hums = rows.map(r => r.humeur_score).filter(v => v !== null && v !== undefined);
+  const avg = arr => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+  const avgMot = avg(motivs), avgHum = avg(hums);
+  const posColor = v => (v == null) ? 'var(--text-dim)' : (v <= 3 ? '#ef4444' : (v <= 4 ? '#eab308' : 'var(--green)'));
+  const cell = v => (v == null || v === undefined)
+    ? '<td style="text-align:center; color:var(--text-dim);">—</td>'
+    : '<td style="text-align:center; font-weight:700; color:' + posColor(v) + ';">' + v + '/7</td>';
+
+  // KPI moyennes
+  let html = '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">';
+  html += '<div style="flex:1; min-width:130px; background:var(--bg-elevated); border-radius:10px; padding:12px 14px;">' +
+    '<div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px;">Motivation moyenne</div>' +
+    '<div style="font-size:22px; font-weight:800; color:' + posColor(avgMot) + ';">' + (avgMot != null ? avgMot.toFixed(1) : '—') + '<span style="font-size:13px; font-weight:400; color:var(--text-dim);"> / 7</span></div></div>';
+  html += '<div style="flex:1; min-width:130px; background:var(--bg-elevated); border-radius:10px; padding:12px 14px;">' +
+    '<div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px;">Humeur moyenne</div>' +
+    '<div style="font-size:22px; font-weight:800; color:' + posColor(avgHum) + ';">' + (avgHum != null ? avgHum.toFixed(1) : '—') + '<span style="font-size:13px; font-weight:400; color:var(--text-dim);"> / 7</span></div></div>';
+  html += '<div style="flex:1; min-width:130px; background:var(--bg-elevated); border-radius:10px; padding:12px 14px;">' +
+    '<div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px;">Réponses</div>' +
+    '<div style="font-size:22px; font-weight:800; color:var(--text);">' + rows.length + '</div></div>';
+  html += '</div>';
+
+  // Tableau par joueuse
+  html += '<div class="table-wrap"><table style="width:100%; font-size:13px;"><thead><tr>' +
+    '<th style="text-align:left;">Joueuse</th><th style="text-align:center;">🔥 Motivation</th><th style="text-align:center;">🙂 Humeur</th></tr></thead><tbody>';
+  rows.forEach(r => {
+    html += '<tr><td style="text-align:left; font-weight:600; padding:6px 8px;">' + escapeHtml(r.joueur) + '</td>' + cell(r.motivation) + cell(r.humeur_score) + '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  // Joueuses en petite forme (motivation ou humeur ≤ 3)
+  const basses = rows.filter(r => (r.motivation != null && r.motivation <= 3) || (r.humeur_score != null && r.humeur_score <= 3));
+  if (basses.length > 0) {
+    html += '<div style="margin-top:12px; font-size:12px; color:#f87171;">⚠️ À surveiller (motivation ou humeur ≤ 3) : <b>' +
+      basses.map(r => escapeHtml(r.joueur)).join(', ') + '</b></div>';
+  }
+  content.innerHTML = html;
+}
+
+// Joueuses ayant déclaré être en période de règles (SECONDE LIGUE / D2F) à la date choisie.
+function renderD2FCycle() {
+  const card = document.getElementById('d2f-cycle-card');
+  if (!card) return;
+  const show = (currentOrg === 'D2F');
+  card.style.display = show ? '' : 'none';
+  if (!show) return;
+  const content = document.getElementById('d2f-cycle-content');
+  const dateEl = document.getElementById('d2f-bilan-date');
+  const date = (dateEl && dateEl.value) ? dateEl.value : toLocalISO(new Date());
+
+  const rows = hooperData.filter(h => h.date === date && h.cycle_menstruel === true);
+  if (rows.length === 0) {
+    content.innerHTML = '<div class="empty-state">Aucune joueuse déclarée en période de règles à cette date.</div>';
+    return;
+  }
+  rows.sort((a, b) => a.joueur.localeCompare(b.joueur));
+  let html = '<div style="font-size:13px; color:var(--text-dim); margin-bottom:10px;"><b style="color:var(--text); font-size:15px;">' + rows.length + '</b> joueuse(s) concernée(s)</div>';
+  html += '<div style="display:flex; flex-wrap:wrap; gap:8px;">';
+  rows.forEach(r => {
+    html += '<span style="display:inline-flex; align-items:center; gap:6px; background:rgba(239,68,68,0.12); border:1px solid #ef4444; color:#f87171; border-radius:14px; padding:5px 12px; font-size:13px; font-weight:600;">🩸 ' + escapeHtml(r.joueur) + '</span>';
+  });
+  html += '</div>';
+  content.innerHTML = html;
 }
 
 // Seuil de variation (en points d'index Hooper) pour considérer une tendance notable (SECONDE LIGUE)
