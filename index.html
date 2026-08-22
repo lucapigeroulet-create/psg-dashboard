@@ -18562,11 +18562,22 @@ async function renderMinijeux() {
 }
 
 function mjIntroHTML(jeu, staffPreview) {
+  // Anti-triche : pour les jeux de citation (top10), le titre ET la règle
+  // révèlent le thème exact (ex. « Clubs vainqueurs de la Ligue des champions »),
+  // ce qui permettrait de chercher les réponses AVANT de lancer. On masque donc
+  // le thème sur l'écran d'intro — il n'est dévoilé qu'au clic sur « Jouer »
+  // (mjRenderTop10 affiche le vrai titre, chrono déjà lancé, aucune recherche
+  // possible). Les jeux "quiz" et "devine" ont déjà un intitulé générique.
+  const hideTheme = (jeu.type === 'top10');
+  const titre = hideTheme ? tr('Naming game', 'Jeu de citation') : escapeHtml(L(jeu.titre));
+  const regle = hideTheme
+    ? tr('The theme stays hidden until you start — no time to look it up. Name as many correct answers as you can!', 'Le thème reste caché jusqu\'au lancement — impossible de chercher avant. Cite un maximum de bonnes réponses !')
+    : escapeHtml(L(jeu.regle));
   return '<div class="mj-hero">' +
-    '<div class="mj-emoji">🎮</div>' +
+    '<div class="mj-emoji">' + (hideTheme ? '🔒' : '🎮') + '</div>' +
     '<div class="mj-sub" style="margin-bottom:2px;">' + tr('Daily game', 'Jeu du jour') + ' · ' + escapeHtml(formatDateJMA(todayYMD())) + '</div>' +
-    '<h2>' + escapeHtml(L(jeu.titre)) + '</h2>' +
-    '<div class="mj-sub">' + escapeHtml(L(jeu.regle)) + '</div>' +
+    '<h2>' + titre + '</h2>' +
+    '<div class="mj-sub">' + regle + '</div>' +
     '<div style="margin:12px 0;"><span style="background:var(--bg-elevated);border:1px solid var(--border);padding:4px 12px;border-radius:12px;font-size:13px;">⏱ ' + jeu.duree + 's</span></div>' +
     '<button class="btn mj-btn-big" id="mj-play-btn">' + tr('Play', 'Jouer') + ' ▶</button>' +
     (staffPreview ? '<div class="mj-sub" style="margin-top:10px;">' + tr('Staff preview of the daily game.', 'Aperçu staff du jeu du jour.') + '</div>' : '') +
