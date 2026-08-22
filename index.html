@@ -7427,7 +7427,7 @@ async function loadState() {
       state.bdd_ent = state.bdd_ent.filter(e => e.seances.length > 0);
     } catch (e) {}
 
-    loadBestMatchData();
+    await loadBestMatchData();
     setStatus('☁️ ' + state.joueurs.length + ' joueurs, ' + state.bdd_ent2.length + ' séances', false);
   } catch(e) {
     console.error('Erreur loadState:', e);
@@ -13318,17 +13318,70 @@ function onGPSSessionChange() {
 // MEILLEUR MATCH — persistance + gestion
 // ============================================================================
 
-function loadBestMatchData() {
+// Le meilleur match est PARTAGÉ par entité (org) : l'admin le détermine, tout le
+// staff de l'entité lit la même référence (table Supabase `best_match`). Le
+// localStorage ne sert plus que de cache de repli hors-ligne.
+async function loadBestMatchData() {
+  const cacheKey = 'best_match_' + currentOrg;
+  // Config locale héritée de l'ancien stockage (avant le passage en base).
+  let legacy = {};
+  try { legacy = JSON.parse(localStorage.getItem(cacheKey) || '{}') || {}; } catch(e) { legacy = {}; }
   try {
-    const raw = localStorage.getItem('best_match_' + currentOrg);
-    state.bdd_best_match = raw ? JSON.parse(raw) : {};
-  } catch(e) { state.bdd_best_match = {}; }
+    const { data, error } = await sb.from('best_match').select('joueur, entry').eq('org', currentOrg);
+    if (error) throw error;
+    let store = {};
+    (data || []).forEach(r => { if (r && r.joueur) store[r.joueur] = r.entry; });
+    // Migration unique et transparente : si la base est encore vide pour cette org
+    // mais que l'admin a une config locale héritée, on la remonte une fois en base.
+    if (currentRole === 'admin' && Object.keys(store).length === 0 && Object.keys(legacy).length > 0) {
+      try {
+        const rows = Object.entries(legacy).map(([joueur, entry]) => ({
+          org: currentOrg, joueur, entry,
+          updated_by: (currentUser && currentUser.email) || null,
+          updated_at: new Date().toISOString()
+        }));
+        const { error: upErr } = await sb.from('best_match').upsert(rows, { onConflict: 'org,joueur' });
+        if (!upErr) store = legacy;
+      } catch(e) {}
+    }
+    state.bdd_best_match = store;
+    saveBestMatchCache();
+  } catch(e) {
+    // Repli : cache local (le staff garde la dernière référence connue hors-ligne).
+    state.bdd_best_match = legacy;
+  }
 }
 
-function saveBestMatchData() {
+// Écrit uniquement le cache local (miroir de l'état). Les vrais writes partagés
+// passent par bmUpsert / bmDelete (admin uniquement, via Supabase).
+function saveBestMatchCache() {
+  try { localStorage.setItem('best_match_' + currentOrg, JSON.stringify(state.bdd_best_match || {})); } catch(e) {}
+}
+
+// Définit la référence d'un joueur en base (admin) puis met à jour l'état + cache.
+async function bmUpsert(player, entry) {
+  if (!state.bdd_best_match) state.bdd_best_match = {};
+  state.bdd_best_match[player] = entry;
+  saveBestMatchCache();
   try {
-    localStorage.setItem('best_match_' + currentOrg, JSON.stringify(state.bdd_best_match));
-  } catch(e) {}
+    const { error } = await sb.from('best_match').upsert(
+      { org: currentOrg, joueur: player, entry,
+        updated_by: (currentUser && currentUser.email) || null,
+        updated_at: new Date().toISOString() },
+      { onConflict: 'org,joueur' }
+    );
+    if (error) throw error;
+  } catch(e) { toast('Erreur enregistrement meilleur match : ' + (e.message || e), 'error'); }
+}
+
+// Supprime la référence d'un joueur en base (admin) puis met à jour l'état + cache.
+async function bmDelete(player) {
+  if (state.bdd_best_match) delete state.bdd_best_match[player];
+  saveBestMatchCache();
+  try {
+    const { error } = await sb.from('best_match').delete().eq('org', currentOrg).eq('joueur', player);
+    if (error) throw error;
+  } catch(e) { toast('Erreur suppression meilleur match : ' + (e.message || e), 'error'); }
 }
 
 function _findBestMatchEntry(player) {
@@ -13482,13 +13535,11 @@ function gpsWISetRatioWeek() { gpsWIRatioWeek = document.getElementById('gps-wi-
 
 // Importe un CSV Catapult et stocke les métriques du meilleur match par joueur
 function onBestMatchClearCSV(player) {
+  if (currentRole !== 'admin') { toast('Seul l\'admin peut modifier le meilleur match.', 'error'); return; }
   if (!state.bdd_best_match) return;
   // Supprimer toutes les clés qui correspondent à ce joueur (casse variable)
-  Object.keys(state.bdd_best_match).forEach(k => {
-    if (k.toLowerCase() === player.toLowerCase()) delete state.bdd_best_match[k];
-  });
-  saveBestMatchData();
-  renderBestMatch();
+  const keys = Object.keys(state.bdd_best_match).filter(k => k.toLowerCase() === player.toLowerCase());
+  Promise.all(keys.map(k => bmDelete(k))).then(renderBestMatch);
 }
 
 function parseBestMatchCSV(text) {
@@ -13554,29 +13605,31 @@ function parseBestMatchCSV(text) {
 }
 
 function handleBestMatchCSV(e) {
+  if (currentRole !== 'admin') { toast('Seul l\'admin peut importer le meilleur match.', 'error'); return; }
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = function(ev) {
+  reader.onload = async function(ev) {
     try {
       const byPlayer = parseBestMatchCSV(ev.target.result);
       const players = Object.keys(byPlayer);
       if (players.length === 0) { toast('Aucun joueur trouvé dans le CSV.', 'error'); return; }
       if (!state.bdd_best_match) state.bdd_best_match = {};
-      players.forEach(p => {
+      const rows = players.map(p => {
         const row = byPlayer[p];
-        state.bdd_best_match[p] = {
-          date: row.date,
-          session_title: row.session_title,
-          source: 'csv',
-          metrics: row
-        };
+        const entry = { date: row.date, session_title: row.session_title, source: 'csv', metrics: row };
+        state.bdd_best_match[p] = entry;
+        return { org: currentOrg, joueur: p, entry,
+          updated_by: (currentUser && currentUser.email) || null,
+          updated_at: new Date().toISOString() };
       });
-      saveBestMatchData();
+      saveBestMatchCache();
+      const { error } = await sb.from('best_match').upsert(rows, { onConflict: 'org,joueur' });
+      if (error) throw error;
       renderBestMatch();
-      toast('✅ Meilleur match importé pour ' + players.length + ' joueur(s) depuis le CSV.', 'success');
+      toast('✅ Meilleur match importé pour ' + players.length + ' joueur(s) depuis le CSV. Partagé avec tout le staff de l\'entité.', 'success');
     } catch(err) {
-      toast('Erreur parsing CSV : ' + err.message, 'error');
+      toast('Erreur import CSV : ' + (err.message || err), 'error');
     }
   };
   reader.readAsText(file);
@@ -13631,21 +13684,19 @@ function scoreColor(pct) {
 }
 
 function onBestMatchSelect(player, key) {
+  if (currentRole !== 'admin') { toast('Seul l\'admin peut définir le meilleur match.', 'error'); return; }
   if (!state.bdd_best_match) state.bdd_best_match = {};
   if (!key) {
-    delete state.bdd_best_match[player];
-    saveBestMatchData();
-    renderBestMatch();
+    bmDelete(player).then(renderBestMatch);
     return;
   }
   const sepIdx = key.indexOf('||');
-  state.bdd_best_match[player] = {
+  const entry = {
     date: key.slice(0, sepIdx),
     session_title: key.slice(sepIdx + 2),
     source: 'session'
   };
-  saveBestMatchData();
-  renderBestMatch();
+  bmUpsert(player, entry).then(renderBestMatch);
 }
 
 // ============================================================================
@@ -13849,6 +13900,10 @@ function renderBestMatch() {
   const container = document.getElementById('best-match-content');
   if (!container) return;
 
+  // Le meilleur match est déterminé par l'ADMIN de l'entité et s'applique à tout
+  // le staff (référence partagée en base). Le staff le consulte en lecture seule.
+  const canEdit = (currentRole === 'admin');
+
   if (!state.bdd_gps || state.bdd_gps.length === 0) {
     container.innerHTML = '<div class="card"><div class="empty-state">Aucune donnée GPS disponible. Importe des séances GPS pour utiliser cette fonctionnalité.</div></div>';
     return;
@@ -13883,12 +13938,18 @@ function renderBestMatch() {
   let html = '<div class="card">';
   html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:8px;">';
   html += '<h2 style="margin:0;">🏆 Meilleur Match par Joueur</h2>';
-  html += '<label style="cursor:pointer;" title="Importer directement un CSV Catapult du meilleur match">';
-  html += '<input type="file" accept=".csv" style="display:none;" onchange="handleBestMatchCSV(event)">';
-  html += '<span class="btn" style="padding:6px 14px;font-size:12px;">📥 Importer CSV meilleur match</span>';
-  html += '</label>';
+  if (canEdit) {
+    html += '<label style="cursor:pointer;" title="Importer directement un CSV Catapult du meilleur match">';
+    html += '<input type="file" accept=".csv" style="display:none;" onchange="handleBestMatchCSV(event)">';
+    html += '<span class="btn" style="padding:6px 14px;font-size:12px;">📥 Importer CSV meilleur match</span>';
+    html += '</label>';
+  }
   html += '</div>';
-  html += '<p style="color:var(--text-dim);font-size:13px;margin-bottom:16px;">Importe un CSV Catapult du meilleur match, ou sélectionne une séance depuis la base de données. Les scores <b>Volume</b> et <b>Intensité</b> apparaîtront dans le rapport de séance GPS.</p>';
+  if (canEdit) {
+    html += '<p style="color:var(--text-dim);font-size:13px;margin-bottom:16px;">En tant qu\'admin, tu détermines le meilleur match de référence de chaque joueur : importe un CSV Catapult ou sélectionne une séance de la base. Ton choix <b>s\'applique à tout le staff de l\'entité</b> et alimente les scores <b>Volume</b> et <b>Intensité</b> du rapport de séance GPS.</p>';
+  } else {
+    html += '<p style="color:var(--text-dim);font-size:13px;margin-bottom:16px;">🔒 Référence <b>définie par l\'admin</b> et partagée avec tout le staff de l\'entité (lecture seule). Elle alimente les scores <b>Volume</b> et <b>Intensité</b> du rapport de séance GPS.</p>';
+  }
 
   html += '<div class="table-wrap"><table style="font-size:12px;width:100%;"><thead><tr>';
   html += '<th style="text-align:left;min-width:140px;">Joueur</th>';
@@ -13908,8 +13969,17 @@ function renderBestMatch() {
     html += '<td style="text-align:left;font-weight:600;padding:8px 6px;">' + escapeHtml(player) + '</td>';
 
     html += '<td style="padding:6px;">';
-    // Badge CSV si la référence vient d'un import direct
-    if (bm && bm.source === 'csv') {
+    if (!canEdit) {
+      // Staff / autres rôles : lecture seule — on montre la référence choisie par l'admin.
+      if (bm) {
+        const roLabel = (bm.date ? formatDateFR(bm.date) : '') + (bm.session_title ? ' · ' + bm.session_title : '');
+        const icon = bm.source === 'csv' ? '📥 ' : '';
+        html += '<span style="font-size:11px;color:var(--text);">' + icon + escapeHtml(roLabel.substring(0, 40) || 'Défini') + '</span>';
+      } else {
+        html += '<span style="color:var(--text-dim);font-size:11px;">— Non défini par l\'admin —</span>';
+      }
+    } else if (bm && bm.source === 'csv') {
+      // Badge CSV si la référence vient d'un import direct
       const csvLabel = (bm.date ? formatDateFR(bm.date) + ' · ' : '') + (bm.session_title || 'CSV import');
       html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
       html += '<span style="background:rgba(52,211,153,0.15);border:1px solid #34d399;color:#34d399;padding:2px 8px;border-radius:10px;font-size:10px;white-space:nowrap;">📥 CSV · ' + escapeHtml(csvLabel.substring(0, 30)) + '</span>';
