@@ -26954,14 +26954,22 @@ async function prepaExportJPG() {
         });
       }
     });
-    // Canvas de sortie garanti paysage (largeur ≥ hauteur × ratio A4), visuel inchangé + centré
-    const outH = src.height;
-    const outW = Math.max(src.width, Math.round(src.height * 1.4142));
+    // Sortie en "photo" standard pour que WhatsApp affiche l'aperçu directement :
+    // proportion ≈ 3:2 paysage (ni trop large ni trop haute) + taille plafonnée.
+    const RATIO = 1.5;      // 3:2 paysage
+    const MAXSIDE = 2000;   // px : au-delà, WhatsApp tend à traiter l'image en document
+    const W = src.width, H = src.height;
+    let outW, outH;
+    if (W / H > RATIO) { outW = W; outH = Math.round(W / RATIO); }   // trop large → on ajoute de la hauteur
+    else { outH = H; outW = Math.round(H * RATIO); }                // sinon → largeur 3:2 (garantit le paysage)
+    const s = Math.min(1, MAXSIDE / outW, MAXSIDE / outH);
+    outW = Math.round(outW * s); outH = Math.round(outH * s);
+    const dw = Math.round(W * s), dh = Math.round(H * s);
     const out = document.createElement('canvas');
     out.width = outW; out.height = outH;
     const ctx = out.getContext('2d');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, outW, outH);
-    ctx.drawImage(src, Math.round((outW - src.width) / 2), 0);
+    ctx.drawImage(src, Math.round((outW - dw) / 2), Math.round((outH - dh) / 2), dw, dh);
     const dataUrl = out.toDataURL('image/jpeg', 0.92);
     const a = document.createElement('a');
     a.href = dataUrl;
