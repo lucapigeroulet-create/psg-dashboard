@@ -26927,6 +26927,8 @@ async function prepaExportJPG() {
   if (!prepaColonnes.length) { toast('Rien à exporter : ajoute au moins une colonne.', 'error'); return; }
   const el = document.getElementById('prepa-content'); if (!el) return;
   toast('Génération de l\'image…', 'info');
+  // Logo de l'entité active (base64 des boutons du sélecteur d'org) pour le titre d'export
+  const logoSrc = ((document.querySelector('#org-btn-' + currentOrg + ' img') || {}).src) || '';
   // Masquer les contrôles d'édition le temps de la capture (poignées, ▲▼✕, 🗑️, +Ajouter)
   const toHide = el.querySelectorAll('.prepa-noexport');
   toHide.forEach(h => { h.dataset._d = h.style.display; h.style.display = 'none'; });
@@ -26939,6 +26941,12 @@ async function prepaExportJPG() {
       onclone: function (doc) {
         const root = doc.getElementById('prepa-content');
         if (!root) return;
+        // Titre d'export : logo de l'entité + "Groupe d'entraînement" (blanc, gras)
+        const header = doc.createElement('div');
+        header.setAttribute('style', 'display:flex; align-items:center; justify-content:center; gap:16px; padding:2px 0 16px; margin-bottom:14px; border-bottom:2px solid rgba(255,255,255,0.18);');
+        header.innerHTML = (logoSrc ? '<img src="' + logoSrc + '" style="height:54px; width:auto;">' : '') +
+          '<span style="color:#ffffff; font-weight:800; font-size:32px; letter-spacing:1px; text-transform:uppercase;">Groupe d\'entraînement</span>';
+        root.insertBefore(header, root.firstChild);
         root.querySelectorAll('input').forEach(function (inp) {
           const val = (inp.value || '').trim();
           const isNote = inp.classList.contains('prepa-colnote');
