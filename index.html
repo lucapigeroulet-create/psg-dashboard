@@ -810,6 +810,7 @@
     <div class="nav-dropdown-menu" id="nav-gestion-menu">
       <button class="nav-btn" data-view="entry">✏️ Saisie séance</button>
       <button class="nav-btn" data-view="plan">📋 Planifier une séance</button>
+      <button class="nav-btn" data-view="prepa-seance">📝 Préparation séance</button>
       <button class="nav-btn" data-view="planification">🗓️ Planification saison</button>
       <button class="nav-btn" data-view="match-entry">⚽ Saisie match</button>
       <button class="nav-btn" data-view="injury-entry">🩹 Saisie blessures</button>
@@ -2641,6 +2642,23 @@
 
     <!-- Récapitulatif mensuel -->
     <div id="amendes-content"></div>
+  </div>
+
+  <!-- ========== GESTION — PRÉPARATION SÉANCE (board live staff) ========== -->
+  <div class="view" id="view-prepa-seance">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h2 style="margin:0;">📝 Préparation séance</h2>
+          <p style="color:var(--text-dim); font-size:13px; margin-top:4px;">Tableau partagé en <b>temps réel</b> avec tout le staff. Groupes, joueurs présents/absents, blessés… Chacun peut modifier.</p>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span id="prepa-live-badge" style="font-size:11px; color:var(--green); display:inline-flex; align-items:center; gap:5px;">● Live</span>
+          <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="prepaReload()">↻ Rafraîchir</button>
+        </div>
+      </div>
+    </div>
+    <div id="prepa-content"></div>
   </div>
 
   <!-- ========== VUE JOUEUR : MES NOTES ========== -->
@@ -7988,7 +8006,7 @@ let realtimeChannels = [];
 
 function setupRealtime() {
   if (realtimeChannels.length > 0) return; // déjà configuré
-  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores', 'creneaux_medicaux', 'medical_notes', 'medical_questionnaires'];
+  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores', 'creneaux_medicaux', 'medical_notes', 'medical_questionnaires', 'prepa_colonnes', 'prepa_items'];
 
   tables.forEach(table => {
     const channel = sb.channel('realtime-' + table)
@@ -8003,6 +8021,18 @@ function setupRealtime() {
 
 function handleRealtimeChange(table, payload) {
   const { eventType, new: newRow, old: oldRow } = payload;
+
+  // ===== Préparation séance : board partagé en direct =====
+  if (table === 'prepa_colonnes' || table === 'prepa_items') {
+    const rowOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (rowOrg && rowOrg !== currentOrg) return;      // autre club → ignorer
+    if (getCurrentView() !== 'prepa-seance') return;  // pas sur la vue → rien à faire
+    // Ne pas casser une saisie en cours : on rafraîchira dès que le champ perdra le focus.
+    const ae = document.activeElement;
+    if (ae && ae.closest && ae.closest('#prepa-content')) return;
+    prepaLoad().then(prepaRenderBoard);
+    return;
+  }
 
   // ===== Mini-jeux : rafraîchir le classement en direct =====
   if (table === 'minijeux_scores') {
@@ -8798,7 +8828,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (!viewEl) return;
     viewEl.classList.add('active');
     // Gérer l'état visuel du menu déroulant Gestion
-    const gestionViews = ['entry', 'plan', 'planification', 'match-entry', 'injury-entry', 'rpe-entry', 'best-match', 'amendes', 'messages', 'minijeux', 'history', 'settings'];
+    const gestionViews = ['entry', 'plan', 'prepa-seance', 'planification', 'match-entry', 'injury-entry', 'rpe-entry', 'best-match', 'amendes', 'messages', 'minijeux', 'history', 'settings'];
     const gestionToggle = document.getElementById('nav-gestion-toggle');
     if (gestionToggle) {
       if (gestionViews.includes(view)) gestionToggle.classList.add('has-active');
@@ -8847,6 +8877,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'settings') renderSettings();
     else if (view === 'best-match') renderBestMatch();
     else if (view === 'amendes') renderAmendes();
+    else if (view === 'prepa-seance') renderPrepaSeance();
     else if (view === 'player-rpe') renderPlayerRPE();
     else if (view === 'player-history') renderPlayerHistory();
     else if (view === 'player-hooper') renderPlayerHooper();
@@ -26838,6 +26869,158 @@ function renderMuscu1RM() {
   html += hist.map(r => '<tr><td>' + (r.date ? formatDateFR(r.date) : '—') + '</td><td style="text-align:left; font-weight:600;">' + escapeHtml(r.joueur) + '</td><td style="text-align:left;">' + escapeHtml(r.exercice) + '</td><td style="text-align:center; font-weight:700;">' + Number(r.valeur_kg) + ' kg</td><td style="text-align:center;"><button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#f87171;" onclick="deleteMuscu1RM(' + r.id + ')">🗑️</button></td></tr>').join('');
   html += '</tbody></table></div>';
   c.innerHTML = html;
+}
+
+// ============================================================================
+// GESTION — PRÉPARATION SÉANCE (board collaboratif live)
+// ============================================================================
+const PREPA_COULEURS = {
+  gris:   { dot: '#94a3b8', bar: '#64748b' },
+  vert:   { dot: '#34d399', bar: '#10b981' },
+  orange: { dot: '#fbbf24', bar: '#f59e0b' },
+  rouge:  { dot: '#f87171', bar: '#ef4444' },
+  bleu:   { dot: '#38bdf8', bar: '#0ea5e9' }
+};
+const PREPA_COULEUR_ORDRE = ['gris', 'vert', 'orange', 'rouge', 'bleu'];
+let prepaColonnes = [];
+let prepaItems = [];
+
+function prepaTouch() { return { updated_at: new Date().toISOString(), updated_by: (currentUser && currentUser.email) || null }; }
+function prepaItemsOf(colId) { return prepaItems.filter(i => i.colonne_id === colId).sort((a, b) => a.ordre - b.ordre); }
+
+async function renderPrepaSeance() { await prepaLoad(); prepaRenderBoard(); }
+async function prepaReload() { await prepaLoad(); prepaRenderBoard(); }
+
+async function prepaLoad() {
+  try {
+    const [colRes, itRes] = await Promise.all([
+      sb.from('prepa_colonnes').select('*').eq('org', currentOrg).order('ordre', { ascending: true }),
+      sb.from('prepa_items').select('*').eq('org', currentOrg).order('ordre', { ascending: true })
+    ]);
+    prepaColonnes = colRes.data || [];
+    prepaItems = itRes.data || [];
+  } catch (e) { toast('Erreur chargement préparation : ' + (e.message || e), 'error'); }
+}
+
+function prepaRenderBoard() {
+  const c = document.getElementById('prepa-content'); if (!c) return;
+  const cols = prepaColonnes.slice().sort((a, b) => a.ordre - b.ordre);
+  if (cols.length === 0) {
+    c.innerHTML = '<div class="card"><div class="empty-state">Aucune colonne pour l\'instant.<br>Crée une colonne (ex : GB, Titulaires, Remplaçants, Blessés) pour commencer.</div>' +
+      '<div style="text-align:center; margin-top:10px;"><button class="btn" onclick="prepaAddCol()">➕ Créer une colonne</button></div></div>';
+    return;
+  }
+  let html = '<div style="display:flex; gap:12px; overflow-x:auto; padding-bottom:8px; align-items:flex-start;">';
+  cols.forEach(col => {
+    const cc = PREPA_COULEURS[col.couleur] || PREPA_COULEURS.gris;
+    const items = prepaItemsOf(col.id);
+    html += '<div style="flex:0 0 262px; background:var(--bg-card); border:1px solid var(--border); border-top:3px solid ' + cc.bar + '; border-radius:10px; padding:10px;">';
+    html += '<div style="display:flex; align-items:center; gap:5px; margin-bottom:8px;">';
+    html += '<button title="Changer la couleur" onclick="prepaCycleColor(' + col.id + ')" style="width:14px; height:14px; border-radius:50%; border:none; cursor:pointer; background:' + cc.dot + '; flex:0 0 auto;"></button>';
+    html += '<input value="' + escapeAttr(col.titre || '') + '" placeholder="Titre" onchange="prepaColTitre(' + col.id + ', this.value)" style="flex:1; min-width:0; background:transparent; border:none; color:var(--text); font-weight:700; font-size:15px; outline:none;">';
+    html += '<span style="font-size:12px; color:var(--text-dim); flex:0 0 auto;">' + items.length + '</span>';
+    html += '<button title="Déplacer à gauche" onclick="prepaMoveCol(' + col.id + ',-1)" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px;">◀</button>';
+    html += '<button title="Déplacer à droite" onclick="prepaMoveCol(' + col.id + ',1)" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px;">▶</button>';
+    html += '<button title="Supprimer la colonne" onclick="prepaDeleteCol(' + col.id + ')" style="background:none; border:none; color:#f87171; cursor:pointer; font-size:12px;">🗑️</button>';
+    html += '</div>';
+    html += '<input value="' + escapeAttr(col.note || '') + '" placeholder="Note (ex : 17+3…)" onchange="prepaColNote(' + col.id + ', this.value)" style="width:100%; box-sizing:border-box; background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; color:var(--text-dim); font-size:12px; padding:4px 8px; margin-bottom:8px; outline:none;">';
+    html += '<div style="display:flex; flex-direction:column; gap:5px;">';
+    items.forEach(it => {
+      html += '<div style="display:flex; align-items:center; gap:3px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; padding:2px 5px;">';
+      html += '<input value="' + escapeAttr(it.texte || '') + '" placeholder="Joueur" onchange="prepaItemTexte(' + it.id + ', this.value)" style="flex:1; min-width:0; background:transparent; border:none; color:var(--text); font-size:14px; outline:none;">';
+      html += '<input value="' + escapeAttr(it.note || '') + '" placeholder="—" title="Annotation (ex : Adapté, ?)" onchange="prepaItemNote(' + it.id + ', this.value)" style="width:64px; flex:0 0 auto; background:transparent; border:none; color:var(--text-dim); font-size:12px; text-align:right; outline:none;">';
+      html += '<button title="Monter" onclick="prepaMoveItem(' + it.id + ',-1)" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px;">▲</button>';
+      html += '<button title="Descendre" onclick="prepaMoveItem(' + it.id + ',1)" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px;">▼</button>';
+      html += '<button title="Supprimer" onclick="prepaDeleteItem(' + it.id + ')" style="background:none; border:none; color:#f87171; cursor:pointer; font-size:12px;">✕</button>';
+      html += '</div>';
+    });
+    html += '</div>';
+    html += '<input id="prepa-add-' + col.id + '" placeholder="+ Ajouter un joueur…" onkeydown="if(event.key===\'Enter\'){prepaAddItem(' + col.id + ', this.value); this.value=\'\';}" style="width:100%; box-sizing:border-box; margin-top:8px; background:var(--bg-elevated); border:1px dashed var(--border); border-radius:6px; color:var(--text); font-size:13px; padding:6px 8px; outline:none;">';
+    html += '</div>';
+  });
+  html += '<div style="flex:0 0 150px;"><button class="btn btn-secondary" style="width:100%; padding:10px; font-size:13px;" onclick="prepaAddCol()">➕ Colonne</button></div>';
+  html += '</div>';
+  c.innerHTML = html;
+}
+
+async function prepaAddCol() {
+  const ordre = prepaColonnes.reduce((m, c) => Math.max(m, c.ordre), 0) + 1;
+  const couleur = PREPA_COULEUR_ORDRE[prepaColonnes.length % PREPA_COULEUR_ORDRE.length];
+  try {
+    const { data, error } = await sb.from('prepa_colonnes').insert(Object.assign({ org: currentOrg, titre: '', note: '', couleur, ordre }, prepaTouch())).select();
+    if (error) throw error;
+    if (data && data[0]) prepaColonnes.push(data[0]);
+    prepaRenderBoard();
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+async function prepaDeleteCol(id) {
+  if (!confirm('Supprimer cette colonne et toutes ses lignes ?')) return;
+  try {
+    const { error } = await sb.from('prepa_colonnes').delete().eq('id', id);
+    if (error) throw error;
+    prepaColonnes = prepaColonnes.filter(c => c.id !== id);
+    prepaItems = prepaItems.filter(i => i.colonne_id !== id);
+    prepaRenderBoard();
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+async function prepaColUpdate(id, patch) {
+  const col = prepaColonnes.find(c => c.id === id); if (col) Object.assign(col, patch);
+  prepaRenderBoard();
+  try { const { error } = await sb.from('prepa_colonnes').update(Object.assign({}, patch, prepaTouch())).eq('id', id); if (error) throw error; }
+  catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+function prepaColTitre(id, v) { prepaColUpdate(id, { titre: v }); }
+function prepaColNote(id, v) { prepaColUpdate(id, { note: v }); }
+function prepaCycleColor(id) {
+  const col = prepaColonnes.find(c => c.id === id); if (!col) return;
+  const idx = PREPA_COULEUR_ORDRE.indexOf(col.couleur || 'gris');
+  prepaColUpdate(id, { couleur: PREPA_COULEUR_ORDRE[(idx + 1) % PREPA_COULEUR_ORDRE.length] });
+}
+async function prepaMoveCol(id, dir) {
+  const sorted = prepaColonnes.slice().sort((a, b) => a.ordre - b.ordre);
+  const i = sorted.findIndex(c => c.id === id); const j = i + dir;
+  if (i < 0 || j < 0 || j >= sorted.length) return;
+  const a = sorted[i], b = sorted[j]; const tmp = a.ordre; a.ordre = b.ordre; b.ordre = tmp;
+  prepaRenderBoard();
+  try {
+    await sb.from('prepa_colonnes').update(Object.assign({ ordre: a.ordre }, prepaTouch())).eq('id', a.id);
+    await sb.from('prepa_colonnes').update(Object.assign({ ordre: b.ordre }, prepaTouch())).eq('id', b.id);
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+async function prepaAddItem(colId, texte) {
+  texte = (texte || '').trim(); if (!texte) return;
+  const ordre = prepaItemsOf(colId).reduce((m, i) => Math.max(m, i.ordre), 0) + 1;
+  try {
+    const { data, error } = await sb.from('prepa_items').insert(Object.assign({ org: currentOrg, colonne_id: colId, texte, note: '', ordre }, prepaTouch())).select();
+    if (error) throw error;
+    if (data && data[0]) prepaItems.push(data[0]);
+    prepaRenderBoard();
+    const el = document.getElementById('prepa-add-' + colId); if (el) el.focus(); // enchaîner les saisies
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+async function prepaItemUpdate(id, patch) {
+  const it = prepaItems.find(x => x.id === id); if (it) Object.assign(it, patch);
+  prepaRenderBoard();
+  try { const { error } = await sb.from('prepa_items').update(Object.assign({}, patch, prepaTouch())).eq('id', id); if (error) throw error; }
+  catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+function prepaItemTexte(id, v) { prepaItemUpdate(id, { texte: v }); }
+function prepaItemNote(id, v) { prepaItemUpdate(id, { note: v }); }
+async function prepaDeleteItem(id) {
+  try { const { error } = await sb.from('prepa_items').delete().eq('id', id); if (error) throw error; prepaItems = prepaItems.filter(i => i.id !== id); prepaRenderBoard(); }
+  catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+async function prepaMoveItem(id, dir) {
+  const it = prepaItems.find(x => x.id === id); if (!it) return;
+  const sib = prepaItemsOf(it.colonne_id);
+  const i = sib.findIndex(x => x.id === id); const j = i + dir;
+  if (i < 0 || j < 0 || j >= sib.length) return;
+  const a = sib[i], b = sib[j]; const tmp = a.ordre; a.ordre = b.ordre; b.ordre = tmp;
+  prepaRenderBoard();
+  try {
+    await sb.from('prepa_items').update(Object.assign({ ordre: a.ordre }, prepaTouch())).eq('id', a.id);
+    await sb.from('prepa_items').update(Object.assign({ ordre: b.ordre }, prepaTouch())).eq('id', b.id);
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
 }
 
 // ============================================================================
