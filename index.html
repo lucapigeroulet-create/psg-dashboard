@@ -27007,8 +27007,8 @@ function prepaRenderBoard() {
   });
   let recap = '<div class="card" style="padding:10px 14px; margin-bottom:12px;"><div style="display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center;">';
   // Cumul joueurs de champ + GB, format "17 + 3"
-  recap += '<span style="display:inline-flex; align-items:baseline; gap:6px; font-size:15px; font-weight:800; color:var(--accent-light);">' +
-    '👥 ' + champ + ' + ' + gb + '</span>';
+  recap += '<span style="display:inline-flex; align-items:baseline; gap:10px; font-size:15px; font-weight:800; color:var(--accent-light);">' +
+    '<span>👥</span><span>' + champ + ' + ' + gb + '</span></span>';
   // Cumuls des autres cases, à la suite
   autres.forEach(a => {
     const cc = PREPA_COULEURS[a.col.couleur] || PREPA_COULEURS.gris;
@@ -27019,7 +27019,7 @@ function prepaRenderBoard() {
   // Cumul des bulles "autre", juste après la dernière
   if (autres.length) {
     const autresTotal = autres.reduce((s, a) => s + a.n, 0);
-    recap += '<span style="font-size:15px; font-weight:800; color:var(--text);">= ' + autresTotal + '</span>';
+    recap += '<span style="font-size:15px; font-weight:800; color:var(--text);">' + autresTotal + '</span>';
   }
   // Total de l'ensemble des joueurs
   recap += '<span style="margin-left:auto; font-size:13px; font-weight:800; color:var(--text);">TOTAL ' + total + '</span>';
@@ -27058,10 +27058,6 @@ function prepaRenderBoard() {
       html += '</div>';
     });
     html += '</div>';
-    // Total en bas des cases NON comprises dans champ/GB (bulles "autre")
-    if ((col.type || 'autre') === 'autre') {
-      html += '<div style="text-align:center; font-size:12px; font-weight:700; color:var(--text-dim); margin-top:8px; padding-top:6px; border-top:1px solid var(--border);">' + items.length + '</div>';
-    }
     html += '<input class="prepa-noexport" id="prepa-add-' + col.id + '" placeholder="+ Ajouter…" onkeydown="if(event.key===\'Enter\'){prepaAddItem(' + col.id + ', this.value); this.value=\'\';}" style="width:100%; box-sizing:border-box; margin-top:8px; background:var(--bg-elevated); border:1px dashed var(--border); border-radius:6px; color:var(--text); font-size:13px; padding:5px 8px; outline:none;">';
     html += '</div>';
   });
