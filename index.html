@@ -26909,6 +26909,9 @@ const PREPA_COULEURS = {
   bleu:   { dot: '#38bdf8', bar: '#0ea5e9' }
 };
 const PREPA_COULEUR_ORDRE = ['gris', 'vert', 'orange', 'rouge', 'bleu'];
+// Type de case pour les cumuls : Champ (DEF/MIL/AIL/ATT/adaptés), GB, Autre.
+const PREPA_TYPES = { champ: { emoji: '🟢', label: 'Champ' }, gb: { emoji: '🧤', label: 'GB' }, autre: { emoji: '⚪', label: 'Autre' } };
+const PREPA_TYPE_ORDRE = ['champ', 'gb', 'autre'];
 let prepaColonnes = [];
 let prepaItems = [];
 
@@ -26966,31 +26969,46 @@ function prepaRenderBoard() {
     return;
   }
 
-  // Récapitulatif (compteurs + total) — coup d'œil, comme un "session summary"
+  // Récapitulatif : cumul Champ (DEF/MIL/AIL/ATT/adaptés) + GB, puis les autres cases, puis le total.
   const total = prepaItems.length;
-  let recap = '<div class="card" style="padding:10px 14px; margin-bottom:12px;"><div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">';
+  let champ = 0, gb = 0; const autres = [];
   cols.forEach(col => {
-    const cc = PREPA_COULEURS[col.couleur] || PREPA_COULEURS.gris;
+    const n = prepaItemsOf(col.id).length;
+    const t = col.type || 'autre';
+    if (t === 'champ') champ += n;
+    else if (t === 'gb') gb += n;
+    else autres.push({ col: col, n: n });
+  });
+  let recap = '<div class="card" style="padding:10px 14px; margin-bottom:12px;"><div style="display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center;">';
+  // Cumul joueurs de champ + GB, format "17 + 3"
+  recap += '<span style="display:inline-flex; align-items:baseline; gap:6px; font-size:15px; font-weight:800; color:var(--accent-light);">' +
+    '👥 ' + champ + ' + ' + gb +
+    ' <span style="font-size:11px; font-weight:600; color:var(--text-dim);">(champ + GB)</span></span>';
+  // Cumuls des autres cases, à la suite
+  autres.forEach(a => {
+    const cc = PREPA_COULEURS[a.col.couleur] || PREPA_COULEURS.gris;
     recap += '<span style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:14px; padding:3px 10px; font-size:12px;">' +
       '<span style="width:9px; height:9px; border-radius:50%; background:' + cc.dot + ';"></span>' +
-      escapeHtml(col.titre || 'Sans titre') + ' <b style="color:var(--text);">' + prepaItemsOf(col.id).length + '</b></span>';
+      escapeHtml(a.col.titre || 'Sans titre') + ' <b style="color:var(--text);">' + a.n + '</b></span>';
   });
-  recap += '<span style="margin-left:auto; font-size:13px; font-weight:800; color:var(--accent-light);">TOTAL ' + total + '</span>';
+  // Total de l'ensemble des joueurs
+  recap += '<span style="margin-left:auto; font-size:13px; font-weight:800; color:var(--text);">TOTAL ' + total + '</span>';
   recap += '</div></div>';
 
-  // Grille auto-ajustée, limitée à 5 cases de large (max-width ≈ 5×200 + gaps)
-  let html = recap + '<div id="prepa-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:12px; align-items:start; max-width:1080px;">';
+  // Grille : jusqu'à 5 cases de large, étirées pour remplir l'écran d'ordinateur
+  const ncols = Math.max(1, Math.min(5, cols.length));
+  let html = recap + '<div id="prepa-grid" style="display:grid; grid-template-columns:repeat(' + ncols + ', minmax(0, 1fr)); gap:12px; align-items:start;">';
   cols.forEach(col => {
     const cc = PREPA_COULEURS[col.couleur] || PREPA_COULEURS.gris;
+    const ti = PREPA_TYPES[col.type] || PREPA_TYPES.autre;
     const items = prepaItemsOf(col.id);
     html += '<div class="prepa-col" data-col="' + col.id + '" ondragover="prepaDragOver(event)" ondragleave="prepaDragLeave(event)" ondrop="prepaDrop(event,' + col.id + ')" style="background:var(--bg-card); border:1px solid var(--border); border-top:3px solid ' + cc.bar + '; border-radius:10px; padding:10px;">';
     html += '<div style="display:flex; align-items:center; gap:4px; margin-bottom:8px;">';
     html += '<span draggable="true" ondragstart="prepaColDragStart(event,' + col.id + ')" ondragend="prepaDragEnd(event)" title="Glisser pour déplacer la colonne" style="cursor:grab; color:var(--text-dim); font-size:13px; flex:0 0 auto; line-height:1;">⋮⋮</span>';
     html += '<button title="Changer la couleur" onclick="prepaCycleColor(' + col.id + ')" style="width:14px; height:14px; border-radius:50%; border:none; cursor:pointer; background:' + cc.dot + '; flex:0 0 auto;"></button>';
     html += '<input value="' + escapeAttr(col.titre || '') + '" placeholder="Titre" onchange="prepaColTitre(' + col.id + ', this.value)" style="flex:1; min-width:0; background:transparent; border:none; color:var(--text); font-weight:700; font-size:14px; outline:none;">';
+    html += '<button title="Type de case : ' + ti.label + ' (cliquer pour changer)" onclick="prepaCycleType(' + col.id + ')" style="background:none; border:none; cursor:pointer; font-size:13px; flex:0 0 auto; line-height:1;">' + ti.emoji + '</button>';
     html += '<span style="font-size:12px; color:var(--text-dim); flex:0 0 auto;">' + items.length + '</span>';
-    html += '<button title="Déplacer à gauche" onclick="prepaMoveCol(' + col.id + ',-1)" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px;">◀</button>';
-    html += '<button title="Déplacer à droite" onclick="prepaMoveCol(' + col.id + ',1)" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px;">▶</button>';
     html += '<button title="Supprimer la colonne" onclick="prepaDeleteCol(' + col.id + ')" style="background:none; border:none; color:#f87171; cursor:pointer; font-size:12px;">🗑️</button>';
     html += '</div>';
     html += '<input value="' + escapeAttr(col.note || '') + '" placeholder="Note (ex : 17+3…)" onchange="prepaColNote(' + col.id + ', this.value)" style="width:100%; box-sizing:border-box; background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; color:var(--text-dim); font-size:12px; padding:4px 8px; margin-bottom:8px; outline:none;">';
@@ -27131,7 +27149,7 @@ async function prepaAddCol() {
   const ordre = prepaColonnes.reduce((m, c) => Math.max(m, c.ordre), 0) + 1;
   const couleur = PREPA_COULEUR_ORDRE[prepaColonnes.length % PREPA_COULEUR_ORDRE.length];
   try {
-    const { data, error } = await sb.from('prepa_colonnes').insert(Object.assign({ org: currentOrg, titre: '', note: '', couleur, ordre }, prepaTouch())).select();
+    const { data, error } = await sb.from('prepa_colonnes').insert(Object.assign({ org: currentOrg, titre: '', note: '', couleur, type: 'autre', ordre }, prepaTouch())).select();
     if (error) throw error;
     if (data && data[0]) prepaColonnes.push(data[0]);
     prepaRenderBoard();
@@ -27159,6 +27177,11 @@ function prepaCycleColor(id) {
   const col = prepaColonnes.find(c => c.id === id); if (!col) return;
   const idx = PREPA_COULEUR_ORDRE.indexOf(col.couleur || 'gris');
   prepaColUpdate(id, { couleur: PREPA_COULEUR_ORDRE[(idx + 1) % PREPA_COULEUR_ORDRE.length] });
+}
+function prepaCycleType(id) {
+  const col = prepaColonnes.find(c => c.id === id); if (!col) return;
+  const idx = PREPA_TYPE_ORDRE.indexOf(col.type || 'autre');
+  prepaColUpdate(id, { type: PREPA_TYPE_ORDRE[(idx + 1) % PREPA_TYPE_ORDRE.length] });
 }
 async function prepaMoveCol(id, dir) {
   const sorted = prepaColonnes.slice().sort((a, b) => a.ordre - b.ordre);
