@@ -26927,6 +26927,9 @@ async function prepaExportJPG() {
   if (!prepaColonnes.length) { toast('Rien à exporter : ajoute au moins une colonne.', 'error'); return; }
   const el = document.getElementById('prepa-content'); if (!el) return;
   toast('Génération de l\'image…', 'info');
+  // Masquer les contrôles d'édition le temps de la capture (poignées, ▲▼✕, 🗑️, +Ajouter)
+  const toHide = el.querySelectorAll('.prepa-noexport');
+  toHide.forEach(h => { h.dataset._d = h.style.display; h.style.display = 'none'; });
   try {
     const bg = getComputedStyle(document.body).backgroundColor || '#0a1628';
     const src = await html2canvas(el, { backgroundColor: bg, scale: 2, useCORS: true, logging: false });
@@ -26946,6 +26949,8 @@ async function prepaExportJPG() {
     toast('✅ Image exportée.', 'success');
   } catch (e) {
     toast('Erreur export : ' + (e.message || e), 'error');
+  } finally {
+    toHide.forEach(h => { h.style.display = h.dataset._d || ''; delete h.dataset._d; });
   }
 }
 
@@ -26982,8 +26987,7 @@ function prepaRenderBoard() {
   let recap = '<div class="card" style="padding:10px 14px; margin-bottom:12px;"><div style="display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center;">';
   // Cumul joueurs de champ + GB, format "17 + 3"
   recap += '<span style="display:inline-flex; align-items:baseline; gap:6px; font-size:15px; font-weight:800; color:var(--accent-light);">' +
-    '👥 ' + champ + ' + ' + gb +
-    ' <span style="font-size:11px; font-weight:600; color:var(--text-dim);">(champ + GB)</span></span>';
+    '👥 ' + champ + ' + ' + gb + '</span>';
   // Cumuls des autres cases, à la suite
   autres.forEach(a => {
     const cc = PREPA_COULEURS[a.col.couleur] || PREPA_COULEURS.gris;
@@ -27004,28 +27008,35 @@ function prepaRenderBoard() {
     const items = prepaItemsOf(col.id);
     html += '<div class="prepa-col" data-col="' + col.id + '" ondragover="prepaDragOver(event)" ondragleave="prepaDragLeave(event)" ondrop="prepaDrop(event,' + col.id + ')" style="background:var(--bg-card); border:1px solid var(--border); border-top:3px solid ' + cc.bar + '; border-radius:10px; padding:10px;">';
     html += '<div style="display:flex; align-items:center; gap:4px; margin-bottom:8px;">';
-    html += '<span draggable="true" ondragstart="prepaColDragStart(event,' + col.id + ')" ondragend="prepaDragEnd(event)" title="Glisser pour déplacer la colonne" style="cursor:grab; color:var(--text-dim); font-size:13px; flex:0 0 auto; line-height:1;">⋮⋮</span>';
+    html += '<span class="prepa-noexport" draggable="true" ondragstart="prepaColDragStart(event,' + col.id + ')" ondragend="prepaDragEnd(event)" title="Glisser pour déplacer la colonne" style="cursor:grab; color:var(--text-dim); font-size:13px; flex:0 0 auto; line-height:1;">⋮⋮</span>';
     html += '<button title="Changer la couleur" onclick="prepaCycleColor(' + col.id + ')" style="width:14px; height:14px; border-radius:50%; border:none; cursor:pointer; background:' + cc.dot + '; flex:0 0 auto;"></button>';
     html += '<input value="' + escapeAttr(col.titre || '') + '" placeholder="Titre" onchange="prepaColTitre(' + col.id + ', this.value)" style="flex:1; min-width:0; background:transparent; border:none; color:var(--text); font-weight:700; font-size:14px; outline:none;">';
     html += '<button title="Type de case : ' + ti.label + ' (cliquer pour changer)" onclick="prepaCycleType(' + col.id + ')" style="background:none; border:none; cursor:pointer; font-size:13px; flex:0 0 auto; line-height:1;">' + ti.emoji + '</button>';
     html += '<span style="font-size:12px; color:var(--text-dim); flex:0 0 auto;">' + items.length + '</span>';
-    html += '<button title="Supprimer la colonne" onclick="prepaDeleteCol(' + col.id + ')" style="background:none; border:none; color:#f87171; cursor:pointer; font-size:12px;">🗑️</button>';
+    html += '<button class="prepa-noexport" title="Supprimer la colonne" onclick="prepaDeleteCol(' + col.id + ')" style="background:none; border:none; color:#f87171; cursor:pointer; font-size:12px;">🗑️</button>';
     html += '</div>';
     html += '<input value="' + escapeAttr(col.note || '') + '" placeholder="Note (ex : 17+3…)" onchange="prepaColNote(' + col.id + ', this.value)" style="width:100%; box-sizing:border-box; background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; color:var(--text-dim); font-size:12px; padding:4px 8px; margin-bottom:8px; outline:none;">';
     // Zone de dépôt (min-height pour rester une cible même vide)
     html += '<div style="display:flex; flex-direction:column; gap:5px; min-height:38px;">';
     items.forEach(it => {
       html += '<div style="display:flex; align-items:center; gap:2px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; padding:2px 4px;">';
-      html += '<span draggable="true" ondragstart="prepaItemDragStart(event,' + it.id + ')" ondragend="prepaDragEnd(event)" title="Glisser vers une autre case" style="cursor:grab; color:var(--text-dim); font-size:13px; padding:0 2px; flex:0 0 auto;">⠿</span>';
-      html += '<input value="' + escapeAttr(it.texte || '') + '" placeholder="Joueur" onchange="prepaItemTexte(' + it.id + ', this.value)" style="flex:1; min-width:0; background:transparent; border:none; color:var(--text); font-size:14px; outline:none;">';
-      html += '<input value="' + escapeAttr(it.note || '') + '" placeholder="—" title="Annotation (ex : Adapté, ?)" onchange="prepaItemNote(' + it.id + ', this.value)" style="width:58px; flex:0 0 auto; background:transparent; border:none; color:var(--text-dim); font-size:12px; text-align:right; outline:none;">';
-      html += '<button title="Monter" onclick="prepaMoveItem(' + it.id + ',-1)" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px;">▲</button>';
-      html += '<button title="Descendre" onclick="prepaMoveItem(' + it.id + ',1)" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px;">▼</button>';
-      html += '<button title="Supprimer" onclick="prepaDeleteItem(' + it.id + ')" style="background:none; border:none; color:#f87171; cursor:pointer; font-size:12px;">✕</button>';
+      html += '<span class="prepa-noexport" draggable="true" ondragstart="prepaItemDragStart(event,' + it.id + ')" ondragend="prepaDragEnd(event)" title="Glisser vers une autre case" style="cursor:grab; color:var(--text-dim); font-size:13px; padding:0 2px; flex:0 0 auto;">⠿</span>';
+      // Nom (normal) + annotation poste/numéro en tout petit dessous → visible en entier, ne masque pas le nom
+      html += '<div style="flex:1; min-width:0; display:flex; flex-direction:column; line-height:1.1;">';
+      html += '<input value="' + escapeAttr(it.texte || '') + '" placeholder="Joueur" onchange="prepaItemTexte(' + it.id + ', this.value)" style="width:100%; box-sizing:border-box; background:transparent; border:none; color:var(--text); font-size:14px; outline:none; padding:0;">';
+      html += '<input value="' + escapeAttr(it.note || '') + '" placeholder="—" title="Annotation (ex : poste, numéro, Adapté, ?)" onchange="prepaItemNote(' + it.id + ', this.value)" style="width:100%; box-sizing:border-box; background:transparent; border:none; color:var(--text-dim); font-size:9px; outline:none; padding:0;">';
+      html += '</div>';
+      html += '<button class="prepa-noexport" title="Monter" onclick="prepaMoveItem(' + it.id + ',-1)" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px;">▲</button>';
+      html += '<button class="prepa-noexport" title="Descendre" onclick="prepaMoveItem(' + it.id + ',1)" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px;">▼</button>';
+      html += '<button class="prepa-noexport" title="Supprimer" onclick="prepaDeleteItem(' + it.id + ')" style="background:none; border:none; color:#f87171; cursor:pointer; font-size:12px;">✕</button>';
       html += '</div>';
     });
     html += '</div>';
-    html += '<input id="prepa-add-' + col.id + '" placeholder="+ Ajouter…" onkeydown="if(event.key===\'Enter\'){prepaAddItem(' + col.id + ', this.value); this.value=\'\';}" style="width:100%; box-sizing:border-box; margin-top:8px; background:var(--bg-elevated); border:1px dashed var(--border); border-radius:6px; color:var(--text); font-size:13px; padding:5px 8px; outline:none;">';
+    // Total en bas des cases NON comprises dans champ/GB (bulles "autre")
+    if ((col.type || 'autre') === 'autre') {
+      html += '<div style="text-align:center; font-size:12px; font-weight:700; color:var(--text-dim); margin-top:8px; padding-top:6px; border-top:1px solid var(--border);">' + items.length + '</div>';
+    }
+    html += '<input class="prepa-noexport" id="prepa-add-' + col.id + '" placeholder="+ Ajouter…" onkeydown="if(event.key===\'Enter\'){prepaAddItem(' + col.id + ', this.value); this.value=\'\';}" style="width:100%; box-sizing:border-box; margin-top:8px; background:var(--bg-elevated); border:1px dashed var(--border); border-radius:6px; color:var(--text); font-size:13px; padding:5px 8px; outline:none;">';
     html += '</div>';
   });
   html += '</div>';
