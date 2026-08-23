@@ -26944,8 +26944,8 @@ async function prepaExportJPG() {
         // Titre d'export : logo de l'entité + "Groupe d'entraînement" (blanc, gras)
         const header = doc.createElement('div');
         header.setAttribute('style', 'display:flex; align-items:center; justify-content:center; gap:16px; padding:2px 0 16px; margin-bottom:14px; border-bottom:2px solid rgba(255,255,255,0.18);');
-        header.innerHTML = (logoSrc ? '<img src="' + logoSrc + '" style="height:54px; width:auto;">' : '') +
-          '<span style="color:#ffffff; font-weight:800; font-size:32px; letter-spacing:1px; text-transform:uppercase;">Groupe d\'entraînement</span>';
+        header.innerHTML = (logoSrc ? '<img src="' + logoSrc + '" style="height:88px; width:auto;">' : '') +
+          '<span style="color:#ffffff; font-weight:800; font-size:52px; letter-spacing:1.5px; text-transform:uppercase;">Groupe d\'entraînement</span>';
         root.insertBefore(header, root.firstChild);
         root.querySelectorAll('input').forEach(function (inp) {
           const val = (inp.value || '').trim();
@@ -26978,12 +26978,22 @@ async function prepaExportJPG() {
     const ctx = out.getContext('2d');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, outW, outH);
     ctx.drawImage(src, Math.round((outW - dw) / 2), Math.round((outH - dh) / 2), dw, dh);
-    const dataUrl = out.toDataURL('image/jpeg', 0.92);
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = 'preparation-seance-' + String(orgLabelText(currentOrg)).replace(/[^a-zA-Z0-9]+/g, '-') + '-' + toLocalISO(new Date()) + '.jpg';
-    document.body.appendChild(a); a.click(); a.remove();
-    toast('✅ Image exportée.', 'success');
+    const fname = 'preparation-seance-' + String(orgLabelText(currentOrg)).replace(/[^a-zA-Z0-9]+/g, '-') + '-' + toLocalISO(new Date()) + '.jpg';
+    const dl = (href, revoke) => {
+      const a = document.createElement('a');
+      a.href = href; a.download = fname;
+      document.body.appendChild(a); a.click(); a.remove();
+      if (revoke) setTimeout(() => URL.revokeObjectURL(href), 4000);
+    };
+    // Blob → téléchargement direct dans le dossier Téléchargements (plus fiable que data-URL)
+    if (out.toBlob) {
+      out.toBlob((blob) => {
+        if (blob) { dl(URL.createObjectURL(blob), true); toast('✅ Image téléchargée.', 'success'); }
+        else { dl(out.toDataURL('image/jpeg', 0.92)); toast('✅ Image téléchargée.', 'success'); }
+      }, 'image/jpeg', 0.92);
+    } else {
+      dl(out.toDataURL('image/jpeg', 0.92)); toast('✅ Image téléchargée.', 'success');
+    }
   } catch (e) {
     toast('Erreur export : ' + (e.message || e), 'error');
   } finally {
