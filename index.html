@@ -26936,19 +26936,21 @@ async function prepaExportJPG() {
   toHide.forEach(h => { h.dataset._d = h.style.display; h.style.display = 'none'; });
   try {
     const bg = getComputedStyle(document.body).backgroundColor || '#0a1628';
-    const src = await html2canvas(el, {
+    // Préchargement du logo : il est dessiné manuellement sur le canvas (rendu garanti,
+    // contrairement à une image injectée dans le clone que html2canvas ne charge pas toujours).
+    const logo = await new Promise((res) => {
+      if (!logoSrc) return res(null);
+      const im = new Image();
+      im.onload = () => res(im); im.onerror = () => res(null);
+      im.src = logoSrc;
+    });
+    // Capture du board seul (le titre est ajouté ensuite). On remplace les <input> par du
+    // texte (html2canvas les rend mal) et on retire notes/annotations vides.
+    const board = await html2canvas(el, {
       backgroundColor: bg, scale: 2, useCORS: true, logging: false,
-      // html2canvas rend mal les <input> : on les remplace par du texte dans le clone,
-      // et on retire les notes/annotations vides pour un rendu propre.
       onclone: function (doc) {
         const root = doc.getElementById('prepa-content');
         if (!root) return;
-        // Titre d'export : logo de l'entité + "Groupe d'entraînement" (blanc, gras)
-        const header = doc.createElement('div');
-        header.setAttribute('style', 'display:flex; align-items:center; justify-content:center; gap:16px; padding:2px 0 16px; margin-bottom:14px; border-bottom:2px solid rgba(255,255,255,0.18);');
-        header.innerHTML = (logoSrc ? '<img src="' + logoSrc + '" style="height:88px; width:auto;">' : '') +
-          '<span style="color:#ffffff; font-weight:800; font-size:52px; letter-spacing:1.5px; text-transform:uppercase;">Groupe d\'entraînement</span>';
-        root.insertBefore(header, root.firstChild);
         root.querySelectorAll('input').forEach(function (inp) {
           const val = (inp.value || '').trim();
           const isNote = inp.classList.contains('prepa-colnote');
@@ -26964,22 +26966,40 @@ async function prepaExportJPG() {
         });
       }
     });
-    // Sortie en "photo" standard pour que WhatsApp affiche l'aperçu directement :
-    // proportion ≈ 3:2 paysage (ni trop large ni trop haute) + taille plafonnée.
-    const RATIO = 1.5;      // 3:2 paysage
-    const MAXSIDE = 2000;   // px : au-delà, WhatsApp tend à traiter l'image en document
-    const W = src.width, H = src.height;
+    // Bandeau titre dessiné au canvas : logo (entité) + "GROUPE D'ENTRAÎNEMENT" (blanc, gras)
+    const W = board.width;
+    const titleFont = 104, logoH = 160, headerH = 232, pad = 40;
+    const comp = document.createElement('canvas');
+    comp.width = W; comp.height = headerH + board.height;
+    const cx = comp.getContext('2d');
+    cx.fillStyle = bg; cx.fillRect(0, 0, comp.width, comp.height);
+    const title = 'GROUPE D\'ENTRAÎNEMENT';
+    cx.font = 'bold ' + titleFont + 'px -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+    const tw = cx.measureText(title).width;
+    const logoW = logo ? Math.round(logo.width * (logoH / logo.height)) : 0;
+    const gap = logoW ? 28 : 0;
+    let gx = Math.max(pad, Math.round((W - (logoW + gap + tw)) / 2));
+    const midY = Math.round(headerH / 2);
+    if (logo) { cx.drawImage(logo, gx, midY - Math.round(logoH / 2), logoW, logoH); gx += logoW + gap; }
+    cx.fillStyle = '#ffffff'; cx.textAlign = 'left'; cx.textBaseline = 'middle';
+    cx.fillText(title, gx, midY + 2);
+    cx.strokeStyle = 'rgba(255,255,255,0.18)'; cx.lineWidth = 2;
+    cx.beginPath(); cx.moveTo(pad, headerH - 10); cx.lineTo(W - pad, headerH - 10); cx.stroke();
+    cx.drawImage(board, 0, headerH);
+    // Sortie en "photo" standard (≈3:2 paysage, plafonnée) pour l'aperçu WhatsApp
+    const RATIO = 1.5, MAXSIDE = 2000;
+    const CW = comp.width, CH = comp.height;
     let outW, outH;
-    if (W / H > RATIO) { outW = W; outH = Math.round(W / RATIO); }   // trop large → on ajoute de la hauteur
-    else { outH = H; outW = Math.round(H * RATIO); }                // sinon → largeur 3:2 (garantit le paysage)
+    if (CW / CH > RATIO) { outW = CW; outH = Math.round(CW / RATIO); }
+    else { outH = CH; outW = Math.round(CH * RATIO); }
     const s = Math.min(1, MAXSIDE / outW, MAXSIDE / outH);
     outW = Math.round(outW * s); outH = Math.round(outH * s);
-    const dw = Math.round(W * s), dh = Math.round(H * s);
+    const dw = Math.round(CW * s), dh = Math.round(CH * s);
     const out = document.createElement('canvas');
     out.width = outW; out.height = outH;
     const ctx = out.getContext('2d');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, outW, outH);
-    ctx.drawImage(src, Math.round((outW - dw) / 2), Math.round((outH - dh) / 2), dw, dh);
+    ctx.drawImage(comp, Math.round((outW - dw) / 2), Math.round((outH - dh) / 2), dw, dh);
     const fname = 'preparation-seance-' + String(orgLabelText(currentOrg)).replace(/[^a-zA-Z0-9]+/g, '-') + '-' + toLocalISO(new Date()) + '.jpg';
     const dl = (href, revoke) => {
       const a = document.createElement('a');
