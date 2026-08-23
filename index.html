@@ -26995,6 +26995,11 @@ function prepaRenderBoard() {
       '<span style="width:9px; height:9px; border-radius:50%; background:' + cc.dot + ';"></span>' +
       escapeHtml(a.col.titre || 'Sans titre') + ' <b style="color:var(--text);">' + a.n + '</b></span>';
   });
+  // Cumul des bulles "autre", juste après la dernière
+  if (autres.length) {
+    const autresTotal = autres.reduce((s, a) => s + a.n, 0);
+    recap += '<span style="font-size:15px; font-weight:800; color:var(--text);">= ' + autresTotal + '</span>';
+  }
   // Total de l'ensemble des joueurs
   recap += '<span style="margin-left:auto; font-size:13px; font-weight:800; color:var(--text);">TOTAL ' + total + '</span>';
   recap += '</div></div>';
