@@ -13528,6 +13528,36 @@ function gpsHalfIndex(name) {
   return 0;
 }
 
+// Comparaison des matchs (Distance vs Intensité) : ne comptabiliser QUE les mi-temps
+// (1ère MT + 2ème MT), en excluant l'échauffement et le travail compensatoire qui
+// gonflent le total du split "all". Somme les splits mi-temps du joueur pour cette
+// séance. Retourne {distance_km, sprint_dist_m, duree_min} ou null si aucune mi-temps.
+function gpsMatchHalvesMetrics(date, title, joueur) {
+  const halves = (state.bdd_gps || []).filter(x =>
+    x.date === date &&
+    (x.seance || x.session_title || '') === title &&
+    x.joueur === joueur &&
+    gpsHalfIndex(x.split_name) > 0
+  );
+  if (!halves.length) return null;
+  let distance_km = 0, sprint_dist_m = 0, duree_min = 0;
+  halves.forEach(h => {
+    distance_km  += gpsVal(h, 'distance_km');
+    sprint_dist_m += gpsVal(h, 'sprint_dist_m');
+    duree_min    += gpsVal(h, 'duree_min');
+  });
+  return { distance_km, sprint_dist_m, duree_min };
+}
+
+// Métriques d'un match pour un joueur : mi-temps uniquement si dispo, sinon repli
+// sur l'enregistrement complet "all" (matchs sans découpage en mi-temps).
+function gpsMatchMetrics(allRow) {
+  const title = allRow.seance || allRow.session_title || '';
+  const h = gpsMatchHalvesMetrics(allRow.date, title, allRow.joueur);
+  if (h) return h;
+  return { distance_km: gpsVal(allRow, 'distance_km'), sprint_dist_m: gpsVal(allRow, 'sprint_dist_m'), duree_min: gpsVal(allRow, 'duree_min') };
+}
+
 // Remplit le sélecteur de split selon la séance/date sélectionnée
 function populateGPSSplitSelect() {
   const sessionVal = document.getElementById('gps-session-select').value;
@@ -15977,8 +16007,11 @@ function renderGPSDistHSR() {
     const seanceTitle = sepIdx >= 0 ? sessionVal.slice(sepIdx + 2) : '';
     rows = rows.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
     title += ' — ' + formatDateFR(date) + (seanceTitle ? ' · ' + escapeHtml(seanceTitle) : '');
-    subtitle = 'Chaque point = un joueur ayant joué ce match. Distance et distance de sprint de ce match uniquement.';
-    points = rows.map(r => ({ joueur: r.joueur, distance: gpsVal(r, 'distance_km') * 1000, sprint: gpsVal(r, 'sprint_dist_m'), duree: gpsVal(r, 'duree_min') }));
+    subtitle = 'Chaque point = un joueur ayant joué ce match. Mi-temps uniquement (1ère + 2ème MT) — échauffement et travail compensatoire exclus.';
+    points = rows.map(r => {
+      const m = gpsMatchMetrics(r);
+      return { joueur: r.joueur, distance: m.distance_km * 1000, sprint: m.sprint_dist_m, duree: m.duree_min };
+    });
   } else if (gpsDistHsrMode === 'player') {
     const player = document.getElementById('gps-player-select').value;
     if (!player) {
@@ -15989,17 +16022,18 @@ function renderGPSDistHSR() {
     rows = rows.filter(x => x.joueur === player);
     rows = rows.filter(gpsIsMatchRow); // rapport = matchs uniquement (exclut les entraînements)
     title = '👤 ' + escapeHtml(player) + ' — Distance vs Intensité (Sprint)';
-    subtitle = 'Chaque point = un match de ' + escapeHtml(player) + '. Le logo affiché est celui de l\'adversaire.';
+    subtitle = 'Chaque point = un match de ' + escapeHtml(player) + '. Mi-temps uniquement (1ère + 2ème MT) — échauffement et travail compensatoire exclus. Le logo affiché est celui de l\'adversaire.';
     const refTimePlayer = gpsGetDistHsrRefTime();
     if (refTimePlayer) subtitle += ' Valeurs projetées sur ' + refTimePlayer + ' min de temps de jeu pour comparer à niveau égal.';
     points = rows.map(r => {
       const seanceTitle = r.seance || r.session_title || '';
       const opponent = gpsGuessOpponent(seanceTitle);
-      const duree = gpsVal(r, 'duree_min');
+      const m = gpsMatchMetrics(r);
+      const duree = m.duree_min;
       return {
         joueur: r.joueur, date: r.date, title: seanceTitle, opponent,
-        distance: gpsNormalizeMetric(gpsVal(r, 'distance_km') * 1000, duree, refTimePlayer),
-        sprint: gpsNormalizeMetric(gpsVal(r, 'sprint_dist_m'), duree, refTimePlayer),
+        distance: gpsNormalizeMetric(m.distance_km * 1000, duree, refTimePlayer),
+        sprint: gpsNormalizeMetric(m.sprint_dist_m, duree, refTimePlayer),
         duree,
         logo: gpsLogoLookup(opponent)
       };
@@ -16012,7 +16046,7 @@ function renderGPSDistHSR() {
       rows = rows.filter(x => groupPlayers.includes(x.joueur));
     }
     title += group ? ' · ' + escapeHtml(group) : '';
-    subtitle = 'Chaque point = un match. Somme de tous les joueurs sur ce match : distance totale de l\'équipe en abscisse, distance de sprint totale de l\'équipe en ordonnée — pour comparer les matchs entre eux. Le logo affiché est celui de l\'adversaire.';
+    subtitle = 'Chaque point = un match. Somme de tous les joueurs sur ce match : distance totale de l\'équipe en abscisse, distance de sprint totale de l\'équipe en ordonnée — pour comparer les matchs entre eux. Mi-temps uniquement (1ère + 2ème MT) — échauffement et travail compensatoire exclus. Le logo affiché est celui de l\'adversaire.';
     const refTimeCumul = gpsGetDistHsrRefTime();
     if (refTimeCumul) subtitle += ' Valeurs de chaque joueur projetées sur ' + refTimeCumul + ' min de temps de jeu avant somme, pour comparer à niveau égal.';
     const byMatch = {};
@@ -16020,9 +16054,10 @@ function renderGPSDistHSR() {
       const seanceTitle = r.seance || r.session_title || '';
       const key = r.date + '||' + seanceTitle;
       if (!byMatch[key]) byMatch[key] = { date: r.date, title: seanceTitle, distance: 0, sprint: 0, players: 0 };
-      const duree = gpsVal(r, 'duree_min');
-      byMatch[key].distance += gpsNormalizeMetric(gpsVal(r, 'distance_km') * 1000, duree, refTimeCumul);
-      byMatch[key].sprint += gpsNormalizeMetric(gpsVal(r, 'sprint_dist_m'), duree, refTimeCumul);
+      const m = gpsMatchMetrics(r);
+      const duree = m.duree_min;
+      byMatch[key].distance += gpsNormalizeMetric(m.distance_km * 1000, duree, refTimeCumul);
+      byMatch[key].sprint += gpsNormalizeMetric(m.sprint_dist_m, duree, refTimeCumul);
       byMatch[key].players++;
     });
     points = Object.values(byMatch).map(p => {
