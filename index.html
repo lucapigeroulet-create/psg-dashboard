@@ -2652,11 +2652,35 @@
           <h2 style="margin:0;">📝 Préparation séance</h2>
           <p style="color:var(--text-dim); font-size:13px; margin-top:4px;">Tableau partagé en <b>temps réel</b> avec tout le staff. Groupes, joueurs présents/absents, blessés… Chacun peut modifier.</p>
         </div>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <span id="prepa-live-badge" style="font-size:11px; color:var(--green); display:inline-flex; align-items:center; gap:5px;">● Live</span>
+          <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="prepaTogglePrefill()">👥 Pré-remplir</button>
           <button class="btn" style="padding:6px 12px; font-size:12px;" onclick="prepaAddCol()">➕ Colonne</button>
           <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="prepaReload()">↻ Rafraîchir</button>
         </div>
+      </div>
+      <!-- Panneau pré-remplissage depuis l'effectif -->
+      <div id="prepa-prefill" style="display:none; margin-top:12px; border-top:1px solid var(--border); padding-top:12px;">
+        <div class="filters" style="margin:0;">
+          <div class="filter-group">
+            <label>Groupe</label>
+            <select id="prepa-prefill-groupe" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;"></select>
+          </div>
+          <div class="filter-group">
+            <label>Destination</label>
+            <select id="prepa-prefill-dest" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:180px;"></select>
+          </div>
+          <div class="filter-group" style="justify-content:flex-end;">
+            <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); cursor:pointer; white-space:nowrap;">
+              <input type="checkbox" id="prepa-prefill-poste" checked> Poste en annotation
+            </label>
+          </div>
+          <div class="filter-group" style="justify-content:flex-end;">
+            <label>&nbsp;</label>
+            <button class="btn" style="padding:6px 14px; font-size:13px;" onclick="prepaPrefillRun()">Ajouter les joueurs</button>
+          </div>
+        </div>
+        <p style="color:var(--text-dim); font-size:12px; margin:8px 0 0;">Ajoute les joueurs de l'effectif dans la case choisie. Les joueurs déjà présents sur le tableau sont ignorés (pas de doublon).</p>
       </div>
     </div>
     <div id="prepa-content"></div>
@@ -26931,6 +26955,7 @@ function prepaRenderBoard() {
     const items = prepaItemsOf(col.id);
     html += '<div class="prepa-col" data-col="' + col.id + '" ondragover="prepaDragOver(event)" ondragleave="prepaDragLeave(event)" ondrop="prepaDrop(event,' + col.id + ')" style="background:var(--bg-card); border:1px solid var(--border); border-top:3px solid ' + cc.bar + '; border-radius:10px; padding:10px;">';
     html += '<div style="display:flex; align-items:center; gap:4px; margin-bottom:8px;">';
+    html += '<span draggable="true" ondragstart="prepaColDragStart(event,' + col.id + ')" ondragend="prepaDragEnd(event)" title="Glisser pour déplacer la colonne" style="cursor:grab; color:var(--text-dim); font-size:13px; flex:0 0 auto; line-height:1;">⋮⋮</span>';
     html += '<button title="Changer la couleur" onclick="prepaCycleColor(' + col.id + ')" style="width:14px; height:14px; border-radius:50%; border:none; cursor:pointer; background:' + cc.dot + '; flex:0 0 auto;"></button>';
     html += '<input value="' + escapeAttr(col.titre || '') + '" placeholder="Titre" onchange="prepaColTitre(' + col.id + ', this.value)" style="flex:1; min-width:0; background:transparent; border:none; color:var(--text); font-weight:700; font-size:14px; outline:none;">';
     html += '<span style="font-size:12px; color:var(--text-dim); flex:0 0 auto;">' + items.length + '</span>';
@@ -26943,7 +26968,7 @@ function prepaRenderBoard() {
     html += '<div style="display:flex; flex-direction:column; gap:5px; min-height:38px;">';
     items.forEach(it => {
       html += '<div style="display:flex; align-items:center; gap:2px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; padding:2px 4px;">';
-      html += '<span draggable="true" ondragstart="prepaDragStart(event,' + it.id + ')" ondragend="prepaDragEnd(event)" title="Glisser vers une autre case" style="cursor:grab; color:var(--text-dim); font-size:13px; padding:0 2px; flex:0 0 auto;">⠿</span>';
+      html += '<span draggable="true" ondragstart="prepaItemDragStart(event,' + it.id + ')" ondragend="prepaDragEnd(event)" title="Glisser vers une autre case" style="cursor:grab; color:var(--text-dim); font-size:13px; padding:0 2px; flex:0 0 auto;">⠿</span>';
       html += '<input value="' + escapeAttr(it.texte || '') + '" placeholder="Joueur" onchange="prepaItemTexte(' + it.id + ', this.value)" style="flex:1; min-width:0; background:transparent; border:none; color:var(--text); font-size:14px; outline:none;">';
       html += '<input value="' + escapeAttr(it.note || '') + '" placeholder="—" title="Annotation (ex : Adapté, ?)" onchange="prepaItemNote(' + it.id + ', this.value)" style="width:58px; flex:0 0 auto; background:transparent; border:none; color:var(--text-dim); font-size:12px; text-align:right; outline:none;">';
       html += '<button title="Monter" onclick="prepaMoveItem(' + it.id + ',-1)" style="background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:11px;">▲</button>';
@@ -26959,14 +26984,18 @@ function prepaRenderBoard() {
   c.innerHTML = html;
 }
 
-// ── Glisser-déposer d'un joueur d'une case à l'autre ──
-let prepaDragItemId = null;
-function prepaDragStart(ev, id) {
-  prepaDragItemId = id;
-  try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(id)); } catch (e) {}
+// ── Glisser-déposer : joueur entre cases, ET colonnes entre elles ──
+let prepaDrag = null; // { type:'item'|'col', id }
+function prepaItemDragStart(ev, id) {
+  prepaDrag = { type: 'item', id };
+  try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', 'i' + id); } catch (e) {}
+}
+function prepaColDragStart(ev, id) {
+  prepaDrag = { type: 'col', id };
+  try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', 'c' + id); } catch (e) {}
 }
 function prepaDragEnd(ev) {
-  prepaDragItemId = null;
+  prepaDrag = null;
   document.querySelectorAll('.prepa-col').forEach(el => { el.style.outline = ''; });
 }
 function prepaDragOver(ev) {
@@ -26981,10 +27010,12 @@ function prepaDragLeave(ev) {
 function prepaDrop(ev, colId) {
   ev.preventDefault();
   const col = ev.currentTarget; if (col) col.style.outline = '';
-  let id = prepaDragItemId;
-  if (!id) { const d = ev.dataTransfer && ev.dataTransfer.getData('text/plain'); id = d ? parseInt(d) : null; }
-  prepaDragItemId = null;
-  if (id) prepaMoveItemToCol(id, colId);
+  let d = prepaDrag;
+  if (!d) { const s = ev.dataTransfer && ev.dataTransfer.getData('text/plain'); if (s) d = { type: s[0] === 'c' ? 'col' : 'item', id: parseInt(s.slice(1)) }; }
+  prepaDrag = null;
+  if (!d || !d.id) return;
+  if (d.type === 'col') prepaReorderColTo(d.id, colId);
+  else prepaMoveItemToCol(d.id, colId);
 }
 async function prepaMoveItemToCol(id, colId) {
   const it = prepaItems.find(x => x.id === id); if (!it) return;
@@ -26994,6 +27025,76 @@ async function prepaMoveItemToCol(id, colId) {
   prepaRenderBoard();
   try { const { error } = await sb.from('prepa_items').update(Object.assign({ colonne_id: colId, ordre }, prepaTouch())).eq('id', id); if (error) throw error; }
   catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+// Réordonne : place la colonne 'dragId' à l'emplacement de 'targetId'
+async function prepaReorderColTo(dragId, targetId) {
+  if (dragId === targetId) return;
+  const sorted = prepaColonnes.slice().sort((a, b) => a.ordre - b.ordre);
+  const from = sorted.findIndex(c => c.id === dragId);
+  const to = sorted.findIndex(c => c.id === targetId);
+  if (from < 0 || to < 0) return;
+  const [moved] = sorted.splice(from, 1);
+  sorted.splice(to, 0, moved);
+  const updates = [];
+  sorted.forEach((c, idx) => { const no = idx + 1; if (c.ordre !== no) { c.ordre = no; updates.push(c); } });
+  prepaRenderBoard();
+  try { for (const c of updates) { const { error } = await sb.from('prepa_colonnes').update(Object.assign({ ordre: c.ordre }, prepaTouch())).eq('id', c.id); if (error) throw error; } }
+  catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
+}
+
+// ── Pré-remplissage depuis l'effectif ──
+function prepaTogglePrefill() {
+  const p = document.getElementById('prepa-prefill'); if (!p) return;
+  const show = p.style.display === 'none';
+  p.style.display = show ? '' : 'none';
+  if (show) {
+    const gsel = document.getElementById('prepa-prefill-groupe');
+    if (gsel) gsel.innerHTML = '<option value="">Tout l\'effectif</option>' + getAllGroups().map(g => '<option value="' + escapeAttr(g) + '">' + escapeHtml(g) + '</option>').join('');
+    const dsel = document.getElementById('prepa-prefill-dest');
+    if (dsel) {
+      const cols = prepaColonnes.slice().sort((a, b) => a.ordre - b.ordre);
+      dsel.innerHTML = '<option value="__new__">➕ Nouvelle colonne</option>' + cols.map(c => '<option value="' + c.id + '">' + escapeHtml(c.titre || 'Sans titre') + '</option>').join('');
+    }
+  }
+}
+
+async function prepaPrefillRun() {
+  const groupe = (document.getElementById('prepa-prefill-groupe') || {}).value || '';
+  const dest = (document.getElementById('prepa-prefill-dest') || {}).value || '__new__';
+  const withPoste = !!(document.getElementById('prepa-prefill-poste') || {}).checked;
+  // Joueurs de l'effectif (option : filtrés par groupe)
+  let joueurs = getAllPlayers();
+  if (groupe) joueurs = joueurs.filter(p => (getJoueurInfo(p).groupe || '') === groupe);
+  // Éviter les doublons : ignorer les joueurs déjà présents (peu importe la case)
+  const dejaLa = new Set(prepaItems.map(i => (i.texte || '').trim().toLowerCase()));
+  joueurs = joueurs.filter(p => !dejaLa.has(p.trim().toLowerCase()));
+  if (!joueurs.length) { toast('Aucun joueur à ajouter (déjà tous sur le tableau, ou groupe vide).', 'error'); return; }
+  try {
+    // Colonne de destination
+    let colId = dest;
+    if (dest === '__new__') {
+      const ordre = prepaColonnes.reduce((m, c) => Math.max(m, c.ordre), 0) + 1;
+      const couleur = PREPA_COULEUR_ORDRE[prepaColonnes.length % PREPA_COULEUR_ORDRE.length];
+      const titre = groupe || 'Effectif';
+      const { data, error } = await sb.from('prepa_colonnes').insert(Object.assign({ org: currentOrg, titre, note: '', couleur, ordre }, prepaTouch())).select();
+      if (error) throw error;
+      if (data && data[0]) { prepaColonnes.push(data[0]); colId = data[0].id; }
+    } else {
+      colId = Number(dest);
+    }
+    let ordre = prepaItemsOf(colId).reduce((m, i) => Math.max(m, i.ordre), 0);
+    const rows = joueurs.map(p => {
+      const info = getJoueurInfo(p);
+      const note = withPoste ? [info.poste, (info.numero != null && info.numero !== '' ? info.numero : '')].filter(x => x && x !== '?').join(' ') : '';
+      return Object.assign({ org: currentOrg, colonne_id: colId, texte: p, note: note || '', ordre: ++ordre }, prepaTouch());
+    });
+    const { data: ins, error: e2 } = await sb.from('prepa_items').insert(rows).select();
+    if (e2) throw e2;
+    if (ins) ins.forEach(r => prepaItems.push(r));
+    prepaRenderBoard();
+    const pf = document.getElementById('prepa-prefill'); if (pf) pf.style.display = 'none';
+    toast('✅ ' + joueurs.length + ' joueur(s) ajouté(s).', 'success');
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'error'); }
 }
 
 async function prepaAddCol() {
