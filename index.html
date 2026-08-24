@@ -3755,7 +3755,7 @@
     <div class="stats-grid">
       <div class="stat"><div class="stat-label" data-en="Total due" data-fr="Total à régler">Total à régler</div><div class="stat-value" id="pa-stat-du">—</div></div>
       <div class="stat"><div class="stat-label" data-en="Current period" data-fr="Période en cours">Période en cours</div><div class="stat-value" id="pa-stat-current">—</div></div>
-      <div class="stat"><div class="stat-label" data-en="Next deadline" data-fr="Prochaine échéance">Prochaine échéance</div><div class="stat-value" id="pa-stat-deadline" style="font-size:18px;">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Payment window" data-fr="Fenêtre de paiement">Fenêtre de paiement</div><div class="stat-value" id="pa-stat-deadline" style="font-size:15px; line-height:1.35;">—</div></div>
       <div class="stat"><div class="stat-label" data-en="Overdue" data-fr="En retard">En retard</div><div class="stat-value" id="pa-stat-overdue" style="color:#f87171;">—</div></div>
     </div>
 
@@ -27568,6 +27568,23 @@ function amPeriodClose(ym) {
   const nextM = m === 12 ? 1 : m + 1;
   return amFirstTuesdayOfMonth(nextY, nextM - 1);
 }
+// Fenetre effective de paiement d'une periode : ouvre le premier mardi du mois suivant
+// (= cloture de la periode), ferme 7 jours apres (mardi suivant).
+function amPaymentWindow(ym) {
+  const open = amPeriodClose(ym);
+  if (!open) return null;
+  const close = new Date(open); close.setDate(open.getDate() + 7);
+  return { open, close };
+}
+function amShortDayDateFR(d) {
+  const jours = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+  return jours[d.getDay()] + ' ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+}
+function amPaymentWindowLabel(ym) {
+  const w = amPaymentWindow(ym);
+  if (!w) return '';
+  return 'du ' + amShortDayDateFR(w.open) + ' au ' + amShortDayDateFR(w.close);
+}
 
 async function renderPlayerAmendes() {
   const alertEl = document.getElementById('pa-alert');
@@ -27617,7 +27634,8 @@ async function renderPlayerAmendes() {
 
   setStat('pa-stat-du', amFmtEuro(totalDu));
   setStat('pa-stat-current', amFmtEuro(currentDu));
-  setStat('pa-stat-deadline', currentDeadline ? formatDateFR(toLocalISO(currentDeadline)) : '—');
+  const currentWindow = amPaymentWindow(currentKey);
+  setStat('pa-stat-deadline', currentWindow ? (amShortDayDateFR(currentWindow.open) + ' → ' + amShortDayDateFR(currentWindow.close)) : '—');
   setStat('pa-stat-overdue', amFmtEuro(overdue));
 
   // Bandeau alerte : retard, ou échéance dans <=7 jours
@@ -27635,12 +27653,14 @@ async function renderPlayerAmendes() {
       const daysLeft = Math.ceil((currentDeadline - today) / 86400000);
       if (daysLeft <= 7) {
         const soonColor = daysLeft <= 2 ? '#f97316' : '#facc15';
+        const win = amPaymentWindow(currentKey);
+        const winTxt = win ? ('Paiement à effectuer <b style="color:var(--text);">' + amPaymentWindowLabel(currentKey) + '</b>. ') : '';
         banner = '<div class="card" style="background:rgba(250,204,21,0.08); border:1px solid ' + soonColor + '55;">' +
           '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">' +
           '<span style="font-size:20px;">⏰</span>' +
           '<div style="flex:1; min-width:200px;">' +
           '<div style="font-weight:700; color:' + soonColor + ';">Échéance proche</div>' +
-          '<div style="font-size:12px; color:var(--text-dim); margin-top:2px;">' + amFmtEuro(currentDu) + ' à régler avant le ' + formatDateFR(toLocalISO(currentDeadline)) + (daysLeft >= 0 ? ' (' + (daysLeft === 0 ? 'aujourd\'hui' : (daysLeft === 1 ? 'demain' : 'dans ' + daysLeft + ' jours')) + ').' : '.') + ' Passé cette date, la somme est <b style="color:#f87171;">doublée</b>.</div>' +
+          '<div style="font-size:12px; color:var(--text-dim); margin-top:2px;">' + amFmtEuro(currentDu) + ' à régler' + (daysLeft >= 0 ? ' (' + (daysLeft === 0 ? 'clôture aujourd\'hui' : (daysLeft === 1 ? 'clôture demain' : 'plus que ' + daysLeft + ' jours')) + '). ' : '. ') + winTxt + 'Passé cette date, la somme est <b style="color:#f87171;">doublée</b>.</div>' +
           '</div></div></div>';
       }
     }
@@ -27680,11 +27700,12 @@ async function renderPlayerAmendes() {
     html += '<div style="font-size:12px; color:var(--text-dim);">Total <b style="color:var(--text);">' + amFmtEuro(total) + '</b> · À régler <b style="color:' + (du > 0 ? '#f87171' : 'var(--text-dim)') + ';">' + amFmtEuro(du) + '</b></div>';
     html += '</div>';
     html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">Période ' + amPeriodRangeLabel(k) + '</div>';
-    if (dl) {
+    const winLabel = amPaymentWindowLabel(k);
+    if (winLabel) {
       const suffix = isOverdue
         ? ' — <b style="color:#f87171;">somme doublée : ' + amFmtEuro(du * 2) + '</b>'
         : (du > 0 ? ' <span style="color:var(--text-dim);">(sinon somme doublée)</span>' : '');
-      html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Paiement dû avant le <b style="color:' + (isOverdue ? '#f87171' : 'var(--text)') + ';">' + formatDateFR(toLocalISO(dl)) + '</b>' + suffix + '</div>';
+      html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Paiement <b style="color:' + (isOverdue ? '#f87171' : 'var(--text)') + ';">' + winLabel + '</b>' + suffix + '</div>';
     }
     html += '<div class="table-wrap"><table style="width:100%; font-size:13px;"><thead><tr><th>Date</th><th style="text-align:left;">Motif</th><th>Montant</th><th>Statut</th></tr></thead><tbody>';
     html += list.map(a => {
