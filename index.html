@@ -836,6 +836,7 @@
   <button class="nav-btn player-only" data-view="minijeux" style="display:none;" data-en="🎮 Mini-games" data-fr="🎮 Mini-jeux">🎮 Mini-jeux</button>
   <button class="nav-btn player-only" data-view="messages" style="display:none;" data-en="📣 Messages" data-fr="📣 Messages">📣 Messages</button>
   <button class="nav-btn player-only" data-view="player-fiche" style="display:none;" data-en="👤 My profile" data-fr="👤 Ma fiche">👤 Ma fiche</button>
+  <button class="nav-btn player-only" data-view="player-amendes" style="display:none;" data-en="💰 My fines" data-fr="💰 Mes amendes">💰 Mes amendes</button>
 </nav>
 
 <main>
@@ -3742,6 +3743,26 @@
     <div id="player-fiche-body"></div>
   </div>
   <!-- ===== FIN VUE MA FICHE ===== -->
+
+  <!-- ========== VUE JOUEUR : MES AMENDES ========== -->
+  <div class="view" id="view-player-amendes">
+    <div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">
+      <h2 style="color:var(--accent-light); font-size:18px;" data-en="💰 My fines" data-fr="💰 Mes amendes">💰 Mes amendes</h2>
+      <p style="color:var(--text); font-size:13px; margin-top:4px;" data-en="Track your fines and payment deadlines." data-fr="Suivi de tes amendes et de tes échéances de paiement.">Suivi de tes amendes et de tes échéances de paiement.</p>
+      <p style="color:var(--text-dim); font-size:12px; margin-top:6px; margin-bottom:0;" data-en="Payment is due monthly on the first Tuesday of the month. You have one week to settle the amount." data-fr="Le paiement se fait par mois, le premier mardi du mois. Tu as une semaine pour régler la somme due.">Le paiement se fait par mois, le premier mardi du mois. Tu as une semaine pour régler la somme due.</p>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat"><div class="stat-label" data-en="Total due" data-fr="Total à régler">Total à régler</div><div class="stat-value" id="pa-stat-du">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Current period" data-fr="Période en cours">Période en cours</div><div class="stat-value" id="pa-stat-current">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Next deadline" data-fr="Prochaine échéance">Prochaine échéance</div><div class="stat-value" id="pa-stat-deadline" style="font-size:18px;">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Overdue" data-fr="En retard">En retard</div><div class="stat-value" id="pa-stat-overdue" style="color:#f87171;">—</div></div>
+    </div>
+
+    <div id="pa-alert" style="display:none;"></div>
+    <div id="pa-content"></div>
+  </div>
+  <!-- ===== FIN VUE MES AMENDES ===== -->
 
   <!-- ===== VUE STAFF MÉDICAL ===== -->
   <div class="view" id="view-medical">
@@ -8920,6 +8941,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'medical-questionnaire') renderMedicalQuestionnaire();
     else if (view === 'player-soins') renderPlayerSoins();
     else if (view === 'player-fiche') renderPlayerFiche();
+    else if (view === 'player-amendes') renderPlayerAmendes();
     else if (view === 'testing') renderTesting();
     else if (view === 'reathletisation') renderReathletisation();
     else if (view === 'musculation') renderMusculation();
@@ -27519,6 +27541,164 @@ function renderAmendesRecap() {
     html += '</tbody></table></div></div>';
   });
   c.innerHTML = html;
+}
+
+// ============================================================================
+// VUE JOUEUR — MES AMENDES (lecture seule)
+// ============================================================================
+// Deadline de paiement d'une période : premier mardi du mois suivant + 7 jours.
+function amPeriodDeadline(ym) {
+  if (!/^\d{4}-\d{2}$/.test(ym)) return null;
+  const [y, m] = ym.split('-').map(Number);
+  const nextY = m === 12 ? y + 1 : y;
+  const nextM = m === 12 ? 1 : m + 1;
+  const dl = amFirstTuesdayOfMonth(nextY, nextM - 1);
+  dl.setDate(dl.getDate() + 7);
+  return dl;
+}
+function amPeriodStart(ym) {
+  if (!/^\d{4}-\d{2}$/.test(ym)) return null;
+  const [y, m] = ym.split('-').map(Number);
+  return amFirstTuesdayOfMonth(y, m - 1);
+}
+function amPeriodClose(ym) {
+  if (!/^\d{4}-\d{2}$/.test(ym)) return null;
+  const [y, m] = ym.split('-').map(Number);
+  const nextY = m === 12 ? y + 1 : y;
+  const nextM = m === 12 ? 1 : m + 1;
+  return amFirstTuesdayOfMonth(nextY, nextM - 1);
+}
+
+async function renderPlayerAmendes() {
+  const alertEl = document.getElementById('pa-alert');
+  const content = document.getElementById('pa-content');
+  const setStat = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
+  if (!currentJoueurNom) {
+    if (content) content.innerHTML = '<div class="card"><div class="empty-state">Joueur non identifié.</div></div>';
+    if (alertEl) { alertEl.style.display = 'none'; alertEl.innerHTML = ''; }
+    setStat('pa-stat-du', '—'); setStat('pa-stat-current', '—'); setStat('pa-stat-deadline', '—'); setStat('pa-stat-overdue', '—');
+    return;
+  }
+
+  let mine = [];
+  try {
+    const { data, error } = await sb.from('amendes')
+      .select('*').eq('org', currentOrg).eq('joueur', currentJoueurNom)
+      .order('date', { ascending: false });
+    if (error) throw error;
+    mine = data || [];
+  } catch (e) {
+    if (content) content.innerHTML = '<div class="card"><div class="empty-state" style="color:#f87171;">Erreur chargement : ' + escapeHtml(e.message || String(e)) + '</div></div>';
+    if (alertEl) { alertEl.style.display = 'none'; alertEl.innerHTML = ''; }
+    setStat('pa-stat-du', '—'); setStat('pa-stat-current', '—'); setStat('pa-stat-deadline', '—'); setStat('pa-stat-overdue', '—');
+    return;
+  }
+
+  const currentKey = amCurrentPeriodKey();
+  const currentDeadline = amPeriodDeadline(currentKey);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  // Groupement par période
+  const byPeriod = {};
+  mine.forEach(a => { const k = amPeriodKey(a.date); (byPeriod[k] = byPeriod[k] || []).push(a); });
+  const keys = Object.keys(byPeriod).sort((a, b) => b.localeCompare(a));
+
+  // Stats
+  const totalDu = mine.filter(a => !a.paye).reduce((s, a) => s + (Number(a.montant) || 0), 0);
+  const currentList = byPeriod[currentKey] || [];
+  const currentDu = currentList.filter(a => !a.paye).reduce((s, a) => s + (Number(a.montant) || 0), 0);
+  let overdue = 0;
+  keys.forEach(k => {
+    const dl = amPeriodDeadline(k);
+    if (!dl || today <= dl) return;
+    overdue += byPeriod[k].filter(a => !a.paye).reduce((s, a) => s + (Number(a.montant) || 0), 0);
+  });
+
+  setStat('pa-stat-du', amFmtEuro(totalDu));
+  setStat('pa-stat-current', amFmtEuro(currentDu));
+  setStat('pa-stat-deadline', currentDeadline ? formatDateFR(toLocalISO(currentDeadline)) : '—');
+  setStat('pa-stat-overdue', amFmtEuro(overdue));
+
+  // Bandeau alerte : retard, ou échéance dans <=7 jours
+  if (alertEl) {
+    let banner = '';
+    if (overdue > 0) {
+      banner = '<div class="card" style="background:rgba(248,113,113,0.10); border:1px solid rgba(248,113,113,0.45);">' +
+        '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">' +
+        '<span style="font-size:20px;">⚠️</span>' +
+        '<div style="flex:1; min-width:200px;">' +
+        '<div style="font-weight:700; color:#f87171;">Paiement en retard</div>' +
+        '<div style="font-size:12px; color:var(--text-dim); margin-top:2px;">Tu as ' + amFmtEuro(overdue) + ' d\'amendes non réglées après la fin du délai. Merci de régulariser dès que possible.</div>' +
+        '</div></div></div>';
+    } else if (currentDu > 0 && currentDeadline) {
+      const daysLeft = Math.ceil((currentDeadline - today) / 86400000);
+      if (daysLeft <= 7) {
+        const soonColor = daysLeft <= 2 ? '#f97316' : '#facc15';
+        banner = '<div class="card" style="background:rgba(250,204,21,0.08); border:1px solid ' + soonColor + '55;">' +
+          '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">' +
+          '<span style="font-size:20px;">⏰</span>' +
+          '<div style="flex:1; min-width:200px;">' +
+          '<div style="font-weight:700; color:' + soonColor + ';">Échéance proche</div>' +
+          '<div style="font-size:12px; color:var(--text-dim); margin-top:2px;">' + amFmtEuro(currentDu) + ' à régler avant le ' + formatDateFR(toLocalISO(currentDeadline)) + (daysLeft >= 0 ? ' (' + (daysLeft === 0 ? 'aujourd\'hui' : (daysLeft === 1 ? 'demain' : 'dans ' + daysLeft + ' jours')) + ').' : '.') + '</div>' +
+          '</div></div></div>';
+      }
+    }
+    alertEl.innerHTML = banner;
+    alertEl.style.display = banner ? 'block' : 'none';
+  }
+
+  // Contenu
+  if (!keys.length) {
+    content.innerHTML = '<div class="card"><div class="empty-state">Aucune amende pour le moment. 👌</div></div>';
+    return;
+  }
+
+  let html = '';
+  keys.forEach(k => {
+    const list = byPeriod[k].slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const total = list.reduce((s, a) => s + (Number(a.montant) || 0), 0);
+    const du = list.filter(a => !a.paye).reduce((s, a) => s + (Number(a.montant) || 0), 0);
+    const dl = amPeriodDeadline(k);
+    const isCurrent = (k === currentKey);
+    const isOverdue = dl && today > dl && du > 0;
+
+    let badge;
+    if (isCurrent) {
+      badge = '<span style="font-size:11px; font-weight:600; color:#22c55e; background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.35); border-radius:999px; padding:2px 8px; margin-left:8px; text-transform:none;">en cours</span>';
+    } else if (isOverdue) {
+      badge = '<span style="font-size:11px; font-weight:600; color:#f87171; background:rgba(248,113,113,0.12); border:1px solid rgba(248,113,113,0.45); border-radius:999px; padding:2px 8px; margin-left:8px; text-transform:none;">en retard</span>';
+    } else if (du > 0) {
+      badge = '<span style="font-size:11px; font-weight:600; color:#facc15; background:rgba(250,204,21,0.10); border:1px solid rgba(250,204,21,0.4); border-radius:999px; padding:2px 8px; margin-left:8px; text-transform:none;">à régler</span>';
+    } else {
+      badge = '<span style="font-size:11px; font-weight:600; color:#22c55e; background:rgba(34,197,94,0.10); border:1px solid rgba(34,197,94,0.35); border-radius:999px; padding:2px 8px; margin-left:8px; text-transform:none;">réglé ✓</span>';
+    }
+
+    html += '<div class="card">';
+    html += '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:4px;">';
+    html += '<h3 style="margin:0; text-transform:capitalize;">' + amMonthLabel(k) + badge + ' <span style="font-size:12px; color:var(--text-dim); font-weight:400; text-transform:none;">(' + list.length + ')</span></h3>';
+    html += '<div style="font-size:12px; color:var(--text-dim);">Total <b style="color:var(--text);">' + amFmtEuro(total) + '</b> · À régler <b style="color:' + (du > 0 ? '#f87171' : 'var(--text-dim)') + ';">' + amFmtEuro(du) + '</b></div>';
+    html += '</div>';
+    html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">Période ' + amPeriodRangeLabel(k) + '</div>';
+    if (dl) {
+      html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Paiement dû avant le <b style="color:' + (isOverdue ? '#f87171' : 'var(--text)') + ';">' + formatDateFR(toLocalISO(dl)) + '</b></div>';
+    }
+    html += '<div class="table-wrap"><table style="width:100%; font-size:13px;"><thead><tr><th>Date</th><th style="text-align:left;">Motif</th><th>Montant</th><th>Statut</th></tr></thead><tbody>';
+    html += list.map(a => {
+      const paye = !!a.paye;
+      const statut = paye
+        ? '<span style="color:#22c55e; font-weight:600;">Payé ✓</span>'
+        : (isOverdue ? '<span style="color:#f87171; font-weight:600;">En retard</span>' : '<span style="color:#facc15; font-weight:600;">À régler</span>');
+      return '<tr' + (paye ? ' style="opacity:0.55;"' : '') + '>' +
+        '<td>' + (a.date ? formatDateFR(a.date) : '—') + '</td>' +
+        '<td style="text-align:left;">' + escapeHtml(a.motif || '—') + '</td>' +
+        '<td style="text-align:center; font-weight:700;">' + amFmtEuro(a.montant) + '</td>' +
+        '<td style="text-align:center;">' + statut + '</td>' +
+        '</tr>';
+    }).join('');
+    html += '</tbody></table></div></div>';
+  });
+  content.innerHTML = html;
 }
 
 function renderTesting() {
