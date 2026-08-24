@@ -2588,7 +2588,7 @@
   <div class="view" id="view-amendes">
     <div class="card">
       <h2 style="margin:0;">💰 Amendes</h2>
-      <p style="color:var(--text-dim); font-size:13px; margin-top:4px;">Ajoute des amendes à un joueur ou à un groupe, avec un motif précis. Suivi mensuel et paiements.</p>
+      <p style="color:var(--text-dim); font-size:13px; margin-top:4px;">Ajoute des amendes à un joueur ou à un groupe, avec un motif précis. Suivi et paiements par période mensuelle (chaque période commence le premier mardi du mois et se clôture la veille du premier mardi du mois suivant).</p>
     </div>
 
     <!-- Résumé -->
@@ -27328,6 +27328,38 @@ function amMonthLabel(ym) {
   const mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
   return (mois[mo - 1] || '') + ' ' + y;
 }
+// Période "amendes" : commence le premier mardi du mois M et se termine
+// la veille du premier mardi du mois M+1. Clé = 'YYYY-MM' du mois de départ.
+function amFirstTuesdayOfMonth(year, monthIdx) {
+  const d = new Date(year, monthIdx, 1);
+  const offset = (2 - d.getDay() + 7) % 7; // 2 = mardi
+  d.setDate(1 + offset);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function amPeriodKey(dateStr) {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}/.test(dateStr)) return '????';
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const ft = amFirstTuesdayOfMonth(y, m - 1);
+  if (dt >= ft) return y + '-' + String(m).padStart(2, '0');
+  const pm = m === 1 ? 12 : m - 1;
+  const py = m === 1 ? y - 1 : y;
+  return py + '-' + String(pm).padStart(2, '0');
+}
+function amPeriodRangeLabel(ym) {
+  if (!/^\d{4}-\d{2}$/.test(ym)) return '';
+  const [y, m] = ym.split('-').map(Number);
+  const start = amFirstTuesdayOfMonth(y, m - 1);
+  const nextY = m === 12 ? y + 1 : y;
+  const nextM = m === 12 ? 1 : m + 1;
+  const nextFT = amFirstTuesdayOfMonth(nextY, nextM - 1);
+  const end = new Date(nextFT); end.setDate(nextFT.getDate() - 1);
+  return 'du ' + formatDateFR(toLocalISO(start)) + ' au ' + formatDateFR(toLocalISO(end));
+}
+function amCurrentPeriodKey() {
+  return amPeriodKey(toLocalISO(new Date()));
+}
 
 async function renderAmendes() {
   const jsel = document.getElementById('am-joueur');
@@ -27457,18 +27489,24 @@ function renderAmendesRecap() {
   const c = document.getElementById('amendes-content'); if (!c) return;
   if (!amendesData.length) { c.innerHTML = '<div class="card"><div class="empty-state">Aucune amende enregistrée.</div></div>'; return; }
   const byMonth = {};
-  amendesData.forEach(a => { const m = (a.date || '').slice(0, 7) || '????'; (byMonth[m] = byMonth[m] || []).push(a); });
+  amendesData.forEach(a => { const m = amPeriodKey(a.date); (byMonth[m] = byMonth[m] || []).push(a); });
   const months = Object.keys(byMonth).sort((a, b) => b.localeCompare(a));
+  const currentKey = amCurrentPeriodKey();
   let html = '';
   months.forEach(m => {
     const list = byMonth[m].slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.joueur.localeCompare(b.joueur));
     const total = list.reduce((s, a) => s + (Number(a.montant) || 0), 0);
     const du = list.filter(a => !a.paye).reduce((s, a) => s + (Number(a.montant) || 0), 0);
+    const isCurrent = (m === currentKey);
+    const badge = isCurrent
+      ? '<span style="font-size:11px; font-weight:600; color:#22c55e; background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.35); border-radius:999px; padding:2px 8px; margin-left:8px; text-transform:none;">en cours</span>'
+      : '<span style="font-size:11px; font-weight:600; color:var(--text-dim); background:var(--bg-elevated); border:1px solid var(--border); border-radius:999px; padding:2px 8px; margin-left:8px; text-transform:none;">clôturé</span>';
     html += '<div class="card">';
-    html += '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">';
-    html += '<h3 style="margin:0; text-transform:capitalize;">' + amMonthLabel(m) + ' <span style="font-size:12px; color:var(--text-dim); font-weight:400;">(' + list.length + ')</span></h3>';
+    html += '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:4px;">';
+    html += '<h3 style="margin:0; text-transform:capitalize;">' + amMonthLabel(m) + badge + ' <span style="font-size:12px; color:var(--text-dim); font-weight:400; text-transform:none;">(' + list.length + ')</span></h3>';
     html += '<div style="font-size:12px; color:var(--text-dim);">Total <b style="color:var(--text);">' + amFmtEuro(total) + '</b> · À récupérer <b style="color:#f87171;">' + amFmtEuro(du) + '</b></div>';
     html += '</div>';
+    html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Période ' + amPeriodRangeLabel(m) + '</div>';
     html += '<div class="table-wrap"><table style="width:100%; font-size:13px;"><thead><tr><th>Date</th><th style="text-align:left;">Joueur</th><th style="text-align:left;">Motif</th><th>Montant</th><th>Payé</th><th></th></tr></thead><tbody>';
     html += list.map(a => '<tr' + (a.paye ? ' style="opacity:0.55;"' : '') + '>' +
       '<td>' + (a.date ? formatDateFR(a.date) : '—') + '</td>' +
