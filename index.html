@@ -8776,8 +8776,14 @@ function formatDateDMY(dateStr) {
 // NAVIGATION
 // ============================================================================
 // ===== Menu déroulant Gestion =====
+function closeOtherNavMenus(exceptId) {
+  ['nav-gestion-menu','nav-params-menu','nav-medical-menu','nav-competition-menu','nav-performance-menu']
+    .filter(id => id !== exceptId)
+    .forEach(id => { const m = document.getElementById(id); if (m) m.classList.remove('open'); });
+}
 function toggleGestionMenu(e) {
   if (e) e.stopPropagation();
+  closeOtherNavMenus('nav-gestion-menu');
   const menu = document.getElementById('nav-gestion-menu');
   const toggle = document.getElementById('nav-gestion-toggle');
   if (!menu) return;
@@ -8802,6 +8808,7 @@ function closeGestionMenu() {
 }
 function toggleParamsMenu(e) {
   if (e) e.stopPropagation();
+  closeOtherNavMenus('nav-params-menu');
   const menu = document.getElementById('nav-params-menu');
   const toggle = document.getElementById('nav-params-toggle');
   if (!menu) return;
@@ -8824,6 +8831,7 @@ function closeParamsMenu() {
 }
 function toggleMedicalMenu(e) {
   if (e) e.stopPropagation();
+  closeOtherNavMenus('nav-medical-menu');
   const menu = document.getElementById('nav-medical-menu');
   const toggle = document.getElementById('nav-medical-toggle');
   if (!menu) return;
@@ -8846,6 +8854,7 @@ function closeMedicalMenu() {
 }
 function togglePerformanceMenu(e) {
   if (e) e.stopPropagation();
+  closeOtherNavMenus('nav-performance-menu');
   const menu = document.getElementById('nav-performance-menu');
   const toggle = document.getElementById('nav-performance-toggle');
   if (!menu) return;
@@ -8870,6 +8879,7 @@ function closePerformanceMenu() {
 function ciTab(t) { competitionTab = (t === 'interne') ? 'interne' : 'matchs'; }
 function toggleCompetitionMenu(e) {
   if (e) e.stopPropagation();
+  closeOtherNavMenus('nav-competition-menu');
   const menu = document.getElementById('nav-competition-menu');
   const toggle = document.getElementById('nav-competition-toggle');
   if (!menu) return;
