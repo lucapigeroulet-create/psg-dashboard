@@ -816,11 +816,16 @@
       <button class="nav-btn" data-view="match-entry">⚽ Saisie match</button>
       <button class="nav-btn" data-view="injury-entry">🩹 Saisie blessures</button>
       <button class="nav-btn" data-view="rpe-entry">⭐ Saisie RPE</button>
+    </div>
+  </div>
+  <div class="nav-dropdown" id="nav-params-dropdown">
+    <button type="button" class="nav-btn nav-dropdown-toggle" id="nav-params-toggle" onclick="toggleParamsMenu(event)">⚙️ Paramètres <span style="font-size:10px;">▾</span></button>
+    <div class="nav-dropdown-menu" id="nav-params-menu">
       <button class="nav-btn" data-view="best-match">🏆 Meilleur Match</button>
       <button class="nav-btn" data-view="amendes">💰 Amendes</button>
-      <button class="nav-btn" data-view="messages">📣 Messages</button>
       <button class="nav-btn" data-view="minijeux">🎮 Mini-jeux</button>
       <button class="nav-btn" data-view="history">📋 Historique séances</button>
+      <button class="nav-btn" data-view="messages">📣 Messages</button>
       <button class="nav-btn" data-view="settings">⚙️ Paramètres</button>
     </div>
   </div>
@@ -7276,6 +7281,7 @@ function applyRoleRestrictions() {
   relocateSeancePanels();
   // Le texte du bouton de déconnexion est géré par applyPlayerLanguage selon l'organisation
   const gestionDropdown = document.getElementById('nav-gestion-dropdown');
+  const paramsDropdown = document.getElementById('nav-params-dropdown');
   const competitionDropdown = document.getElementById('nav-competition-dropdown');
   const performanceDropdown = document.getElementById('nav-performance-dropdown');
   // Par défaut les menus déroulants Compétition et Performance (staff) sont masqués ;
@@ -7299,6 +7305,7 @@ function applyRoleRestrictions() {
       });
     }
     if (gestionDropdown) gestionDropdown.style.display = 'none'; // Cacher le menu Gestion
+    if (paramsDropdown) paramsDropdown.style.display = 'none'; // Cacher le menu Paramètres
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = 'none'; // Cacher l'export JSON aux joueurs
     // Bouton Rafraîchir : indispensable en mode "écran d'accueil" (PWA standalone),
@@ -7319,6 +7326,7 @@ function applyRoleRestrictions() {
     // Direction sportive : calendrier des séances + données GPS uniquement, lecture seule
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
     if (gestionDropdown) gestionDropdown.style.display = 'none';
+    if (paramsDropdown) paramsDropdown.style.display = 'none';
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = 'none';
     // Masquer tous les boutons staff génériques
@@ -7355,6 +7363,7 @@ function applyRoleRestrictions() {
     // Médical : vue dédiée — pas de Charge RPE ni Données GPS, Saisie blessures en direct
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
     if (gestionDropdown) gestionDropdown.style.display = 'none';
+    if (paramsDropdown) paramsDropdown.style.display = 'none';
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = 'none';
     // Masquer Charge RPE, Données GPS et Testing (réservé staff/admin)
@@ -7365,6 +7374,7 @@ function applyRoleRestrictions() {
     // Staff/admin : cacher les onglets joueur, réafficher le menu Gestion + Compétition
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
     if (gestionDropdown) gestionDropdown.style.display = '';
+    if (paramsDropdown) paramsDropdown.style.display = '';
     if (competitionDropdown) competitionDropdown.style.display = '';
     if (performanceDropdown) performanceDropdown.style.display = '';
     // Le rôle 'staff' a une interface allégée par rapport à l'admin :
@@ -8790,6 +8800,28 @@ function closeGestionMenu() {
   const menu = document.getElementById('nav-gestion-menu');
   if (menu) menu.classList.remove('open');
 }
+function toggleParamsMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('nav-params-menu');
+  const toggle = document.getElementById('nav-params-toggle');
+  if (!menu) return;
+  const willOpen = !menu.classList.contains('open');
+  menu.classList.toggle('open');
+  if (willOpen && toggle) {
+    const r = toggle.getBoundingClientRect();
+    menu.style.top = (r.bottom + 2) + 'px';
+    let left = r.left;
+    const menuWidth = menu.offsetWidth || 220;
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - menuWidth - 8);
+    }
+    menu.style.left = left + 'px';
+  }
+}
+function closeParamsMenu() {
+  const menu = document.getElementById('nav-params-menu');
+  if (menu) menu.classList.remove('open');
+}
 function toggleMedicalMenu(e) {
   if (e) e.stopPropagation();
   const menu = document.getElementById('nav-medical-menu');
@@ -8862,6 +8894,8 @@ function closeCompetitionMenu() {
 document.addEventListener('click', (e) => {
   const dd = document.getElementById('nav-gestion-dropdown');
   if (dd && !dd.contains(e.target)) closeGestionMenu();
+  const pdParams = document.getElementById('nav-params-dropdown');
+  if (pdParams && !pdParams.contains(e.target)) closeParamsMenu();
   const md = document.getElementById('nav-medical-dropdown');
   if (md && !md.contains(e.target)) closeMedicalMenu();
   const cd = document.getElementById('nav-competition-dropdown');
@@ -8882,11 +8916,18 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (!viewEl) return;
     viewEl.classList.add('active');
     // Gérer l'état visuel du menu déroulant Gestion
-    const gestionViews = ['entry', 'plan', 'prepa-seance', 'planification', 'match-entry', 'injury-entry', 'rpe-entry', 'best-match', 'amendes', 'messages', 'minijeux', 'history', 'settings'];
+    const gestionViews = ['entry', 'plan', 'prepa-seance', 'planification', 'match-entry', 'injury-entry', 'rpe-entry'];
     const gestionToggle = document.getElementById('nav-gestion-toggle');
     if (gestionToggle) {
       if (gestionViews.includes(view)) gestionToggle.classList.add('has-active');
       else gestionToggle.classList.remove('has-active');
+    }
+    // Gérer l'état visuel du menu déroulant Paramètres
+    const paramsViews = ['best-match', 'amendes', 'messages', 'minijeux', 'history', 'settings'];
+    const paramsToggle = document.getElementById('nav-params-toggle');
+    if (paramsToggle) {
+      if (paramsViews.includes(view)) paramsToggle.classList.add('has-active');
+      else paramsToggle.classList.remove('has-active');
     }
     // Gérer l'état visuel du menu déroulant Médical
     const medicalViews = ['medical', 'medical-planning', 'medical-fiche', 'medical-notes', 'medical-questionnaire'];
@@ -8909,6 +8950,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
       else performanceToggle.classList.remove('has-active');
     }
     closeGestionMenu();
+    closeParamsMenu();
     closeMedicalMenu();
     closeCompetitionMenu();
     closePerformanceMenu();
