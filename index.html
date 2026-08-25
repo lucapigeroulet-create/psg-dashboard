@@ -19602,11 +19602,15 @@ function exportPerfNotesPDF(singleMatchId) {
     const m = allMatchs.find(x => x.id === singleMatchId);
     if (!m) { toast('Match introuvable.', 'error'); return; }
     const notes = {};
-    (state.bdd_match_notes || []).filter(n => n.match_id === m.id).forEach(n => notes[n.joueur] = n.note);
+    const commentaires = {};
+    (state.bdd_match_notes || []).filter(n => n.match_id === m.id).forEach(n => {
+      notes[n.joueur] = n.note;
+      if (n.commentaire) commentaires[n.joueur] = n.commentaire;
+    });
     const compo = (m.composition || []).filter(c => c.statut !== 'absent').slice()
       .sort((a, b) => (b.total_min || 0) - (a.total_min || 0));
     if (!compo.length) { toast('Aucun joueur dans la composition.', 'error'); return; }
-    head = [['Joueur', 'Statut', 'Min', 'Buts', 'Passes déc.', 'Note perf', 'Note coachs']];
+    head = [['Joueur', 'Statut', 'Min', 'Buts', 'Passes déc.', 'Note perf', 'Note coachs', 'Commentaire']];
     body = compo.map(c => {
       const np = notes[c.joueur];
       return [
@@ -19616,7 +19620,8 @@ function exportPerfNotesPDF(singleMatchId) {
         String(c.buts || 0),
         String(c.passes_dec || 0),
         np != null ? String(np) : '·',
-        c.note_coachs_avg != null ? String(c.note_coachs_avg) : '—'
+        c.note_coachs_avg != null ? String(c.note_coachs_avg) : '—',
+        commentaires[c.joueur] || ''
       ];
     });
     const PERF_COL = 5;
@@ -20037,15 +20042,20 @@ function renderCompetitionStaff(filters, content, matchs) {
 
 function renderCompetitionMatchDetail(m) {
   const notes = {};
-  (state.bdd_match_notes || []).filter(n => n.match_id === m.id).forEach(n => notes[n.joueur] = n.note);
+  const commentaires = {};
+  (state.bdd_match_notes || []).filter(n => n.match_id === m.id).forEach(n => {
+    notes[n.joueur] = n.note;
+    if (n.commentaire) commentaires[n.joueur] = n.commentaire;
+  });
   let html = '<h3 style="margin-top:22px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' + matchLabelStr(m) +
     ' <span style="font-weight:normal;font-size:12px;color:var(--text-dim);">' + formatDateFR(m.date) + ' · ' + matchScoreStr(m) + '</span>' +
     '<button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="exportPerfNotesPDF(\'' + m.id + '\')">📄 Exporter ce match (PDF)</button></h3>';
   const compo = (m.composition || []).filter(c => c.statut !== 'absent').slice().sort((a, b) => (b.total_min || 0) - (a.total_min || 0));
   if (!compo.length) return html + '<div style="color:var(--text-dim);font-size:13px;padding:10px;">Aucun joueur dans la composition.</div>';
-  html += '<div class="table-wrap"><table style="font-size:13px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Statut</th><th>Min</th><th>⚽</th><th>🅰️</th><th>Note coachs</th><th>Note perso</th></tr></thead><tbody>';
+  html += '<div class="table-wrap"><table style="font-size:13px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Statut</th><th>Min</th><th>⚽</th><th>🅰️</th><th>Note coachs</th><th>Note perf</th><th style="text-align:left;">Commentaire</th></tr></thead><tbody>';
   compo.forEach(c => {
     const np = notes[c.joueur];
+    const com = commentaires[c.joueur] || '';
     html += '<tr>';
     html += '<td style="text-align:left;font-weight:600;">' + escapeHtml(c.joueur) + '</td>';
     html += '<td style="text-align:center;">' + (c.statut === 'titulaire' ? 'Titulaire' : 'Remplaçant') + '</td>';
@@ -20053,7 +20063,16 @@ function renderCompetitionMatchDetail(m) {
     html += '<td style="text-align:center;font-weight:700;color:var(--accent-light);">' + (c.buts || 0) + '</td>';
     html += '<td style="text-align:center;">' + (c.passes_dec || 0) + '</td>';
     html += '<td style="text-align:center;">' + (c.note_coachs_avg != null ? c.note_coachs_avg : '—') + '</td>';
-    html += '<td style="text-align:center;">' + (np != null ? np : '—') + '</td>';
+    if (np != null) {
+      const noteStyle = com
+        ? 'text-decoration:underline;text-decoration-style:wavy;text-decoration-color:var(--accent);cursor:help;font-weight:700;'
+        : '';
+      const titleAttr = com ? ' title="' + escapeHtml(com) + '"' : '';
+      html += '<td style="text-align:center;"><span style="' + noteStyle + '"' + titleAttr + '>' + np + '</span></td>';
+    } else {
+      html += '<td style="text-align:center;">—</td>';
+    }
+    html += '<td style="text-align:left;font-size:12px;color:var(--text-dim);max-width:280px;">' + (com ? escapeHtml(com) : '—') + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table></div>';
