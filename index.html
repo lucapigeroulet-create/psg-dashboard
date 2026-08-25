@@ -20123,6 +20123,11 @@ function getMatchPerfNote(matchId, joueur) {
   const n = (state.bdd_match_notes || []).find(x => x.match_id === matchId && x.joueur === joueur);
   return (n && n.note != null) ? n.note : null;
 }
+// Commentaire staff/admin associé à la note de performance (justification), ou ''
+function getMatchPerfCommentaire(matchId, joueur) {
+  const n = (state.bdd_match_notes || []).find(x => x.match_id === matchId && x.joueur === joueur);
+  return (n && n.commentaire) ? n.commentaire : '';
+}
 
 // Note de performance perso du joueur courant pour un match donné, ou null
 function getMyMatchPerfNote(matchId) {
@@ -20138,13 +20143,15 @@ async function setMatchPerfFromInput(inp) {
   const raw = (inp.value || '').trim();
   const note = raw === '' ? null : parseFloat(raw);
   if (note != null && (isNaN(note) || note < 0 || note > 10)) { toast('Note entre 0 et 10', 'error'); return; }
+  // Préserver un éventuel commentaire déjà saisi (l'upsert écraserait sinon commentaire=null)
+  const existingComment = getMatchPerfCommentaire(matchId, joueur);
   try {
-    if (note == null) {
+    if (note == null && !existingComment) {
       const { error } = await sb.from('match_notes').delete().match({ match_id: matchId, joueur: joueur });
       if (error) { toast('Erreur : ' + error.message, 'error'); return; }
       state.bdd_match_notes = (state.bdd_match_notes || []).filter(n => !(n.match_id === matchId && n.joueur === joueur));
     } else {
-      const row = { match_id: matchId, joueur: joueur, note: note, org: currentOrg, updated_at: new Date().toISOString() };
+      const row = { match_id: matchId, joueur: joueur, note: note, commentaire: existingComment || null, org: currentOrg, updated_at: new Date().toISOString() };
       const { data, error } = await sb.from('match_notes').upsert(row, { onConflict: 'match_id,joueur' }).select();
       if (error) { toast('Erreur : ' + error.message, 'error'); return; }
       const saved = (data && data[0]) ? data[0] : row;
@@ -20159,6 +20166,32 @@ async function setMatchPerfFromInput(inp) {
     inp.style.fontWeight = filled ? '700' : 'normal';
     // Ratio dédié à la note de perf (indépendant du ratio RPE)
     updateMatchPerfProgress(document.getElementById('rpe-entry-date').value, document.getElementById('rpe-entry-group').value);
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); }
+}
+
+// Sauvegarde staff/admin du commentaire justifiant la note de performance.
+// Débounce léger via onblur (pas onchange sur textarea) — invoqué depuis les vues staff (tableau + carte).
+async function setMatchPerfCommentFromInput(inp) {
+  if (!canWrite()) { toast('Réservé au staff/admin', 'error'); return; }
+  const matchId = inp.dataset.perfMatch;
+  const joueur = inp.dataset.perfPlayer;
+  const commentaire = (inp.value || '').trim();
+  const existingNote = getMatchPerfNote(matchId, joueur);
+  try {
+    if (!commentaire && existingNote == null) {
+      const { error } = await sb.from('match_notes').delete().match({ match_id: matchId, joueur: joueur });
+      if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+      state.bdd_match_notes = (state.bdd_match_notes || []).filter(n => !(n.match_id === matchId && n.joueur === joueur));
+    } else {
+      const row = { match_id: matchId, joueur: joueur, note: existingNote, commentaire: commentaire || null, org: currentOrg, updated_at: new Date().toISOString() };
+      const { data, error } = await sb.from('match_notes').upsert(row, { onConflict: 'match_id,joueur' }).select();
+      if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+      const saved = (data && data[0]) ? data[0] : row;
+      const arr = state.bdd_match_notes || (state.bdd_match_notes = []);
+      const idx = arr.findIndex(n => n.match_id === matchId && n.joueur === joueur);
+      if (idx >= 0) arr[idx] = saved; else arr.push(saved);
+    }
+    inp.style.borderColor = commentaire ? 'var(--green)' : 'var(--border)';
   } catch (e) { toast('Erreur : ' + e.message, 'error'); }
 }
 
@@ -21328,8 +21361,9 @@ function renderMatchRPESection(date, groupFilter) {
     const matchTitle = (m.type_match === 'interne') ? '🔁 Opposition interne' : ('⚽ Match vs ' + escapeHtml(m.adversaire));
     html += '<div class="card" style="border-left:3px solid #fbbf24;">';
     html += '<h2 style="font-size:16px;">' + matchTitle + ' <span style="font-size:12px;color:var(--text-dim);font-weight:normal;">— ' + formatDateFR(m.date) + (m.groupe ? ' · ' + escapeHtml(m.groupe) : '') + '</span></h2>';
-    html += '<p style="color:var(--text-dim);font-size:12px;margin-bottom:10px;">RPE = charge du match (RPE × temps de jeu). 🎯 Note de perf = estimation de la performance du joueur sur 10 (indépendante du ratio RPE).</p>';
-    html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Temps</th><th>RPE (0-10)</th><th>sRPE</th><th>🎯 Note perf. (0-10)</th></tr></thead><tbody>';
+    html += '<p style="color:var(--text-dim);font-size:12px;margin-bottom:10px;">RPE = charge du match (RPE × temps de jeu). 🎯 Note de perf = estimation de la performance du joueur sur 10 (indépendante du ratio RPE). Ajoute un commentaire pour justifier la note.</p>';
+    html += '<details style="margin-bottom:10px;"><summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.04em;">📋 Échelle des notes de performance</summary>' + renderMatchPerfScaleReference() + '</details>';
+    html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Temps</th><th>RPE (0-10)</th><th>sRPE</th><th style="min-width:220px;">🎯 Note perf. (0-10) + commentaire</th></tr></thead><tbody>';
 
     joueurs.forEach(j => {
       const temps = getMatchTempsJeu(m, j);
@@ -21350,9 +21384,17 @@ function renderMatchRPESection(date, groupFilter) {
       const perfStyle = 'width:70px;border-radius:4px;padding:4px;text-align:center;color:var(--text);' + (perfFilled
         ? 'border:2px solid var(--green);background:rgba(16,185,129,0.12);font-weight:700;'
         : 'border:1px solid var(--border);background:var(--bg-elevated);');
-      html += '<td style="text-align:center;"><input type="number" min="0" max="10" step="0.5" style="' + perfStyle + '" ' +
+      const perfCom = getMatchPerfCommentaire(m.id, j);
+      const comBorder = perfCom ? 'var(--green)' : 'var(--border)';
+      html += '<td style="text-align:center;"><div style="display:flex;flex-direction:column;gap:4px;align-items:stretch;">';
+      html += '<input type="number" min="0" max="10" step="0.5" style="' + perfStyle + '" ' +
               'data-perf-match="' + m.id + '" data-perf-player="' + joueurEsc + '" ' +
-              'value="' + (perf ?? '') + '" placeholder="0-10" onchange="setMatchPerfFromInput(this)" /></td>';
+              'value="' + (perf ?? '') + '" placeholder="0-10" onchange="setMatchPerfFromInput(this)" />';
+      html += '<textarea rows="1" placeholder="Commentaire (justification)" ' +
+              'data-perf-match="' + m.id + '" data-perf-player="' + joueurEsc + '" ' +
+              'onblur="setMatchPerfCommentFromInput(this)" ' +
+              'style="width:100%;min-width:200px;background:var(--bg-elevated);color:var(--text);border:1px solid ' + comBorder + ';border-radius:4px;padding:4px 6px;font-size:11px;resize:vertical;">' + escapeHtml(perfCom) + '</textarea>';
+      html += '</div></td>';
       html += '</tr>';
     });
     html += '</tbody></table></div></div>';
@@ -21493,6 +21535,16 @@ function renderStaffMatchNotation(date, joueur, m) {
   html += '<div style="font-size:13px;font-weight:700;margin-bottom:2px;">🎯 Note de performance</div>';
   html += '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">Estimation de la performance du joueur sur 10 (même échelle que la note du coach). Indépendante du RPE.</div>';
   html += '<input type="number" min="0" max="10" step="0.5" style="' + perfStyle + '" data-perf-match="' + m.id + '" data-perf-player="' + escapeHtml(joueur) + '" value="' + (perf ?? '') + '" placeholder="0-10" onchange="setMatchPerfFromInput(this)" />';
+  // Commentaire staff justifiant la note
+  const perfCom = getMatchPerfCommentaire(m.id, joueur);
+  html += '<div style="margin-top:10px;">';
+  html += '<label style="font-size:12px;font-weight:600;color:var(--text-dim);display:block;margin-bottom:4px;">💬 Commentaire (justification)</label>';
+  html += '<textarea rows="2" placeholder="Pourquoi cette note ? (facultatif)" ' +
+          'data-perf-match="' + m.id + '" data-perf-player="' + escapeHtml(joueur) + '" ' +
+          'onblur="setMatchPerfCommentFromInput(this)" ' +
+          'style="width:100%;background:var(--bg-elevated);color:var(--text);border:1px solid ' + (perfCom ? 'var(--green)' : 'var(--border)') + ';border-radius:6px;padding:8px;font-size:13px;resize:vertical;">' + escapeHtml(perfCom) + '</textarea>';
+  html += '</div>';
+  html += renderMatchPerfScaleReference();
   html += '</div>';
   html += '</div>';
   return html;
