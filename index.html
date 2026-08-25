@@ -7375,7 +7375,7 @@ function applyRoleRestrictions() {
     const isFullMedical = FULL_MEDICAL_EMAILS.includes((currentUser && currentUser.email || '').toLowerCase());
     // Vue Médical réservée aux kinés (FULL_MEDICAL_EMAILS) + hugo@psg.fr et kevin@psg.fr.
     // Tout le reste du staff/admin n'a plus accès au menu Médical.
-    const EXTRA_MEDICAL_EMAILS = ['hugo@psg.fr', 'kevin@psg.fr'];
+    const EXTRA_MEDICAL_EMAILS = ['hugo@psg.fr', 'kevin@psg.fr', 'sebastien@psg.fr'];
     const canSeeMedical = isFullMedical || EXTRA_MEDICAL_EMAILS.includes((currentUser && currentUser.email || '').toLowerCase());
     const medicalDropdown = document.getElementById('nav-medical-dropdown');
     if (medicalDropdown) medicalDropdown.style.display = canSeeMedical ? '' : 'none';
