@@ -4383,6 +4383,10 @@ async function loadProfileAndStart() {
   }
   currentRole = profile.role;
   currentLang = profile.lang || null; // langue forcée par compte (fr/en), sinon défaut org
+  // Multi-club : mapping {org: role} pour les comptes qui changent de rôle selon l'entité active
+  // (ex. Melvin : staff sur PSG, lecteur sur TEGG). set_active_org(new_org) l'applique côté base ;
+  // côté front on l'utilise pour détecter un changement de rôle avant switch (voir switchOrg).
+  window.currentRolesByOrg = (profile.roles_by_org && typeof profile.roles_by_org === 'object') ? profile.roles_by_org : null;
   // Comptes en rôle 'médical' pur (vue médicale restreinte). lou@tegg.fr et lucam@psg.fr
   // sont désormais staff multi-club (vue médicale + tous les onglets) — voir FULL_MEDICAL_EMAILS.
   const MEDICAL_EMAILS = ['christian@tegg.fr'];
@@ -7216,6 +7220,18 @@ function setupD2FFeminization() {
 async function switchOrg(org) {
   if (!ORGS.includes(org)) return;
   if (currentOrg === org) return;
+  // Multi-club à rôle variable (ex. Melvin : staff PSG / lecteur TEGG) : si le rôle
+  // change, la vue entière (nav, badge, restrictions) doit être reconstruite.
+  // Le plus propre = reload après avoir aligné la base — loadProfileAndStart repartira
+  // du bon rôle et du bon org (persisté par set_active_org côté serveur + localStorage).
+  const map = window.currentRolesByOrg;
+  const newRole = (map && map[org]) ? map[org] : currentRole;
+  if (newRole !== currentRole) {
+    try { await sb.rpc('set_active_org', { new_org: org }); } catch(e) {}
+    try { localStorage.setItem('current_org', org); } catch(e) {}
+    location.reload();
+    return;
+  }
   // Aligner les droits (RLS) sur le club sélectionné : l'écriture suit le club actif
   try { await sb.rpc('set_active_org', { new_org: org }); } catch(e) {}
   currentOrg = org;
@@ -7256,7 +7272,10 @@ function updateOrgSwitcherUI() {
   const switcher = document.getElementById('org-switcher');
   if (!switcher) return;
   const allowedOrgs = window.currentAllowedOrgs || (currentRole === 'admin' ? ORGS : []);
-  const canSwitch = currentRole === 'admin' || (currentRole === 'staff' && allowedOrgs.length > 1);
+  // Multi-club : le sélecteur s'affiche dès qu'un compte a plusieurs orgs autorisées,
+  // quel que soit le rôle (utile pour les comptes staff-sur-une-org / joueur-sur-une-autre,
+  // ex. Melvin : staff PSG + lecteur TEGG). Admin voit toujours le sélecteur.
+  const canSwitch = currentRole === 'admin' || allowedOrgs.length > 1;
   switcher.style.display = canSwitch ? 'block' : 'none';
   // Afficher/masquer chaque bouton selon les orgs autorisées
   ORGS.forEach(o => {
