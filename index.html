@@ -13710,16 +13710,9 @@ function populateGPSSplitSelect() {
   const sessionChanged = splitSel.dataset.sessionKey !== sessionKey;
   splitSel.dataset.sessionKey = sessionKey;
   const rows = state.bdd_gps.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
-  // Splits disponibles pour cette séance
-  const splits = uniqueSorted(rows.map(x => (x.split_name || 'all')));
-  // Trier : "all" en premier, puis Split 1, 2, 3...
-  splits.sort((a, b) => {
-    if (a.toLowerCase() === 'all') return -1;
-    if (b.toLowerCase() === 'all') return 1;
-    const na = parseInt((a.match(/\d+/) || [999])[0]);
-    const nb = parseInt((b.match(/\d+/) || [999])[0]);
-    return na - nb;
-  });
+  // Splits disponibles pour cette séance — ordre stable (min id par split_name),
+  // conservé même après un renommage des procédés.
+  const splits = gpsSessionSplitOrder(rows);
   const cur = splitSel.value;
   const optionVals = splits.slice();
   let optionsHTML = splits.map(s => {
@@ -14653,14 +14646,30 @@ function gpsCombineRows(list) {
   return base;
 }
 
+// Ordre stable des procédés d'une séance : min(id) par split_name, "all" toujours en tête.
+// Utilisé par le sélecteur et le mode cumul du rapport de séance (équipe) pour que
+// l'ordre affiché reste identique après un renommage (ex. "Split 1" → "1re mi-temps").
+function gpsSessionSplitOrder(sessionRows) {
+  const firstSeen = {};
+  sessionRows.forEach(r => {
+    const sp = r.split_name || 'all';
+    const key = (r.id != null) ? Number(r.id) : Number.POSITIVE_INFINITY;
+    if (firstSeen[sp] === undefined || key < firstSeen[sp]) firstSeen[sp] = key;
+  });
+  return Object.keys(firstSeen).sort((a, b) => {
+    if (a.toLowerCase() === 'all') return -1;
+    if (b.toLowerCase() === 'all') return 1;
+    return firstSeen[a] - firstSeen[b];
+  });
+}
+
 // Résout les lignes d'un rapport de séance selon l'affichage choisi.
 // selectedSplit === '__cumul__' -> combine les procédés cochés (gpsCumulSplits) en une
 // ligne par joueur ; sinon filtre sur « séance entière » (all) ou un procédé précis.
 function gpsResolveSessionRows(date, seanceTitle, selectedSplit) {
   const sessionRows = state.bdd_gps.filter(x => x.date === date && (x.seance || x.session_title || '') === seanceTitle);
   if (selectedSplit === '__cumul__') {
-    const avail = uniqueSorted(sessionRows.map(x => x.split_name || 'all')).filter(s => s.toLowerCase() !== 'all');
-    avail.sort((a, b) => (parseInt((a.match(/\d+/) || [999])[0])) - (parseInt((b.match(/\d+/) || [999])[0])));
+    const avail = gpsSessionSplitOrder(sessionRows).filter(s => s.toLowerCase() !== 'all');
     // Réconcilier la sélection avec les procédés disponibles (ordre trié ; défaut = tous)
     let sel = avail.filter(s => gpsCumulSplits.indexOf(s) >= 0);
     if (sel.length === 0) sel = avail.slice();
