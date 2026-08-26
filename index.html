@@ -790,6 +790,7 @@
       <button class="nav-btn" data-view="testing" id="nav-testing-btn">🧪 Testing</button>
       <button class="nav-btn" data-view="reathletisation" id="nav-reathletisation-btn">🩼 Réathlétisation</button>
       <button class="nav-btn" data-view="musculation" id="nav-musculation-btn">🏋️ Musculation</button>
+      <button class="nav-btn" data-view="reco-entrainement" id="nav-reco-entrainement-btn">💡 Recommandation d'entraînement</button>
     </div>
   </div>
   <div class="nav-dropdown" id="nav-medical-dropdown">
@@ -3499,6 +3500,25 @@
       </div>
       <div id="muscu-1rm-content"></div>
     </div>
+  </div>
+
+
+  <!-- ========== RECOMMANDATION D'ENTRAINEMENT (staff) ========== -->
+  <div class="view" id="view-reco-entrainement">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:8px;">
+        <div>
+          <h2 style="margin:0;">💡 Recommandation d'entraînement</h2>
+          <p style="color:var(--text-dim); font-size:13px; margin:4px 0 0;">Plan individualisé pour une journée off (salle, mobilité, vélo, gainage, haut du corps), calculé à partir des données RPE 7j&nbsp;/ GPS 7j&nbsp;/ Hooper du jour&nbsp;/ notes kiné&nbsp;/ blessures actives.</p>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-secondary" onclick="document.getElementById('reco-frame').contentWindow.print()" style="white-space:nowrap;">🖨️ Imprimer</button>
+          <button class="btn btn-secondary" onclick="window.open('./plan-off-n2.html','_blank')" style="white-space:nowrap;">↗ Ouvrir en pleine page</button>
+        </div>
+      </div>
+    </div>
+    <iframe id="reco-frame" src="./plan-off-n2.html" title="Plan récupération individualisé"
+      style="width:100%; height:calc(100vh - 220px); min-height:600px; border:1px solid var(--border); border-radius:8px; background:#fff; display:block;"></iframe>
   </div>
 
 

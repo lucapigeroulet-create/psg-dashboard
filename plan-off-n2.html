@@ -1,0 +1,1160 @@
+<title>Séance off — National 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F3F1EA;
+  --surface:#FFFFFF;
+  --surface-2:#F8F6EF;
+  --ink:#171A21;
+  --ink-dim:#5B6472;
+  --ink-mute:#8A93A0;
+  --rule:#E3E0D5;
+  --rule-strong:#CFCBBB;
+  --accent:#0F4C81;
+  --accent-2:#8A5A00;
+  --ok:#2C7A4A;
+  --warn:#B26A00;
+  --danger:#A62A22;
+  --ok-bg:#E4F0E6;
+  --warn-bg:#F6EBD8;
+  --danger-bg:#F5DEDA;
+  --wave-a-bg:#E7F0F7;
+  --wave-a-ink:#0F4C81;
+  --wave-b-bg:#F3EDE0;
+  --wave-b-ink:#8A5A00;
+  --shadow: 0 1px 0 rgba(23,26,33,0.04), 0 1px 2px rgba(23,26,33,0.05);
+}
+:root:not([data-theme="light"]){
+  @media (prefers-color-scheme: dark){
+    --ground:#0F1218;
+    --surface:#171B23;
+    --surface-2:#1D2129;
+    --ink:#EDEAE1;
+    --ink-dim:#98A0AE;
+    --ink-mute:#6E7683;
+    --rule:#262B35;
+    --rule-strong:#333947;
+    --accent:#6FB1DE;
+    --accent-2:#E1A54D;
+    --ok:#67B487;
+    --warn:#E1A54D;
+    --danger:#E37166;
+    --ok-bg:#1B2E24;
+    --warn-bg:#332818;
+    --danger-bg:#3A211E;
+    --wave-a-bg:#1A2A3A;
+    --wave-a-ink:#8AC0E5;
+    --wave-b-bg:#2D2517;
+    --wave-b-ink:#E1A54D;
+    --shadow: 0 1px 0 rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.4);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F1218;
+  --surface:#171B23;
+  --surface-2:#1D2129;
+  --ink:#EDEAE1;
+  --ink-dim:#98A0AE;
+  --ink-mute:#6E7683;
+  --rule:#262B35;
+  --rule-strong:#333947;
+  --accent:#6FB1DE;
+  --accent-2:#E1A54D;
+  --ok:#67B487;
+  --warn:#E1A54D;
+  --danger:#E37166;
+  --ok-bg:#1B2E24;
+  --warn-bg:#332818;
+  --danger-bg:#3A211E;
+  --wave-a-bg:#1A2A3A;
+  --wave-a-ink:#8AC0E5;
+  --wave-b-bg:#2D2517;
+  --wave-b-ink:#E1A54D;
+  --shadow: 0 1px 0 rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.4);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--ground);
+  color:var(--ink);
+  font-family:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  font-size:15px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1200px;margin:0 auto;padding:32px 24px 64px}
+header.masthead{
+  display:flex;flex-direction:column;gap:14px;
+  padding:14px 0 22px;
+  border-bottom:1px solid var(--rule-strong);
+  margin-bottom:22px;
+}
+.eyebrow{
+  font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-dim);
+  display:flex;gap:14px;align-items:center;flex-wrap:wrap;
+}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block}
+h1{
+  font-family:"Fraunces","Georgia",serif;
+  font-weight:600;font-size:clamp(28px,4vw,42px);
+  line-height:1.05;letter-spacing:-.01em;margin:0;text-wrap:balance;
+  font-variation-settings:"opsz" 96;
+}
+h1 em{font-style:italic;font-weight:400;color:var(--ink-dim);font-variation-settings:"opsz" 96}
+.lede{max-width:65ch;color:var(--ink-dim);font-size:15px;line-height:1.55}
+.legend{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:10px 24px;margin-top:6px;
+  font-size:12.5px;color:var(--ink-dim);
+}
+.legend div{display:flex;gap:8px;align-items:baseline}
+.legend b{color:var(--ink);font-weight:500;font-family:"IBM Plex Mono",monospace;font-size:11.5px}
+
+.rotation{
+  margin:0 0 30px;padding:18px 20px;
+  background:var(--surface);border:1px solid var(--rule);border-radius:6px;
+  box-shadow:var(--shadow);
+}
+.rotation-head{
+  display:flex;justify-content:space-between;align-items:baseline;
+  gap:14px;flex-wrap:wrap;margin-bottom:12px;
+}
+.rotation-head h2{
+  font-family:"Fraunces",Georgia,serif;font-weight:500;font-size:20px;
+  margin:0;letter-spacing:-.005em;font-variation-settings:"opsz" 48;
+}
+.rotation-head .cap{
+  font-family:"IBM Plex Mono",monospace;font-size:11px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);
+}
+.rotation-note{color:var(--ink-dim);font-size:13.5px;margin:0 0 14px}
+.waves{
+  display:grid;grid-template-columns:1fr 1fr;gap:14px;
+}
+.wave{
+  padding:12px 14px;border-radius:5px;border:1px solid;
+}
+.wave.a{background:var(--wave-a-bg);border-color:var(--wave-a-ink);color:var(--wave-a-ink)}
+.wave.b{background:var(--wave-b-bg);border-color:var(--wave-b-ink);color:var(--wave-b-ink)}
+.wave-lbl{
+  font-family:"IBM Plex Mono",monospace;font-size:11px;
+  letter-spacing:.12em;text-transform:uppercase;display:block;margin-bottom:6px;font-weight:500;
+}
+.wave-players{
+  font-size:13.5px;color:var(--ink);line-height:1.6;
+}
+.wave-timing{
+  display:block;margin-top:8px;
+  font-family:"IBM Plex Mono",monospace;font-size:11px;
+  color:var(--ink-dim);letter-spacing:.04em;
+}
+.aside{
+  margin-top:10px;font-size:12.5px;color:var(--ink-dim);
+  padding:8px 12px;border-left:2px solid var(--rule-strong);background:var(--surface-2);
+}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:18px}
+.card{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-radius:6px;padding:18px 18px 16px;
+  box-shadow:var(--shadow);
+  display:flex;flex-direction:column;gap:12px;
+  break-inside:avoid;
+  border-top:3px solid var(--rule);
+}
+.card.wave-a{border-top-color:var(--wave-a-ink)}
+.card.wave-b{border-top-color:var(--wave-b-ink)}
+.card.rest{background:var(--surface-2);border-style:dashed;border-top-color:var(--danger)}
+.card.ell{border-top-color:var(--accent-2)}
+.card-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.name{
+  font-family:"Fraunces","Georgia",serif;
+  font-weight:600;font-size:22px;line-height:1;letter-spacing:-.005em;
+  font-variation-settings:"opsz" 48;
+}
+.poste{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);
+  display:block;margin-top:4px;
+}
+.chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:60%}
+.chip{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 8px;border-radius:3px;border:1px solid transparent;line-height:1.4;
+  white-space:nowrap;
+}
+.chip.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.chip.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn)}
+.chip.danger{background:var(--danger-bg);color:var(--danger);border-color:var(--danger)}
+.chip.neutral{background:transparent;color:var(--ink-dim);border-color:var(--rule-strong)}
+.chip.wa{background:var(--wave-a-bg);color:var(--wave-a-ink);border-color:var(--wave-a-ink)}
+.chip.wb{background:var(--wave-b-bg);color:var(--wave-b-ink);border-color:var(--wave-b-ink)}
+
+.stats{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:0;
+  border:1px solid var(--rule);border-radius:4px;overflow:hidden;
+}
+.stat{padding:8px 10px;background:var(--surface);border-right:1px solid var(--rule);text-align:center}
+.stat:last-child{border-right:none}
+.stat-lbl{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);
+  display:block;margin-bottom:2px;
+}
+.stat-val{
+  font-family:"IBM Plex Mono",monospace;font-weight:500;font-size:14px;
+  font-variant-numeric:tabular-nums;color:var(--ink);
+}
+.stat-val.dim{color:var(--ink-mute);font-weight:400}
+.stat-val.warn{color:var(--warn)}
+.stat-val.danger{color:var(--danger)}
+.stat-val.ok{color:var(--ok)}
+
+.section-lbl{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-mute);
+  margin:2px 0 6px;
+}
+.note{color:var(--ink-dim);font-size:13.5px;line-height:1.5}
+.note em{color:var(--ink);font-style:normal;font-weight:500}
+
+.plan{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.plan li{
+  display:grid;grid-template-columns:auto 1fr auto;gap:10px;
+  padding:6px 0;border-top:1px dotted var(--rule);
+  font-size:13.5px;line-height:1.4;align-items:baseline;
+}
+.plan li:first-child{border-top:none}
+.plan li.bike{background:linear-gradient(to right, var(--wave-a-bg) 0%, transparent 100%);padding-left:6px;margin-left:-6px;border-radius:3px}
+.card.wave-b .plan li.bike{background:linear-gradient(to right, var(--wave-b-bg) 0%, transparent 100%)}
+.step-num{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:10.5px;color:var(--ink-mute);font-variant-numeric:tabular-nums;min-width:1.6em;
+}
+.step-txt{color:var(--ink)}
+.step-txt b{font-weight:600;color:var(--ink)}
+.step-dur{
+  font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-mute);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+
+.card-foot{
+  display:flex;justify-content:space-between;align-items:baseline;
+  padding-top:8px;border-top:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace;font-size:11px;
+  color:var(--ink-dim);
+}
+.card-foot b{color:var(--ink);font-weight:500}
+
+.section-divider{
+  display:flex;align-items:baseline;gap:14px;
+  margin:36px 0 16px;
+}
+.section-divider h2{
+  font-family:"Fraunces",Georgia,serif;font-weight:500;
+  font-size:20px;letter-spacing:-.005em;margin:0;
+  font-variation-settings:"opsz" 48;
+}
+.section-divider .rule{flex:1;height:1px;background:var(--rule-strong)}
+.section-divider .count{
+  font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);
+}
+
+footer{
+  margin-top:48px;padding-top:20px;border-top:1px solid var(--rule);
+  font-size:12px;color:var(--ink-mute);
+  display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;
+}
+
+@media (max-width:640px){
+  .wrap{padding:20px 16px 40px}
+  .grid{grid-template-columns:1fr}
+  .waves{grid-template-columns:1fr}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .stat:nth-child(2){border-right:none}
+  .stat:nth-child(-n+2){border-bottom:1px solid var(--rule)}
+  .chips{max-width:100%}
+}
+
+@media print{
+  body{background:#fff;color:#000}
+  .card{box-shadow:none;border-color:#ccc;break-inside:avoid;page-break-inside:avoid}
+  .grid{grid-template-columns:repeat(2,1fr);gap:10px}
+  footer{display:none}
+}
+</style>
+
+<div class="wrap">
+<header class="masthead">
+  <div class="eyebrow">
+    <span class="dot"></span>
+    <span>Groupe National 2 · TEGG</span>
+    <span>·</span>
+    <span>Séance off — jeu. 27 août 2026</span>
+    <span>·</span>
+    <span>26 joueurs · 12 vélos</span>
+  </div>
+  <h1>Salle, mobilité, récup&nbsp;: <em>plan individualisé</em></h1>
+  <p class="lede">
+    Journée de coupure. Chaque bloc croise la charge GPS 7 j, le RPE moyen 7 j, le Hooper du 26/08 (fatigue&nbsp;+ sommeil&nbsp;+ courbatures&nbsp;+ stress), les zones de douleur déclarées et les dernières notes du kiné. Contrainte matériel&nbsp;: 12 vélos disponibles → deux vagues en circuit.
+  </p>
+  <div class="legend">
+    <div><b>RPE&nbsp;7j</b> moyenne pondérée par séance (0–10)</div>
+    <div><b>Hooper</b> 4–28 · vert ≤9 · orange 10–13 · rouge ≥14</div>
+    <div><b>Charge&nbsp;km</b> distance cumulée 7j (séance entière)</div>
+    <div><b>Vmax</b> pic 14j (km/h)</div>
+  </div>
+</header>
+
+<section class="rotation">
+  <div class="rotation-head">
+    <h2>Rotation vélo — 12 postes</h2>
+    <span class="cap">2 vagues · 24 joueurs concernés</span>
+  </div>
+  <p class="rotation-note">
+    Vague A démarre sur le vélo pendant que la vague B travaille au sol (mobilité, gainage, renfo).
+    Après ~15 min, échange&nbsp;: la vague B monte sur les vélos pour finir en récup active, la vague A enchaîne salle et étirements. Étape vélo repérée en surbrillance dans chaque carte.
+  </p>
+  <div class="waves">
+    <div class="wave a">
+      <span class="wave-lbl">Vague A · vélo au démarrage</span>
+      <div class="wave-players">Alassane · Amine · Belko · Diome · Erwann · Kacou · Mae · Mandiaye · Mara · Maria · Mody · Morel</div>
+      <span class="wave-timing">≈ 15 min vélo, puis salle → étirements</span>
+    </div>
+    <div class="wave b">
+      <span class="wave-lbl">Vague B · vélo en fin de séance</span>
+      <div class="wave-players">Jafar · Joao · Johan · Melvin · Mohamed · Odilon · Olivier · Ousmane · Pape · Sekou · Wilfried · Yohan</div>
+      <span class="wave-timing">Salle d'abord → vélo récup active en clôture</span>
+    </div>
+  </div>
+  <div class="aside">
+    <b>Hors rotation</b> — <b>Paul</b>&nbsp;: repos strict post-viscosupplémentation, pas de salle.
+    <b>Louis</b>&nbsp;: elliptique dédié (confort selle réduit), n'occupe pas de vélo.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<div class="section-divider">
+  <h2>Réathlétisation &amp; retour progressif</h2>
+  <div class="rule"></div>
+  <span class="count">5 joueurs · protocole individuel</span>
+</div>
+<div class="grid">
+
+  <!-- PAUL — post-visco, repos strict -->
+  <div class="card rest">
+    <div class="card-head">
+      <div><div class="name">Paul</div><span class="poste">Milieu</span></div>
+      <div class="chips">
+        <span class="chip danger">Repos strict</span>
+        <span class="chip warn">Réathlé · orange</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">1.7</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val warn">13</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val dim">7.9</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val dim">26.4</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné (Dr Sonnery-Cottet)</div>
+      <p class="note">Visco du <em>26/08</em> sur condyle interne fémoral. <em>Reprise 48 h après</em>&nbsp;— rien avant vendredi. Genou D + ischios sensibles au réveil.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Pas de salle, pas de vélo, pas de renfo MI. Repos actif à la maison&nbsp;: marche 20&nbsp;min + glace 3×15&nbsp;min.</span><span class="step-dur">—</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilité haut du corps assis&nbsp;: thoracique, épaules, cervicales.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Point kiné vendredi matin avant tout redémarrage terrain.</span><span class="step-dur">—</span></li>
+    </ol>
+    <div class="card-foot"><span>Séance off</span><b>Repos médical</b></div>
+  </div>
+
+  <!-- AMINE — Vague A -->
+  <div class="card wave-a">
+    <div class="card-head">
+      <div><div class="name">Amine</div><span class="poste">Milieu</span></div>
+      <div class="chips">
+        <span class="chip warn">Entorse cheville D · IRM</span>
+        <span class="chip wa">Vague A</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val dim">—</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val dim">—</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val dim">—</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val dim">—</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné</div>
+      <p class="note">LFTA D sensible à la palpation + pointes de pied. RDV Dr Antunes 26/08&nbsp;· IRM attendue&nbsp;: adapter selon résultats.</p>
+    </div>
+    <ol class="plan">
+      <li class="bike"><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> bras + jambes, résistance basse, cheville protégée.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilisation cheville active sans douleur + proprioception assis (bosu).</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt"><b>Renfo cheville</b>&nbsp;: soléaire + fibulaires iso 3×30&quot;.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Gainage transverse au sol (planche, dead-bug) 3×30&quot;.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Haut du corps modéré&nbsp;: tirage assis + développé haltères 3×10.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Cryothérapie / bain froid cheville.</span><span class="step-dur">10&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle uniquement</span><b>~70 min</b></div>
+  </div>
+
+  <!-- BELKO — Vague A -->
+  <div class="card wave-a">
+    <div class="card-head">
+      <div><div class="name">Belko</div><span class="poste">Milieu</span></div>
+      <div class="chips">
+        <span class="chip warn">Symphyse · orange</span>
+        <span class="chip wa">Vague A</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.7</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val warn">13</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val dim">—</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val dim">—</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné</div>
+      <p class="note">Ostéoarthropathie berges symphysiennes, inflammation enthèse adducteurs G+D. Retour terrain progressif validé avec Lucas.</p>
+    </div>
+    <ol class="plan">
+      <li class="bike"><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> résistance basse-moyenne, position droite (pas de flexion agressive hanche).</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilité hanches + chaîne postérieure&nbsp;: 90/90, bretzel, pigeon.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt"><b>Adducteurs iso</b>&nbsp;: Copenhagen court + squeeze ballon 4×20&quot; (RPE ≤6).</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Chaîne oblique-transverse&nbsp;: pallof press, dead-bug avec anti-rotation, side plank 3×30&quot;.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Haut du corps&nbsp;: tirage horizontal + push élastique 3×10 (pas de charge lourde en compression).</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Bain froid.</span><span class="step-dur">10&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle uniquement</span><b>~72 min</b></div>
+  </div>
+
+  <!-- KACOU — pubalgie, symphyse, Vague A -->
+  <div class="card wave-a">
+    <div class="card-head">
+      <div><div class="name">Kacou</div><span class="poste">Ailier</span></div>
+      <div class="chips">
+        <span class="chip warn">Pubalgie · rechute symphyse</span>
+        <span class="chip wa">Vague A</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val dim">—</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val danger">14</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val dim">—</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val dim">—</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Blessure active</div>
+      <p class="note">Pubalgie osseuse/musculaire — <em>rechute symphyse pubienne</em> (22/06). Indispo 90 j. Fenêtre réathlé programmée <em>30/08 → 30/09</em>. Aujourd'hui&nbsp;: dernière séance avant l'entrée en protocole réathlé, calquer sur ce que le kiné a fait le matin&nbsp;— pas de course, pas d'appui explosif adducteurs.</p>
+    </div>
+    <ol class="plan">
+      <li class="bike"><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> résistance basse, position droite (comme ce matin).</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilité hanches + dorsale (chat/vache, 90/90).</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt"><b>Chaîne oblique / transverse / stabilisateurs hanche</b>&nbsp;: pallof, dead-bug anti-rotation, side plank rotation, McGill big 3.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Adducteurs iso <em>doux, statique</em>&nbsp;: squeeze ballon 3×20&quot; (gêne ≤ 3/10, pas de dynamique).</span><span class="step-dur">8&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Abdos en dissociation au sol (comme kiné ce matin) — 3×12.</span><span class="step-dur">8&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Haut du corps push/pull vertical léger 3×10 (pas d'axial lourd).</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">07</span><span class="step-txt">Massage kiné + bain froid + brief entrée en réathlé samedi.</span><span class="step-dur">12&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle uniquement · pré-réathlé</span><b>~80 min</b></div>
+  </div>
+
+  <!-- SEKOU — Vague B -->
+  <div class="card wave-b">
+    <div class="card-head">
+      <div><div class="name">Sekou</div><span class="poste">Ailier</span></div>
+      <div class="chips">
+        <span class="chip neutral">Retour progressif adducteurs</span>
+        <span class="chip wb">Vague B</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.1</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val">9</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val">25.6</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">32.0</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné</div>
+      <p class="note">Reprise validée. Même vigilance que Belko&nbsp;— pas de sprint max, pas de COD à haute vitesse en salle.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Mobilité hanche + adducteurs (pigeon, cossack squat sans charge).</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt"><b>Stabilisateurs hanche + transverse/obliques</b>&nbsp;: pallof, side plank + rotation, single-leg glute bridge.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Adducteurs iso&nbsp;: Copenhagen 3×15&quot;.</span><span class="step-dur">6&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Haut du corps complet&nbsp;: dev couché + rowing barre 4×8.</span><span class="step-dur">20&nbsp;min</span></li>
+      <li class="bike"><span class="step-num">05</span><span class="step-txt"><b>Vélo</b> récup active + tapis marche inclinée en clôture.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Étirements passifs adducteurs / ischios.</span><span class="step-dur">6&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle + vélo fin</span><b>~72 min</b></div>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
+<div class="section-divider">
+  <h2>Charge élevée — priorité récupération</h2>
+  <div class="rule"></div>
+  <span class="count">4 joueurs · >45 km/7j ou Hooper ≥14</span>
+</div>
+<div class="grid">
+
+  <!-- YOHAN — Vague B -->
+  <div class="card wave-b">
+    <div class="card-head">
+      <div><div class="name">Yohan</div><span class="poste">Latéral</span></div>
+      <div class="chips">
+        <span class="chip warn">Charge élevée</span>
+        <span class="chip wb">Vague B</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.5</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val">8</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val warn">51.5</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">30.5</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné</div>
+      <p class="note">Rotateurs profonds hanche + récup ischios prescrits le 20/08. Épaules/dos/pecs courbaturés — <em>haut du corps allégé</em>.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Mobilité thoracique + rotateurs hanche&nbsp;: 90/90, clamshell, world's greatest.</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt"><b>Rotateurs profonds hanche</b>&nbsp;: clamshell chargé + hip airplane 3×10.</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Gainage anti-extension&nbsp;: dead-bug, planche 3×30&quot;.</span><span class="step-dur">8&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Haut du corps <em>très léger</em>&nbsp;: tirage bande 2×15 uniquement.</span><span class="step-dur">8&nbsp;min</span></li>
+      <li class="bike"><span class="step-num">05</span><span class="step-txt"><b>Vélo</b> récup active, résistance basse, RPE 3/10.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Étirements chaîne postérieure + bain froid.</span><span class="step-dur">10&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle + vélo fin</span><b>~65 min</b></div>
+  </div>
+
+  <!-- ERWANN — Vague A -->
+  <div class="card wave-a">
+    <div class="card-head">
+      <div><div class="name">Erwann</div><span class="poste">Ailier</span></div>
+      <div class="chips">
+        <span class="chip warn">Charge très élevée</span>
+        <span class="chip wa">Vague A</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.8</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val warn">12</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val warn">49.8</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">33.7</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné</div>
+      <p class="note">Récup quadri ce matin. Iso cheville à intégrer en activation. Charge cumulée + intensité maximales du groupe&nbsp;: décharger.</p>
+    </div>
+    <ol class="plan">
+      <li class="bike"><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> récup 12 min + rameur léger 5 min.</span><span class="step-dur">17&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilité complète&nbsp;: hanches, thoracique, ischios (90/90, pigeon).</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Iso cheville sur banc (calcanéus vs mur) 3×30&quot; — routine kiné.</span><span class="step-dur">5&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Gainage transverse + obliques&nbsp;: dead-bug, pallof, side plank 3×30&quot;.</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Haut du corps modéré&nbsp;: tirage vertical + développé militaire 3×8.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Bain froid ischios/quadri.</span><span class="step-dur">10&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Priorité récup</span><b>~70 min</b></div>
+  </div>
+
+  <!-- WILFRIED — Vague B -->
+  <div class="card wave-b">
+    <div class="card-head">
+      <div><div class="name">Wilfried</div><span class="poste">Attaquant</span></div>
+      <div class="chips">
+        <span class="chip warn">Charge élevée</span>
+        <span class="chip wb">Vague B</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.1</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val">8</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val warn">46.9</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">31.5</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné</div>
+      <p class="note">Récup quadri/ischios 20/08. Bonne réserve mentale (Hooper 8) malgré la charge&nbsp;— tenir la récup pour préserver la fraîcheur.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Mobilité chaîne postérieure + hanches.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt"><b>Ischios excentriques doux</b>&nbsp;: RDL tempo 3-0-1 3×8 (charge modérée).</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Gainage complet 3×30&quot;.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Haut du corps complet&nbsp;: bench + rowing 4×8.</span><span class="step-dur">20&nbsp;min</span></li>
+      <li class="bike"><span class="step-num">05</span><span class="step-txt"><b>Vélo</b> récup 15 min RPE 3/10.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Étirements + rouleau.</span><span class="step-dur">8&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle + vélo fin</span><b>~75 min</b></div>
+  </div>
+
+  <!-- OLIVIER — Vague B -->
+  <div class="card wave-b">
+    <div class="card-head">
+      <div><div class="name">Olivier</div><span class="poste">Défenseur central</span></div>
+      <div class="chips">
+        <span class="chip warn">Ischio G · contracture</span>
+        <span class="chip wb">Vague B</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">2.6</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val danger">14</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val warn">44.9</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">29.8</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné (prescription du 25/08)</div>
+      <p class="note">Contractures jonction demi-tendineux/demi-membraneux G. <em>Kiné demande jour récup&nbsp;: mobilité + vélo seulement</em>. RDL excentrique déjà fait en post-séance.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Mobilité chaîne postérieure&nbsp;: pigeon, forward fold, 90/90.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Massage échauffement + activation ischios en manuel (kiné).</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Haut du corps léger&nbsp;: tirage assis + presse épaule 3×10.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li class="bike"><span class="step-num">04</span><span class="step-txt"><b>Vélo</b> récup, résistance très basse, RPE 3/10.</span><span class="step-dur">20&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Bain froid ischios.</span><span class="step-dur">10&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Récup pure (consigne kiné)</span><b>~75 min</b></div>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
+<div class="section-divider">
+  <h2>Prévention ciblée &amp; suivi kiné</h2>
+  <div class="rule"></div>
+  <span class="count">7 joueurs · zone à surveiller</span>
+</div>
+<div class="grid">
+
+  <!-- MOHAMED — Vague B -->
+  <div class="card wave-b">
+    <div class="card-head">
+      <div><div class="name">Mohamed</div><span class="poste">Milieu</span></div>
+      <div class="chips">
+        <span class="chip warn">Adducteur G + ischio D</span>
+        <span class="chip wb">Vague B</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.8</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val danger">14</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val">44.2</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">27.2</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné</div>
+      <p class="note">Long adducteur G tendu, kiné a demandé <em>baisse de charge demain</em>. Bilan MI G à prévoir.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Mobilité adducteurs + ischios (frog, pigeon, forward fold).</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt"><b>Adducteurs iso doux</b>&nbsp;: squeeze ballon 3×20&quot; + Copenhagen court 2×10.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Ischios iso longue jambe D&nbsp;: nordic partiel 3×5.</span><span class="step-dur">8&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Gainage transverse.</span><span class="step-dur">8&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Haut du corps modéré&nbsp;: tirage + push 3×10.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li class="bike"><span class="step-num">06</span><span class="step-txt"><b>Vélo</b> récup 15 min RPE 3/10.</span><span class="step-dur">15&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Charge basse (consigne kiné)</span><b>~70 min</b></div>
+  </div>
+
+  <!-- MAE — Vague A -->
+  <div class="card wave-a">
+    <div class="card-head">
+      <div><div class="name">Mae</div><span class="poste">Latéral</span></div>
+      <div class="chips">
+        <span class="chip neutral">Prévention ischios</span>
+        <span class="chip wa">Vague A</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.4</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val">8</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val">34.3</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">29.8</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné (à prévoir)</div>
+      <p class="note">Faiblesse ischios notée par le kiné — routine prévention à installer. Contracture décontractée le 18/08.</p>
+    </div>
+    <ol class="plan">
+      <li class="bike"><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> récup.</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilité hanches + chaîne postérieure.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt"><b>Prévention ischios</b>&nbsp;: nordic hamstring 3×5 (excentrique complet) + RDL 3×8.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Gainage anti-extension 3×30&quot;.</span><span class="step-dur">8&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Haut du corps complet&nbsp;: bench + rowing 4×8.</span><span class="step-dur">20&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Étirements ischios PNF.</span><span class="step-dur">8&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle</span><b>~75 min</b></div>
+  </div>
+
+  <!-- ODILON — Vague B -->
+  <div class="card wave-b">
+    <div class="card-head">
+      <div><div class="name">Odilon</div><span class="poste">Ailier</span></div>
+      <div class="chips">
+        <span class="chip neutral">Prévention ischio D (post-croisé)</span>
+        <span class="chip wb">Vague B</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.1</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val warn">11</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val">37.7</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">31.0</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné</div>
+      <p class="note">Ischio D récurrent côté croisé opéré (&lt;1 an). Kiné insiste sur <em>renfo spécifique ischio D</em> + routines perso à réactiver.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Mobilité genou + hanche D.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt"><b>Renfo ischio D ciblé</b>&nbsp;: single-leg RDL 3×8 D, nordic 3×5, glute bridge single leg 3×10 D.</span><span class="step-dur">18&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Gainage transverse.</span><span class="step-dur">8&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Haut du corps complet 4×8.</span><span class="step-dur">18&nbsp;min</span></li>
+      <li class="bike"><span class="step-num">05</span><span class="step-txt"><b>Vélo</b> récup.</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Étirements + rouleau chaîne postérieure D.</span><span class="step-dur">8&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle + vélo fin</span><b>~75 min</b></div>
+  </div>
+
+  <!-- MELVIN — Vague B -->
+  <div class="card wave-b">
+    <div class="card-head">
+      <div><div class="name">Melvin</div><span class="poste">Gardien</span></div>
+      <div class="chips">
+        <span class="chip neutral">Protocole tendon rotulien</span>
+        <span class="chip wb">Vague B</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">2.6</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val warn">11</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val dim">GB</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val dim">—</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné / fiche médicale</div>
+      <p class="note">Double op. tendon rotulien D — faiblesses résiduelles quadri, ischios, mollets. Routine mobilité + activation + renfo quadri déjà établie. <em>Lundi = jour de coupure obligatoire</em>.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Routine mobilité genou D + mollets (protocole personnel).</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt"><b>Renfo quadri Discuss</b>&nbsp;: leg extension unilatéral D 4×10 charge légère + Cyriax mollets 3×15.</span><span class="step-dur">20&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Gainage complet + haut du corps GB (pompes, tirage) 3×10.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li class="bike"><span class="step-num">04</span><span class="step-txt"><b>Vélo</b> doux, résistance basse.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Étirements + bain froid genou.</span><span class="step-dur">10&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Routine perso · vélo fin</span><b>~75 min</b></div>
+  </div>
+
+  <!-- MANDIAYE — Vague A -->
+  <div class="card wave-a">
+    <div class="card-head">
+      <div><div class="name">Mandiaye</div><span class="poste">Ailier</span></div>
+      <div class="chips">
+        <span class="chip neutral">Genou G + lombo-pelvien</span>
+        <span class="chip wa">Vague A</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">2.9</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val warn">11</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val">37.1</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">31.6</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné</div>
+      <p class="note">Douleur interne genou G + gêne lombaires chronique. Bilan stabilité lombo-pelvienne à prévoir.</p>
+    </div>
+    <ol class="plan">
+      <li class="bike"><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> récup, selle bien réglée pour éviter compression lombaire.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilité hanches + thoracique (chat/vache, world's greatest).</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt"><b>Stabilité lombo-pelvienne</b>&nbsp;: bird-dog, dead-bug, pallof, McGill big 3.</span><span class="step-dur">18&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Genou G iso&nbsp;: wall sit 3×30&quot; + terminal knee extension 3×12.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Haut du corps sans compression axiale&nbsp;: tirage + push haltères 3×10.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Étirements psoas + lombaires.</span><span class="step-dur">8&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle</span><b>~80 min</b></div>
+  </div>
+
+  <!-- OUSMANE — Vague B -->
+  <div class="card wave-b">
+    <div class="card-head">
+      <div><div class="name">Ousmane</div><span class="poste">Attaquant</span></div>
+      <div class="chips">
+        <span class="chip neutral">Prescription ischio G</span>
+        <span class="chip wb">Vague B</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.0</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val">9</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val">44.5</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">28.1</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné (18/08)</div>
+      <p class="note">Légère inflammation insertion + haut ischios G. Prescription&nbsp;: iso longue &lt;3/10 + <em>RDL tempo 3-3-3-1 3×6</em>.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Mobilité chaîne postérieure + hanches.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt"><b>Ischio G iso longue</b> (gêne &lt; 3/10) 3×45&quot;.</span><span class="step-dur">8&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt"><b>RDL tempo 3-3-3-1</b> 3×6 (kiné).</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Gainage transverse.</span><span class="step-dur">8&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Haut du corps complet 3×10.</span><span class="step-dur">18&nbsp;min</span></li>
+      <li class="bike"><span class="step-num">06</span><span class="step-txt"><b>Vélo</b> récup.</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">07</span><span class="step-txt">Étirements + bain froid ischios.</span><span class="step-dur">8&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle + vélo fin</span><b>~75 min</b></div>
+  </div>
+
+  <!-- JAFAR — Vague B -->
+  <div class="card wave-b">
+    <div class="card-head">
+      <div><div class="name">Jafar</div><span class="poste">Latéral</span></div>
+      <div class="chips">
+        <span class="chip neutral">Ischio D + charge élevée</span>
+        <span class="chip wb">Vague B</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">2.6</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val">7</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val warn">46.4</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">31.4</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné</div>
+      <p class="note">Récup ischios ce matin. Lourdeur générale MMII notée le 11/08. Charge élevée à contenir.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Mobilité chaîne postérieure + hanches.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt"><b>Prévention ischio D</b>&nbsp;: nordic 3×5 + single-leg RDL 3×8 D.</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Gainage anti-rotation.</span><span class="step-dur">8&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Haut du corps complet 4×8.</span><span class="step-dur">18&nbsp;min</span></li>
+      <li class="bike"><span class="step-num">05</span><span class="step-txt"><b>Vélo</b> récup.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Bain froid MMII.</span><span class="step-dur">10&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle + vélo fin</span><b>~73 min</b></div>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
+<div class="section-divider">
+  <h2>Fraîcheur correcte — off classique</h2>
+  <div class="rule"></div>
+  <span class="count">10 joueurs · protocole standard adapté</span>
+</div>
+<div class="grid">
+
+  <!-- DIOME — Vague A -->
+  <div class="card wave-a">
+    <div class="card-head">
+      <div><div class="name">Diome</div><span class="poste">Défenseur central</span></div>
+      <div class="chips">
+        <span class="chip neutral">Béquille cuisse D</span>
+        <span class="chip wa">Vague A</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val warn">4.4</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val">8</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val">39.7</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">29.1</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte</div>
+      <p class="note">Béquille cuisse D validée par kiné (24/08), RAS. RPE moyen le plus élevé du groupe&nbsp;: séance orientée récup, éviter charge lourde cuisse D.</p>
+    </div>
+    <ol class="plan">
+      <li class="bike"><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> récup.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilité quadri + hanches, rouleau cuisse D sans forcer.</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Gainage complet 3×30&quot;.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Haut du corps complet&nbsp;: bench + rowing + tirage 4×8.</span><span class="step-dur">25&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Étirements + bain froid cuisse D.</span><span class="step-dur">10&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle</span><b>~75 min</b></div>
+  </div>
+
+  <!-- LOUIS — elliptique -->
+  <div class="card ell">
+    <div class="card-head">
+      <div><div class="name">Louis</div><span class="poste">Ailier</span></div>
+      <div class="chips">
+        <span class="chip neutral">Adducteur D</span>
+        <span class="chip warn">Elliptique (sans vélo)</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.5</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val danger">14</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val">41.1</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">32.7</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte</div>
+      <p class="note">Contracture adducteur D — iso prescrite. Confort selle réduit (déclaré 26/08)&nbsp;: <em>elliptique / spinning debout</em>, ne pas prendre un poste de vélo assis.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Elliptique récup <em>(pas de selle)</em>.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilité hanches + adducteurs.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt"><b>Adducteurs iso</b>&nbsp;: squeeze ballon + Copenhagen court 3×15&quot;.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Gainage debout&nbsp;: pallof, chops, wood-choppers.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Haut du corps complet 4×8.</span><span class="step-dur">20&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Étirements + rouleau.</span><span class="step-dur">8&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle · sans vélo</span><b>~75 min</b></div>
+  </div>
+
+  <!-- MOREL — Vague A -->
+  <div class="card wave-a">
+    <div class="card-head">
+      <div><div class="name">Morel</div><span class="poste">Milieu</span></div>
+      <div class="chips">
+        <span class="chip warn">Sortie fièvre</span>
+        <span class="chip wa">Vague A</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.5</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val danger">14</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val">41.9</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">29.3</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte</div>
+      <p class="note">Fièvre disparue le 25/08, entraînement normal repris. Hooper encore rouge&nbsp;: <em>séance très allégée</em>, surveiller récidive.</p>
+    </div>
+    <ol class="plan">
+      <li class="bike"><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> très doux, RPE 2-3/10.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilité globale.</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Gainage léger&nbsp;: dead-bug, planche 3×20&quot;.</span><span class="step-dur">8&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Haut du corps très léger&nbsp;: bande + haltères 3×12.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Étirements.</span><span class="step-dur">8&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Off allégé</span><b>~60 min</b></div>
+  </div>
+
+  <!-- PAPE — Vague B -->
+  <div class="card wave-b">
+    <div class="card-head">
+      <div><div class="name">Pape</div><span class="poste">Défenseur central</span></div>
+      <div class="chips">
+        <span class="chip neutral">Stress élevé</span>
+        <span class="chip wb">Vague B</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">2.9</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val warn">12</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val">40.8</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">29.1</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte</div>
+      <p class="note">Physique OK, stress 5/7 (score le plus haut du groupe). Intégrer <em>respiration et retour au calme long</em>.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Mobilité thoracique + hanches.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Gainage isométrique long&nbsp;: planche 3×45&quot;, side plank 3×30&quot;.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Haut du corps modéré&nbsp;: tirage + push 4×8.</span><span class="step-dur">18&nbsp;min</span></li>
+      <li class="bike"><span class="step-num">04</span><span class="step-txt"><b>Vélo</b> récup en respiration nasale (RPE 3/10).</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt"><b>Retour au calme long</b>&nbsp;: 4-7-8 respiration + étirements passifs.</span><span class="step-dur">15&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle + décompression</span><b>~70 min</b></div>
+  </div>
+
+  <!-- JOHAN — Vague B -->
+  <div class="card wave-b">
+    <div class="card-head">
+      <div><div class="name">Johan</div><span class="poste">Milieu</span></div>
+      <div class="chips">
+        <span class="chip neutral">Quadri chargés</span>
+        <span class="chip wb">Vague B</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.7</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val">9</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val">28.3</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">27.8</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné</div>
+      <p class="note">Récup quadri hier. Béquille quadri le 11/08&nbsp;— entretenir sans surcharger.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Mobilité quadri + hanches (couch stretch, 90/90).</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Renfo postérieur (compenser quadri)&nbsp;: glute bridge + RDL 3×10.</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Gainage complet 3×30&quot;.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Haut du corps complet 4×8.</span><span class="step-dur">20&nbsp;min</span></li>
+      <li class="bike"><span class="step-num">05</span><span class="step-txt"><b>Vélo</b> récup.</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Étirements + rouleau quadri.</span><span class="step-dur">8&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle + vélo fin</span><b>~72 min</b></div>
+  </div>
+
+  <!-- MARA — Vague A -->
+  <div class="card wave-a">
+    <div class="card-head">
+      <div><div class="name">Mara</div><span class="poste">Latéral</span></div>
+      <div class="chips">
+        <span class="chip ok">Frais</span>
+        <span class="chip wa">Vague A</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val ok">2.4</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val ok">7</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val">40.0</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">31.0</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte</div>
+      <p class="note">Aucun signal négatif. Peut monter en intensité sur la salle.</p>
+    </div>
+    <ol class="plan">
+      <li class="bike"><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> activation.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilité complète.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt"><b>Point faible latéral</b>&nbsp;: mono-podal (Bulgarian split squat) 4×8 + hip thrust 4×8.</span><span class="step-dur">18&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Gainage complet + anti-rotation 3×30&quot;.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Haut du corps complet 4×8.</span><span class="step-dur">20&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Étirements.</span><span class="step-dur">7&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle intensité modérée</span><b>~75 min</b></div>
+  </div>
+
+  <!-- MARIA — Vague A -->
+  <div class="card wave-a">
+    <div class="card-head">
+      <div><div class="name">Maria</div><span class="poste">Milieu</span></div>
+      <div class="chips">
+        <span class="chip ok">Très frais</span>
+        <span class="chip wa">Vague A</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val ok">2.3</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val ok">4</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val">43.7</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">29.9</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte</div>
+      <p class="note">Meilleur Hooper du groupe. Séance complète possible avec vraie stimulation.</p>
+    </div>
+    <ol class="plan">
+      <li class="bike"><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> activation.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilité complète.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt"><b>Renfo MI complet</b>&nbsp;: goblet squat + RDL 4×8.</span><span class="step-dur">18&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Gainage lourd&nbsp;: planche chargée + Copenhagen + pallof 3×30&quot;.</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Haut du corps complet 4×8-10.</span><span class="step-dur">20&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Étirements.</span><span class="step-dur">6&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle</span><b>~75 min</b></div>
+  </div>
+
+  <!-- JOAO — Vague B -->
+  <div class="card wave-b">
+    <div class="card-head">
+      <div><div class="name">Joao</div><span class="poste">—</span></div>
+      <div class="chips">
+        <span class="chip ok">Frais · essai</span>
+        <span class="chip wb">Vague B</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.0</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val ok">6</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val dim">21.6</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">25.9</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte</div>
+      <p class="note">Nouveau, peu de données GPS/kiné. Aligner sur séance standard, observer réactions.</p>
+    </div>
+    <ol class="plan">
+      <li><span class="step-num">01</span><span class="step-txt">Mobilité complète.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Renfo MI général&nbsp;: goblet squat + hip thrust 4×8.</span><span class="step-dur">18&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt">Gainage complet 3×30&quot;.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Haut du corps complet 4×8.</span><span class="step-dur">20&nbsp;min</span></li>
+      <li class="bike"><span class="step-num">05</span><span class="step-txt"><b>Vélo</b> activation légère en récup.</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Étirements + rouleau (test tolérance).</span><span class="step-dur">8&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle + vélo fin</span><b>~78 min</b></div>
+  </div>
+
+  <!-- ALASSANE — Vague A -->
+  <div class="card wave-a">
+    <div class="card-head">
+      <div><div class="name">Alassane</div><span class="poste">Gardien</span></div>
+      <div class="chips">
+        <span class="chip ok">Frais</span>
+        <span class="chip wa">Vague A</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.3</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val ok">6</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val dim">GB</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val dim">—</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte</div>
+      <p class="note">Aucun signal négatif. Séance GB standard.</p>
+    </div>
+    <ol class="plan">
+      <li class="bike"><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> activation.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilité hanches + épaules (spécifique GB).</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt"><b>Renfo mono-podal</b>&nbsp;: Bulgarian split + jump squat 4×8.</span><span class="step-dur">15&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Gainage anti-rotation lourd.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Haut du corps + épaules (rotateurs) 4×10.</span><span class="step-dur">20&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Étirements.</span><span class="step-dur">7&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle</span><b>~75 min</b></div>
+  </div>
+
+  <!-- MODY — Vague A -->
+  <div class="card wave-a">
+    <div class="card-head">
+      <div><div class="name">Mody</div><span class="poste">Gardien</span></div>
+      <div class="chips">
+        <span class="chip ok">Très frais</span>
+        <span class="chip wa">Vague A</span>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-lbl">RPE&nbsp;7j</span><span class="stat-val">3.0</span></div>
+      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val ok">4</span></div>
+      <div class="stat"><span class="stat-lbl">Charge&nbsp;km</span><span class="stat-val dim">GB</span></div>
+      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val dim">—</span></div>
+    </div>
+    <div>
+      <div class="section-lbl">Contexte kiné</div>
+      <p class="note">Décontracture lombaire 21/08. Aujourd'hui top forme&nbsp;— entretenir avec gainage anti-extension.</p>
+    </div>
+    <ol class="plan">
+      <li class="bike"><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> activation.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">02</span><span class="step-txt">Mobilité hanches + thoracique (spécifique GB).</span><span class="step-dur">12&nbsp;min</span></li>
+      <li><span class="step-num">03</span><span class="step-txt"><b>Chaîne postérieure + lombaires</b>&nbsp;: RDL + hip thrust + McGill big 3.</span><span class="step-dur">18&nbsp;min</span></li>
+      <li><span class="step-num">04</span><span class="step-txt">Gainage anti-extension&nbsp;: dead-bug, hollow body 3×30&quot;.</span><span class="step-dur">10&nbsp;min</span></li>
+      <li><span class="step-num">05</span><span class="step-txt">Haut du corps complet + rotateurs 4×8-10.</span><span class="step-dur">20&nbsp;min</span></li>
+      <li><span class="step-num">06</span><span class="step-txt">Étirements.</span><span class="step-dur">6&nbsp;min</span></li>
+    </ol>
+    <div class="card-foot"><span>Salle</span><b>~75 min</b></div>
+  </div>
+
+</div>
+
+<footer>
+  <span>Généré depuis StatField · données arrêtées au 26/08/2026, 18h. RPE 7j, GPS 7j (séance entière), Hooper du jour, kiné 21 derniers jours, blessures actives.</span>
+  <span>À valider par le staff médical avant diffusion.</span>
+</footer>
+</div>
