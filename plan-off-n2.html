@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Séance 28 août — National 2</title>
+<title>Recommandation d'entraînement — National 2</title>
 <style>
 :root{
   --bg:#08111e;--bg-card:#0f1f33;--bg-elevated:#162840;
@@ -13,6 +13,9 @@
   --green:#34d399;--yellow:#fbbf24;--orange:#fb923c;--red:#f87171;--gray:#4b5563;
   --aero-bg:rgba(56,182,255,0.12);--aero-ink:#38b6ff;
   --force-bg:rgba(251,146,60,0.12);--force-ink:#fb923c;
+  --watch-bg:rgba(251,191,36,0.12);--watch-ink:#fbbf24;
+  --rest-bg:rgba(248,113,113,0.12);--rest-ink:#f87171;
+  --off-bg:rgba(52,211,153,0.12);--off-ink:#34d399;
   --radius-sm:6px;--radius:12px;--radius-lg:16px;
   --shadow-sm:0 1px 2px rgba(0,0,0,0.25);--shadow-md:0 6px 18px -4px rgba(0,0,0,0.45);--shadow-lg:0 16px 40px -12px rgba(0,0,0,0.55);
   --grad-card:linear-gradient(160deg,#122643 0%,#0e1d31 100%);
@@ -35,6 +38,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Helvetica,A
 h1{font-size:26px;font-weight:800;letter-spacing:-0.3px;line-height:1.15;color:var(--text);margin:0;}
 h1 .accent{color:var(--accent-light)}
 .lede{color:var(--text-dim);font-size:13.5px;line-height:1.55;max-width:70ch;margin-top:8px;}
+.gen-meta{margin-top:8px;font-size:11px;color:var(--text-mute);font-family:ui-monospace,monospace;letter-spacing:0.3px;}
+.gen-meta b{color:var(--accent-light);font-weight:700}
 
 .filter{display:flex;flex-direction:column;gap:6px;min-width:260px;}
 .filter label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-dim);}
@@ -52,10 +57,6 @@ h1 .accent{color:var(--accent-light)}
 .pager .current b{color:var(--text);font-weight:700;font-size:13px}
 .pager .current .pos{font-family:ui-monospace,monospace;font-size:10.5px;color:var(--text-mute);margin-left:6px;}
 
-.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 24px;font-size:11.5px;color:var(--text-dim);padding-top:14px;border-top:1px solid var(--border);}
-.legend div{display:flex;gap:8px;align-items:baseline}
-.legend b{color:var(--text);font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px}
-
 .context{background:var(--grad-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:20px;box-shadow:var(--shadow-md);position:relative;}
 .context::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--grad-accent);border-radius:var(--radius) 0 0 var(--radius);}
 .context-head{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:8px;}
@@ -70,18 +71,24 @@ h1 .accent{color:var(--accent-light)}
 .context textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,182,255,0.22)}
 .context textarea::placeholder{color:var(--text-mute)}
 .context-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--text-mute);}
-.context-footer .hint{max-width:65ch;line-height:1.5}
-.context-footer .actions{display:flex;gap:8px}
+.context-footer .hint{max-width:60ch;line-height:1.5}
+.context-footer .actions{display:flex;gap:8px;flex-wrap:wrap}
 .context-footer button{background:transparent;border:1px solid var(--border);color:var(--text);padding:5px 12px;border-radius:var(--radius-sm);cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:600;letter-spacing:0.4px;transition:background .12s ease,border-color .12s ease,color .12s ease;}
-.context-footer button:hover{background:var(--accent-soft);border-color:rgba(56,182,255,0.4);color:var(--accent-light)}
+.context-footer button:hover:not(:disabled){background:var(--accent-soft);border-color:rgba(56,182,255,0.4);color:var(--accent-light)}
 .context-footer button.primary{background:var(--grad-accent);color:#fff;border-color:transparent}
-.context-footer button.primary:hover{filter:brightness(1.08);color:#fff}
+.context-footer button.primary:hover:not(:disabled){filter:brightness(1.08);color:#fff}
+.context-footer button.magic{background:linear-gradient(135deg,#fb923c 0%,#f59e0b 100%);color:#0b1220;border-color:transparent;font-weight:800;padding:7px 16px;font-size:12px;}
+.context-footer button.magic:hover:not(:disabled){filter:brightness(1.05)}
+.context-footer button:disabled{opacity:0.55;cursor:not-allowed}
+.gen-status{font-size:11px;color:var(--text-dim);font-family:ui-monospace,monospace;letter-spacing:0.4px;padding-left:6px;}
+.gen-status.saving{color:var(--accent-light)}
+.gen-status.error{color:var(--red)}
+.gen-status.ok{color:var(--green)}
 
 .trame{background:var(--grad-card);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;margin-bottom:22px;box-shadow:var(--shadow-md);position:relative;}
 .trame::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--force-ink);border-radius:var(--radius) 0 0 var(--radius);}
 .trame-head{display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:12px;}
 .trame-head h2{font-size:15px;font-weight:800;color:var(--text);margin:0;letter-spacing:-0.2px;}
-.trame-head h2 .tag{background:var(--force-bg);color:var(--force-ink);font-size:10px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;padding:3px 8px;border-radius:3px;border:1px solid rgba(251,146,60,0.35);margin-left:6px;vertical-align:middle;}
 .trame-head .duree{font-size:11px;color:var(--text-mute);letter-spacing:0.5px;font-family:ui-monospace,monospace;}
 .trame-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;}
 .trame-step{background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;position:relative;overflow:hidden;}
@@ -97,6 +104,9 @@ h1 .accent{color:var(--accent-light)}
 .section-divider h2{font-size:13px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--accent-light);margin:0;}
 .section-divider.aero h2{color:var(--aero-ink)}
 .section-divider.force h2{color:var(--force-ink)}
+.section-divider.watch h2{color:var(--watch-ink)}
+.section-divider.rest h2{color:var(--rest-ink)}
+.section-divider.off h2{color:var(--off-ink)}
 .section-divider .rule{flex:1;height:1px;background:linear-gradient(90deg,var(--border) 0%,transparent 100%)}
 .section-divider .count{font-size:11px;color:var(--text-mute);letter-spacing:0.6px;font-family:ui-monospace,monospace;}
 
@@ -107,8 +117,9 @@ h1 .accent{color:var(--accent-light)}
 .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--border-strong);border-radius:var(--radius) 0 0 var(--radius);}
 .card.aero::before{background:var(--aero-ink)}
 .card.force::before{background:var(--force-ink)}
-.card.watch::before{background:var(--yellow)}
-.card.rest::before{background:var(--red)}
+.card.watch::before{background:var(--watch-ink)}
+.card.rest::before{background:var(--rest-ink)}
+.card.off::before{background:var(--off-ink)}
 .card:hover{border-color:rgba(56,182,255,0.35);box-shadow:var(--shadow-lg)}
 .card.solo{grid-column:1 / -1;max-width:900px;margin:0 auto}
 .card.mini{padding:12px 14px 10px;gap:8px}
@@ -141,31 +152,41 @@ h1 .accent{color:var(--accent-light)}
 
 .section-lbl{font-size:10px;letter-spacing:1.3px;text-transform:uppercase;color:var(--text-mute);margin:2px 0 6px;font-weight:700;}
 .note{color:var(--text-dim);font-size:13px;line-height:1.55}
-.note em{color:var(--text);font-style:normal;font-weight:600}
-.note.mini{font-size:12.5px;line-height:1.45}
+.note em,.note strong{color:var(--text);font-style:normal;font-weight:600}
 
 .plan{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:2px}
 .plan li{display:grid;grid-template-columns:auto 1fr auto;gap:12px;padding:8px 8px 8px 10px;border-radius:var(--radius-sm);font-size:13px;line-height:1.45;align-items:baseline;border-left:2px solid transparent;}
 .plan li:hover{background:var(--bg-elevated)}
+.plan li.hi{background:var(--accent-soft);border-left-color:var(--accent-light);}
 .step-num{font-size:11px;color:var(--text-mute);font-family:ui-monospace,monospace;min-width:1.8em;font-weight:600;}
 .step-txt{color:var(--text)}
-.step-txt b{font-weight:700;color:var(--accent-light)}
+.step-txt b,.step-txt strong{font-weight:700;color:var(--accent-light)}
 .step-dur{font-size:11px;color:var(--text-dim);font-family:ui-monospace,monospace;white-space:nowrap;font-weight:600;}
 
 .reco{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--text-dim);line-height:1.5}
-.reco b{color:var(--text);font-weight:600}
-.reco .flag{color:var(--accent-light);font-family:ui-monospace,monospace;font-size:10.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;display:inline-block;margin-right:4px}
+.reco b,.reco strong{color:var(--text);font-weight:600}
 
 .card-foot{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px;color:var(--text-dim);letter-spacing:0.4px;font-family:ui-monospace,monospace;}
 .card-foot b{color:var(--accent-light);font-weight:700}
 
 footer{margin-top:36px;padding-top:20px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-mute);display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;}
 
-.empty-hint{display:none;padding:40px 20px;text-align:center;color:var(--text-dim);font-size:14px;background:var(--grad-card);border:1px dashed var(--border);border-radius:var(--radius);}
+.empty-state{display:none;padding:40px 24px;text-align:center;color:var(--text-dim);font-size:14px;background:var(--grad-card);border:1px dashed var(--border);border-radius:var(--radius);margin-top:12px;box-shadow:var(--shadow-md);}
+.empty-state .icon{font-size:38px;margin-bottom:10px}
+.empty-state h2{font-size:17px;color:var(--text);margin:0 0 8px;font-weight:800}
+.empty-state p{max-width:520px;margin:0 auto;line-height:1.55}
+.empty-state small{display:block;margin-top:14px;color:var(--text-mute);font-size:11.5px}
+
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(8,17,30,0.72);backdrop-filter:blur(4px);z-index:100;align-items:center;justify-content:center;flex-direction:column;gap:14px;padding:24px;}
+.loading-overlay.show{display:flex}
+.loading-overlay .spin{width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-overlay .msg{color:var(--text);font-size:14px;font-weight:600;letter-spacing:0.2px;text-align:center}
+.loading-overlay .sub{color:var(--text-dim);font-size:12px;text-align:center;font-family:ui-monospace,monospace;letter-spacing:0.3px;max-width:400px}
 
 @media (max-width:900px){.filter{width:100%}}
 @media (max-width:640px){.wrap{padding:16px}.grid,.grid.compact{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.chips{max-width:100%}h1{font-size:22px}}
-@media print{body{background:#fff;color:#000}.card,.context,.trame,.masthead{background:#fff;color:#000;box-shadow:none;border-color:#ccc}.filter,footer{display:none}.grid{grid-template-columns:repeat(2,1fr);gap:10px}.card::before{display:none}}
+@media print{body{background:#fff;color:#000}.card,.context,.trame,.masthead{background:#fff;color:#000;box-shadow:none;border-color:#ccc}.filter,footer,.loading-overlay{display:none}.grid{grid-template-columns:repeat(2,1fr);gap:10px}.card::before{display:none}}
 </style>
 </head>
 <body>
@@ -174,71 +195,24 @@ footer{margin-top:36px;padding-top:20px;border-top:1px solid var(--border);font-
 <header class="masthead">
   <div class="masthead-top">
     <div class="title-block">
-      <div class="eyebrow">
+      <div class="eyebrow" id="eyebrow">
         <span class="dot"></span>
-        <span>Groupe National 2 · TEGG</span>
-        <span class="sep">·</span>
-        <span>Séance — ven. 28 août 2026</span>
-        <span class="sep">·</span>
-        <span>26 joueurs</span>
+        <span id="eyebrow-text">Chargement…</span>
       </div>
-      <h1>Force terrain <span class="accent">+</span> aérobie blessés</h1>
-      <p class="lede">
-        Plan bâti sur la consigne du staff&nbsp;: <em>travail de force sur le terrain avec les valides, aérobie continue pour les joueurs blessés</em>. La trame collective ci-dessous cadre la séance des 21 valides ; chaque carte joueur précise l'adaptation à faire selon son état (charge 7&nbsp;j, Hooper du 27/08, kiné, blessures actives).
-      </p>
+      <h1 id="title">Recommandation d'entraînement</h1>
+      <p class="lede" id="lede">Plan individualisé généré à partir de la suggestion staff + données joueurs (RPE 7j, GPS 7j, Hooper du jour, kiné 21j, blessures actives).</p>
+      <div class="gen-meta" id="gen-meta"></div>
     </div>
     <div class="filter" id="filter-block">
       <label for="jump">🔎 Vue individuelle</label>
-      <select id="jump">
-        <option value="__all__">👥 Toute l'équipe (26)</option>
-        <optgroup label="Groupe aérobie — retour progressif (5)">
-          <option value="Paul">Paul · Milieu</option>
-          <option value="Amine">Amine · Milieu</option>
-          <option value="Belko">Belko · Milieu</option>
-          <option value="Kacou">Kacou · Ailier</option>
-          <option value="Sekou">Sekou · Ailier</option>
-        </optgroup>
-        <optgroup label="Force terrain — à surveiller (6)">
-          <option value="Mohamed">Mohamed · Milieu</option>
-          <option value="Olivier">Olivier · Défenseur central</option>
-          <option value="Odilon">Odilon · Ailier</option>
-          <option value="Mae">Mae · Latéral</option>
-          <option value="Louis">Louis · Ailier</option>
-          <option value="Mandiaye">Mandiaye · Ailier</option>
-        </optgroup>
-        <optgroup label="Force terrain — charge élevée (adapter volume) (5)">
-          <option value="Yohan">Yohan · Latéral</option>
-          <option value="Erwann">Erwann · Ailier</option>
-          <option value="Wilfried">Wilfried · Attaquant</option>
-          <option value="Jafar">Jafar · Latéral</option>
-          <option value="Ousmane">Ousmane · Attaquant</option>
-        </optgroup>
-        <optgroup label="Force terrain — plein régime (10)">
-          <option value="Alassane">Alassane · Gardien</option>
-          <option value="Diome">Diome · Défenseur central</option>
-          <option value="Joao">Joao</option>
-          <option value="Johan">Johan · Milieu</option>
-          <option value="Mara">Mara · Latéral</option>
-          <option value="Maria">Maria · Milieu</option>
-          <option value="Melvin">Melvin · Gardien</option>
-          <option value="Mody">Mody · Gardien</option>
-          <option value="Morel">Morel · Milieu</option>
-          <option value="Pape">Pape · Défenseur central</option>
-        </optgroup>
-      </select>
-      <div class="pager" id="pager" aria-label="Navigation joueur">
+      <select id="jump"><option value="__all__">👥 Toute l'équipe</option></select>
+      <div class="pager" id="pager">
         <button type="button" class="prev" id="pager-prev" onclick="stepPlayer(-1)" title="Joueur précédent">← Préc.</button>
         <div class="current"><b id="pager-name">—</b><span class="pos" id="pager-pos"></span></div>
         <button type="button" class="next" id="pager-next" onclick="stepPlayer(1)" title="Joueur suivant">Suiv. →</button>
       </div>
       <button class="clear" onclick="clearFilter()">← Retour à la vue équipe</button>
     </div>
-  </div>
-  <div class="legend">
-    <div><b>Hooper</b> vert ≤9 · orange 10–13 · rouge ≥14</div>
-    <div><b>Charge&nbsp;km</b> distance cumulée 7j</div>
-    <div><b>Vmax</b> pic 14j (km/h)</div>
-    <div><b>Chip</b> ok=vert · attention=jaune · charge=orange · repos=rouge</div>
   </div>
 </header>
 
@@ -248,507 +222,273 @@ footer{margin-top:36px;padding-top:20px;border-top:1px solid var(--border);font-
     <span class="meta" id="context-meta"></span>
   </div>
   <div class="context-body">
-    <textarea id="context-text" placeholder="Décris l'objectif de la séance : type de bloc (force, aérobie, prévention, jeu réduit…), qui bosse quoi (valides / blessés / groupes), consignes spécifiques par joueur, contraintes matériel ou temps. Le plan ci-dessous sera adapté à cette consigne."></textarea>
+    <textarea id="context-text" placeholder="Décris l'objectif de la séance : type de bloc (force, aérobie, prévention, jeu réduit…), qui bosse quoi (valides / blessés / groupes), consignes spécifiques par joueur, contraintes matériel ou temps. Puis clique 🪄 Générer le plan pour que Claude construise les cartes joueurs."></textarea>
     <div class="context-footer">
-      <div class="hint">Auto-enregistré 1,5 s après la dernière frappe · partagé avec le staff de l'entité pour cette date. <b style="color:var(--accent-light);">📌 La régénération automatique du plan est en cours de mise en place</b> — pour l'instant, une fois ta suggestion enregistrée, ping le staff performance pour qu'il rebuild les cartes en fonction (individuel, collectif ou en groupes).</div>
+      <div class="hint">Auto-enregistré 1,5 s après la dernière frappe · partagé avec le staff pour cette date. <b style="color:var(--accent-light);">Génère le plan</b> pour l'appliquer aux 26 cartes joueurs en s'appuyant sur les données du jour.</div>
       <div class="actions">
         <input type="date" id="context-date" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 10px;font-family:inherit;font-size:12px;">
         <button type="button" onclick="saveContextNow()" class="primary">💾 Enregistrer</button>
+        <button type="button" id="btn-generate" onclick="generatePlan()" class="magic">🪄 Générer le plan</button>
+        <span class="gen-status" id="gen-status"></span>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ============================================================ -->
-<section class="trame" id="trame-collective">
-  <div class="trame-head">
-    <h2>🎯 Trame collective <span class="tag">Force terrain</span></h2>
-    <span class="duree">21 joueurs valides · ~85 min</span>
-  </div>
-  <div class="trame-body">
-    <div class="trame-step">
-      <span class="n">01 · Activation</span>
-      <div class="t">Mobilité + activation neuromusculaire</div>
-      <div class="d">Hanches, thoracique, chaîne postérieure. Bandes glutes/adducteurs, mini-hurdles, sprint drills faibles amplitudes.</div>
-      <span class="dur">12 min</span>
-    </div>
-    <div class="trame-step">
-      <span class="n">02 · Sprints PAP</span>
-      <div class="t">Sprints courts (post-activation potentiation)</div>
-      <div class="d">4×20 m à 90&nbsp;% · 2×30 m à 95&nbsp;% · récup complète 90&nbsp;s entre sprints. Objectif&nbsp;: solliciter les qualités neuro sans fatigue.</div>
-      <span class="dur">15 min</span>
-    </div>
-    <div class="trame-step">
-      <span class="n">03 · Force / puissance</span>
-      <div class="t">Bloc force explosive</div>
-      <div class="d">4×5 sauts contre-mouvement + 4×5 medicine-ball throws (chest / rotation). Récup 60&nbsp;s. Intensité max, contrôle du geste.</div>
-      <span class="dur">15 min</span>
-    </div>
-    <div class="trame-step">
-      <span class="n">04 · Résistance</span>
-      <div class="t">Traîneau / échelle chargée</div>
-      <div class="d">4×30 m poussée traîneau (~40&nbsp;kg) OU 4×15" échelle+saut+course 10 m. Récup 90&nbsp;s. Focus poussée horizontale.</div>
-      <span class="dur">15 min</span>
-    </div>
-    <div class="trame-step">
-      <span class="n">05 · Jeu de force</span>
-      <div class="t">Duels 1v1 + finitions</div>
-      <div class="d">2×3&nbsp;min duels dos-face-latéral, entrées / sorties de but sur passe croisée. Intensité match, expression force.</div>
-      <span class="dur">15 min</span>
-    </div>
-    <div class="trame-step">
-      <span class="n">06 · Retour au calme</span>
-      <div class="t">Jog + étirements passifs</div>
-      <div class="d">Jog 5 min faible intensité + étirements ischios / adducteurs / quadri. Bain froid en option pour les charges les plus élevées.</div>
-      <span class="dur">13 min</span>
-    </div>
-  </div>
-  <div class="trame-foot">
-    <b>Adaptations individuelles</b> — chaque carte joueur précise les ajustements&nbsp;: baisser le volume sprints pour les charges élevées (Yohan, Erwann, Wilfried), remplacer traîneau par renfo iso pour les zones sensibles (Olivier ischios, Mohamed adducteur, Mae ischios), garder haut du corps allégé pour Yohan (courbatures pecs/épaules). Melvin&nbsp;/ Mody&nbsp;/ Alassane suivent séance GB dédiée en parallèle.
-  </div>
-</section>
+<section id="trame-container"></section>
+<div id="sections-container"></div>
 
-<div class="empty-hint" id="empty-hint">Aucun joueur ne correspond à ce filtre.</div>
-
-<!-- ============================================================ -->
-<div class="section-divider aero" data-section="aero">
-  <h2>Groupe aérobie — retour progressif</h2>
-  <div class="rule"></div>
-  <span class="count">5 joueurs · salle + tapis/vélo</span>
-</div>
-<div class="grid" data-section="aero">
-
-  <div class="card rest" data-joueur="Paul">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Paul</div><span class="poste">Milieu</span></div>
-      <div class="chips"><span class="chip danger">Post-visco 48 h</span><span class="chip warn">Genou · orange</span></div>
-    </div>
-    <div class="stats">
-      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val warn">10</span></div>
-      <div class="stat"><span class="stat-lbl">Charge km</span><span class="stat-val dim">7.9</span></div>
-      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val dim">26.4</span></div>
-      <div class="stat"><span class="stat-lbl">Douleur</span><span class="stat-val warn">Genou D</span></div>
-    </div>
-    <div>
-      <div class="section-lbl">Contexte kiné</div>
-      <p class="note">Visco du 26/08 — 48 h post-injection. <em>Reprise très prudente autorisée</em> mais aucun impact au sol, pas de terrain aujourd'hui.</p>
-    </div>
-    <ol class="plan">
-      <li><span class="step-num">01</span><span class="step-txt">Marche tapis inclinée 4&nbsp;% à 5 km/h.</span><span class="step-dur">15 min</span></li>
-      <li><span class="step-num">02</span><span class="step-txt"><b>Vélo</b> continu, résistance très basse, RPE 3/10.</span><span class="step-dur">25 min</span></li>
-      <li><span class="step-num">03</span><span class="step-txt">Mobilité + étirements passifs chaîne post.</span><span class="step-dur">10 min</span></li>
-      <li><span class="step-num">04</span><span class="step-txt">Bain froid genou.</span><span class="step-dur">10 min</span></li>
-    </ol>
-    <div class="card-foot"><span>Aérobie continu très léger</span><b>~60 min</b></div>
-  </div>
-
-  <div class="card aero" data-joueur="Amine">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Amine</div><span class="poste">Milieu</span></div>
-      <div class="chips"><span class="chip warn">Cheville D · IRM</span></div>
-    </div>
-    <div class="stats">
-      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val ok">7</span></div>
-      <div class="stat"><span class="stat-lbl">Charge km</span><span class="stat-val dim">—</span></div>
-      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val dim">—</span></div>
-      <div class="stat"><span class="stat-lbl">Douleur</span><span class="stat-val warn">LFTA D</span></div>
-    </div>
-    <div>
-      <div class="section-lbl">Contexte kiné</div>
-      <p class="note">Mobilisation cheville + proprio + renfo 26/08. IRM attendue — <em>cheville protégée</em>, pas d'appui répété.</p>
-    </div>
-    <ol class="plan">
-      <li><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> bras + jambes, résistance moyenne, cadence 80 rpm.</span><span class="step-dur">30 min</span></li>
-      <li><span class="step-num">02</span><span class="step-txt">Renfo cheville + soléaire iso 3×30".</span><span class="step-dur">10 min</span></li>
-      <li><span class="step-num">03</span><span class="step-txt">Gainage transverse au sol 3×30".</span><span class="step-dur">10 min</span></li>
-      <li><span class="step-num">04</span><span class="step-txt">Étirements + froid.</span><span class="step-dur">10 min</span></li>
-    </ol>
-    <div class="card-foot"><span>Aérobie sans appui</span><b>~60 min</b></div>
-  </div>
-
-  <div class="card aero" data-joueur="Belko">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Belko</div><span class="poste">Milieu</span></div>
-      <div class="chips"><span class="chip warn">Symphyse · orange</span><span class="chip neutral">Terrain OK (léger)</span></div>
-    </div>
-    <div class="stats">
-      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val warn">13</span></div>
-      <div class="stat"><span class="stat-lbl">Charge km</span><span class="stat-val dim">—</span></div>
-      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val dim">—</span></div>
-      <div class="stat"><span class="stat-lbl">Douleur</span><span class="stat-val warn">Adducteurs G+D</span></div>
-    </div>
-    <div>
-      <div class="section-lbl">Contexte kiné (26/08)</div>
-      <p class="note">« Travail terrain avec Lucas » validé. <em>Aérobie continue possible sur terrain</em>, mais pas de sprint max, pas de changement d'appui violent.</p>
-    </div>
-    <ol class="plan">
-      <li><span class="step-num">01</span><span class="step-txt">Activation adducteurs sans charge + mobilité hanches.</span><span class="step-dur">10 min</span></li>
-      <li><span class="step-num">02</span><span class="step-txt"><b>Course continue</b> terrain, RPE 5-6/10, allure aérobie.</span><span class="step-dur">25 min</span></li>
-      <li><span class="step-num">03</span><span class="step-txt">Adducteurs iso&nbsp;: Copenhagen 3×20" + squeeze 3×20".</span><span class="step-dur">10 min</span></li>
-      <li><span class="step-num">04</span><span class="step-txt">Gainage transverse + bain froid.</span><span class="step-dur">15 min</span></li>
-    </ol>
-    <div class="card-foot"><span>Aérobie terrain + iso</span><b>~60 min</b></div>
-  </div>
-
-  <div class="card aero" data-joueur="Kacou">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Kacou</div><span class="poste">Ailier</span></div>
-      <div class="chips"><span class="chip warn">Pubalgie · rechute</span><span class="chip neutral">Réathlé samedi</span></div>
-    </div>
-    <div class="stats">
-      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val warn">12</span></div>
-      <div class="stat"><span class="stat-lbl">Charge km</span><span class="stat-val dim">—</span></div>
-      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val dim">—</span></div>
-      <div class="stat"><span class="stat-lbl">Douleur</span><span class="stat-val warn">Add. + dos</span></div>
-    </div>
-    <div>
-      <div class="section-lbl">Contexte</div>
-      <p class="note">Dernière séance avant entrée en protocole réathlé (30/08). <em>Aérobie salle uniquement</em>, calque de la séance kiné du matin.</p>
-    </div>
-    <ol class="plan">
-      <li><span class="step-num">01</span><span class="step-txt"><b>Vélo</b> 15 min + elliptique variation résistance 12 min.</span><span class="step-dur">27 min</span></li>
-      <li><span class="step-num">02</span><span class="step-txt">Mobilité hanches + dos.</span><span class="step-dur">10 min</span></li>
-      <li><span class="step-num">03</span><span class="step-txt">Chaîne transverse / obliques 3×30".</span><span class="step-dur">10 min</span></li>
-      <li><span class="step-num">04</span><span class="step-txt">Massage kiné + bain froid.</span><span class="step-dur">15 min</span></li>
-    </ol>
-    <div class="card-foot"><span>Salle uniquement</span><b>~65 min</b></div>
-  </div>
-
-  <div class="card aero" data-joueur="Sekou">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Sekou</div><span class="poste">Ailier</span></div>
-      <div class="chips"><span class="chip neutral">Retour prog. adducteurs</span></div>
-    </div>
-    <div class="stats">
-      <div class="stat"><span class="stat-lbl">Hooper</span><span class="stat-val warn">11</span></div>
-      <div class="stat"><span class="stat-lbl">Charge km</span><span class="stat-val">25.6</span></div>
-      <div class="stat"><span class="stat-lbl">Vmax</span><span class="stat-val">26.6</span></div>
-      <div class="stat"><span class="stat-lbl">Douleur</span><span class="stat-val ok">Aucune</span></div>
-    </div>
-    <div>
-      <div class="section-lbl">Contexte kiné (26/08)</div>
-      <p class="note">Proprio bosu + renfo kettlebell validé. <em>Course continue possible</em>, éviter accélérations max et COD haute vitesse.</p>
-    </div>
-    <ol class="plan">
-      <li><span class="step-num">01</span><span class="step-txt">Activation + mobilité hanches + adducteurs.</span><span class="step-dur">10 min</span></li>
-      <li><span class="step-num">02</span><span class="step-txt"><b>Course continue</b> terrain, RPE 5-6/10 (progression).</span><span class="step-dur">25 min</span></li>
-      <li><span class="step-num">03</span><span class="step-txt">Renfo transverse + stabilisateurs hanche.</span><span class="step-dur">12 min</span></li>
-      <li><span class="step-num">04</span><span class="step-txt">Étirements adducteurs + froid.</span><span class="step-dur">10 min</span></li>
-    </ol>
-    <div class="card-foot"><span>Aérobie modérée</span><b>~60 min</b></div>
-  </div>
-
-</div>
-
-<!-- ============================================================ -->
-<div class="section-divider force" data-section="watch">
-  <h2>Force terrain — à surveiller</h2>
-  <div class="rule"></div>
-  <span class="count">6 joueurs · zone à protéger, adapter</span>
-</div>
-<div class="grid compact" data-section="watch">
-
-  <div class="card mini watch" data-joueur="Mohamed">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Mohamed</div><span class="poste">Milieu</span></div>
-      <div class="chips"><span class="chip watch">Adducteur G</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Adaptation</span>Pas d'accélérations max sur la première jambe G. Remplacer traîneau par 4×15" iso Copenhagen. Course continue OK. Hooper 13 = surveiller sensation.</span></div>
-  </div>
-
-  <div class="card mini watch" data-joueur="Olivier">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Olivier</div><span class="poste">Défenseur central</span></div>
-      <div class="chips"><span class="chip watch">Ischios G · contracture</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Adaptation</span>Skip sprints PAP (bloc 02) — trop tôt post-RDL prescrit. Remplacer par activation ischios manuelle (kiné) puis intégrer force/duels à partir du bloc 03. Sortir avant les duels 1v1 si sensation.</span></div>
-  </div>
-
-  <div class="card mini watch" data-joueur="Odilon">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Odilon</div><span class="poste">Ailier</span></div>
-      <div class="chips"><span class="chip watch">Ischio D · post-croisé</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Adaptation</span>Sprints PAP OK mais ajouter 3× single-leg RDL D en activation. Éviter décélérations max. Bloc 04 traîneau à 60&nbsp;% de la charge.</span></div>
-  </div>
-
-  <div class="card mini watch" data-joueur="Mae">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Mae</div><span class="poste">Latéral</span></div>
-      <div class="chips"><span class="chip watch">Ischio D</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Adaptation</span>Activation ischios prolongée (nordic 3×5 pré-séance). Séance complète possible, sortir si tension. Sortie ischio D à checker post-séance.</span></div>
-  </div>
-
-  <div class="card mini watch" data-joueur="Louis">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Louis</div><span class="poste">Ailier</span></div>
-      <div class="chips"><span class="chip watch">Adducteur D</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Adaptation</span>Hooper 12 = surveiller. OK sur trame complète, alléger le bloc traîneau (2×30 m au lieu de 4) et prioriser mobilité hanches en cool-down.</span></div>
-  </div>
-
-  <div class="card mini watch" data-joueur="Mandiaye">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Mandiaye</div><span class="poste">Ailier</span></div>
-      <div class="chips"><span class="chip watch">Genou G + ischio D</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Adaptation</span>Wall sit 3×30" + bird-dog en activation. Trame OK, éviter appuis pied G lourds (choisir traîneau tirage plutôt que poussée si possible).</span></div>
-  </div>
-
-</div>
-
-<!-- ============================================================ -->
-<div class="section-divider force" data-section="charge">
-  <h2>Force terrain — charge élevée (adapter volume)</h2>
-  <div class="rule"></div>
-  <span class="count">5 joueurs · >45 km/7j — baisser le volume</span>
-</div>
-<div class="grid compact" data-section="charge">
-
-  <div class="card mini force" data-joueur="Yohan">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Yohan</div><span class="poste">Latéral</span></div>
-      <div class="chips"><span class="chip warn">51.5 km / 7j</span><span class="chip watch">Épaules courbaturées</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Adaptation</span>Volume sprints réduit&nbsp;: 3×20 m + 1×30 m. Skip medicine-ball throws (épaules/pecs courbaturés du 27). Duels 1v1 OK. Étirements haut du corps ++.</span></div>
-  </div>
-
-  <div class="card mini force" data-joueur="Erwann">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Erwann</div><span class="poste">Ailier</span></div>
-      <div class="chips"><span class="chip warn">49.8 km / 7j</span><span class="chip watch">Récup quadri</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Adaptation</span>Skip 1 sprint sur 6 (5×20 m au lieu de 4×20 + 2×30). Bloc traîneau à 60&nbsp;% charge. Iso cheville en activation. Sortir 5 min plus tôt.</span></div>
-  </div>
-
-  <div class="card mini force" data-joueur="Wilfried">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Wilfried</div><span class="poste">Attaquant</span></div>
-      <div class="chips"><span class="chip warn">46.9 km / 7j</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Adaptation</span>Trame complète possible mais réduire duels 1v1 à 2×2 min. Bain froid post-séance obligatoire.</span></div>
-  </div>
-
-  <div class="card mini force" data-joueur="Jafar">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Jafar</div><span class="poste">Latéral</span></div>
-      <div class="chips"><span class="chip warn">46.4 km / 7j</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Adaptation</span>Nordic partiel 3×5 en activation (prévention ischio D). Traîneau à 60&nbsp;% charge. Sortie à checker post-séance.</span></div>
-  </div>
-
-  <div class="card mini force" data-joueur="Ousmane">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Ousmane</div><span class="poste">Attaquant</span></div>
-      <div class="chips"><span class="chip warn">44.5 km / 7j</span><span class="chip watch">Iso ischio G</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Adaptation</span>Iso ischio G 3×45" en activation (prescription kiné). Trame complète OK. Étirements ischios prolongés.</span></div>
-  </div>
-
-</div>
-
-<!-- ============================================================ -->
-<div class="section-divider force" data-section="go">
-  <h2>Force terrain — plein régime</h2>
-  <div class="rule"></div>
-  <span class="count">10 joueurs · aucun signal négatif</span>
-</div>
-<div class="grid compact" data-section="go">
-
-  <div class="card mini force" data-joueur="Alassane">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Alassane</div><span class="poste">Gardien</span></div>
-      <div class="chips"><span class="chip ok">Frais</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Séance GB</span>Trame GB spécifique (jump squat + Bulgarian split + rotateurs épaule). Peut se joindre à la trame collective sur les blocs 01 activation et 06 cool-down.</span></div>
-  </div>
-
-  <div class="card mini force" data-joueur="Diome">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Diome</div><span class="poste">Défenseur central</span></div>
-      <div class="chips"><span class="chip ok">OK (béquille validée)</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Full</span>Trame complète. Béquille cuisse D validée par kiné le 24/08. Rouleau cuisse D en cool-down.</span></div>
-  </div>
-
-  <div class="card mini force" data-joueur="Joao">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Joao</div><span class="poste">—</span></div>
-      <div class="chips"><span class="chip ok">Frais · essai</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Full</span>Trame complète, observer la tolérance (charge cumulée basse). Peut être un bon test physique.</span></div>
-  </div>
-
-  <div class="card mini force" data-joueur="Johan">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Johan</div><span class="poste">Milieu</span></div>
-      <div class="chips"><span class="chip ok">OK</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Full</span>Trame complète. Quadri chargés en début de semaine, RAS ce matin. Rouleau quadri en cool-down.</span></div>
-  </div>
-
-  <div class="card mini force" data-joueur="Mara">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Mara</div><span class="poste">Latéral</span></div>
-      <div class="chips"><span class="chip ok">Frais</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Full</span>Trame complète. Peut charger fort — bon vecteur pour la Vmax (31.0). Ajouter 1 sprint sur signal si en forme.</span></div>
-  </div>
-
-  <div class="card mini force" data-joueur="Maria">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Maria</div><span class="poste">Milieu</span></div>
-      <div class="chips"><span class="chip ok">Très frais</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Full</span>Meilleur Hooper (4). Bosser à intensité max. Peut prendre le rôle de leader / signal pour le groupe.</span></div>
-  </div>
-
-  <div class="card mini force" data-joueur="Melvin">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Melvin</div><span class="poste">Gardien</span></div>
-      <div class="chips"><span class="chip watch">Genou D (protocole)</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Séance GB</span>Trame GB adaptée. Renfo quadri unilatéral D obligatoire (protocole tendon rotulien). Pas de plyo bilatérale lourde. Bain froid.</span></div>
-  </div>
-
-  <div class="card mini force" data-joueur="Mody">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Mody</div><span class="poste">Gardien</span></div>
-      <div class="chips"><span class="chip ok">Top forme</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Séance GB</span>Trame GB à intensité max. Gainage anti-extension prolongé (préventif lombaires).</span></div>
-  </div>
-
-  <div class="card mini force" data-joueur="Morel">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Morel</div><span class="poste">Milieu</span></div>
-      <div class="chips"><span class="chip ok">Post-fièvre OK</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Full mesuré</span>Trame OK, sortie post-fièvre : surveiller les 15 premières min. Sortir sur signal si sensation.</span></div>
-  </div>
-
-  <div class="card mini force" data-joueur="Pape">
-    <div class="card-head">
-      <div class="name-block"><div class="name">Pape</div><span class="poste">Défenseur central</span></div>
-      <div class="chips"><span class="chip ok">OK</span></div>
-    </div>
-    <div class="reco"><span><span class="flag">Full</span>Trame complète. Ajouter respiration 4-7-8 en cool-down (stress 5/7 déclaré hier).</span></div>
-  </div>
-
+<div class="empty-state" id="empty-state">
+  <div class="icon">📋</div>
+  <h2>Aucun plan généré pour cette date</h2>
+  <p>Écris ta suggestion ci-dessus (objectif, contraintes, groupes) puis clique <b>🪄 Générer le plan</b>. Claude construira les cartes individuelles en croisant ta consigne avec les données du jour (RPE, GPS, Hooper, kiné, blessures).</p>
+  <small>La génération prend environ 20-40 secondes.</small>
 </div>
 
 <footer>
-  <span>Généré depuis StatField · données arrêtées au 27/08/2026. Hooper du jour, GPS 7j, kiné 3 derniers jours, blessures actives.</span>
-  <span>Consigne staff du 28/08&nbsp;: force terrain valides + aérobie blessés. À valider par le staff médical avant diffusion.</span>
+  <span id="footer-note">Généré depuis StatField · données fraîches à la demande via Claude.</span>
+  <span>À valider par le staff médical avant diffusion.</span>
 </footer>
 
 </div>
 
+<div class="loading-overlay" id="loading">
+  <div class="spin"></div>
+  <div class="msg" id="loading-msg">Génération en cours…</div>
+  <div class="sub">Claude analyse RPE, GPS, Hooper, kiné et blessures pour chaque joueur et construit les recommandations.</div>
+</div>
+
 <script>
-(function(){
-  const sel = document.getElementById('jump');
-  const filterBlock = document.getElementById('filter-block');
-  const trame = document.getElementById('trame-collective');
-  const emptyHint = document.getElementById('empty-hint');
-  const cards = document.querySelectorAll('.card[data-joueur]');
-  const dividers = document.querySelectorAll('.section-divider[data-section]');
-  const grids = document.querySelectorAll('.grid[data-section]');
-  const pagerPrev = document.getElementById('pager-prev');
-  const pagerNext = document.getElementById('pager-next');
-  const pagerName = document.getElementById('pager-name');
-  const pagerPos  = document.getElementById('pager-pos');
+/* ============================================================
+ * Rendu du plan (data-driven depuis reco_generated_plan.plan)
+ * ============================================================ */
+function esc(s){ return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function md(s){
+  return esc(s)
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+}
+function safeVariant(v, fallback){ return ['aero','force','watch','off','rest','default'].includes(String(v)) ? v : (fallback || 'default'); }
+function safeChipKind(v){ return ['ok','warn','danger','watch','neutral','aero','force'].includes(String(v)) ? v : 'neutral'; }
+function safeTone(v){ return ['ok','warn','danger','dim',''].includes(String(v)) ? v : ''; }
 
-  const players = Array.from(sel.querySelectorAll('option'))
-    .map(o => o.value)
-    .filter(v => v && v !== '__all__');
+const PLAYERS_ORDER = [];
 
-  function updatePager(v){
-    if (v === '__all__' || !v){
-      pagerName.textContent = 'Toute l\'équipe';
-      pagerPos.textContent = '· 0 / ' + players.length;
-      pagerPrev.disabled = true;
-      pagerNext.disabled = players.length === 0;
-      return;
-    }
-    const i = players.indexOf(v);
-    pagerName.textContent = v;
-    pagerPos.textContent = (i >= 0) ? ('· ' + (i + 1) + ' / ' + players.length) : '';
-    pagerPrev.disabled = false;
-    pagerNext.disabled = i < 0 || i >= players.length - 1;
-  }
+function renderTrame(collective){
+  const c = document.getElementById('trame-container');
+  if (!collective || typeof collective !== 'object') { c.innerHTML = ''; return; }
+  const steps = (collective.steps || []).map(s => `
+    <div class="trame-step">
+      <span class="n">${esc(s.n || '')}</span>
+      <div class="t">${md(s.title || '')}</div>
+      <div class="d">${md(s.description || '')}</div>
+      ${s.duration ? `<span class="dur">${esc(s.duration)}</span>` : ''}
+    </div>`).join('');
+  c.innerHTML = `
+    <section class="trame">
+      <div class="trame-head">
+        <h2>🎯 ${md(collective.title || 'Trame collective')}</h2>
+        ${collective.duration ? `<span class="duree">${esc(collective.subtitle || '')} ${esc(collective.subtitle) ? '·' : ''} ${esc(collective.duration)}</span>` : (collective.subtitle ? `<span class="duree">${esc(collective.subtitle)}</span>` : '')}
+      </div>
+      <div class="trame-body">${steps}</div>
+      ${collective.footer ? `<div class="trame-foot">${md(collective.footer)}</div>` : ''}
+    </section>`;
+}
 
-  function apply(v){
-    const all = (v === '__all__' || !v);
-    filterBlock.classList.toggle('filtered', !all);
-    if (trame) trame.style.display = all ? '' : 'none';
+function renderCard(card, sectionVariant, layout){
+  const variant = safeVariant(card.variant, sectionVariant);
+  const chips = (card.chips || []).map(ch => `<span class="chip ${safeChipKind(ch.kind)}">${esc(ch.label || '')}</span>`).join('');
+  const stats = (card.stats && card.stats.length) ? `<div class="stats">${card.stats.map(st => `<div class="stat"><span class="stat-lbl">${esc(st.lbl || '')}</span><span class="stat-val ${safeTone(st.tone)}">${esc(st.val || '')}</span></div>`).join('')}</div>` : '';
+  const context = (card.context_note) ? `<div><div class="section-lbl">${esc(card.context_label || 'Contexte')}</div><p class="note">${md(card.context_note)}</p></div>` : '';
+  const steps = (card.steps && card.steps.length) ? `<ol class="plan">${card.steps.map(s => `<li${s.highlight ? ' class="hi"' : ''}><span class="step-num">${esc(s.n || '')}</span><span class="step-txt">${md(s.text || '')}</span>${s.duration ? `<span class="step-dur">${esc(s.duration)}</span>` : '<span class="step-dur"></span>'}</li>`).join('')}</ol>` : '';
+  const reco = (card.reco) ? `<div class="reco"><span>${md(card.reco)}</span></div>` : '';
+  const foot = (card.foot_left || card.foot_right) ? `<div class="card-foot"><span>${esc(card.foot_left || '')}</span><b>${esc(card.foot_right || '')}</b></div>` : '';
+  const miniClass = (layout === 'compact') ? ' mini' : '';
+  return `
+    <div class="card ${variant}${miniClass}" data-joueur="${esc(card.joueur || '')}">
+      <div class="card-head">
+        <div class="name-block"><div class="name">${esc(card.joueur || '')}</div>${card.poste ? `<span class="poste">${esc(card.poste)}</span>` : ''}</div>
+        ${chips ? `<div class="chips">${chips}</div>` : ''}
+      </div>
+      ${stats}
+      ${context}
+      ${steps}
+      ${reco}
+      ${foot}
+    </div>`;
+}
 
-    let matched = 0;
-    cards.forEach(c => {
-      const match = all || c.dataset.joueur === v;
-      c.style.display = match ? '' : 'none';
-      c.classList.toggle('solo', !all && match);
-      if (match) matched++;
-    });
-
-    grids.forEach(g => {
-      const anyVisible = Array.from(g.querySelectorAll('.card')).some(c => c.style.display !== 'none');
-      g.style.display = anyVisible ? '' : 'none';
-    });
-    dividers.forEach(d => {
-      const sec = d.dataset.section;
-      const grid = document.querySelector('.grid[data-section="' + sec + '"]');
-      d.style.display = (grid && grid.style.display !== 'none') ? '' : 'none';
-    });
-
-    emptyHint.style.display = matched === 0 ? 'block' : 'none';
-    updatePager(v);
-
-    if (!all) {
-      const first = document.querySelector('.card[data-joueur="' + v + '"]');
-      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  }
-
-  sel.addEventListener('change', e => apply(e.target.value));
-  window.clearFilter = function(){ sel.value = '__all__'; apply('__all__'); };
-  window.stepPlayer = function(delta){
-    if (players.length === 0) return;
-    const cur = sel.value;
-    if (cur === '__all__' || !cur){
-      if (delta > 0) { sel.value = players[0]; apply(players[0]); }
-      return;
-    }
-    const i = players.indexOf(cur);
-    const next = i + delta;
-    if (next < 0) { sel.value = '__all__'; apply('__all__'); return; }
-    if (next >= players.length) return;
-    sel.value = players[next];
-    apply(players[next]);
-  };
-  document.addEventListener('keydown', e => {
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
-    if (e.key === 'ArrowLeft') { e.preventDefault(); window.stepPlayer(-1); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); window.stepPlayer(1); }
+function renderSections(sections){
+  PLAYERS_ORDER.length = 0;
+  const c = document.getElementById('sections-container');
+  const parts = [];
+  const bySection = {};
+  (sections || []).forEach((sec, idx) => {
+    const variant = safeVariant(sec.variant, 'default');
+    const layout = sec.layout === 'compact' ? 'compact' : 'full';
+    const id = sec.id || ('sec' + idx);
+    const count = (sec.cards || []).length;
+    parts.push(`
+      <div class="section-divider ${variant}" data-section="${esc(id)}">
+        <h2>${md(sec.title || '')}</h2>
+        <div class="rule"></div>
+        <span class="count">${esc(sec.subtitle || (count + ' joueur' + (count > 1 ? 's' : '')))}</span>
+      </div>
+      <div class="grid ${layout === 'compact' ? 'compact' : ''}" data-section="${esc(id)}">
+        ${(sec.cards || []).map(card => { if (card.joueur) PLAYERS_ORDER.push({ nom: card.joueur, poste: card.poste || '', section: sec.title || '' }); return renderCard(card, variant, layout); }).join('')}
+      </div>`);
   });
-  updatePager(sel.value);
-})();
+  c.innerHTML = parts.join('');
+  rebuildJumpSelect();
+}
 
-/* Suggestion d'entraînement — persisté côté parent (postMessage). */
+function rebuildJumpSelect(){
+  const sel = document.getElementById('jump');
+  const bySection = {};
+  PLAYERS_ORDER.forEach(p => { (bySection[p.section] ||= []).push(p); });
+  const opts = ['<option value="__all__">👥 Toute l\'équipe (' + PLAYERS_ORDER.length + ')</option>'];
+  Object.entries(bySection).forEach(([sec, list]) => {
+    opts.push(`<optgroup label="${esc(sec + ' (' + list.length + ')')}">${list.map(p => `<option value="${esc(p.nom)}">${esc(p.nom + (p.poste ? ' · ' + p.poste : ''))}</option>`).join('')}</optgroup>`);
+  });
+  sel.innerHTML = opts.join('');
+  sel.value = '__all__';
+  updatePager('__all__');
+}
+
+function renderPlan(plan){
+  if (!plan || typeof plan !== 'object') { showEmpty(); return; }
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('title').innerHTML = md(plan.title || 'Recommandation d\'entraînement');
+  document.getElementById('lede').innerHTML = md(plan.lede || '');
+  const eb = document.getElementById('eyebrow-text');
+  if (plan.eyebrow) eb.textContent = plan.eyebrow;
+  renderTrame(plan.collective);
+  renderSections(plan.sections);
+  applyFilter('__all__');
+}
+
+function showEmpty(){
+  document.getElementById('trame-container').innerHTML = '';
+  document.getElementById('sections-container').innerHTML = '';
+  PLAYERS_ORDER.length = 0;
+  rebuildJumpSelect();
+  document.getElementById('empty-state').style.display = 'block';
+  document.getElementById('gen-meta').innerHTML = '';
+}
+
+function setGenMeta(plan, meta){
+  const el = document.getElementById('gen-meta');
+  if (!plan) { el.innerHTML = ''; return; }
+  const parts = [];
+  if (meta && meta.generated_at) {
+    const d = new Date(meta.generated_at);
+    parts.push('Généré <b>' + d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) + '</b>');
+  }
+  if (meta && meta.generated_by) parts.push('par ' + String(meta.generated_by).split('@')[0]);
+  if (meta && meta.model) parts.push(meta.model);
+  el.innerHTML = parts.join(' · ');
+}
+
+/* ============================================================
+ * Sélecteur / pager
+ * ============================================================ */
+function updatePager(v){
+  const sel = document.getElementById('jump');
+  const prev = document.getElementById('pager-prev');
+  const next = document.getElementById('pager-next');
+  const nm = document.getElementById('pager-name');
+  const pos = document.getElementById('pager-pos');
+  const list = PLAYERS_ORDER.map(p => p.nom);
+  if (v === '__all__' || !v){
+    nm.textContent = 'Toute l\'équipe';
+    pos.textContent = list.length ? ('· 0 / ' + list.length) : '';
+    prev.disabled = true;
+    next.disabled = list.length === 0;
+    return;
+  }
+  const i = list.indexOf(v);
+  nm.textContent = v;
+  pos.textContent = i >= 0 ? ('· ' + (i + 1) + ' / ' + list.length) : '';
+  prev.disabled = false;
+  next.disabled = i < 0 || i >= list.length - 1;
+}
+
+function applyFilter(v){
+  const all = (v === '__all__' || !v);
+  document.getElementById('filter-block').classList.toggle('filtered', !all);
+  const trame = document.getElementById('trame-container');
+  if (trame) trame.style.display = all ? '' : 'none';
+  const cards = document.querySelectorAll('.card[data-joueur]');
+  let matched = 0;
+  cards.forEach(c => {
+    const m = all || c.dataset.joueur === v;
+    c.style.display = m ? '' : 'none';
+    c.classList.toggle('solo', !all && m);
+    if (m) matched++;
+  });
+  document.querySelectorAll('.grid[data-section]').forEach(g => {
+    const anyVisible = Array.from(g.querySelectorAll('.card')).some(c => c.style.display !== 'none');
+    g.style.display = anyVisible ? '' : 'none';
+  });
+  document.querySelectorAll('.section-divider[data-section]').forEach(d => {
+    const sec = d.dataset.section;
+    const grid = document.querySelector('.grid[data-section="' + sec + '"]');
+    d.style.display = (grid && grid.style.display !== 'none') ? '' : 'none';
+  });
+  updatePager(v);
+  if (!all) {
+    const el = document.querySelector('.card[data-joueur="' + v + '"]');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
+document.getElementById('jump').addEventListener('change', e => applyFilter(e.target.value));
+window.clearFilter = function(){ const s = document.getElementById('jump'); s.value = '__all__'; applyFilter('__all__'); };
+window.stepPlayer = function(delta){
+  const list = PLAYERS_ORDER.map(p => p.nom);
+  if (list.length === 0) return;
+  const s = document.getElementById('jump');
+  const cur = s.value;
+  if (cur === '__all__' || !cur){
+    if (delta > 0) { s.value = list[0]; applyFilter(list[0]); }
+    return;
+  }
+  const i = list.indexOf(cur);
+  const next = i + delta;
+  if (next < 0) { s.value = '__all__'; applyFilter('__all__'); return; }
+  if (next >= list.length) return;
+  s.value = list[next];
+  applyFilter(list[next]);
+};
+document.addEventListener('keydown', e => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); window.stepPlayer(-1); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); window.stepPlayer(1); }
+});
+
+/* ============================================================
+ * Suggestion (context) + Génération (via postMessage → parent)
+ * ============================================================ */
 (function(){
   const ta = document.getElementById('context-text');
   const dateEl = document.getElementById('context-date');
   const meta = document.getElementById('context-meta');
   const dateLabel = document.getElementById('context-date-label');
-  if (!ta || !dateEl) return;
+  const genStatus = document.getElementById('gen-status');
+  const genBtn = document.getElementById('btn-generate');
+  const overlay = document.getElementById('loading');
+  const loadingMsg = document.getElementById('loading-msg');
+
   const today = new Date();
   const iso = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
   dateEl.value = iso;
   let debounceTimer = null;
   let lastSavedContent = '';
   let currentDate = iso;
+
   function fmtDateLabel(d){
     if (!d) return 'aujourd\'hui';
     const [y,m,day] = d.split('-').map(Number);
@@ -769,7 +509,9 @@ footer{margin-top:36px;padding-top:20px;border-top:1px solid var(--border);font-
     return d.toLocaleDateString('fr-FR');
   }
   function setMeta(cls, text){ meta.className = 'meta' + (cls ? ' ' + cls : ''); meta.textContent = text; }
-  function requestLoad(date){
+  function setGenStatus(cls, text){ genStatus.className = 'gen-status' + (cls ? ' ' + cls : ''); genStatus.textContent = text || ''; }
+
+  function requestLoadContext(date){
     currentDate = date;
     dateLabel.textContent = fmtDateLabel(date);
     setMeta('saving', 'Chargement…');
@@ -778,26 +520,44 @@ footer{margin-top:36px;padding-top:20px;border-top:1px solid var(--border);font-
     try { window.parent.postMessage({ type: 'reco:load-context', date }, '*'); }
     catch (e) { setMeta('error', 'Hors connexion StatField'); ta.disabled = false; }
     setTimeout(() => { if (ta.disabled) { ta.disabled = false; setMeta('', 'Édition locale (hors StatField)'); } }, 1500);
+    // On demande aussi le plan pour cette date
+    requestLoadPlan(date);
   }
-  function requestSave(){
+  function requestLoadPlan(date){
+    try { window.parent.postMessage({ type: 'reco:load-plan', date }, '*'); }
+    catch (e) { /* no-op */ }
+  }
+  function requestSaveContext(){
     setMeta('saving', 'Enregistrement…');
     try {
       window.parent.postMessage({ type: 'reco:save-context', date: currentDate, contenu: ta.value }, '*');
       lastSavedContent = ta.value;
     } catch (e) { setMeta('error', 'Impossible d\'enregistrer'); }
   }
-  window.saveContextNow = function(){ if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; } requestSave(); };
+  window.saveContextNow = function(){ if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; } requestSaveContext(); };
+
+  window.generatePlan = function(){
+    if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; requestSaveContext(); }
+    genBtn.disabled = true;
+    setGenStatus('saving', 'Envoi à Claude…');
+    overlay.classList.add('show');
+    loadingMsg.textContent = 'Génération en cours…';
+    try { window.parent.postMessage({ type: 'reco:generate-plan', date: currentDate, suggestion: ta.value }, '*'); }
+    catch (e) { overlay.classList.remove('show'); genBtn.disabled = false; setGenStatus('error', 'Erreur'); }
+  };
+
   ta.addEventListener('input', () => {
     if (ta.value === lastSavedContent) return;
     setMeta('', 'Modifié…');
     if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(requestSave, 1500);
+    debounceTimer = setTimeout(requestSaveContext, 1500);
   });
   dateEl.addEventListener('change', () => {
     if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
-    if (ta.value !== lastSavedContent) requestSave();
-    requestLoad(dateEl.value || iso);
+    if (ta.value !== lastSavedContent) requestSaveContext();
+    requestLoadContext(dateEl.value || iso);
   });
+
   window.addEventListener('message', (e) => {
     const m = e.data;
     if (!m || typeof m !== 'object') return;
@@ -806,16 +566,35 @@ footer{margin-top:36px;padding-top:20px;border-top:1px solid var(--border);font-
       lastSavedContent = ta.value;
       ta.disabled = false;
       if (m.updated_at) setMeta('saved', 'Enregistré ' + fmtWhen(m.updated_at) + (m.updated_by ? ' · ' + String(m.updated_by).split('@')[0] : ''));
-      else setMeta('', 'Aucune note pour cette date');
+      else setMeta('', 'Aucune suggestion pour cette date');
     } else if (m.type === 'reco:saved' && m.date === currentDate) {
       lastSavedContent = m.contenu || '';
       if (m.updated_at) setMeta('saved', 'Enregistré ' + fmtWhen(m.updated_at) + (m.updated_by ? ' · ' + String(m.updated_by).split('@')[0] : ''));
-      else setMeta('', 'Note supprimée');
+      else setMeta('', 'Suggestion supprimée');
     } else if (m.type === 'reco:save-error') {
       setMeta('error', 'Erreur : ' + (m.error || 'inconnue'));
+    } else if (m.type === 'reco:plan' && m.date === currentDate) {
+      if (m.plan) { renderPlan(m.plan); setGenMeta(m.plan, { generated_at: m.generated_at, generated_by: m.generated_by, model: m.model }); }
+      else showEmpty();
+    } else if (m.type === 'reco:generated' && m.date === currentDate) {
+      overlay.classList.remove('show');
+      genBtn.disabled = false;
+      if (m.plan) {
+        renderPlan(m.plan);
+        setGenMeta(m.plan, { generated_at: m.generated_at, generated_by: m.generated_by, model: m.model });
+        setGenStatus('ok', '✓ Plan généré' + (m.ms ? ' (' + Math.round(m.ms/1000) + 's)' : ''));
+        setTimeout(() => setGenStatus('', ''), 6000);
+      } else {
+        setGenStatus('error', 'Réponse vide');
+      }
+    } else if (m.type === 'reco:generate-error') {
+      overlay.classList.remove('show');
+      genBtn.disabled = false;
+      setGenStatus('error', 'Erreur : ' + (m.error || 'inconnue'));
     }
   });
-  requestLoad(iso);
+
+  requestLoadContext(iso);
 })();
 </script>
 </body>

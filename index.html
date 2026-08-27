@@ -23056,6 +23056,40 @@ window.addEventListener('message', async (e) => {
       if (error) { console.error('reco save', error); reply({ type: 'reco:save-error', date, error: error.message }); return; }
       reply({ type: 'reco:saved', date, contenu, updated_by: payload.updated_by, updated_at: nowIso });
     }
+  } else if (msg.type === 'reco:load-plan') {
+    const date = String(msg.date || '').slice(0, 10);
+    if (!date) return reply({ type: 'reco:plan', date, plan: null });
+    const { data, error } = await sb.from('reco_generated_plan')
+      .select('plan,generated_at,generated_by,model').eq('org', currentOrg).eq('date', date).maybeSingle();
+    if (error && error.code !== 'PGRST116') console.warn('reco load-plan', error);
+    reply({
+      type: 'reco:plan', date,
+      plan: (data && data.plan) || null,
+      generated_at: data ? data.generated_at : null,
+      generated_by: data ? data.generated_by : null,
+      model: data ? data.model : null,
+    });
+  } else if (msg.type === 'reco:generate-plan') {
+    const date = String(msg.date || '').slice(0, 10);
+    const suggestion = String(msg.suggestion || '');
+    if (!date) return reply({ type: 'reco:generate-error', date, error: 'date manquante' });
+    try {
+      const { data, error } = await sb.functions.invoke('reco-generate', { body: { org: currentOrg, date, suggestion } });
+      if (error) throw error;
+      if (data && data.error) throw new Error(data.error);
+      reply({
+        type: 'reco:generated', date,
+        plan: (data && data.plan) || null,
+        generated_at: (data && data.generated_at) || null,
+        generated_by: (data && data.generated_by) || null,
+        model: (data && data.model) || null,
+        ms: (data && data.ms) || null,
+      });
+    } catch (e) {
+      console.error('reco-generate', e);
+      const errMsg = (e && e.message) ? e.message : String(e);
+      reply({ type: 'reco:generate-error', date, error: errMsg });
+    }
   }
 });
 
