@@ -3036,7 +3036,7 @@
         </div>
         <div id="hooper-schedule-box" style="flex:0 0 auto; background:var(--bg-elevated); border:1px solid var(--border); border-radius:10px; padding:10px 14px; min-width:250px; display:flex; flex-direction:column; gap:6px;">
           <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;">
-            <label for="hooper-training-time" style="font-size:11px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase; color:var(--text-dim); margin:0;">🕐 Heure d'entraînement</label>
+            <label for="hooper-training-time" style="font-size:11px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase; color:var(--text-dim); margin:0;">🕐 Heure de RDV à l'entraînement</label>
             <button id="hooper-schedule-clear" onclick="clearHooperSchedule()" style="background:none; border:none; color:var(--text-dim); font-size:11px; cursor:pointer; font-family:inherit; padding:0; text-decoration:underline; display:none;">Défaut</button>
           </div>
           <div style="display:flex; gap:8px; align-items:center;">
@@ -22930,7 +22930,7 @@ function updateHooperScheduleNote(tt) {
   const total = h * 60 + m + 15;
   const hh = String(Math.floor(total / 60) % 24).padStart(2,'0');
   const mm = String(total % 60).padStart(2,'0');
-  noteEl.innerHTML = 'Début entraînement <b>' + escapeHtml(tt) + '</b> → envoi rapport <b style="color:var(--accent-light);">' + hh + ':' + mm + '</b>.';
+  noteEl.innerHTML = 'RDV à <b>' + escapeHtml(tt) + '</b> → envoi rapport <b style="color:var(--accent-light);">' + hh + ':' + mm + '</b>.';
 }
 
 async function saveHooperSchedule() {
@@ -22955,7 +22955,7 @@ async function saveHooperSchedule() {
   try { await sb.rpc('hooper_report_reset_sent', { p_date: date }); } catch(e) { /* non bloquant */ }
   updateHooperScheduleNote(tt);
   if (clearBtn) clearBtn.style.display = 'inline-block';
-  toast('Heure d\'entraînement enregistrée', 'success');
+  toast('Heure de RDV enregistrée', 'success');
 }
 
 async function clearHooperSchedule() {
