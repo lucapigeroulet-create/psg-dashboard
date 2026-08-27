@@ -3521,17 +3521,25 @@
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:8px;">
         <div>
-          <h2 style="margin:0;">💡 Recommandation d'entraînement</h2>
-          <p style="color:var(--text-dim); font-size:13px; margin:4px 0 0;">Plan individualisé pour une journée off (salle, mobilité, vélo, gainage, haut du corps), calculé à partir des données RPE 7j&nbsp;/ GPS 7j&nbsp;/ Hooper du jour&nbsp;/ notes kiné&nbsp;/ blessures actives.</p>
+          <h2 style="margin:0;">💡 Recommandation d'entraînement <span id="reco-org-badge" style="font-size:12px; color:var(--text-dim); font-weight:500; letter-spacing:0;"></span></h2>
+          <p style="color:var(--text-dim); font-size:13px; margin:4px 0 0;">Plan individualisé calculé à partir des données RPE 7j&nbsp;/ GPS 7j&nbsp;/ Hooper du jour&nbsp;/ notes kiné&nbsp;/ blessures actives.</p>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;" id="reco-actions">
           <button class="btn btn-secondary" onclick="document.getElementById('reco-frame').contentWindow.print()" style="white-space:nowrap;">🖨️ Imprimer</button>
-          <button class="btn btn-secondary" onclick="window.open('./plan-off-n2.html','_blank')" style="white-space:nowrap;">↗ Ouvrir en pleine page</button>
+          <button class="btn btn-secondary" onclick="window.open(document.getElementById('reco-frame').src,'_blank')" style="white-space:nowrap;">↗ Ouvrir en pleine page</button>
         </div>
       </div>
     </div>
-    <iframe id="reco-frame" src="./plan-off-n2.html" title="Plan récupération individualisé"
-      style="width:100%; height:calc(100vh - 220px); min-height:600px; border:1px solid var(--border); border-radius:8px; background:#fff; display:block;"></iframe>
+    <iframe id="reco-frame" src="about:blank" title="Plan récupération individualisé"
+      style="width:100%; height:calc(100vh - 220px); min-height:600px; border:1px solid var(--border); border-radius:8px; background:#fff; display:none;"></iframe>
+    <div id="reco-empty" class="card" style="display:none; text-align:center; padding:40px 20px;">
+      <div style="font-size:38px; margin-bottom:10px;">📋</div>
+      <h2 style="margin:0 0 8px;">Aucun plan disponible pour <span id="reco-empty-org">cette entité</span></h2>
+      <p style="color:var(--text-dim); font-size:13px; max-width:520px; margin:0 auto;">
+        Les recommandations individualisées sont générées à la demande, à partir des données de charge et du contexte du jour.<br>
+        Contacte le staff performance (Lucas) pour en produire une pour <b><span id="reco-empty-org-2">cette entité</span></b>.
+      </p>
+    </div>
   </div>
 
 
@@ -7298,6 +7306,7 @@ async function switchOrg(org) {
   if (v === 'rpe' && typeof renderRPE === 'function') renderRPE();
   if (v === 'gps' && typeof renderGPS === 'function') renderGPS();
   if (v === 'entry' && typeof renderEntry === 'function') renderEntry();
+  if (v === 'reco-entrainement' && typeof renderRecoEntrainement === 'function') renderRecoEntrainement();
   toast('Vue ' + orgLabelText(org) + ' activée', 'success');
 }
 
@@ -9052,6 +9061,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'player-soins') renderPlayerSoins();
     else if (view === 'player-fiche') renderPlayerFiche();
     else if (view === 'player-amendes') renderPlayerAmendes();
+    else if (view === 'reco-entrainement') renderRecoEntrainement();
     else if (view === 'testing') renderTesting();
     else if (view === 'reathletisation') renderReathletisation();
     else if (view === 'musculation') renderMusculation();
@@ -22973,6 +22983,81 @@ async function clearHooperSchedule() {
   if (clearBtn) clearBtn.style.display = 'none';
   toast('Retour à l\'heure par défaut (09h15)', 'success');
 }
+
+// ============================================================
+// RECOMMANDATION D'ENTRAINEMENT
+// - Un fichier par org : plan-off-<slug>.html (à date : seul TEGG = N2 existe).
+// - Cadre "contexte du jour" persisté dans public.reco_day_context (org, date).
+// - Le contenu du cadre vit dans l'iframe ; parent ↔ iframe via postMessage.
+// ============================================================
+const RECO_PLANS = { TEGG: './plan-off-n2.html' };
+
+function renderRecoEntrainement() {
+  const frame = document.getElementById('reco-frame');
+  const empty = document.getElementById('reco-empty');
+  const actions = document.getElementById('reco-actions');
+  const badge = document.getElementById('reco-org-badge');
+  const emptyOrg = document.getElementById('reco-empty-org');
+  const emptyOrg2 = document.getElementById('reco-empty-org-2');
+  if (!frame || !empty) return;
+  const orgLabel = (typeof orgLabelText === 'function') ? orgLabelText(currentOrg) : currentOrg;
+  if (badge) badge.textContent = '· ' + orgLabel;
+  const src = RECO_PLANS[currentOrg];
+  if (src) {
+    empty.style.display = 'none';
+    frame.style.display = 'block';
+    if (actions) actions.style.display = '';
+    // Toujours recharger l'iframe (change d'org, ou re-entrée dans la vue)
+    if (frame.dataset.currentSrc !== src) {
+      frame.src = src;
+      frame.dataset.currentSrc = src;
+    }
+  } else {
+    frame.style.display = 'none';
+    if (actions) actions.style.display = 'none';
+    empty.style.display = 'block';
+    if (emptyOrg) emptyOrg.textContent = orgLabel;
+    if (emptyOrg2) emptyOrg2.textContent = orgLabel;
+  }
+}
+
+// Pont postMessage iframe → parent pour le "contexte du jour"
+window.addEventListener('message', async (e) => {
+  const msg = e.data;
+  if (!msg || typeof msg !== 'object' || !msg.type) return;
+  const frame = document.getElementById('reco-frame');
+  if (!frame || e.source !== frame.contentWindow) return;
+  const reply = (payload) => {
+    try { frame.contentWindow.postMessage(payload, '*'); } catch (_e) {}
+  };
+  if (msg.type === 'reco:load-context') {
+    const date = String(msg.date || '').slice(0, 10);
+    if (!date) return reply({ type: 'reco:context', date, contenu: '', updated_by: null, updated_at: null });
+    const { data, error } = await sb.from('reco_day_context')
+      .select('contenu,updated_by,updated_at').eq('org', currentOrg).eq('date', date).maybeSingle();
+    if (error && error.code !== 'PGRST116') console.warn('reco load', error);
+    reply({
+      type: 'reco:context', date,
+      contenu: (data && data.contenu) || '',
+      updated_by: data ? data.updated_by : null,
+      updated_at: data ? data.updated_at : null,
+    });
+  } else if (msg.type === 'reco:save-context') {
+    const date = String(msg.date || '').slice(0, 10);
+    const contenu = String(msg.contenu || '');
+    if (!date) return;
+    const nowIso = new Date().toISOString();
+    if (contenu.trim() === '') {
+      await sb.from('reco_day_context').delete().eq('org', currentOrg).eq('date', date);
+      reply({ type: 'reco:saved', date, contenu: '', updated_by: null, updated_at: null });
+    } else {
+      const payload = { org: currentOrg, date, contenu, updated_by: (currentUser && currentUser.email) || null, updated_at: nowIso };
+      const { error } = await sb.from('reco_day_context').upsert(payload, { onConflict: 'org,date' });
+      if (error) { console.error('reco save', error); reply({ type: 'reco:save-error', date, error: error.message }); return; }
+      reply({ type: 'reco:saved', date, contenu, updated_by: payload.updated_by, updated_at: nowIso });
+    }
+  }
+});
 
 // Bilan motivation & humeur des joueuses (SECONDE LIGUE / D2F) pour la date choisie.
 function renderD2FBilan() {

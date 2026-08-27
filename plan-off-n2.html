@@ -190,6 +190,58 @@ h1 .accent{color:var(--accent-light)}
 }
 .aside b{color:var(--text);font-weight:700}
 
+/* Contexte du jour (staff) */
+.context{
+  background:var(--grad-card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px 18px;margin-bottom:20px;box-shadow:var(--shadow-md);
+  position:relative;
+}
+.context::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:var(--grad-accent);border-radius:var(--radius) 0 0 var(--radius);
+}
+.context-head{
+  display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:8px;
+}
+.context-head h2{
+  font-size:12px;letter-spacing:1.2px;text-transform:uppercase;font-weight:700;color:var(--text-dim);margin:0;
+}
+.context-head h2 b{color:var(--text)}
+.context-head .meta{
+  font-size:11px;color:var(--text-mute);letter-spacing:0.4px;font-family:ui-monospace,monospace;
+}
+.context-head .meta.saving{color:var(--accent-light)}
+.context-head .meta.saved{color:var(--green)}
+.context-head .meta.error{color:var(--red)}
+.context-body{
+  display:flex;flex-direction:column;gap:10px;
+}
+.context textarea{
+  width:100%;min-height:96px;resize:vertical;
+  background:var(--bg-elevated);color:var(--text);
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:12px 14px;font-family:inherit;font-size:13.5px;line-height:1.55;
+  outline:none;transition:border-color .12s ease,box-shadow .12s ease;
+}
+.context textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,182,255,0.22)}
+.context textarea::placeholder{color:var(--text-mute)}
+.context-footer{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+  font-size:11.5px;color:var(--text-mute);
+}
+.context-footer .hint{max-width:65ch;line-height:1.5}
+.context-footer .actions{display:flex;gap:8px}
+.context-footer button{
+  background:transparent;border:1px solid var(--border);color:var(--text);
+  padding:5px 12px;border-radius:var(--radius-sm);cursor:pointer;
+  font-family:inherit;font-size:11.5px;font-weight:600;letter-spacing:0.4px;
+  transition:background .12s ease,border-color .12s ease,color .12s ease;
+}
+.context-footer button:hover{background:var(--accent-soft);border-color:rgba(56,182,255,0.4);color:var(--accent-light)}
+.context-footer button.primary{background:var(--grad-accent);color:#fff;border-color:transparent}
+.context-footer button.primary:hover{filter:brightness(1.08);color:#fff}
+.context-footer button:disabled{opacity:.5;cursor:not-allowed}
+
 /* Section dividers */
 .section-divider{
   display:flex;align-items:center;gap:14px;
@@ -417,6 +469,23 @@ footer{
     <div><b>Vmax</b> pic 14j (km/h)</div>
   </div>
 </header>
+
+<section class="context" id="context-card">
+  <div class="context-head">
+    <h2>📝 <b>Contexte du jour</b> · <span id="context-date-label">aujourd'hui</span></h2>
+    <span class="meta" id="context-meta"></span>
+  </div>
+  <div class="context-body">
+    <textarea id="context-text" placeholder="Décris ici le contexte de la journée : intention pédagogique, contraintes (créneau raccourci, matériel indispo, joueur qui manque), thème du bloc à travailler, consignes générales, adaptations individuelles… Ces notes s'affichent en tête et guident la lecture des séances ci-dessous."></textarea>
+    <div class="context-footer">
+      <div class="hint">Auto-enregistré 1,5 s après la dernière frappe · partagé avec tout le staff de l'entité pour cette date.</div>
+      <div class="actions">
+        <input type="date" id="context-date" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 10px;font-family:inherit;font-size:12px;">
+        <button type="button" onclick="saveContextNow()" class="primary">💾 Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</section>
 
 <section class="rotation" id="rotation-banner">
   <div class="rotation-head">
@@ -1339,6 +1408,110 @@ footer{
   });
   // Init : afficher l'état du pager pour la vue équipe au chargement
   updatePager(sel.value);
+})();
+
+/* ------------------------------------------------------------------ *
+ * Contexte du jour — persisté côté parent via postMessage.
+ * Le parent (StatField) écrit dans public.reco_day_context (org, date).
+ * ------------------------------------------------------------------ */
+(function(){
+  const ta = document.getElementById('context-text');
+  const dateEl = document.getElementById('context-date');
+  const meta = document.getElementById('context-meta');
+  const dateLabel = document.getElementById('context-date-label');
+  if (!ta || !dateEl) return;
+
+  const today = new Date();
+  const iso = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+  dateEl.value = iso;
+
+  let debounceTimer = null;
+  let lastSavedContent = '';
+  let currentDate = iso;
+
+  function fmtDateLabel(d){
+    if (!d) return 'aujourd\'hui';
+    const [y,m,day] = d.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m-1, day));
+    const jours = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+    const mois  = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+    return jours[dt.getUTCDay()] + ' ' + day + ' ' + mois[m-1];
+  }
+
+  function fmtWhen(iso){
+    if (!iso) return '';
+    const d = new Date(iso);
+    const now = Date.now();
+    const diff = Math.round((now - d.getTime())/1000);
+    if (diff < 5) return 'à l\'instant';
+    if (diff < 60) return 'il y a ' + diff + ' s';
+    if (diff < 3600) return 'il y a ' + Math.floor(diff/60) + ' min';
+    if (diff < 86400) return 'il y a ' + Math.floor(diff/3600) + ' h';
+    return d.toLocaleDateString('fr-FR');
+  }
+
+  function setMeta(cls, text){
+    meta.className = 'meta' + (cls ? ' ' + cls : '');
+    meta.textContent = text;
+  }
+
+  function requestLoad(date){
+    currentDate = date;
+    dateLabel.textContent = fmtDateLabel(date);
+    setMeta('saving', 'Chargement…');
+    ta.value = '';
+    ta.disabled = true;
+    try { window.parent.postMessage({ type: 'reco:load-context', date }, '*'); }
+    catch (e) { setMeta('error', 'Hors connexion StatField'); ta.disabled = false; }
+    // Fallback si le parent ne répond pas (page ouverte hors iframe)
+    setTimeout(() => { if (ta.disabled) { ta.disabled = false; setMeta('', 'Édition locale (hors StatField)'); } }, 1500);
+  }
+
+  function requestSave(){
+    setMeta('saving', 'Enregistrement…');
+    try {
+      window.parent.postMessage({ type: 'reco:save-context', date: currentDate, contenu: ta.value }, '*');
+      lastSavedContent = ta.value;
+    } catch (e) { setMeta('error', 'Impossible d\'enregistrer'); }
+  }
+
+  window.saveContextNow = function(){
+    if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+    requestSave();
+  };
+
+  ta.addEventListener('input', () => {
+    if (ta.value === lastSavedContent) return;
+    setMeta('', 'Modifié…');
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(requestSave, 1500);
+  });
+
+  dateEl.addEventListener('change', () => {
+    if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+    if (ta.value !== lastSavedContent) requestSave();
+    requestLoad(dateEl.value || iso);
+  });
+
+  window.addEventListener('message', (e) => {
+    const m = e.data;
+    if (!m || typeof m !== 'object') return;
+    if (m.type === 'reco:context' && m.date === currentDate) {
+      ta.value = m.contenu || '';
+      lastSavedContent = ta.value;
+      ta.disabled = false;
+      if (m.updated_at) setMeta('saved', 'Enregistré ' + fmtWhen(m.updated_at) + (m.updated_by ? ' · ' + String(m.updated_by).split('@')[0] : ''));
+      else setMeta('', 'Aucune note pour cette date');
+    } else if (m.type === 'reco:saved' && m.date === currentDate) {
+      lastSavedContent = m.contenu || '';
+      if (m.updated_at) setMeta('saved', 'Enregistré ' + fmtWhen(m.updated_at) + (m.updated_by ? ' · ' + String(m.updated_by).split('@')[0] : ''));
+      else setMeta('', 'Note supprimée');
+    } else if (m.type === 'reco:save-error') {
+      setMeta('error', 'Erreur : ' + (m.error || 'inconnue'));
+    }
+  });
+
+  requestLoad(iso);
 })();
 </script>
 </body>
