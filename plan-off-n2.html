@@ -104,6 +104,31 @@ h1 .accent{color:var(--accent-light)}
   display:none;
 }
 .filter.filtered .clear{display:inline-block}
+.pager{
+  display:none;margin-top:2px;
+  align-items:center;gap:0;
+  background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);
+  overflow:hidden;
+}
+.filter.filtered .pager{display:flex}
+.pager button{
+  background:transparent;border:none;color:var(--text);cursor:pointer;
+  padding:8px 14px;font-family:inherit;font-size:13px;font-weight:600;
+  display:flex;align-items:center;gap:6px;transition:background .12s ease,color .12s ease;
+}
+.pager button:hover:not(:disabled){background:var(--accent-soft);color:var(--accent-light)}
+.pager button:disabled{opacity:.35;cursor:not-allowed}
+.pager button.prev{border-right:1px solid var(--border)}
+.pager button.next{border-left:1px solid var(--border)}
+.pager .current{
+  flex:1;text-align:center;padding:8px 10px;min-width:0;
+  font-size:12px;color:var(--text-dim);letter-spacing:0.3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.pager .current b{color:var(--text);font-weight:700;font-size:13px}
+.pager .current .pos{
+  font-family:ui-monospace,monospace;font-size:10.5px;color:var(--text-mute);margin-left:6px;
+}
 
 .legend{
   display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
@@ -378,6 +403,11 @@ footer{
           <option value="Mody">Mody · Gardien</option>
         </optgroup>
       </select>
+      <div class="pager" id="pager" aria-label="Navigation joueur">
+        <button type="button" class="prev" id="pager-prev" onclick="stepPlayer(-1)" title="Joueur précédent">← Préc.</button>
+        <div class="current"><b id="pager-name">—</b><span class="pos" id="pager-pos"></span></div>
+        <button type="button" class="next" id="pager-next" onclick="stepPlayer(1)" title="Joueur suivant">Suiv. →</button>
+      </div>
       <button class="clear" onclick="clearFilter()">← Retour à la vue équipe</button>
     </div>
   </div>
@@ -1222,6 +1252,30 @@ footer{
   const cards = document.querySelectorAll('.card[data-joueur]');
   const dividers = document.querySelectorAll('.section-divider[data-section]');
   const grids = document.querySelectorAll('.grid[data-section]');
+  const pagerPrev = document.getElementById('pager-prev');
+  const pagerNext = document.getElementById('pager-next');
+  const pagerName = document.getElementById('pager-name');
+  const pagerPos  = document.getElementById('pager-pos');
+
+  // Liste ordonnée des joueurs telle qu'apparaissant dans le <select> (ignore __all__)
+  const players = Array.from(sel.querySelectorAll('option'))
+    .map(o => o.value)
+    .filter(v => v && v !== '__all__');
+
+  function updatePager(v){
+    if (v === '__all__' || !v){
+      pagerName.textContent = '—';
+      pagerPos.textContent = '';
+      pagerPrev.disabled = true;
+      pagerNext.disabled = true;
+      return;
+    }
+    const i = players.indexOf(v);
+    pagerName.textContent = v;
+    pagerPos.textContent = (i >= 0) ? ('· ' + (i + 1) + ' / ' + players.length) : '';
+    pagerPrev.disabled = i <= 0;
+    pagerNext.disabled = i < 0 || i >= players.length - 1;
+  }
 
   function apply(v){
     const all = (v === '__all__' || !v);
@@ -1236,7 +1290,6 @@ footer{
       if (match) matched++;
     });
 
-    // Hide sections that have no visible card
     grids.forEach(g => {
       const anyVisible = Array.from(g.querySelectorAll('.card')).some(c => c.style.display !== 'none');
       g.style.display = anyVisible ? '' : 'none';
@@ -1248,6 +1301,7 @@ footer{
     });
 
     emptyHint.style.display = matched === 0 ? 'block' : 'none';
+    updatePager(v);
 
     if (!all) {
       const first = document.querySelector('.card[data-joueur="' + v + '"]');
@@ -1262,6 +1316,22 @@ footer{
     sel.value = '__all__';
     apply('__all__');
   };
+  window.stepPlayer = function(delta){
+    const cur = sel.value;
+    if (cur === '__all__' || !cur) return;
+    const i = players.indexOf(cur);
+    const next = i + delta;
+    if (next < 0 || next >= players.length) return;
+    sel.value = players[next];
+    apply(players[next]);
+  };
+  // Flèches ← / → au clavier pour naviguer
+  document.addEventListener('keydown', e => {
+    if (sel.value === '__all__') return;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); window.stepPlayer(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); window.stepPlayer(1); }
+  });
 })();
 </script>
 </body>
