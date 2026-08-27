@@ -7307,6 +7307,7 @@ async function switchOrg(org) {
   if (v === 'gps' && typeof renderGPS === 'function') renderGPS();
   if (v === 'entry' && typeof renderEntry === 'function') renderEntry();
   if (v === 'reco-entrainement' && typeof renderRecoEntrainement === 'function') renderRecoEntrainement();
+  if (v === 'planification' && typeof renderPlanification === 'function') renderPlanification();
   toast('Vue ' + orgLabelText(org) + ' activée', 'success');
 }
 
@@ -9995,7 +9996,9 @@ function renderPlanView() {
 // PLANIFICATION SAISON — macrocycle éditable (vision globale : séances, charge,
 // intensité, volume, contenus athlétiques). Source : table Supabase "planification".
 // ============================================================================
-const PLANIF_CTX = { org: 'TEGG', categorie: '1ere PS', saison: '2026-2027' };
+// Contexte planification : org est aligné sur currentOrg au moment d'ouvrir la vue
+// (voir renderPlanification). categorie/saison restent par défaut mais éditables plus tard.
+let PLANIF_CTX = { org: 'TEGG', categorie: '1ere PS', saison: '2026-2027' };
 let planifRows = [];
 let microRows = [];
 let planifLogos = [];   // bibliothèque de logos adversaires (org TEGG)
@@ -10060,6 +10063,10 @@ async function renderPlanification() {
     view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Accès réservé au staff.</p></div>';
     return;
   }
+  // Chaque entité voit sa propre planification. On aligne le contexte sur l'org active
+  // pour que lecture et écriture (drawPlanification / planifSave / planifUpdate) ciblent
+  // l'org courante sans fuite entre clubs.
+  PLANIF_CTX.org = currentOrg;
   planifInjectStyle();
   view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Chargement de la planification…</p></div>';
   const [planRes, microRes, logoRes] = await Promise.all([
@@ -10082,6 +10089,39 @@ async function renderPlanification() {
   drawPlanification();
 }
 
+// Copie la planification d'une org source (par défaut TEGG) vers l'org courante,
+// pour amorcer une nouvelle entité sans repartir de zéro. Ne duplique QUE si l'org
+// courante n'a aucune ligne, sinon on refuse pour éviter les doublons accidentels.
+async function planifSeedFromOrg(sourceOrg) {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { toast('Réservé au staff', 'error'); return; }
+  if (!sourceOrg || sourceOrg === PLANIF_CTX.org) return;
+  const targetOrg = PLANIF_CTX.org;
+  const targetLbl = (typeof orgLabelText === 'function') ? orgLabelText(targetOrg) : targetOrg;
+  const srcLbl = (typeof orgLabelText === 'function') ? orgLabelText(sourceOrg) : sourceOrg;
+  const ok = confirm('Copier la planification de ' + srcLbl + ' vers ' + targetLbl + ' ?\n\n' +
+    'Toutes les semaines et objectifs de ' + srcLbl + ' seront dupliqués sous ' + targetLbl + '. ' +
+    'Tu pourras ensuite les adapter librement sans impacter ' + srcLbl + '.');
+  if (!ok) return;
+  const { data: existing } = await sb.from('planification').select('id').eq('org', targetOrg)
+    .eq('categorie', PLANIF_CTX.categorie).eq('saison', PLANIF_CTX.saison).limit(1);
+  if (existing && existing.length) { toast('Cette entité a déjà une planification — copie annulée', 'error'); renderPlanification(); return; }
+  const { data: src, error: srcErr } = await sb.from('planification').select('*').eq('org', sourceOrg)
+    .eq('categorie', PLANIF_CTX.categorie).eq('saison', PLANIF_CTX.saison).order('ordre', { ascending: true });
+  if (srcErr) { toast('Erreur lecture source : ' + srcErr.message, 'error'); return; }
+  if (!src || !src.length) { toast('Aucune planification à copier chez ' + srcLbl, 'error'); return; }
+  const rows = src.map(r => { const c = { ...r }; delete c.id; delete c.updated_at; c.org = targetOrg; return c; });
+  const { error: insErr } = await sb.from('planification').insert(rows);
+  if (insErr) { toast('Erreur copie : ' + insErr.message, 'error'); return; }
+  const { data: srcMicro } = await sb.from('microcycle').select('*').eq('org', sourceOrg)
+    .eq('categorie', PLANIF_CTX.categorie).eq('saison', PLANIF_CTX.saison).order('ordre', { ascending: true });
+  if (srcMicro && srcMicro.length) {
+    const mrows = srcMicro.map(r => { const c = { ...r }; delete c.id; delete c.updated_at; c.org = targetOrg; return c; });
+    await sb.from('microcycle').insert(mrows);
+  }
+  toast('Planification copiée depuis ' + srcLbl + ' (' + rows.length + ' semaines)', 'success');
+  renderPlanification();
+}
+
 function planifLogoLookup(name) {
   const key = String(name || '').trim().toLowerCase();
   if (!key) return null;
@@ -10096,7 +10136,17 @@ function drawPlanification() {
   const view = document.getElementById('view-planification');
   const rows = planifRows;
   if (!rows.length) {
-    view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Aucune semaine planifiée pour ' + escapeHtml(PLANIF_CTX.categorie) + ' — ' + escapeHtml(PLANIF_CTX.saison) + '.</p></div>';
+    const orgLbl = (typeof orgLabelText === 'function') ? orgLabelText(PLANIF_CTX.org) : PLANIF_CTX.org;
+    // Propose d'amorcer à partir d'une autre org qui a déjà une planification (typiquement TEGG).
+    const seedOptions = ['TEGG','PSG','D2F'].filter(o => o !== PLANIF_CTX.org);
+    const seedBtns = seedOptions.map(o => {
+      const lbl = (typeof orgLabelText === 'function') ? orgLabelText(o) : o;
+      return '<button class="pf-btn" onclick="planifSeedFromOrg(\'' + o + '\')">📋 Copier depuis ' + escapeHtml(lbl) + '</button>';
+    }).join(' ');
+    view.innerHTML = '<div class="card"><h2 style="margin:0 0 8px;">🗓️ Planification saison — ' + escapeHtml(orgLbl) + '</h2>' +
+      '<p style="color:var(--text-dim); font-size:13px; margin:0 0 14px;">Aucune semaine planifiée pour ' + escapeHtml(PLANIF_CTX.categorie) + ' — ' + escapeHtml(PLANIF_CTX.saison) + ' sous <b>' + escapeHtml(orgLbl) + '</b>. ' +
+      'Tu peux copier la trame d\'une autre entité pour démarrer (les modifications resteront propres à ' + escapeHtml(orgLbl) + ').</p>' +
+      '<div style="display:flex; gap:8px; flex-wrap:wrap;">' + seedBtns + '</div></div>';
     return;
   }
 
