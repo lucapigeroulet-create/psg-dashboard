@@ -23075,7 +23075,18 @@ window.addEventListener('message', async (e) => {
     if (!date) return reply({ type: 'reco:generate-error', date, error: 'date manquante' });
     try {
       const { data, error } = await sb.functions.invoke('reco-generate', { body: { org: currentOrg, date, suggestion } });
-      if (error) throw error;
+      // Supabase masque le body sur non-2xx : essayer d'extraire l'erreur détaillée
+      if (error) {
+        let detail = error.message || String(error);
+        try {
+          if (error.context && typeof error.context.text === 'function') {
+            const bodyTxt = await error.context.text();
+            try { const j = JSON.parse(bodyTxt); if (j && j.error) detail = j.error; else detail = bodyTxt.slice(0, 400); }
+            catch (_e) { if (bodyTxt) detail = bodyTxt.slice(0, 400); }
+          }
+        } catch (_e) { /* garde le message générique */ }
+        throw new Error(detail);
+      }
       if (data && data.error) throw new Error(data.error);
       reply({
         type: 'reco:generated', date,
