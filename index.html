@@ -3371,6 +3371,8 @@
 
   <!-- ========== PERFORMANCE — RÉATHLÉTISATION (staff) ========== -->
   <div class="view" id="view-reathletisation">
+    <!-- Aperçu global : rendu par renderReaOverview(), affiché tout en haut -->
+    <div id="rea-overview-top"></div>
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
         <div>
@@ -3886,6 +3888,8 @@
           </table>
         </div>
       </div>
+      <!-- Aperçu global des dossiers de réathlétisation (rendu par renderReaOverviewFor) -->
+      <div id="med-reathle-overview"></div>
       <div class="card">
         <h2>📊 Synthèse des blessures</h2>
         <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;">Jours de blessure par joueur, répartition des membres touchés et du type de blessure (articulaire / musculaire / ligamentaire…).</p>
@@ -26103,6 +26107,8 @@ function renderMedicalAvailability() {
       (details.description ? '<div style="margin-top:6px; font-size:12px; color:var(--text-dim);">' + escapeHtml(details.description) + '</div>' : '') +
       '</div>';
   }).join('');
+  // Aperçu réathlé sous le tableau de disponibilité (asynchrone : charge si besoin)
+  if (typeof renderReaOverviewForMedical === 'function') renderReaOverviewForMedical();
 }
 
 
@@ -27358,18 +27364,39 @@ function renderReathleList() {
   const showClosed = (document.getElementById('rea-show-closed') || {}).checked;
   const active = reathleData.filter(r => r.actif !== false);
   const closed = reathleData.filter(r => r.actif === false);
+  // Aperçu global en haut de page (avant les cartes de titre/formulaire) — dans #rea-overview-top
+  renderReaOverviewInto('rea-overview-top', active);
   if (active.length === 0 && (!showClosed || closed.length === 0)) {
     c.innerHTML = '<div class="card"><div class="empty-state">Aucun dossier de réathlétisation en cours.</div></div>';
     return;
   }
-  let html = reaOverviewHTML(active);
-  html += '<div class="card"><h3 style="margin:0 0 10px;">Dossiers en cours (' + active.length + ')</h3>';
+  let html = '<div class="card"><h3 style="margin:0 0 10px;">Dossiers en cours (' + active.length + ')</h3>';
   html += active.length ? active.map(reaCardHTML).join('') : '<div class="empty-state">Aucun dossier actif.</div>';
   html += '</div>';
   if (showClosed && closed.length) {
     html += '<div class="card"><h3 style="margin:0 0 10px; color:var(--text-dim);">Dossiers clôturés (' + closed.length + ')</h3>' + closed.map(reaCardHTML).join('') + '</div>';
   }
   c.innerHTML = html;
+}
+
+// Rend l'aperçu réathlé dans le conteneur donné (utilisé par la vue Réathlé et l'onglet Médical → Disponibilités)
+function renderReaOverviewInto(containerId, active) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  if (!active || !active.length) { c.innerHTML = ''; return; }
+  c.innerHTML = reaOverviewHTML(active);
+}
+
+// Version pour l'onglet Médical : charge les données si nécessaire puis rend l'aperçu
+async function renderReaOverviewForMedical() {
+  const c = document.getElementById('med-reathle-overview');
+  if (!c) return;
+  // Charger si pas déjà en mémoire
+  if (!reathleData.length && !reathleJournal.length) {
+    try { await loadReathle(); } catch (_e) { /* silencieux, l'onglet médical ne bloque pas */ }
+  }
+  const active = reathleData.filter(r => r.actif !== false);
+  renderReaOverviewInto('med-reathle-overview', active);
 }
 
 // ============================================================================
