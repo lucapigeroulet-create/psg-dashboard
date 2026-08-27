@@ -3389,10 +3389,16 @@
       <div class="filters" style="margin-bottom:12px;">
         <div class="filter-group">
           <label>Joueur</label>
-          <select id="rea-joueur" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:160px;"></select>
+          <select id="rea-joueur" onchange="renderReaBlessureOptions()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:160px;"></select>
         </div>
         <div class="filter-group">
-          <label>Blessure</label>
+          <label>Blessure liée (dossier médical)</label>
+          <select id="rea-blessure-id" onchange="onReaBlessurePick()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:220px;">
+            <option value="">— Aucune / saisie libre —</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Blessure (libellé)</label>
           <input type="text" id="rea-blessure" placeholder="Ex : entorse cheville droite" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:200px;">
         </div>
         <div class="filter-group">
@@ -26966,6 +26972,19 @@ const REA_FEUX = [
 let reathleData = [];
 let reathleJournal = []; // entrées jour-par-jour, groupées côté rendu par reathletisation_id
 let reathleOpenJournal = new Set(); // ids des dossiers dont le journal est déplié
+let reathleBlessuresActives = []; // toutes les blessures actives de l'org (statut ≠ 'disponible')
+
+// Libellé humain d'une blessure : "Adducteur G · musculaire · 22/06/2026"
+function reaBlessureLabel(b) {
+  if (!b) return '';
+  const parts = [];
+  if (b.zone) parts.push(b.zone);
+  if (b.cote) parts.push(b.cote === 'gauche' ? 'G' : (b.cote === 'droit' ? 'D' : b.cote));
+  const head = parts.join(' ');
+  const det = (b.details && (b.details.description || b.details.zone_autre)) ? String(b.details.description || b.details.zone_autre).split('\n')[0].slice(0, 50) : '';
+  const date = b.date_blessure ? formatDateFR(b.date_blessure) : '';
+  return [head, det, date].filter(Boolean).join(' · ');
+}
 
 function reaFeuInfo(v)    { return REA_FEUX.find(f => f.v === v) || REA_FEUX[0]; }
 function reaStatutInfo(v) { return REA_STATUTS.find(s => s.v === v) || REA_STATUTS[0]; }
@@ -26977,19 +26996,49 @@ async function renderReathletisation() {
   renderReaEtapesInputs();
   resetReathleForm();
   await loadReathle();
+  renderReaBlessureOptions();  // recharge le select "Blessure liée" avec les blessures actives du joueur par défaut
   renderReathleList();
 }
 
 async function loadReathle() {
   try {
-    const [dossiersRes, journalRes] = await Promise.all([
+    const [dossiersRes, journalRes, blessRes] = await Promise.all([
       sb.from('reathletisation').select('*').eq('org', currentOrg).order('updated_at', { ascending: false }),
       sb.from('reathletisation_journal').select('*').eq('org', currentOrg).order('date', { ascending: false }).order('created_at', { ascending: false }),
+      // Blessures encore ouvertes (tout ce qui n'est pas "disponible") pour proposer un lien.
+      sb.from('blessures').select('id,joueur,zone,cote,categorie,statut,date_blessure,duree_indispo,details').eq('org', currentOrg).neq('statut', 'disponible').order('date_blessure', { ascending: false }),
     ]);
     if (dossiersRes.error) throw dossiersRes.error;
     reathleData = dossiersRes.data || [];
     reathleJournal = journalRes.data || [];
-  } catch (e) { reathleData = []; reathleJournal = []; toast('Erreur chargement réathlé : ' + (e.message || e), 'error'); }
+    reathleBlessuresActives = blessRes.data || [];
+  } catch (e) { reathleData = []; reathleJournal = []; reathleBlessuresActives = []; toast('Erreur chargement réathlé : ' + (e.message || e), 'error'); }
+}
+
+// Alimente le select "Blessure liée" à partir des blessures actives du joueur choisi.
+function renderReaBlessureOptions(preselectId) {
+  const sel = document.getElementById('rea-blessure-id');
+  const joueurSel = document.getElementById('rea-joueur');
+  if (!sel || !joueurSel) return;
+  const joueur = joueurSel.value;
+  const list = reathleBlessuresActives.filter(b => b.joueur === joueur);
+  const opts = ['<option value="">— Aucune / saisie libre —</option>']
+    .concat(list.map(b => '<option value="' + escapeAttr(b.id) + '">' + escapeHtml(reaBlessureLabel(b)) + (b.statut ? ' [' + b.statut + ']' : '') + '</option>'))
+    .join('');
+  sel.innerHTML = opts;
+  if (preselectId) sel.value = preselectId;
+}
+
+// Quand on choisit une blessure du dossier médical : préremplit libellé + date de blessure.
+function onReaBlessurePick() {
+  const sel = document.getElementById('rea-blessure-id');
+  if (!sel || !sel.value) return;
+  const b = reathleBlessuresActives.find(x => String(x.id) === String(sel.value));
+  if (!b) return;
+  const blessInp = document.getElementById('rea-blessure');
+  if (blessInp && !blessInp.value.trim()) blessInp.value = reaBlessureLabel(b).split(' · ').slice(0, 2).join(' · ');
+  const dateInp = document.getElementById('rea-date-blessure');
+  if (dateInp && !dateInp.value && b.date_blessure) dateInp.value = b.date_blessure;
 }
 
 // --- Journal jour-par-jour ---------------------------------------------------
@@ -27113,6 +27162,7 @@ function resetReathleForm() {
   document.getElementById('rea-form-title').textContent = '➕ Nouveau dossier';
   document.getElementById('rea-cancel-btn').style.display = 'none';
   document.getElementById('rea-blessure').value = '';
+  const bidSel = document.getElementById('rea-blessure-id'); if (bidSel) bidSel.value = '';
   document.getElementById('rea-date-blessure').value = toLocalISO(new Date());
   document.getElementById('rea-date-retour').value = '';
   document.getElementById('rea-notes').value = '';
@@ -27131,9 +27181,11 @@ async function saveReathle() {
     statut: (document.getElementById('rea-st-' + s.cle) || {}).value || 'a_venir',
     date: (document.getElementById('rea-dt-' + s.cle) || {}).value || null
   }));
+  const blessureId = (document.getElementById('rea-blessure-id') || {}).value || null;
   const row = {
     org: currentOrg, joueur,
     blessure: document.getElementById('rea-blessure').value.trim() || null,
+    blessure_id: blessureId || null,
     date_blessure: document.getElementById('rea-date-blessure').value || null,
     date_retour_prevue: document.getElementById('rea-date-retour').value || null,
     feu: document.getElementById('rea-feu').value || 'rouge',
@@ -27169,6 +27221,7 @@ function editReathle(id) {
     jsel.value = r.joueur;
   }
   document.getElementById('rea-blessure').value = r.blessure || '';
+  renderReaBlessureOptions(r.blessure_id || '');
   document.getElementById('rea-date-blessure').value = r.date_blessure || '';
   document.getElementById('rea-date-retour').value = r.date_retour_prevue || '';
   document.getElementById('rea-feu').value = r.feu || 'rouge'; renderReaFeuButtons();
@@ -27214,11 +27267,17 @@ function reaCardHTML(r) {
   if (r.date_blessure) dates.push('Blessé le ' + formatDateFR(r.date_blessure));
   if (r.date_retour_prevue) dates.push('Retour prévu ' + formatDateFR(r.date_retour_prevue));
   const closedTag = (r.actif === false) ? ' <span style="font-size:11px; color:var(--text-dim);">(clôturé)</span>' : '';
+  // Chip "lien blessure médical" si dossier de blessure liée
+  const bl = r.blessure_id ? reathleBlessuresActives.find(x => String(x.id) === String(r.blessure_id)) : null;
+  const linkChip = bl
+    ? '<div style="margin-top:6px; font-size:11.5px;"><span style="background:rgba(0,144,232,0.12); color:var(--accent-light); border:1px solid rgba(56,182,255,0.35); border-radius:999px; padding:3px 10px; font-weight:600;">🔗 Blessure médicale : ' + escapeHtml(reaBlessureLabel(bl)) + (bl.statut ? ' · ' + escapeHtml(bl.statut) : '') + '</span></div>'
+    : (r.blessure_id ? '<div style="margin-top:6px; font-size:11.5px;"><span style="color:var(--text-mute);">🔗 Blessure liée introuvable (supprimée du module médical)</span></div>' : '');
   return '<div style="border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:10px; background:var(--bg-card);">' +
     '<div style="display:flex; justify-content:space-between; align-items:start; gap:10px; flex-wrap:wrap;">' +
       '<div><div style="font-size:15px; font-weight:700;">' + f.emoji + ' ' + escapeHtml(r.joueur) + closedTag + '</div>' +
       (r.blessure ? '<div style="font-size:13px; color:var(--text); margin-top:2px;">' + escapeHtml(r.blessure) + '</div>' : '') +
       (dates.length ? '<div style="font-size:12px; color:var(--text-dim); margin-top:2px;">' + dates.join(' · ') + '</div>' : '') +
+      linkChip +
       '</div>' +
       '<div style="display:flex; gap:6px; flex-wrap:wrap;">' +
         '<button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="editReathle(' + r.id + ')">✏️ Modifier</button>' +
