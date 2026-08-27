@@ -26964,9 +26964,12 @@ const REA_FEUX = [
   { v: 'vert',   emoji: '🟢', label: 'Disponible' }
 ];
 let reathleData = [];
+let reathleJournal = []; // entrées jour-par-jour, groupées côté rendu par reathletisation_id
+let reathleOpenJournal = new Set(); // ids des dossiers dont le journal est déplié
 
 function reaFeuInfo(v)    { return REA_FEUX.find(f => f.v === v) || REA_FEUX[0]; }
 function reaStatutInfo(v) { return REA_STATUTS.find(s => s.v === v) || REA_STATUTS[0]; }
+function reaJournalFor(id) { return reathleJournal.filter(j => j.reathletisation_id === id); }
 
 async function renderReathletisation() {
   const jsel = document.getElementById('rea-joueur');
@@ -26979,10 +26982,107 @@ async function renderReathletisation() {
 
 async function loadReathle() {
   try {
-    const { data, error } = await sb.from('reathletisation').select('*').eq('org', currentOrg).order('updated_at', { ascending: false });
-    if (error) throw error;
-    reathleData = data || [];
-  } catch (e) { reathleData = []; toast('Erreur chargement réathlé : ' + (e.message || e), 'error'); }
+    const [dossiersRes, journalRes] = await Promise.all([
+      sb.from('reathletisation').select('*').eq('org', currentOrg).order('updated_at', { ascending: false }),
+      sb.from('reathletisation_journal').select('*').eq('org', currentOrg).order('date', { ascending: false }).order('created_at', { ascending: false }),
+    ]);
+    if (dossiersRes.error) throw dossiersRes.error;
+    reathleData = dossiersRes.data || [];
+    reathleJournal = journalRes.data || [];
+  } catch (e) { reathleData = []; reathleJournal = []; toast('Erreur chargement réathlé : ' + (e.message || e), 'error'); }
+}
+
+// --- Journal jour-par-jour ---------------------------------------------------
+function reaToggleJournal(id) {
+  if (reathleOpenJournal.has(id)) reathleOpenJournal.delete(id); else reathleOpenJournal.add(id);
+  renderReathleList();
+}
+
+async function reaAddJournalEntry(reathletisation_id) {
+  const dossier = reathleData.find(r => r.id === reathletisation_id);
+  if (!dossier) return;
+  const dateEl = document.getElementById('rj-date-' + reathletisation_id);
+  const feuEl  = document.getElementById('rj-feu-'  + reathletisation_id);
+  const txtEl  = document.getElementById('rj-txt-'  + reathletisation_id);
+  const date = dateEl && dateEl.value ? dateEl.value : toLocalISO(new Date());
+  const feu  = feuEl ? feuEl.value : null;
+  const contenu = (txtEl ? txtEl.value : '').trim();
+  if (!contenu) { toast('Écris un contenu avant d\'ajouter', 'error'); return; }
+  const row = {
+    reathletisation_id, org: currentOrg, joueur: dossier.joueur,
+    date, feu: feu || null, contenu,
+    auteur: (currentUser && currentUser.email) || null,
+  };
+  const { error } = await sb.from('reathletisation_journal').insert(row);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (txtEl) txtEl.value = '';
+  reathleOpenJournal.add(reathletisation_id);
+  await loadReathle();
+  renderReathleList();
+}
+
+async function reaDeleteJournalEntry(entryId, reathletisation_id) {
+  if (!confirm('Supprimer cette entrée du journal ?')) return;
+  const { error } = await sb.from('reathletisation_journal').delete().eq('id', entryId);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  reathleOpenJournal.add(reathletisation_id);
+  await loadReathle();
+  renderReathleList();
+}
+
+async function reaUpdateJournalContenu(entryId, newContenu) {
+  const clean = String(newContenu || '').trim();
+  const { error } = await sb.from('reathletisation_journal').update({ contenu: clean }).eq('id', entryId);
+  if (error) toast('Erreur : ' + error.message, 'error');
+  else { await loadReathle(); }
+}
+
+function reaJournalEntryHTML(e) {
+  const f = e.feu ? reaFeuInfo(e.feu) : null;
+  const feuBadge = f ? '<span style="background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; padding:2px 8px; font-size:11px; margin-right:6px;">' + f.emoji + ' ' + escapeHtml(f.label) + '</span>' : '';
+  const auteur = e.auteur ? ' · ' + escapeHtml(String(e.auteur).split('@')[0]) : '';
+  return '<div style="display:flex; gap:10px; padding:8px 10px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; align-items:flex-start;">' +
+    '<div style="min-width:80px; font-size:11px; color:var(--text-dim); font-family:ui-monospace,monospace; padding-top:2px;">' + escapeHtml(formatDateFR(e.date)) + '</div>' +
+    '<div style="flex:1; min-width:0;">' +
+      '<div style="margin-bottom:4px;">' + feuBadge + '<span style="font-size:11px; color:var(--text-mute);">Ajouté' + auteur + '</span></div>' +
+      '<div style="font-size:13px; color:var(--text); line-height:1.5; white-space:pre-wrap;">' + escapeHtml(e.contenu) + '</div>' +
+    '</div>' +
+    '<button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#f87171; align-self:flex-start;" onclick="reaDeleteJournalEntry(' + e.id + ',' + e.reathletisation_id + ')" title="Supprimer">🗑️</button>' +
+  '</div>';
+}
+
+function reaJournalCardHTML(r) {
+  const open = reathleOpenJournal.has(r.id);
+  const entries = reaJournalFor(r.id);
+  const n = entries.length;
+  const preview = entries.slice(0, 2);
+  const rest = entries.slice(2);
+  const feuOpts = REA_FEUX.map(f => '<option value="' + f.v + '">' + f.emoji + ' ' + f.label + '</option>').join('');
+  const inp = 'background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px; font-family:inherit;';
+  const today = toLocalISO(new Date());
+  const form =
+    '<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:flex-start; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border);">' +
+      '<input type="date" id="rj-date-' + r.id + '" value="' + today + '" style="' + inp + '">' +
+      '<select id="rj-feu-' + r.id + '" style="' + inp + '"><option value="">—</option>' + feuOpts + '</select>' +
+      '<textarea id="rj-txt-' + r.id + '" rows="2" placeholder="Ce qui a été fait aujourd\'hui, sensations, prochaine étape…" style="flex:1; min-width:220px; resize:vertical; ' + inp + '"></textarea>' +
+      '<button class="btn" style="padding:6px 12px; font-size:12px;" onclick="reaAddJournalEntry(' + r.id + ')">➕ Ajouter</button>' +
+    '</div>';
+
+  let body;
+  if (n === 0) {
+    body = '<div style="font-size:12px; color:var(--text-mute); padding:6px 0;">Aucune entrée pour l\'instant. Ajoute la première ci-dessous.</div>' + form;
+  } else if (!open) {
+    body = '<div style="display:flex; flex-direction:column; gap:6px;">' + preview.map(reaJournalEntryHTML).join('') + '</div>' +
+      (rest.length ? '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px; margin-top:8px;" onclick="reaToggleJournal(' + r.id + ')">▾ Voir tout l\'historique (' + rest.length + ' de plus)</button>' : '') +
+      form;
+  } else {
+    body = '<div style="display:flex; flex-direction:column; gap:6px;">' + entries.map(reaJournalEntryHTML).join('') + '</div>' +
+      '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px; margin-top:8px;" onclick="reaToggleJournal(' + r.id + ')">▴ Réduire</button>' +
+      form;
+  }
+  return '<div style="margin-top:10px; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px;">' +
+    '<div style="font-size:12px; color:var(--text-dim); font-weight:600; letter-spacing:0.4px; text-transform:uppercase; margin-bottom:8px;">📅 Suivi jour par jour <span style="color:var(--text-mute); font-weight:400; text-transform:none; letter-spacing:0;">(' + n + ' entrée' + (n>1?'s':'') + ')</span></div>' +
+    body + '</div>';
 }
 
 function renderReaFeuButtons() {
@@ -27128,6 +27228,7 @@ function reaCardHTML(r) {
     '</div>' +
     '<div style="margin-top:10px;">' + stages + '</div>' +
     (r.notes ? '<div style="margin-top:8px; font-size:12px; color:var(--text-dim); white-space:pre-wrap;">📝 ' + escapeHtml(r.notes) + '</div>' : '') +
+    reaJournalCardHTML(r) +
   '</div>';
 }
 
