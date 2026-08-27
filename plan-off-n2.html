@@ -472,13 +472,13 @@ footer{
 
 <section class="context" id="context-card">
   <div class="context-head">
-    <h2>📝 <b>Contexte du jour</b> · <span id="context-date-label">aujourd'hui</span></h2>
+    <h2>🪄 <b>Suggestion d'entraînement</b> · <span id="context-date-label">aujourd'hui</span></h2>
     <span class="meta" id="context-meta"></span>
   </div>
   <div class="context-body">
-    <textarea id="context-text" placeholder="Décris ici le contexte de la journée : intention pédagogique, contraintes (créneau raccourci, matériel indispo, joueur qui manque), thème du bloc à travailler, consignes générales, adaptations individuelles… Ces notes s'affichent en tête et guident la lecture des séances ci-dessous."></textarea>
+    <textarea id="context-text" placeholder="Décris l'objectif de la séance : type de bloc (force, aérobie, prévention, jeu réduit…), qui bosse quoi (valides / blessés / groupes), consignes spécifiques par joueur, contraintes matériel ou temps. Le plan ci-dessous sera adapté à cette consigne."></textarea>
     <div class="context-footer">
-      <div class="hint">Auto-enregistré 1,5 s après la dernière frappe · partagé avec tout le staff de l'entité pour cette date.</div>
+      <div class="hint">Auto-enregistré 1,5 s après la dernière frappe · partagé avec le staff de l'entité pour cette date. <b style="color:var(--accent-light);">📌 La régénération automatique du plan est en cours de mise en place</b> — pour l'instant, une fois ta suggestion enregistrée, ping le staff performance pour qu'il rebuild les cartes en fonction (individuel, collectif ou en groupes).</div>
       <div class="actions">
         <input type="date" id="context-date" style="background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 10px;font-family:inherit;font-size:12px;">
         <button type="button" onclick="saveContextNow()" class="primary">💾 Enregistrer</button>
