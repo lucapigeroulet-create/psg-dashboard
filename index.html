@@ -7469,6 +7469,35 @@ function applyRoleRestrictions() {
     // 'direction 1.0' (pierre@tegg.fr) : tous les onglets admin SAUF Paramètres.
     if (settingsBtn) settingsBtn.style.display = (staffLimited || window.isDirectionPlus) ? 'none' : '';
   }
+
+  // Comptes "Surveillant" : vue staff limitée aux 2 onglets suivi wellness/charge.
+  // Ne voient ni Saisie séance, ni Joueur, ni GPS, ni Séance, ni Compétition, ni Performance,
+  // ni Médical, ni Gestion, ni Paramètres — juste État de forme et Charge RPE.
+  const SURVEILLANT_EMAILS = ['surveillant@psg.fr'];
+  const isSurveillant = SURVEILLANT_EMAILS.includes(((currentUser && currentUser.email) || '').toLowerCase());
+  if (isSurveillant) {
+    const KEEP_VIEWS = new Set(['staff-hooper', 'rpe']);
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      const v = btn.dataset.view;
+      if (v && !KEEP_VIEWS.has(v)) btn.style.display = 'none';
+    });
+    // Masquer aussi les dropdowns dont on ne garde aucun enfant
+    ['nav-gestion-dropdown','nav-params-dropdown','nav-competition-dropdown','nav-performance-dropdown','nav-medical-dropdown']
+      .forEach(id => { const d = document.getElementById(id); if (d) d.style.display = 'none'; });
+    const btnExport = document.getElementById('btn-export-json');
+    if (btnExport) btnExport.style.display = 'none';
+    // Badge SURVEILLANT à la place de STAFF
+    const badge = document.querySelector('#user-info .role-badge');
+    if (badge) { badge.textContent = 'SURVEILLANT'; badge.className = 'role-badge role-coach'; }
+    // Vue par défaut : État de forme
+    setTimeout(() => {
+      const cur = (typeof getCurrentView === 'function') ? getCurrentView() : null;
+      if (!cur || !KEEP_VIEWS.has(cur)) {
+        const b = document.querySelector('.nav-btn[data-view="staff-hooper"]');
+        if (b) b.click();
+      }
+    }, 100);
+  }
 }
 
 function canWrite() {
