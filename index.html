@@ -2748,6 +2748,9 @@
       <button class="btn btn-secondary" style="padding:4px 12px; font-size:12px;" onclick="backToStaffHooper()">← Retour à l'état de forme</button>
     </div>
 
+    <!-- Panneau des joueurs sans check-in pour la date choisie (staff/surveillant uniquement) -->
+    <div id="hooper-missing-panel" style="display:none; margin-bottom:14px;"></div>
+
     <div id="hooper-status" style="margin-bottom:12px;"></div>
 
     <!-- 4 questions Hooper -->
@@ -7476,7 +7479,7 @@ function applyRoleRestrictions() {
   const SURVEILLANT_EMAILS = ['surveillant@psg.fr'];
   const isSurveillant = SURVEILLANT_EMAILS.includes(((currentUser && currentUser.email) || '').toLowerCase());
   if (isSurveillant) {
-    const KEEP_VIEWS = new Set(['staff-hooper', 'rpe']);
+    const KEEP_VIEWS = new Set(['staff-hooper', 'rpe-entry']);
     document.querySelectorAll('.nav-btn').forEach(btn => {
       const v = btn.dataset.view;
       if (v && !KEEP_VIEWS.has(v)) btn.style.display = 'none';
@@ -22670,9 +22673,65 @@ function backToStaffHooper() {
 
 // Ouvre la page de saisie Hooper en mode staff (depuis l'onglet État de forme)
 function openHooperEntryStaff() {
+  // On ouvre la vue Hooper (staff/surveillant) : la première chose que le staff voit
+  // est la liste des joueurs sans check-in du jour (renderHooperMissingPanel), et il
+  // clique sur un joueur pour commencer sa saisie.
   const players = getAllPlayers();
-  const firstPlayer = players[0] || null;
-  goToHooperForPlayer(toLocalISO(new Date()), firstPlayer);
+  const today = toLocalISO(new Date());
+  // Chercher le premier joueur SANS check-in pour préremplir le sélecteur
+  // (mais l'utilisateur pourra en cliquer un autre depuis le panneau).
+  const missing = players.filter(p => !hooperData.some(h => h.joueur === p && h.date === today && computeHooperIndex(h) !== null));
+  const target = missing[0] || players[0] || null;
+  goToHooperForPlayer(today, target);
+}
+
+// Rend le panneau "joueurs sans check-in" pour la date sélectionnée.
+// Affiché uniquement pour le staff/admin/surveillant. Chaque puce clique → sélectionne le joueur.
+function renderHooperMissingPanel() {
+  const panel = document.getElementById('hooper-missing-panel');
+  if (!panel) return;
+  if (currentRole === 'lecteur') { panel.style.display = 'none'; return; }
+  const dateInput = document.getElementById('hooper-date');
+  const date = (dateInput && dateInput.value) || toLocalISO(new Date());
+  const players = getAllPlayers();
+  const missing = players.filter(p => !hooperData.some(h => h.joueur === p && h.date === date && computeHooperIndex(h) !== null));
+  const filled = players.length - missing.length;
+  const label = formatDateFR(date);
+  if (missing.length === 0) {
+    panel.style.display = '';
+    panel.innerHTML = '<div class="card" style="background:rgba(52,211,153,0.10); border-color:rgba(52,211,153,0.35);">' +
+      '<div style="display:flex; gap:10px; align-items:center;"><span style="font-size:20px;">✅</span>' +
+      '<div><div style="font-weight:700; color:var(--green);">Tous les joueurs ont rempli leur état de forme</div>' +
+      '<div style="font-size:12px; color:var(--text-dim); margin-top:2px;">' + escapeHtml(label) + ' · ' + players.length + '/' + players.length + ' saisies</div></div></div></div>';
+    return;
+  }
+  panel.style.display = '';
+  const cur = hooperTargetJoueur || '';
+  const pills = missing.map(p => {
+    const active = p === cur;
+    return '<button type="button" onclick="hooperPickMissing(\'' + escapeAttr(p) + '\')" style="padding:6px 12px; border-radius:16px; font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer; border:1px solid ' + (active ? 'var(--accent)' : 'var(--border)') + '; background:' + (active ? 'var(--accent)' : 'var(--bg-elevated)') + '; color:' + (active ? '#fff' : 'var(--text)') + ';">' + escapeHtml(p) + '</button>';
+  }).join(' ');
+  panel.innerHTML = '<div class="card">' +
+    '<div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:10px; margin-bottom:10px;">' +
+      '<div><h3 style="margin:0; color:var(--orange);">📝 Joueurs sans check-in — ' + escapeHtml(label) + '</h3>' +
+      '<p style="font-size:12px; color:var(--text-dim); margin:4px 0 0;">Clique un joueur pour le sélectionner et remplir son état de forme.</p></div>' +
+      '<span style="font-family:ui-monospace,monospace; font-size:12px; color:var(--text-dim);">' + filled + '/' + players.length + ' saisies · <b style="color:var(--orange);">' + missing.length + ' manquantes</b></span>' +
+    '</div>' +
+    '<div style="display:flex; flex-wrap:wrap; gap:6px;">' + pills + '</div>' +
+  '</div>';
+}
+
+// Sélectionne un joueur depuis le panneau "manquants" et re-render le formulaire Hooper pour lui
+function hooperPickMissing(joueur) {
+  hooperTargetJoueur = joueur;
+  const sel = document.getElementById('hooper-player-select');
+  if (sel) {
+    if (![...sel.options].some(o => o.value === joueur)) sel.insertAdjacentHTML('beforeend', '<option value="' + escapeAttr(joueur) + '">' + escapeHtml(joueur) + '</option>');
+    sel.value = joueur;
+  }
+  renderPlayerHooper();
+  const status = document.getElementById('hooper-status');
+  if (status) status.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // Le staff change de joueur cible pour la saisie Hooper
@@ -22718,6 +22777,9 @@ async function renderPlayerHooper() {
     }
   }
   if (!hooperTargetJoueur) hooperTargetJoueur = currentJoueurNom;
+
+  // Panneau des joueurs sans check-in (staff/surveillant/admin)
+  renderHooperMissingPanel();
 
   const existing = getHooper(date, hooperTargetJoueur);
 
