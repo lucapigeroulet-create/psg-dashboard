@@ -10035,9 +10035,12 @@ function renderPlanView() {
 // PLANIFICATION SAISON — macrocycle éditable (vision globale : séances, charge,
 // intensité, volume, contenus athlétiques). Source : table Supabase "planification".
 // ============================================================================
-// Contexte planification : org est aligné sur currentOrg au moment d'ouvrir la vue
-// (voir renderPlanification). categorie/saison restent par défaut mais éditables plus tard.
+// Contexte planification : org est aligné sur currentOrg au moment d'ouvrir la vue.
+// categorie est modifiable via le sélecteur en haut de la vue (permet de gérer plusieurs
+// catégories dans une même org, ex. PSG : 1ere PS + U15 + U18).
 let PLANIF_CTX = { org: 'TEGG', categorie: '1ere PS', saison: '2026-2027' };
+// Catégories disponibles pour l'org courante (chargées à l'ouverture de la vue).
+let planifCategoriesForOrg = ['1ere PS'];
 let planifRows = [];
 let microRows = [];
 let planifLogos = [];   // bibliothèque de logos adversaires (org TEGG)
@@ -10108,6 +10111,15 @@ async function renderPlanification() {
   PLANIF_CTX.org = currentOrg;
   planifInjectStyle();
   view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Chargement de la planification…</p></div>';
+  // Liste des catégories déjà planifiées dans cette org (dropdown en haut de la vue)
+  const { data: catRows } = await sb.from('planification').select('categorie')
+    .eq('org', PLANIF_CTX.org).eq('saison', PLANIF_CTX.saison);
+  const cats = Array.from(new Set((catRows || []).map(r => r.categorie).filter(Boolean))).sort();
+  planifCategoriesForOrg = cats.length ? cats : ['1ere PS'];
+  // Si la catégorie courante n'existe plus pour cette org, retomber sur la première dispo.
+  if (!planifCategoriesForOrg.includes(PLANIF_CTX.categorie)) {
+    PLANIF_CTX.categorie = planifCategoriesForOrg[0];
+  }
   const [planRes, microRes, logoRes] = await Promise.all([
     sb.from('planification').select('*')
       .eq('org', PLANIF_CTX.org).eq('categorie', PLANIF_CTX.categorie).eq('saison', PLANIF_CTX.saison)
@@ -10171,9 +10183,90 @@ function planifLogoLookup(name) {
 // La gestion des logos adversaires est centralisée dans Paramètres → onglet Logos
 // (voir renderLogosSettings / settingsAddLogo / settingsReplaceLogo / settingsDeleteLogo).
 
+// Sélecteur de catégorie affiché en tête de la vue Planification.
+// Permet de passer d'une équipe/catégorie à l'autre dans la même org
+// (ex. PSG : 1ère PS · U15 · U18) et d'en créer une nouvelle à la volée.
+function planifCategoryBar() {
+  const opts = planifCategoriesForOrg.map(c =>
+    '<option value="' + escapeAttr(c) + '"' + (c === PLANIF_CTX.categorie ? ' selected' : '') + '>' + escapeHtml(c) + '</option>'
+  ).join('');
+  const inp = 'background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; font-family:inherit;';
+  return '<div class="card" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:12px 16px;">' +
+    '<div style="display:flex; gap:8px; align-items:center;">' +
+      '<label style="font-size:11px; letter-spacing:0.6px; text-transform:uppercase; color:var(--text-dim); font-weight:700;">Catégorie</label>' +
+      '<select id="planif-cat-select" onchange="switchPlanifCategory(this.value)" style="' + inp + '">' + opts + '</select>' +
+    '</div>' +
+    '<button class="btn btn-secondary" style="padding:5px 12px; font-size:12px;" onclick="planifNewCategory()">➕ Nouvelle catégorie</button>' +
+    (planifCategoriesForOrg.length > 1
+      ? '<button class="btn btn-secondary" style="padding:5px 12px; font-size:12px; color:#f87171;" onclick="planifDeleteCategory()">🗑️ Supprimer cette catégorie</button>' : '') +
+  '</div>';
+}
+
+// Change de catégorie et recharge la vue
+async function switchPlanifCategory(cat) {
+  if (!cat || cat === PLANIF_CTX.categorie) return;
+  PLANIF_CTX.categorie = cat;
+  microSelCal = null;  // reset le microcycle sélectionné
+  await renderPlanification();
+}
+
+// Crée une nouvelle catégorie vide (45 semaines à partir du 03/08/2026 par défaut)
+async function planifNewCategory() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { toast('Réservé au staff', 'error'); return; }
+  const name = (prompt('Nom de la nouvelle catégorie (ex : U15, U18, Réserve, 1ere PS…) :') || '').trim();
+  if (!name) return;
+  if (planifCategoriesForOrg.includes(name)) { toast('Cette catégorie existe déjà pour cette entité', 'error'); return; }
+  const startStr = prompt('Date de début (lundi, format AAAA-MM-JJ) :', '2026-08-03') || '';
+  const startDate = /^\d{4}-\d{2}-\d{2}$/.test(startStr) ? new Date(startStr + 'T00:00:00') : null;
+  if (!startDate || isNaN(startDate)) { toast('Date invalide', 'error'); return; }
+  const nWeeksStr = prompt('Nombre de semaines à créer :', '45') || '';
+  const nWeeks = Math.max(1, Math.min(60, parseInt(nWeeksStr, 10) || 45));
+  const rows = [];
+  for (let w = 0; w < nWeeks; w++) {
+    const d = new Date(startDate.getTime() + w * 7 * 86400000);
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+    // Numéro de semaine ISO (approx : semaine du jeudi de la semaine calendaire)
+    const tmp = new Date(Date.UTC(y, d.getMonth(), d.getDate()));
+    tmp.setUTCDate(tmp.getUTCDate() + 4 - (tmp.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
+    const weekNum = Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+    rows.push({
+      org: PLANIF_CTX.org, categorie: name, saison: PLANIF_CTX.saison,
+      semaine_cal: 'S' + String(weekNum).padStart(2, '0'),
+      semaine_num: w + 1,
+      date_debut: y + '-' + m + '-' + day,
+      volume: 0, intensite: 0, explo: 0, submax: 0, vitesse: 0, chgt: 0, vma: 0,
+      ordre: w,
+    });
+  }
+  const { error } = await sb.from('planification').insert(rows);
+  if (error) { toast('Erreur création : ' + error.message, 'error'); return; }
+  PLANIF_CTX.categorie = name;
+  toast('Catégorie ' + name + ' créée (' + nWeeks + ' semaines vides)', 'success');
+  await renderPlanification();
+}
+
+// Supprime définitivement la catégorie courante (toutes ses semaines + microcycles)
+async function planifDeleteCategory() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { toast('Réservé au staff', 'error'); return; }
+  const cat = PLANIF_CTX.categorie;
+  if (planifCategoriesForOrg.length <= 1) { toast('Impossible : c\'est la seule catégorie de cette entité', 'error'); return; }
+  const ok = confirm('Supprimer définitivement la catégorie "' + cat + '" et TOUTES ses semaines ?\n\nCette action est irréversible.');
+  if (!ok) return;
+  const { error: mErr } = await sb.from('microcycle').delete()
+    .eq('org', PLANIF_CTX.org).eq('categorie', cat).eq('saison', PLANIF_CTX.saison);
+  const { error: pErr } = await sb.from('planification').delete()
+    .eq('org', PLANIF_CTX.org).eq('categorie', cat).eq('saison', PLANIF_CTX.saison);
+  if (mErr || pErr) { toast('Erreur suppression : ' + ((mErr || pErr).message), 'error'); return; }
+  toast('Catégorie ' + cat + ' supprimée', 'success');
+  PLANIF_CTX.categorie = planifCategoriesForOrg.find(c => c !== cat) || '1ere PS';
+  await renderPlanification();
+}
+
 function drawPlanification() {
   const view = document.getElementById('view-planification');
   const rows = planifRows;
+  const catBar = planifCategoryBar();
   if (!rows.length) {
     const orgLbl = (typeof orgLabelText === 'function') ? orgLabelText(PLANIF_CTX.org) : PLANIF_CTX.org;
     // Propose d'amorcer à partir d'une autre org qui a déjà une planification (typiquement TEGG).
@@ -10182,7 +10275,8 @@ function drawPlanification() {
       const lbl = (typeof orgLabelText === 'function') ? orgLabelText(o) : o;
       return '<button class="pf-btn" onclick="planifSeedFromOrg(\'' + o + '\')">📋 Copier depuis ' + escapeHtml(lbl) + '</button>';
     }).join(' ');
-    view.innerHTML = '<div class="card"><h2 style="margin:0 0 8px;">🗓️ Planification saison — ' + escapeHtml(orgLbl) + '</h2>' +
+    view.innerHTML = catBar +
+      '<div class="card"><h2 style="margin:0 0 8px;">🗓️ Planification saison — ' + escapeHtml(orgLbl) + ' · ' + escapeHtml(PLANIF_CTX.categorie) + '</h2>' +
       '<p style="color:var(--text-dim); font-size:13px; margin:0 0 14px;">Aucune semaine planifiée pour ' + escapeHtml(PLANIF_CTX.categorie) + ' — ' + escapeHtml(PLANIF_CTX.saison) + ' sous <b>' + escapeHtml(orgLbl) + '</b>. ' +
       'Tu peux copier la trame d\'une autre entité pour démarrer (les modifications resteront propres à ' + escapeHtml(orgLbl) + ').</p>' +
       '<div style="display:flex; gap:8px; flex-wrap:wrap;">' + seedBtns + '</div></div>';
@@ -10208,7 +10302,7 @@ function drawPlanification() {
   const grid = '<div class="card"><div class="pf-scroll">' + planifTable(rows) + '</div>' +
     '<p style="margin:10px 4px 0; color:var(--text-dim); font-size:12px;">Clique une barre pour régler le niveau (0→5). Les objectifs, tests et thèmes sont éditables directement. Clique l\'entête d\'une semaine pour voir son microcycle en détail. Tout est sauvegardé automatiquement.</p></div>';
 
-  view.innerHTML = overview + grid + planifMicroCard();
+  view.innerHTML = catBar + overview + grid + planifMicroCard();
   planifWire(view);
 }
 
