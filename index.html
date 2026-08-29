@@ -10058,6 +10058,8 @@ let microRows = [];
 let planifLogos = [];   // bibliothèque de logos adversaires (org TEGG)
 let microSelCal = null; // semaine sélectionnée dans le détail microcycle
 let microOpen = false;  // le panneau détail est-il visible ?
+let microCopyOpen = false; // le sous-panneau "copier depuis une autre catégorie" est-il visible ?
+let microCopyState = { srcCategorie: '', srcSemaineCal: '', srcRows: [], srcCats: [] };
 
 // Barres 0→5 : charge (volume/intensité) + contenus athlétiques, chacune sa couleur.
 const PLANIF_BARS = [
@@ -10342,11 +10344,113 @@ function planifMicroCard() {
         '<button class="pf-navbtn" id="pf-micro-prev" title="Semaine précédente" type="button">‹</button>' +
         '<select id="pf-micro-week" class="pf-weeksel">' + opts + '</select>' +
         '<button class="pf-navbtn" id="pf-micro-next" title="Semaine suivante" type="button">›</button>' +
+        '<button class="pf-btn" id="pf-micro-copy" title="Copier le microcycle d\'une semaine d\'une autre catégorie" type="button" onclick="planifOpenMicroCopy()">📋 Copier</button>' +
         '<button class="pf-btn" id="pf-micro-pdf" title="Exporter le microcycle en PDF (A4 paysage)" type="button" onclick="planifMicroExportPDF()">📄 PDF</button>' +
         '<button class="pf-btn pf-micro-close" id="pf-micro-close" title="Fermer le microcycle" type="button">✕</button>' +
       '</div>' +
     '</div>' +
+    planifMicroCopyPanel() +
     '<div id="pf-micro-body">' + planifMicroBody(microSelCal) + '</div></div>';
+}
+
+// Sous-panneau "Copier depuis une autre catégorie" — affiché sous le header quand
+// microCopyOpen === true. Choix : catégorie source (autre que la catégorie courante)
+// + semaine source, puis bouton pour écraser la semaine courante avec les jours/theme/note.
+function planifMicroCopyPanel() {
+  const catsOpts = microCopyState.srcCats.map(c =>
+    '<option value="' + escapeHtml(c) + '"' + (c === microCopyState.srcCategorie ? ' selected' : '') + '>' + escapeHtml(c) + '</option>'
+  ).join('');
+  const weeksOpts = microCopyState.srcRows.map(w =>
+    '<option value="' + escapeHtml(w.semaine_cal) + '"' + (w.semaine_cal === microCopyState.srcSemaineCal ? ' selected' : '') + '>' +
+    escapeHtml(w.semaine_cal) + (w.date_debut ? ' — ' + w.date_debut.slice(8, 10) + '/' + w.date_debut.slice(5, 7) : '') + '</option>'
+  ).join('');
+  const style = microCopyOpen ? '' : 'display:none;';
+  const empty = !microCopyState.srcCats.length;
+  const body = empty
+    ? '<div style="color:var(--text-dim); font-size:12px;">Aucune autre catégorie n\'a de microcycle pour ' + escapeHtml(PLANIF_CTX.saison || '') + '.</div>'
+    : '<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; font-size:12px;">' +
+        '<span style="color:var(--text-dim);">Copier depuis :</span>' +
+        '<select id="pf-micro-copy-cat" class="pf-weeksel">' + catsOpts + '</select>' +
+        '<span style="color:var(--text-dim);">semaine</span>' +
+        '<select id="pf-micro-copy-week" class="pf-weeksel">' + weeksOpts + '</select>' +
+        '<button class="pf-btn" onclick="planifDoMicroCopyWeek()" type="button">✔ Copier vers ' + escapeHtml(microSelCal || '') + '</button>' +
+        '<button class="pf-btn pf-btn-ghost" onclick="planifCloseMicroCopy()" type="button">Annuler</button>' +
+      '</div>';
+  return '<div id="pf-micro-copy-panel" class="pf-micro-copy" style="' + style + '">' + body + '</div>';
+}
+
+// Ouvre / bascule le panneau de copie. À l'ouverture, charge la liste des catégories
+// et des semaines disponibles pour l'org courante et la saison courante.
+async function planifOpenMicroCopy() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { toast('Réservé au staff', 'error'); return; }
+  microCopyOpen = !microCopyOpen;
+  if (!microCopyOpen) { planifShowMicroCopyPanel(); return; }
+  try {
+    const { data: cats } = await sb.from('microcycle').select('categorie')
+      .eq('org', PLANIF_CTX.org).eq('saison', PLANIF_CTX.saison);
+    const uniq = Array.from(new Set((cats || []).map(r => r.categorie)
+      .filter(c => c && c !== PLANIF_CTX.categorie))).sort();
+    microCopyState.srcCats = uniq;
+    microCopyState.srcCategorie = uniq[0] || '';
+    await _planifLoadMicroCopyWeeks();
+  } catch (e) {
+    toast('Erreur chargement : ' + (e.message || e), 'error');
+  }
+  planifShowMicroCopyPanel();
+}
+function planifCloseMicroCopy() { microCopyOpen = false; planifShowMicroCopyPanel(); }
+
+async function _planifLoadMicroCopyWeeks() {
+  if (!microCopyState.srcCategorie) { microCopyState.srcRows = []; microCopyState.srcSemaineCal = ''; return; }
+  const { data: weeks } = await sb.from('microcycle').select('*')
+    .eq('org', PLANIF_CTX.org).eq('saison', PLANIF_CTX.saison).eq('categorie', microCopyState.srcCategorie)
+    .order('ordre', { ascending: true });
+  microCopyState.srcRows = weeks || [];
+  // Par défaut : même semaine_cal que la courante si dispo, sinon la première
+  const same = microCopyState.srcRows.find(w => w.semaine_cal === microSelCal);
+  microCopyState.srcSemaineCal = same ? same.semaine_cal : (microCopyState.srcRows[0] ? microCopyState.srcRows[0].semaine_cal : '');
+}
+
+function planifShowMicroCopyPanel() {
+  const p = document.getElementById('pf-micro-copy-panel');
+  if (!p) return;
+  const parent = p.parentNode;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = planifMicroCopyPanel();
+  const fresh = tmp.firstChild;
+  parent.replaceChild(fresh, p);
+  const catSel = document.getElementById('pf-micro-copy-cat');
+  const wkSel = document.getElementById('pf-micro-copy-week');
+  if (catSel) catSel.addEventListener('change', async () => {
+    microCopyState.srcCategorie = catSel.value;
+    await _planifLoadMicroCopyWeeks();
+    planifShowMicroCopyPanel();
+  });
+  if (wkSel) wkSel.addEventListener('change', () => { microCopyState.srcSemaineCal = wkSel.value; });
+}
+
+// Écrase la semaine courante (jours, theme, note) avec ceux de la source choisie.
+async function planifDoMicroCopyWeek() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { toast('Réservé au staff', 'error'); return; }
+  if (!microSelCal) { toast('Aucune semaine cible', 'error'); return; }
+  const src = microCopyState.srcRows.find(r => r.semaine_cal === microCopyState.srcSemaineCal);
+  if (!src) { toast('Semaine source introuvable', 'error'); return; }
+  const msg = 'Copier le microcycle de ' + microCopyState.srcCategorie + ' — ' + microCopyState.srcSemaineCal +
+    ' vers ' + PLANIF_CTX.categorie + ' — ' + microSelCal + ' ?\n\n' +
+    'Le contenu actuel de la semaine cible sera écrasé (séances, espace/séquence, durées, thème, note).';
+  if (!confirm(msg)) return;
+  const patch = { jours: src.jours || [], theme: src.theme || null, note: src.note || null,
+    updated_at: new Date().toISOString() };
+  const { error } = await sb.from('microcycle').update(patch)
+    .eq('org', PLANIF_CTX.org).eq('categorie', PLANIF_CTX.categorie).eq('saison', PLANIF_CTX.saison)
+    .eq('semaine_cal', microSelCal);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  const m = microRows.find(r => r.semaine_cal === microSelCal);
+  if (m) { m.jours = patch.jours; m.theme = patch.theme; m.note = patch.note; }
+  microCopyOpen = false;
+  planifRefreshMicroBody();
+  planifShowMicroCopyPanel();
+  toast('Microcycle copié depuis ' + microCopyState.srcCategorie + ' — ' + microCopyState.srcSemaineCal, 'success');
 }
 
 // Bandeau récap (charge issue de la planification macro), affiché dans l'entête
@@ -11151,6 +11255,9 @@ function planifInjectStyle() {
   #view-planification .pf-mtable td{text-align:center;}
   #view-planification .pf-mdur{min-height:26px;font-size:11px;opacity:.9;text-align:center;}
   #view-planification .pf-mspacer td,#view-planification .pf-mspacer th{border:none;background:transparent;height:10px;padding:0;box-shadow:none;}
+  #view-planification .pf-micro-copy{margin:8px 0 12px;padding:10px 12px;border:1px dashed var(--border);border-radius:8px;background:var(--bg-elevated);}
+  #view-planification .pf-btn-ghost{background:transparent;border-color:transparent;color:var(--text-dim);}
+  #view-planification .pf-btn-ghost:hover{color:var(--text);}
   /* Cellule remplie : fond blanc, texte bleu foncé (placeholder=" " sur les textareas
      rend :placeholder-shown vrai UNIQUEMENT quand vide → :not(:placeholder-shown) = a du contenu) */
   #view-planification .pf-mses:not(:placeholder-shown){background:#ffffff;color:#0b2942;border-color:#c8d5e6;}
