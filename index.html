@@ -10048,6 +10048,7 @@ let planifRows = [];
 let microRows = [];
 let planifLogos = [];   // bibliothèque de logos adversaires (org TEGG)
 let microSelCal = null; // semaine sélectionnée dans le détail microcycle
+let microOpen = false;  // le panneau détail est-il visible ?
 
 // Barres 0→5 : charge (volume/intensité) + contenus athlétiques, chacune sa couleur.
 const PLANIF_BARS = [
@@ -10305,8 +10306,10 @@ function drawPlanification() {
   const grid = '<div class="card"><div class="pf-scroll">' + planifTable(rows) + '</div>' +
     '<p style="margin:10px 4px 0; color:var(--text-dim); font-size:12px;">Clique une barre pour régler le niveau (0→5). Les objectifs, tests et thèmes sont éditables directement. Clique l\'entête d\'une semaine pour voir son microcycle en détail. Tout est sauvegardé automatiquement.</p></div>';
 
-  view.innerHTML = catBar + overview + grid + planifMicroCard();
+  view.innerHTML = catBar + overview + planifMicroCard() + grid;
   planifWire(view);
+  planifShowMicro();
+  planifAutoGrowMicro();
 }
 
 // ---- Carte 3 : détail du microcycle (semaine par semaine) --------------------
@@ -10316,10 +10319,23 @@ function planifMicroCard() {
     '<option value="' + escapeHtml(m.semaine_cal) + '"' + (m.semaine_cal === microSelCal ? ' selected' : '') + '>' +
     escapeHtml(m.semaine_cal) + (m.date_debut ? ' — ' + m.date_debut.slice(8, 10) + '/' + m.date_debut.slice(5, 7) : '') + '</option>'
   ).join('');
-  return '<div class="card pf-micro-card">' +
-    '<div class="pf-head"><div><h2 style="margin:0;">📅 Détail du microcycle</h2>' +
-    '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">Séances jour par jour de la semaine sélectionnée (séance principale + complément).</p></div>' +
-    '<select id="pf-micro-week" class="pf-weeksel">' + opts + '</select></div>' +
+  const curM = microRows.find(r => r.semaine_cal === microSelCal);
+  const curDate = (curM && curM.date_debut) ? ' — ' + curM.date_debut.slice(8, 10) + '/' + curM.date_debut.slice(5, 7) : '';
+  return '<div class="card pf-micro-card" id="pf-micro-card" style="display:none;">' +
+    '<div class="pf-head" style="align-items:center; gap:12px;">' +
+      '<div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">' +
+        '<button class="pf-navbtn" id="pf-micro-prev" title="Semaine précédente" type="button">‹</button>' +
+        '<div style="flex:1; min-width:0;">' +
+          '<h2 style="margin:0;">📅 Détail du microcycle — <span id="pf-micro-title">' + escapeHtml(microSelCal || '') + escapeHtml(curDate) + '</span></h2>' +
+          '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">Séances jour par jour : matin, après-midi et salle, chacune avec sa durée.</p>' +
+        '</div>' +
+        '<button class="pf-navbtn" id="pf-micro-next" title="Semaine suivante" type="button">›</button>' +
+      '</div>' +
+      '<div style="display:flex; gap:8px; align-items:center;">' +
+        '<select id="pf-micro-week" class="pf-weeksel">' + opts + '</select>' +
+        '<button class="pf-btn pf-micro-close" id="pf-micro-close" title="Fermer le microcycle" type="button">✕</button>' +
+      '</div>' +
+    '</div>' +
     '<div id="pf-micro-body">' + planifMicroBody(microSelCal) + '</div></div>';
 }
 
@@ -10344,17 +10360,75 @@ function planifMicroBody(cal) {
     '<label>Thème <input class="pf-txt pf-mtheme" data-cal="' + escapeHtml(cal) + '" value="' + escapeHtml(m.theme || '') + '"></label>' +
     '<label>Note / durée <input class="pf-txt pf-mnote" data-cal="' + escapeHtml(cal) + '" value="' + escapeHtml(m.note || '') + '"></label>' +
     '</div>';
-  // Grille jours
-  let head = '<tr>', s1 = '<tr><th class="pf-lbl pf-mlbl">Séance principale</th>', s2 = '<tr><th class="pf-lbl pf-mlbl">Complément</th>';
-  jours.forEach((jr, i) => {
-    head += '<th class="pf-mday">' + escapeHtml(jr.j || ('J' + (i + 1))) + '</th>';
-    s1 += '<td><textarea class="pf-txt pf-mses" rows="3" data-cal="' + escapeHtml(cal) + '" data-idx="' + i + '" data-slot="s1">' + escapeHtml(jr.s1 || '') + '</textarea></td>';
-    s2 += '<td><textarea class="pf-txt pf-mses pf-mses2" rows="2" data-cal="' + escapeHtml(cal) + '" data-idx="' + i + '" data-slot="s2">' + escapeHtml(jr.s2 || '') + '</textarea></td>';
+  // Grille jours — 6 lignes (matin / durée / après-midi / durée / salle / durée)
+  const rowSpecs = [
+    { key: 's1', label: 'Séance Matin',        kind: 'seance' },
+    { key: 'd1', label: 'Durée séance matin',  kind: 'duree'  },
+    { key: 's2', label: 'Séance Après-midi',   kind: 'seance' },
+    { key: 'd2', label: 'Durée séance A-M',    kind: 'duree'  },
+    { key: 's3', label: 'Séance Salle',        kind: 'seance' },
+    { key: 'd3', label: 'Durée séance salle',  kind: 'duree'  }
+  ];
+  let head = '<tr><th class="pf-lbl pf-mlbl"></th>';
+  jours.forEach((jr, i) => { head += '<th class="pf-mday">' + escapeHtml(jr.j || ('J' + (i + 1))) + '</th>'; });
+  head += '</tr>';
+  let body = '';
+  rowSpecs.forEach(spec => {
+    let tr = '<tr><th class="pf-lbl pf-mlbl">' + escapeHtml(spec.label) + '</th>';
+    jours.forEach((jr, i) => {
+      const val = (jr[spec.key] != null) ? String(jr[spec.key]) : '';
+      const cls = 'pf-txt pf-mses pf-autogrow' + (spec.kind === 'duree' ? ' pf-mdur' : '');
+      tr += '<td><textarea class="' + cls + '" rows="1" data-cal="' + escapeHtml(cal) + '" data-idx="' + i + '" data-slot="' + spec.key + '">' + escapeHtml(val) + '</textarea></td>';
+    });
+    tr += '</tr>';
+    body += tr;
   });
-  head = '<tr><th class="pf-lbl pf-mlbl"></th>' + head.slice(4) + '</tr>';
-  s1 += '</tr>'; s2 += '</tr>';
   return recap + themeRow +
-    '<div class="pf-scroll"><table class="pf-table pf-mtable"><thead>' + head + '</thead><tbody>' + s1 + s2 + '</tbody></table></div>';
+    '<div class="pf-scroll"><table class="pf-table pf-mtable"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
+}
+
+// Helpers microcycle : afficher/cacher, MAJ titre, MAJ corps, navigation, auto-hauteur
+function planifShowMicro() {
+  const c = document.getElementById('pf-micro-card');
+  if (!c) return;
+  c.style.display = microOpen ? 'block' : 'none';
+  if (microOpen) planifRefreshMicroTitle();
+}
+function planifRefreshMicroTitle() {
+  const t = document.getElementById('pf-micro-title');
+  const m = microRows.find(r => r.semaine_cal === microSelCal);
+  const date = (m && m.date_debut) ? ' — ' + m.date_debut.slice(8, 10) + '/' + m.date_debut.slice(5, 7) : '';
+  if (t) t.textContent = (microSelCal || '') + date;
+  const idx = microRows.findIndex(r => r.semaine_cal === microSelCal);
+  const prev = document.getElementById('pf-micro-prev');
+  const next = document.getElementById('pf-micro-next');
+  if (prev) prev.disabled = (idx <= 0);
+  if (next) next.disabled = (idx < 0 || idx >= microRows.length - 1);
+}
+function planifRefreshMicroBody() {
+  const b = document.getElementById('pf-micro-body');
+  if (b) b.innerHTML = planifMicroBody(microSelCal);
+  const w = document.getElementById('pf-micro-week');
+  if (w) w.value = microSelCal;
+  planifRefreshMicroTitle();
+  planifAutoGrowMicro();
+}
+function planifStepMicro(delta) {
+  if (!microRows.length) return;
+  const idx = microRows.findIndex(r => r.semaine_cal === microSelCal);
+  const n = microRows.length;
+  const nx = Math.min(n - 1, Math.max(0, (idx < 0 ? 0 : idx + delta)));
+  if (nx === idx) return;
+  microSelCal = microRows[nx].semaine_cal;
+  planifRefreshMicroBody();
+}
+function pfAutoGrow(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = (el.scrollHeight + 2) + 'px';
+}
+function planifAutoGrowMicro() {
+  document.querySelectorAll('#pf-micro-body .pf-autogrow').forEach(pfAutoGrow);
 }
 
 // Courbe de périodisation : Volume (aires) + Intensité (ligne) sur toute la saison.
@@ -10633,7 +10707,7 @@ function planifWire(view) {
     });
   }
 
-  // Clic sur l'entête d'une semaine → ouvrir son microcycle
+  // Clic sur l'entête d'une semaine → ouvrir son microcycle (au-dessus du tableau)
   view.querySelectorAll('thead .pf-wcol').forEach((th, i) => {
     const r = planifRows[i];
     if (!r || !microRows.some(m => m.semaine_cal === r.semaine_cal)) return;
@@ -10642,23 +10716,39 @@ function planifWire(view) {
       // Ne pas ouvrir le microcycle quand on édite le titre/couleur de la phase
       if (ev.target.closest('.pf-phasewrap')) return;
       microSelCal = r.semaine_cal;
-      const wsel = document.getElementById('pf-micro-week');
-      const mbody = document.getElementById('pf-micro-body');
-      if (wsel) wsel.value = microSelCal;
-      if (mbody) { mbody.innerHTML = planifMicroBody(microSelCal); }
-      const card = document.querySelector('.pf-micro-card');
+      microOpen = true;
+      planifShowMicro();
+      planifRefreshMicroBody();
+      const card = document.getElementById('pf-micro-card');
       if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 
-  // Microcycle : changement de semaine
+  // Microcycle : changement de semaine via le select
   const wsel = document.getElementById('pf-micro-week');
   if (wsel) wsel.addEventListener('change', () => {
     microSelCal = wsel.value;
-    const mbody = document.getElementById('pf-micro-body');
-    if (mbody) mbody.innerHTML = planifMicroBody(microSelCal);
+    planifRefreshMicroBody();
   });
 
+  // Microcycle : boutons ‹ › (semaine précédente / suivante) et ✕ (fermer)
+  const prevBtn = document.getElementById('pf-micro-prev');
+  const nextBtn = document.getElementById('pf-micro-next');
+  const closeBtn = document.getElementById('pf-micro-close');
+  if (prevBtn) prevBtn.addEventListener('click', () => planifStepMicro(-1));
+  if (nextBtn) nextBtn.addEventListener('click', () => planifStepMicro(+1));
+  if (closeBtn) closeBtn.addEventListener('click', () => {
+    microOpen = false;
+    planifShowMicro();
+  });
+
+  // Auto-hauteur des cellules pendant la frappe (délégation sur le conteneur persistant)
+  if (!view._pfAutoGrowWired) {
+    view._pfAutoGrowWired = true;
+    view.addEventListener('input', (ev) => {
+      if (ev.target && ev.target.classList && ev.target.classList.contains('pf-autogrow')) pfAutoGrow(ev.target);
+    });
+  }
 }
 
 async function planifSaveMicro(cal, patch, el) {
@@ -10885,6 +10975,12 @@ function planifInjectStyle() {
   #view-planification .pf-mtable td{vertical-align:top;padding:3px;}
   #view-planification .pf-mses{width:100%;min-height:52px;font-size:11px;line-height:1.35;white-space:pre-wrap;}
   #view-planification .pf-mses2{min-height:34px;opacity:.9;}
+  #view-planification .pf-navbtn{background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:50%;width:34px;height:34px;font-size:20px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+  #view-planification .pf-navbtn:hover:not(:disabled){border-color:var(--accent);color:var(--accent-light);}
+  #view-planification .pf-navbtn:disabled{opacity:.35;cursor:not-allowed;}
+  #view-planification .pf-micro-close{padding:4px 10px;font-size:14px;line-height:1;}
+  #view-planification .pf-autogrow{text-align:justify;text-justify:inter-word;overflow:hidden;resize:none;box-sizing:border-box;word-break:break-word;}
+  #view-planification .pf-mdur{min-height:26px;font-size:11px;opacity:.9;text-align:center;}
   `;
   const st = document.createElement('style');
   st.id = 'planif-style';
