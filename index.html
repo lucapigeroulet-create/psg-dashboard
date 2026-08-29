@@ -10365,24 +10365,30 @@ function planifMicroBody(cal) {
   // Grille jours — 6 lignes (matin / durée / après-midi / durée / salle / durée)
   const rowSpecs = [
     { key: 's1', label: 'Séance Matin',        kind: 'seance' },
-    { key: 'e1', label: 'Espace-temps',        kind: 'seance' },
+    { key: 'e1', label: 'Espace/séquence',     kind: 'duree'  },
     { key: 'd1', label: 'Durée séance matin',  kind: 'duree'  },
+    { kind: 'spacer' },
     { key: 's2', label: 'Séance Après-midi',   kind: 'seance' },
-    { key: 'e2', label: 'Espace-temps',        kind: 'seance' },
+    { key: 'e2', label: 'Espace/séquence',     kind: 'duree'  },
     { key: 'd2', label: 'Durée séance A-M',    kind: 'duree'  },
-    { key: 's3', label: 'Séance Salle',        kind: 'seance' },
-    { key: 'd3', label: 'Durée séance salle',  kind: 'duree'  }
+    { kind: 'spacer' },
+    { key: 's3', label: 'Séance Salle',        kind: 'seance' }
   ];
   let head = '<tr><th class="pf-lbl pf-mlbl"></th>';
   jours.forEach((jr, i) => { head += '<th class="pf-mday">' + escapeHtml(jr.j || ('J' + (i + 1))) + '</th>'; });
   head += '</tr>';
   let body = '';
   rowSpecs.forEach(spec => {
+    if (spec.kind === 'spacer') {
+      body += '<tr class="pf-mspacer"><th class="pf-lbl pf-mlbl pf-mspacer-lbl"></th>' +
+        jours.map(() => '<td class="pf-mspacer-cell"></td>').join('') + '</tr>';
+      return;
+    }
     let tr = '<tr><th class="pf-lbl pf-mlbl">' + escapeHtml(spec.label) + '</th>';
     jours.forEach((jr, i) => {
       const val = (jr[spec.key] != null) ? String(jr[spec.key]) : '';
       const cls = 'pf-txt pf-mses pf-autogrow' + (spec.kind === 'duree' ? ' pf-mdur' : '');
-      tr += '<td><textarea class="' + cls + '" rows="1" data-cal="' + escapeHtml(cal) + '" data-idx="' + i + '" data-slot="' + spec.key + '">' + escapeHtml(val) + '</textarea></td>';
+      tr += '<td><textarea class="' + cls + '" rows="1" placeholder=" " data-cal="' + escapeHtml(cal) + '" data-idx="' + i + '" data-slot="' + spec.key + '">' + escapeHtml(val) + '</textarea></td>';
     });
     tr += '</tr>';
     body += tr;
@@ -11025,6 +11031,11 @@ function planifInjectStyle() {
   #view-planification .pf-micro-close{padding:4px 10px;font-size:14px;line-height:1;}
   #view-planification .pf-autogrow{text-align:justify;text-justify:inter-word;overflow:hidden;resize:none;box-sizing:border-box;word-break:break-word;}
   #view-planification .pf-mdur{min-height:26px;font-size:11px;opacity:.9;text-align:center;}
+  #view-planification .pf-mspacer td,#view-planification .pf-mspacer th{border:none;background:transparent;height:10px;padding:0;box-shadow:none;}
+  /* Cellule remplie : fond blanc, texte bleu foncé (placeholder=" " sur les textareas
+     rend :placeholder-shown vrai UNIQUEMENT quand vide → :not(:placeholder-shown) = a du contenu) */
+  #view-planification .pf-mses:not(:placeholder-shown){background:#ffffff;color:#0b2942;border-color:#c8d5e6;}
+  #view-planification .pf-mses:not(:placeholder-shown)::selection{background:#0b2942;color:#ffffff;}
   `;
   const st = document.createElement('style');
   st.id = 'planif-style';
