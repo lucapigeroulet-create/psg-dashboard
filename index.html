@@ -10322,10 +10322,11 @@ function planifMicroCard() {
   const curM = microRows.find(r => r.semaine_cal === microSelCal);
   const curDate = (curM && curM.date_debut) ? ' — ' + curM.date_debut.slice(8, 10) + '/' + curM.date_debut.slice(5, 7) : '';
   return '<div class="card pf-micro-card" id="pf-micro-card" style="display:none;">' +
-    '<div class="pf-head" style="align-items:center; gap:12px;">' +
-      '<div style="min-width:0;">' +
+    '<div class="pf-head" style="align-items:flex-start; gap:12px;">' +
+      '<div class="pf-micro-titleblock" style="min-width:0;">' +
         '<h2 style="margin:0;">📅 Détail du microcycle — <span id="pf-micro-title">' + escapeHtml(microSelCal || '') + escapeHtml(curDate) + '</span></h2>' +
         '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">Séances jour par jour : matin, après-midi et salle, chacune avec sa durée.</p>' +
+        planifMicroRecap(microSelCal) +
       '</div>' +
       planifMicroAthleStrip(microSelCal) +
       '<div style="display:flex; gap:8px; align-items:center;">' +
@@ -10338,23 +10339,25 @@ function planifMicroCard() {
     '<div id="pf-micro-body">' + planifMicroBody(microSelCal) + '</div></div>';
 }
 
+// Bandeau récap (charge issue de la planification macro), affiché dans l'entête
+// à côté du bloc "Contenus athlétiques".
+function planifMicroRecap(cal) {
+  const plan = planifRows.find(r => r.semaine_cal === cal);
+  if (!plan) return '<div class="pf-micro-recap" id="pf-micro-recap"></div>';
+  const c = planifCharge(plan);
+  return '<div class="pf-micro-recap" id="pf-micro-recap">' +
+    '<span>Volume <b style="color:#38b6ff">' + (plan.volume || 0) + '</b></span>' +
+    '<span>Intensité <b style="color:#fb7185">' + (plan.intensite || 0) + '</b></span>' +
+    '<span>Charge <b style="color:' + planifChargeColor(c) + '">' + c + '</b></span>' +
+    (plan.nb_entrainements != null ? '<span>Entraînements <b>' + plan.nb_entrainements + '</b></span>' : '') +
+    (plan.nb_matchs ? '<span>Matchs <b>' + plan.nb_matchs + '</b></span>' : '') +
+    '</div>';
+}
+
 function planifMicroBody(cal) {
   const m = microRows.find(r => r.semaine_cal === cal);
   if (!m) return '<p style="color:var(--text-dim);">Semaine introuvable.</p>';
-  const plan = planifRows.find(r => r.semaine_cal === cal);
   const jours = Array.isArray(m.jours) ? m.jours : [];
-  // Bandeau récap (charge issue de la planification macro)
-  let recap = '';
-  if (plan) {
-    const c = planifCharge(plan);
-    recap = '<div class="pf-micro-recap">' +
-      '<span>Volume <b style="color:#38b6ff">' + (plan.volume || 0) + '</b></span>' +
-      '<span>Intensité <b style="color:#fb7185">' + (plan.intensite || 0) + '</b></span>' +
-      '<span>Charge <b style="color:' + planifChargeColor(c) + '">' + c + '</b></span>' +
-      (plan.nb_entrainements != null ? '<span>Entraînements <b>' + plan.nb_entrainements + '</b></span>' : '') +
-      (plan.nb_matchs ? '<span>Matchs <b>' + plan.nb_matchs + '</b></span>' : '') +
-      '</div>';
-  }
   const themeRow = '<div class="pf-micro-meta">' +
     '<label>Thème <input class="pf-txt pf-mtheme" data-cal="' + escapeHtml(cal) + '" value="' + escapeHtml(m.theme || '') + '"></label>' +
     '<label>Note / durée <input class="pf-txt pf-mnote" data-cal="' + escapeHtml(cal) + '" value="' + escapeHtml(m.note || '') + '"></label>' +
@@ -10389,7 +10392,7 @@ function planifMicroBody(cal) {
     tr += '</tr>';
     body += tr;
   });
-  return recap + themeRow +
+  return themeRow +
     '<div class="pf-scroll"><table class="pf-table pf-mtable"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
 }
 
@@ -10438,6 +10441,8 @@ function planifRefreshMicroBody() {
   if (w) w.value = microSelCal;
   const a = document.getElementById('pf-micro-athle');
   if (a) a.outerHTML = planifMicroAthleStrip(microSelCal);
+  const rc = document.getElementById('pf-micro-recap');
+  if (rc) rc.outerHTML = planifMicroRecap(microSelCal);
   planifRefreshMicroTitle();
   planifAutoGrowMicro();
 }
@@ -11008,8 +11013,10 @@ function planifInjectStyle() {
   #view-planification .pf-mtable td{vertical-align:top;padding:3px;}
   #view-planification .pf-mses{width:100%;min-height:52px;font-size:11px;line-height:1.35;white-space:pre-wrap;}
   #view-planification .pf-mses2{min-height:34px;opacity:.9;}
-  #view-planification .pf-micro-athle{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px;padding:0 12px;}
-  #view-planification .pf-athle-hdr{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;font-weight:700;}
+  #view-planification .pf-micro-titleblock{min-width:0;display:flex;flex-direction:column;gap:6px;}
+  #view-planification .pf-micro-titleblock .pf-micro-recap{margin:2px 0 0;}
+  #view-planification .pf-micro-athle{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:8px;padding:0 0 0 40px;}
+  #view-planification .pf-athle-hdr{font-size:20px;font-weight:700;color:var(--text);letter-spacing:0;text-transform:none;line-height:1.2;margin:0;}
   #view-planification .pf-athle-chips{display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
   #view-planification .pf-athle-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--border);border-radius:14px;font-size:11px;color:var(--text);background:var(--bg-elevated);line-height:1.2;}
   #view-planification .pf-athle-off{opacity:.35;}
