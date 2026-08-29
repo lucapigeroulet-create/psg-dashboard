@@ -10903,7 +10903,7 @@ async function planifMicroExportPDF() {
     doc.setFontSize(12);
     doc.setTextColor(180, 200, 220);
     const sub = debutISO ? 'semaine du ' + fmtFR(debutISO) + ' au ' + fmtFR(finISO) : '';
-    const subY = titleY + 18;
+    const subY = titleY + Math.max(28, titleFs * 0.7);
     if (sub) {
       const sw = doc.getTextWidth(sub);
       doc.text(sub, margin + (usableW - sw) / 2, subY);
