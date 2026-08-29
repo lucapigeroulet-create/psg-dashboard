@@ -7527,13 +7527,22 @@ const SESSION_WINDOW_HOURS = 4; // fenêtre unique de saisie/modif après public
 
 // Timestamp (ms) de début de la fenêtre 4h, ou null si inconnu.
 // Séance normale : moment où elle a été AFFECTÉE à ce joueur (seance_affectations).
-// Match : conserve la logique historique (création du match, pas d'affectation par joueur).
-// Fallback (aucune affectation connue) : ancien comportement basé sur seances.created_at.
+// Match : priorité au timestamp par joueur (composition[i].assigned_at). Fallback = created_at du match.
+// → Un joueur ajouté à la composition plus tard a SA propre fenêtre 4h depuis son affectation.
 function getSeancePublishedMs(date, seanceNom, joueur) {
   // Cas match : la "séance virtuelle" commence par '⚽ MATCH'
   if (seanceNom && seanceNom.indexOf('⚽ MATCH') === 0) {
     const m = (state.bdd_matchs || []).find(x => x.date === date && matchSeanceNom(x) === seanceNom);
-    if (!m || !m.created_at) return null;
+    if (!m) return null;
+    // Priorité : timestamp d'affectation du joueur dans la composition
+    if (joueur && Array.isArray(m.composition)) {
+      const entry = m.composition.find(c => c && c.joueur === joueur);
+      if (entry && entry.assigned_at) {
+        const msP = new Date(entry.assigned_at).getTime();
+        if (!isNaN(msP)) return msP;
+      }
+    }
+    if (!m.created_at) return null;
     const ms = new Date(m.created_at).getTime();
     return isNaN(ms) ? null : ms;
   }
