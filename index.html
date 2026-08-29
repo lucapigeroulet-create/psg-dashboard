@@ -14366,7 +14366,38 @@ function getBestMatchRow(player) {
     r.date === bm.date &&
     (r.seance || r.session_title || '') === bm.session_title
   );
+  // Prioriser la SOMME des mi-temps (1ère MT + 2ème MT) — exclut l'échauffement et
+  // le travail compensatoire, qui gonflent le total du split "all".
+  const halves = rows.filter(r => gpsHalfIndex(r.split_name) > 0);
+  if (halves.length > 0) return _sumHalvesRow(halves);
+  // Fallback : ligne "all" (match sans découpage en mi-temps)
   return rows.find(r => (r.split_name || 'all').toLowerCase() === 'all') || rows[0] || null;
+}
+
+// Somme 1ère MT + 2ème MT sur les champs cumulatifs (distance, HSR, sprint, décels…),
+// et prend le max sur les champs "plafond" (top_speed, hr_max…). Renvoie une "ligne
+// synthétique" utilisable partout où on lisait une ligne GPS classique.
+function _sumHalvesRow(halves) {
+  const sumFields = ['distance_km','hsr','hsr_m','sprint_dist_m','decel_count_high',
+    'power_plays','impacts','energy_kcal','player_load','duree_min',
+    'dist_zone1','dist_zone2','dist_zone3','dist_zone4','dist_zone5'];
+  const maxFields = ['top_speed','hr_max','max_decel','max_accel'];
+  const first = halves[0];
+  const out = {};
+  ['date','joueur','seance','session_title','org','categorie'].forEach(k => {
+    if (first[k] !== undefined) out[k] = first[k];
+  });
+  out.split_name = 'MT1+MT2';
+  sumFields.forEach(k => {
+    out[k] = halves.reduce((s, r) => s + (parseFloat(r[k]) || 0), 0);
+  });
+  maxFields.forEach(k => {
+    out[k] = halves.reduce((m, r) => Math.max(m, parseFloat(r[k]) || 0), 0);
+  });
+  // acc_count_high peut ne pas exister sur toutes les lignes → null si aucune valeur trouvée
+  const accVals = halves.map(r => r.acc_count_high).filter(v => v !== null && v !== undefined && v !== '');
+  out.acc_count_high = accVals.length ? accVals.reduce((s, v) => s + (parseFloat(v) || 0), 0) : null;
+  return out;
 }
 
 // Vmax de référence du joueur = valeur max enregistrée sur l'ensemble de ses données GPS
