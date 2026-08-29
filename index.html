@@ -10871,14 +10871,43 @@ async function planifMicroExportPDF() {
     const pageH = doc.internal.pageSize.getHeight();
     doc.setFillColor(bgRgb[0], bgRgb[1], bgRgb[2]);
     doc.rect(0, 0, pageW, pageH, 'F');
+
+    // Titre principal : "Microcycle — Sxx · Catégorie" en gros, quasi pleine largeur.
+    const m = microRows.find(r => r.semaine_cal === microSelCal) || {};
+    const dateFR = m.date_debut ? m.date_debut.slice(8, 10) + '/' + m.date_debut.slice(5, 7) + '/' + m.date_debut.slice(0, 4) : '';
+    const titleParts = ['Microcycle', microSelCal || '', PLANIF_CTX.categorie || ''].filter(Boolean);
+    const title = titleParts.join(' — ');
     const margin = 18;
+    const titleTop = margin + 6;
+    // Ajuste dynamiquement la taille pour que le titre remplisse ~95% de la largeur utile.
     const usableW = pageW - margin * 2;
-    const usableH = pageH - margin * 2;
+    let titleFs = 40;
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(titleFs);
+    let tw = doc.getTextWidth(title);
+    const targetW = usableW * 0.95;
+    if (tw > 0) titleFs = Math.min(56, Math.max(20, titleFs * (targetW / tw)));
+    doc.setFontSize(titleFs);
+    tw = doc.getTextWidth(title);
+    doc.setTextColor(255, 255, 255);
+    const titleY = titleTop + titleFs * 0.85;
+    doc.text(title, margin + (usableW - tw) / 2, titleY);
+    // Petit sous-titre (org + saison + date de début) sous le titre
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(11);
+    doc.setTextColor(180, 200, 220);
+    const sub = [PLANIF_CTX.org, PLANIF_CTX.saison, dateFR ? 'semaine du ' + dateFR : ''].filter(Boolean).join('  ·  ');
+    const subY = titleY + 16;
+    const sw = doc.getTextWidth(sub);
+    doc.text(sub, margin + (usableW - sw) / 2, subY);
+
+    const headerBottom = subY + 12;
+    const usableH = pageH - headerBottom - margin;
     const ratio = Math.min(usableW / canvas.width, usableH / canvas.height);
     const drawW = canvas.width * ratio;
     const drawH = canvas.height * ratio;
     const dx = margin + (usableW - drawW) / 2;
-    const dy = margin + (usableH - drawH) / 2;
+    const dy = headerBottom + (usableH - drawH) / 2;
     doc.addImage(canvas.toDataURL('image/png'), 'PNG', dx, dy, drawW, drawH);
 
     const safe = s => String(s || '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
