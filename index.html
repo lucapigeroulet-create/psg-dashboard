@@ -10323,10 +10323,11 @@ function planifMicroCard() {
   const curDate = (curM && curM.date_debut) ? ' — ' + curM.date_debut.slice(8, 10) + '/' + curM.date_debut.slice(5, 7) : '';
   return '<div class="card pf-micro-card" id="pf-micro-card" style="display:none;">' +
     '<div class="pf-head" style="align-items:center; gap:12px;">' +
-      '<div style="flex:1; min-width:0;">' +
+      '<div style="min-width:0;">' +
         '<h2 style="margin:0;">📅 Détail du microcycle — <span id="pf-micro-title">' + escapeHtml(microSelCal || '') + escapeHtml(curDate) + '</span></h2>' +
         '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">Séances jour par jour : matin, après-midi et salle, chacune avec sa durée.</p>' +
       '</div>' +
+      planifMicroAthleStrip(microSelCal) +
       '<div style="display:flex; gap:8px; align-items:center;">' +
         '<button class="pf-navbtn" id="pf-micro-prev" title="Semaine précédente" type="button">‹</button>' +
         '<select id="pf-micro-week" class="pf-weeksel">' + opts + '</select>' +
@@ -10385,6 +10386,26 @@ function planifMicroBody(cal) {
     '<div class="pf-scroll"><table class="pf-table pf-mtable"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>';
 }
 
+// Bandeau "Contenus athlétiques" affiché dans l'entête du microcycle (à droite du titre).
+// Reprend les 5 curseurs athlé (0→5) de la planification macro pour cette semaine.
+function planifMicroAthleStrip(cal) {
+  const plan = planifRows.find(r => r.semaine_cal === cal);
+  const items = PLANIF_BARS.filter(b => b.sec === 'athle');
+  const inner = plan ? items.map(b => {
+    const v = plan[b.key] || 0;
+    const cls = 'pf-athle-chip' + (v > 0 ? '' : ' pf-athle-off');
+    const labelTxt = b.label.replace(' / Coordination', ' / Coord.');
+    return '<span class="' + cls + '" title="' + escapeHtml(b.label) + ' — niveau ' + v + '/5">' +
+      '<i class="pf-athle-dot" style="background:' + b.color + '"></i>' +
+      '<span class="pf-athle-lbl">' + escapeHtml(labelTxt) + '</span>' +
+      '<b class="pf-athle-val">' + v + '</b></span>';
+  }).join('') : '<span class="pf-athle-empty">—</span>';
+  return '<div class="pf-micro-athle" id="pf-micro-athle" title="Contenus athlétiques de la semaine (0→5)">' +
+    '<div class="pf-athle-hdr">Contenus athlétiques</div>' +
+    '<div class="pf-athle-chips">' + inner + '</div>' +
+    '</div>';
+}
+
 // Helpers microcycle : afficher/cacher, MAJ titre, MAJ corps, navigation, auto-hauteur
 function planifShowMicro() {
   const c = document.getElementById('pf-micro-card');
@@ -10408,6 +10429,8 @@ function planifRefreshMicroBody() {
   if (b) b.innerHTML = planifMicroBody(microSelCal);
   const w = document.getElementById('pf-micro-week');
   if (w) w.value = microSelCal;
+  const a = document.getElementById('pf-micro-athle');
+  if (a) a.outerHTML = planifMicroAthleStrip(microSelCal);
   planifRefreshMicroTitle();
   planifAutoGrowMicro();
 }
@@ -10978,6 +11001,15 @@ function planifInjectStyle() {
   #view-planification .pf-mtable td{vertical-align:top;padding:3px;}
   #view-planification .pf-mses{width:100%;min-height:52px;font-size:11px;line-height:1.35;white-space:pre-wrap;}
   #view-planification .pf-mses2{min-height:34px;opacity:.9;}
+  #view-planification .pf-micro-athle{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px;padding:0 12px;}
+  #view-planification .pf-athle-hdr{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;font-weight:700;}
+  #view-planification .pf-athle-chips{display:flex;flex-wrap:wrap;gap:4px 6px;}
+  #view-planification .pf-athle-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border:1px solid var(--border);border-radius:14px;font-size:11px;color:var(--text);background:var(--bg-elevated);line-height:1.2;}
+  #view-planification .pf-athle-off{opacity:.35;}
+  #view-planification .pf-athle-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;}
+  #view-planification .pf-athle-lbl{white-space:nowrap;}
+  #view-planification .pf-athle-val{font-size:12px;color:var(--accent-light);}
+  #view-planification .pf-athle-empty{color:var(--text-dim);font-size:11px;}
   #view-planification .pf-navbtn{background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:50%;width:34px;height:34px;font-size:20px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
   #view-planification .pf-navbtn:hover:not(:disabled){border-color:var(--accent);color:var(--accent-light);}
   #view-planification .pf-navbtn:disabled{opacity:.35;cursor:not-allowed;}
