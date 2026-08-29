@@ -10323,16 +10323,14 @@ function planifMicroCard() {
   const curDate = (curM && curM.date_debut) ? ' — ' + curM.date_debut.slice(8, 10) + '/' + curM.date_debut.slice(5, 7) : '';
   return '<div class="card pf-micro-card" id="pf-micro-card" style="display:none;">' +
     '<div class="pf-head" style="align-items:center; gap:12px;">' +
-      '<div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">' +
-        '<button class="pf-navbtn" id="pf-micro-prev" title="Semaine précédente" type="button">‹</button>' +
-        '<div style="flex:1; min-width:0;">' +
-          '<h2 style="margin:0;">📅 Détail du microcycle — <span id="pf-micro-title">' + escapeHtml(microSelCal || '') + escapeHtml(curDate) + '</span></h2>' +
-          '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">Séances jour par jour : matin, après-midi et salle, chacune avec sa durée.</p>' +
-        '</div>' +
-        '<button class="pf-navbtn" id="pf-micro-next" title="Semaine suivante" type="button">›</button>' +
+      '<div style="flex:1; min-width:0;">' +
+        '<h2 style="margin:0;">📅 Détail du microcycle — <span id="pf-micro-title">' + escapeHtml(microSelCal || '') + escapeHtml(curDate) + '</span></h2>' +
+        '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">Séances jour par jour : matin, après-midi et salle, chacune avec sa durée.</p>' +
       '</div>' +
       '<div style="display:flex; gap:8px; align-items:center;">' +
+        '<button class="pf-navbtn" id="pf-micro-prev" title="Semaine précédente" type="button">‹</button>' +
         '<select id="pf-micro-week" class="pf-weeksel">' + opts + '</select>' +
+        '<button class="pf-navbtn" id="pf-micro-next" title="Semaine suivante" type="button">›</button>' +
         '<button class="pf-btn pf-micro-close" id="pf-micro-close" title="Fermer le microcycle" type="button">✕</button>' +
       '</div>' +
     '</div>' +
