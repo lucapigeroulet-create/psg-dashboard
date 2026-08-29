@@ -10515,7 +10515,7 @@ function planifTable(rows) {
   ).join('') + '</tr>';
 
   // Séances : entraînements + matchs (éditable numérique)
-  body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl" colspan="' + (rows.length + 1) + '">SÉANCES</th></tr>';
+  body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl">SÉANCES</th><td class="pf-secfill" colspan="' + rows.length + '"></td></tr>';
   body += '<tr>' + lbl('Entraînements') + rows.map(r =>
     cell('<input class="pf-num" type="number" min="0" max="14" data-id="' + r.id + '" data-field="nb_entrainements" value="' + (r.nb_entrainements != null ? r.nb_entrainements : '') + '">')
   ).join('') + '</tr>';
@@ -10524,7 +10524,7 @@ function planifTable(rows) {
   ).join('') + '</tr>';
 
   // Charge : volume + intensité + charge totale
-  body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl" colspan="' + (rows.length + 1) + '">CHARGE</th></tr>';
+  body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl">CHARGE</th><td class="pf-secfill" colspan="' + rows.length + '"></td></tr>';
   PLANIF_BARS.filter(b => b.sec === 'charge').forEach(b => {
     body += '<tr>' + lbl(b.label) + rows.map(r => cell(planifBarHTML(r, b), 'pf-barcell')).join('') + '</tr>';
   });
@@ -10534,13 +10534,16 @@ function planifTable(rows) {
   }).join('') + '</tr>';
 
   // Contenus athlétiques
-  body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl" colspan="' + (rows.length + 1) + '">CONTENUS ATHLÉTIQUES</th></tr>';
+  body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl">CONTENUS ATHLÉTIQUES</th><td class="pf-secfill" colspan="' + rows.length + '"></td></tr>';
   PLANIF_BARS.filter(b => b.sec === 'athle').forEach(b => {
-    body += '<tr>' + lbl('<span class="pf-dot" style="background:' + b.color + '"></span>' + b.label) + rows.map(r => cell(planifBarHTML(r, b), 'pf-barcell')).join('') + '</tr>';
+    // "Chgt direction / Coordination" est trop long pour tenir sur une ligne dans la colonne
+    // de gauche (190 px) : on force un retour à la ligne avant le "/ Coordination".
+    const labelHtml = b.label.replace(' / Coordination', '<br>/ Coordination');
+    body += '<tr>' + lbl('<span class="pf-dot" style="background:' + b.color + '"></span>' + labelHtml, 'pf-lbl-wrap') + rows.map(r => cell(planifBarHTML(r, b), 'pf-barcell')).join('') + '</tr>';
   });
 
   // Objectifs / tests / thèmes (éditable texte)
-  body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl" colspan="' + (rows.length + 1) + '">OBJECTIFS & THÈMES</th></tr>';
+  body += '<tr class="pf-sub"><th class="pf-lbl pf-secttl">OBJECTIFS &amp; THÈMES</th><td class="pf-secfill" colspan="' + rows.length + '"></td></tr>';
   PLANIF_TEXTS.forEach(t => {
     body += '<tr>' + lbl(t.label) + rows.map(r =>
       cell('<textarea class="pf-txt pf-ta" rows="1" data-id="' + r.id + '" data-field="' + t.key + '" title="' + escapeHtml(r[t.key] || '') + '">' + escapeHtml(r[t.key] || '') + '</textarea>')
@@ -10933,7 +10936,9 @@ function planifInjectStyle() {
   #view-planification .pf-phasecolor::-webkit-color-swatch{border:none;border-radius:2px;}
   #view-planification .pf-scal{font-weight:700;color:var(--text);font-size:11px;}
   #view-planification .pf-date{color:var(--text-dim);font-size:9px;}
-  #view-planification .pf-sub .pf-secttl{position:sticky;left:0;background:var(--primary);color:var(--accent-light);text-transform:uppercase;letter-spacing:.06em;font-size:10px;font-weight:700;padding:5px 10px;text-align:left;z-index:3;}
+  #view-planification .pf-sub .pf-secttl{position:sticky;left:0;background:var(--primary);color:var(--accent-light);text-transform:uppercase;letter-spacing:.06em;font-size:10px;font-weight:700;padding:5px 10px;text-align:left;z-index:3;white-space:nowrap;}
+  #view-planification .pf-sub .pf-secfill{background:var(--primary);border-right:none;padding:0;}
+  #view-planification .pf-lbl.pf-lbl-wrap{white-space:normal;line-height:1.25;}
   #view-planification .pf-dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle;}
   #view-planification td{text-align:center;padding:2px;background:var(--bg-card);}
   #view-planification td.pf-barcell{padding:3px 2px;}
