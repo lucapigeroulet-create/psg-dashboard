@@ -10817,119 +10817,75 @@ async function planifSave(id, field, value, el) {
 // Export PDF A4 paysage de toute la planification : entête = semaines (colonnes),
 // lignes = métriques (comme à l'écran). Les semaines sont découpées en blocs par page
 // pour rester lisibles. jsPDF + autotable (déjà chargés).
-// Export PDF de la semaine microcycle en cours (A4 paysage, 1 page).
-function planifMicroExportPDF() {
+// Export PDF de la semaine microcycle (A4 paysage) : rasterisation DOM via html2canvas
+// pour préserver la charte visuelle exacte de l'app (couleurs, police, tailles de case).
+async function planifMicroExportPDF() {
   if (currentRole !== 'admin' && currentRole !== 'staff') { toast('Accès réservé au staff.', 'error'); return; }
+  if (typeof html2canvas === 'undefined') { toast('Librairie image non disponible (vérifie ta connexion).', 'error'); return; }
   if (!window.jspdf || !window.jspdf.jsPDF) { toast('Librairie PDF non disponible (vérifie ta connexion).', 'error'); return; }
   if (!microSelCal) { toast('Aucune semaine sélectionnée.', 'error'); return; }
-  const m = microRows.find(r => r.semaine_cal === microSelCal);
-  if (!m) { toast('Semaine introuvable.', 'error'); return; }
-  const plan = planifRows.find(r => r.semaine_cal === microSelCal);
-  const jours = Array.isArray(m.jours) && m.jours.length ? m.jours : [
-    { j: 'Lundi' }, { j: 'Mardi' }, { j: 'Mercredi' }, { j: 'Jeudi' }, { j: 'Vendredi' }, { j: 'Samedi' }, { j: 'Dimanche' }
-  ];
+  const card = document.getElementById('pf-micro-card');
+  if (!card) { toast('Aucun microcycle affiché.', 'error'); return; }
+  toast('Génération du PDF…', 'info');
+  try {
+    const bg = getComputedStyle(document.body).backgroundColor || 'rgb(10,22,40)';
+    const rgbMatch = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(bg);
+    const bgRgb = rgbMatch ? [+rgbMatch[1], +rgbMatch[2], +rgbMatch[3]] : [10, 22, 40];
 
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-  const pageW = doc.internal.pageSize.getWidth();
-  const margin = 28;
-
-  const dateFR = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
-  const dateStr = dateFR(m.date_debut);
-
-  // Titre
-  doc.setFontSize(15); doc.setTextColor(20);
-  doc.text('Détail du microcycle — ' + (microSelCal || '') + (dateStr ? '  (semaine du ' + dateStr + ')' : ''), margin, margin + 6);
-  doc.setFontSize(9); doc.setTextColor(90);
-  doc.text([PLANIF_CTX.org, PLANIF_CTX.categorie, PLANIF_CTX.saison].filter(Boolean).join(' · '), margin, margin + 22);
-
-  let y = margin + 40;
-
-  // Récap Volume / Intensité / Charge / Entraînements / Matchs
-  if (plan) {
-    const c = planifCharge(plan);
-    const bits = ['Volume ' + (plan.volume || 0), 'Intensité ' + (plan.intensite || 0), 'Charge ' + c];
-    if (plan.nb_entrainements != null) bits.push('Entraînements ' + plan.nb_entrainements);
-    if (plan.nb_matchs) bits.push('Matchs ' + plan.nb_matchs);
-    doc.setFontSize(10); doc.setTextColor(30);
-    doc.text(bits.join('   ·   '), margin, y);
-    y += 16;
-  }
-
-  // Contenus athlétiques (2 colonnes)
-  const athle = PLANIF_BARS.filter(b => b.sec === 'athle');
-  if (plan) {
-    doc.setFontSize(10); doc.setTextColor(30);
-    doc.text('Contenus athlétiques :', margin, y);
-    y += 12;
-    doc.setFontSize(9);
-    athle.forEach((b, i) => {
-      const v = plan[b.key] || 0;
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const x = margin + 12 + col * 280;
-      const yy = y + row * 12;
-      doc.setTextColor(v > 0 ? 30 : 160);
-      doc.text('• ' + b.label + '  ' + v + '/5', x, yy);
-    });
-    y += Math.ceil(athle.length / 2) * 12 + 8;
-  }
-
-  // Thème / Note
-  doc.setTextColor(30); doc.setFontSize(10);
-  if (m.theme) { doc.text('Thème : ' + m.theme, margin, y); y += 12; }
-  if (m.note)  { doc.text('Note / durée : ' + m.note, margin, y); y += 12; }
-  if (m.theme || m.note) y += 4;
-
-  // Tableau jour par jour
-  const rowSpecs = [
-    { key: 's1', label: 'Séance Matin',        kind: 'seance' },
-    { key: 'e1', label: 'Espace/séquence',     kind: 'small'  },
-    { key: 'd1', label: 'Durée séance matin',  kind: 'small'  },
-    { key: 's2', label: 'Séance Après-midi',   kind: 'seance' },
-    { key: 'e2', label: 'Espace/séquence',     kind: 'small'  },
-    { key: 'd2', label: 'Durée séance A-M',    kind: 'small'  },
-    { key: 's3', label: 'Séance Salle',        kind: 'seance' }
-  ];
-  const dayNames = jours.map((jr, i) => jr.j || ('J' + (i + 1)));
-  const head = [[''].concat(dayNames)];
-  const body = rowSpecs.map(spec => [spec.label].concat(
-    jours.map(jr => (jr[spec.key] != null ? String(jr[spec.key]) : ''))
-  ));
-
-  const usable = pageW - margin * 2;
-  const labelW = 110;
-  const dayW = (usable - labelW) / dayNames.length;
-  const columnStyles = { 0: { cellWidth: labelW, fontStyle: 'bold', halign: 'left', fillColor: [241, 245, 249], textColor: 30 } };
-  for (let i = 1; i <= dayNames.length; i++) columnStyles[i] = { cellWidth: dayW, halign: 'center', valign: 'middle' };
-
-  doc.autoTable({
-    head: head,
-    body: body,
-    startY: y,
-    margin: { left: margin, right: margin },
-    theme: 'grid',
-    styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak', valign: 'middle', halign: 'center', lineColor: [210, 214, 220], lineWidth: 0.5, textColor: 30 },
-    headStyles: { fontSize: 9, halign: 'center', valign: 'middle', fillColor: [51, 65, 85], textColor: 255 },
-    columnStyles: columnStyles,
-    didParseCell: (data) => {
-      if (data.section !== 'body' || !Array.isArray(data.row.raw)) return;
-      const idx = data.row.index;
-      const spec = rowSpecs[idx];
-      if (!spec) return;
-      if (spec.kind === 'small') {
-        data.cell.styles.fontSize = 7;
-        data.cell.styles.minCellHeight = 16;
-        data.cell.styles.fillColor = [248, 250, 252];
-        if (data.column.index === 0) data.cell.styles.textColor = 90;
-      } else {
-        data.cell.styles.minCellHeight = 46;
+    const canvas = await html2canvas(card, {
+      backgroundColor: bg, scale: 2, useCORS: true, logging: false,
+      onclone: (docCloned) => {
+        const root = docCloned.getElementById('pf-micro-card');
+        if (!root) return;
+        // Retire les contrôles interactifs qui n'ont pas de sens en PDF
+        ['pf-micro-prev', 'pf-micro-next', 'pf-micro-week', 'pf-micro-pdf', 'pf-micro-close'].forEach(id => {
+          const el = docCloned.getElementById(id);
+          if (el && el.parentNode) el.parentNode.removeChild(el);
+        });
+        // Rend le tableau intégralement visible (pas de scroll horizontal figé)
+        root.querySelectorAll('.pf-scroll').forEach(s => { s.style.overflow = 'visible'; });
+        // Remplace textareas et inputs par des <div> : html2canvas rend mal les form controls
+        // (troncatures, textes coupés). On recopie la valeur + le style calculé.
+        root.querySelectorAll('textarea, input').forEach(el => {
+          const parentDoc = el.ownerDocument;
+          const cs = parentDoc.defaultView.getComputedStyle(el);
+          const div = parentDoc.createElement('div');
+          div.textContent = el.value || '';
+          div.style.cssText =
+            'display:block;box-sizing:border-box;width:100%;' +
+            'min-height:' + el.offsetHeight + 'px;' +
+            'font-family:' + cs.fontFamily + ';font-size:' + cs.fontSize + ';' +
+            'font-weight:' + cs.fontWeight + ';line-height:' + cs.lineHeight + ';' +
+            'color:' + cs.color + ';background:' + cs.backgroundColor + ';' +
+            'border:' + cs.border + ';border-radius:' + cs.borderRadius + ';' +
+            'padding:' + cs.padding + ';text-align:' + cs.textAlign + ';' +
+            'white-space:pre-wrap;word-break:break-word;overflow:hidden;';
+          if (el.parentNode) el.parentNode.replaceChild(div, el);
+        });
       }
-    }
-  });
+    });
 
-  const safe = s => String(s || '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  doc.save('microcycle-' + safe(PLANIF_CTX.org) + '-' + safe(PLANIF_CTX.categorie) + '-' + safe(microSelCal) + '.pdf');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    doc.setFillColor(bgRgb[0], bgRgb[1], bgRgb[2]);
+    doc.rect(0, 0, pageW, pageH, 'F');
+    const margin = 18;
+    const usableW = pageW - margin * 2;
+    const usableH = pageH - margin * 2;
+    const ratio = Math.min(usableW / canvas.width, usableH / canvas.height);
+    const drawW = canvas.width * ratio;
+    const drawH = canvas.height * ratio;
+    const dx = margin + (usableW - drawW) / 2;
+    const dy = margin + (usableH - drawH) / 2;
+    doc.addImage(canvas.toDataURL('image/png'), 'PNG', dx, dy, drawW, drawH);
+
+    const safe = s => String(s || '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    doc.save('microcycle-' + safe(PLANIF_CTX.org) + '-' + safe(PLANIF_CTX.categorie) + '-' + safe(microSelCal) + '.pdf');
+  } catch (err) {
+    toast('Erreur PDF : ' + (err && err.message ? err.message : err), 'error');
+  }
 }
 
 function planifExportPDF() {
