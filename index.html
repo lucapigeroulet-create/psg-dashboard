@@ -20686,10 +20686,11 @@ function renderCompetitionPlayer(filters, content, matchs) {
     html += '<div style="color:var(--text-dim);font-size:13px;padding:10px;">' + (fr ? 'Tu n\'as pas encore de match enregistré.' : 'No matches recorded yet.') + '</div>';
   } else {
     html += '<div class="table-wrap"><table style="font-size:13px;"><thead><tr>';
-    html += '<th style="text-align:left;">Date</th><th style="text-align:left;">Match</th><th>Min</th><th>⚽</th><th>🅰️</th><th>' + (fr ? 'Note coachs' : 'Coaches') + '</th><th>' + (fr ? 'Ma note /10' : 'My rating /10') + '</th></tr></thead><tbody>';
+    html += '<th style="text-align:left;">Date</th><th style="text-align:left;">Match</th><th>Min</th><th>⚽</th><th>🅰️</th><th>' + (fr ? 'Note coachs' : 'Coaches') + '</th><th>' + (fr ? 'Ma note /10' : 'My rating /10') + '</th><th style="text-align:left;">' + (fr ? 'Mon commentaire' : 'My comment') + '</th></tr></thead><tbody>';
     mine.forEach(m => {
       const c = (m.composition || []).find(x => x.joueur === me) || {};
       const np = myNotes[m.id];
+      const myComment = getMatchPerfCommentaire(m.id, me);
       html += '<tr>';
       html += '<td style="text-align:left;">' + formatDateFR(m.date) + '</td>';
       html += '<td style="text-align:left;">' + matchLabelStr(m) + ' <span style="font-size:11px;color:var(--text-dim);">' + matchScoreStr(m) + '</span></td>';
@@ -20698,6 +20699,7 @@ function renderCompetitionPlayer(filters, content, matchs) {
       html += '<td style="text-align:center;">' + (c.passes_dec || 0) + '</td>';
       html += '<td style="text-align:center;">' + (c.note_coachs_avg != null ? c.note_coachs_avg : '—') + '</td>';
       html += '<td style="text-align:center;"><input type="number" min="0" max="10" step="0.5" value="' + (np != null ? np : '') + '" onchange="saveMatchNoteJoueur(\'' + m.id + '\', this.value)" style="width:62px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;text-align:center;" /></td>';
+      html += '<td style="text-align:left;"><textarea rows="1" onblur="saveMatchCommentaireJoueur(\'' + m.id + '\', this)" placeholder="' + (fr ? 'Optionnel — décris ta prestation' : 'Optional — describe your match') + '" style="min-width:200px;max-width:320px;width:100%;background:var(--bg-elevated);color:var(--text);border:1px solid ' + (myComment ? 'var(--green)' : 'var(--border)') + ';border-radius:4px;padding:4px 6px;font-size:12px;resize:vertical;font-family:inherit;">' + escapeHtml(myComment) + '</textarea></td>';
       html += '</tr>';
     });
     html += '</tbody></table></div>';
@@ -20835,6 +20837,47 @@ async function saveMatchNoteJoueur(matchId, value) {
 // Sauvegarde depuis la vue "Noter les séances" (carte match, au moment de la RPE)
 async function savePlayerMatchPerf(matchId, value) {
   if (await _upsertMatchNoteJoueur(matchId, value)) renderPlayerRPE();
+}
+
+// Cœur de sauvegarde du commentaire joueur sur un match (ne touche pas à la note).
+async function _upsertMatchCommentaireJoueur(matchId, value) {
+  const me = currentJoueurNom;
+  if (currentRole !== 'lecteur' || !me) { toast('Action réservée au joueur', 'error'); return false; }
+  const commentaire = (value || '').trim();
+  const existingNote = getMyMatchPerfNote(matchId);
+  try {
+    if (!commentaire && existingNote == null) {
+      // Rien à conserver → supprime la ligne
+      const { error } = await sb.from('match_notes').delete().match({ match_id: matchId, joueur: me });
+      if (error) { toast('Erreur : ' + error.message, 'error'); return false; }
+      state.bdd_match_notes = (state.bdd_match_notes || []).filter(n => !(n.match_id === matchId && n.joueur === me));
+    } else {
+      // Upsert de la seule colonne "commentaire" : PostgREST ne touche pas aux colonnes absentes
+      // du payload lors du ON CONFLICT UPDATE, donc la note existante est préservée.
+      const row = { match_id: matchId, joueur: me, commentaire: commentaire || null, org: currentOrg, updated_at: new Date().toISOString() };
+      const { data, error } = await sb.from('match_notes').upsert(row, { onConflict: 'match_id,joueur' }).select();
+      if (error) { toast('Erreur : ' + error.message, 'error'); return false; }
+      const saved = (data && data[0]) ? data[0] : row;
+      const arr = state.bdd_match_notes || (state.bdd_match_notes = []);
+      const idx = arr.findIndex(n => n.match_id === matchId && n.joueur === me);
+      if (idx >= 0) arr[idx] = saved; else arr.push(saved);
+    }
+    return true;
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); return false; }
+}
+
+// Wrapper depuis la vue Compétition ("Mes matchs") : sauve à la sortie du champ, feedback visuel léger.
+async function saveMatchCommentaireJoueur(matchId, el) {
+  if (await _upsertMatchCommentaireJoueur(matchId, el.value)) {
+    el.style.borderColor = (el.value || '').trim() ? 'var(--green)' : 'var(--border)';
+  }
+}
+
+// Wrapper depuis la vue "Noter les séances" (carte match, au moment de la RPE).
+async function savePlayerMatchCommentaire(matchId, el) {
+  if (await _upsertMatchCommentaireJoueur(matchId, el.value)) {
+    el.style.borderColor = (el.value || '').trim() ? 'var(--green)' : 'var(--border)';
+  }
 }
 
 
@@ -25021,6 +25064,16 @@ function renderPlayerMatchNotation(date, joueur, m) {
     if (perfMissing) html += '<div style="margin-top:6px;font-size:12px;color:var(--red);font-weight:600;">⚠️ ' + tr("Performance rating required to complete this match.", "Note de performance obligatoire pour valider ce match.") + '</div>';
   }
   html += renderMatchPerfScaleReference();
+  // Commentaire libre du joueur sur sa prestation (optionnel — non requis pour valider)
+  const myPerfComment = getMatchPerfCommentaire(m.id, currentJoueurNom);
+  html += '<div style="margin-top:10px;">';
+  html += '<div style="font-size:12px;color:var(--text-dim);margin-bottom:4px;">💬 ' + tr('Optional comment on your performance', 'Commentaire optionnel sur ta prestation') + '</div>';
+  if (locked) {
+    html += '<div style="font-size:13px;padding:8px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;min-height:34px;white-space:pre-wrap;">' + (myPerfComment ? escapeHtml(myPerfComment) : '<span style="color:var(--text-dim);">' + tr('No comment', 'Aucun commentaire') + '</span>') + '</div>';
+  } else {
+    html += '<textarea rows="2" onblur="savePlayerMatchCommentaire(\'' + matchIdEsc + '\', this)" placeholder="' + tr('Ex: good build-up, dropped intensity in second half…', 'Ex : bon volume de jeu, moins d\'intensité en 2e MT…') + '" style="width:100%;box-sizing:border-box;background:var(--bg-card);color:var(--text);border:1px solid ' + (myPerfComment ? 'var(--green)' : 'var(--border)') + ';border-radius:6px;padding:8px;font-size:13px;font-family:inherit;resize:vertical;">' + escapeHtml(myPerfComment) + '</textarea>';
+  }
+  html += '</div>';
   html += '</div>';
 
   html += '</div>';
