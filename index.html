@@ -16604,38 +16604,87 @@ function gpsExportDistHsrPDF() {
 // Ajuste l'échelle d'un axe par cliquer-glisser SUR l'axe (X sous le graphe, Y à gauche).
 // On garde le min courant fixe et on étire/comprime le max autour de l'origine.
 function gpsAttachAxisDrag(chart, canvas) {
-  let drag = null; // { axis:'x'|'y', min, startVal, area }
+  // Trois modes de drag :
+  //  - 'axis' : glisser sur un axe (X en bas, Y à gauche) pour rescaler
+  //  - 'pan'  : glisser dans le graphe pour déplacer la vue (comme une carte)
+  let drag = null;
   const zoomOpts = () => (chart.options.plugins && chart.options.plugins.zoom) || null;
 
+  canvas.style.cursor = 'grab';
+
   canvas.addEventListener('pointerdown', (ev) => {
+    if (ev.pointerType === 'mouse' && ev.button !== 0) return;
     const rect = canvas.getBoundingClientRect();
     const px = ev.clientX - rect.left, py = ev.clientY - rect.top;
     const area = chart.chartArea;
     if (!area) return;
     const onX = (py > area.bottom && px >= area.left && px <= area.right);
     const onY = (px < area.left && py >= area.top && py <= area.bottom);
-    if (!onX && !onY) return; // dans le graphe → laisser le pan du plugin agir
-    const axis = onX ? 'x' : 'y';
-    const sc = chart.scales[axis];
-    if (!sc) return;
-    // Désactive temporairement le pan du plugin pour éviter les conflits
+    const inside = (px >= area.left && px <= area.right && py >= area.top && py <= area.bottom);
+    if (!onX && !onY && !inside) return;
+
+    // Désactive le pan du plugin pendant qu'on gère nous-mêmes le drag
     const z = zoomOpts();
-    if (z && z.pan) { drag = { restorePan: z.pan.enabled }; z.pan.enabled = false; } else { drag = {}; }
-    drag.axis = axis; drag.min = sc.min; drag.area = area;
-    drag.startVal = sc.getValueForPixel(axis === 'x' ? px : py);
+    const restorePan = (z && z.pan) ? z.pan.enabled : undefined;
+    if (z && z.pan) z.pan.enabled = false;
+
+    if (inside) {
+      const sx = chart.scales.x, sy = chart.scales.y;
+      if (!sx || !sy) { if (z && z.pan && restorePan !== undefined) z.pan.enabled = restorePan; return; }
+      const mode = (z && z.pan && z.pan.mode) || gpsDistHsrZoomAxis || 'xy';
+      drag = {
+        kind: 'pan', restorePan, panMode: mode,
+        startPx: px, startPy: py,
+        xMin: sx.min, xMax: sx.max,
+        yMin: sy.min, yMax: sy.max,
+        xUnitsPerPx: (sx.max - sx.min) / Math.max(1, (area.right - area.left)),
+        yUnitsPerPx: (sy.max - sy.min) / Math.max(1, (area.bottom - area.top))
+      };
+      canvas.style.cursor = 'grabbing';
+    } else {
+      const axis = onX ? 'x' : 'y';
+      const sc = chart.scales[axis];
+      if (!sc) { if (z && z.pan && restorePan !== undefined) z.pan.enabled = restorePan; return; }
+      drag = {
+        kind: 'axis', restorePan, axis, area,
+        min: sc.min,
+        startVal: sc.getValueForPixel(axis === 'x' ? px : py)
+      };
+    }
     canvas.setPointerCapture(ev.pointerId);
     ev.preventDefault();
   });
 
   canvas.addEventListener('pointermove', (ev) => {
-    if (!drag || !drag.axis) return;
+    if (!drag) return;
     const rect = canvas.getBoundingClientRect();
+
+    if (drag.kind === 'pan') {
+      const px = ev.clientX - rect.left, py = ev.clientY - rect.top;
+      const dx = px - drag.startPx, dy = py - drag.startPy;
+      const doX = drag.panMode !== 'y';
+      const doY = drag.panMode !== 'x';
+      if (doX) {
+        const shift = dx * drag.xUnitsPerPx;
+        chart.options.scales.x.min = drag.xMin - shift;
+        chart.options.scales.x.max = drag.xMax - shift;
+      }
+      if (doY) {
+        // Axe Y : haut = valeur max, bas = valeur min → glisser vers le bas fait remonter la fenêtre
+        const shift = dy * drag.yUnitsPerPx;
+        chart.options.scales.y.min = drag.yMin + shift;
+        chart.options.scales.y.max = drag.yMax + shift;
+      }
+      chart.update('none');
+      ev.preventDefault();
+      return;
+    }
+
+    // Rescale axe : la valeur saisie au départ reste "sous le doigt", l'origine (min) ne bouge pas.
     const area = drag.area;
     const axis = drag.axis;
     const sc = chart.scales[axis];
     const min = (drag.min != null) ? drag.min : sc.min;
-    // max_new = min + (startVal - min) * (longueur de l'axe / distance du curseur à l'origine)
-    // → la valeur saisie au départ reste "sous le doigt", l'origine (min) ne bouge pas.
     let axisLen, distCursor;
     if (axis === 'x') {
       axisLen = area.right - area.left;
@@ -16644,7 +16693,7 @@ function gpsAttachAxisDrag(chart, canvas) {
       axisLen = area.bottom - area.top;
       distCursor = area.bottom - (ev.clientY - rect.top);
     }
-    distCursor = Math.max(8, distCursor); // évite division par ~0
+    distCursor = Math.max(8, distCursor);
     let newMax = min + (drag.startVal - min) * (axisLen / distCursor);
     if (!isFinite(newMax) || newMax <= min) return;
     chart.options.scales[axis].min = min;
@@ -16657,6 +16706,7 @@ function gpsAttachAxisDrag(chart, canvas) {
     if (!drag) return;
     const z = zoomOpts();
     if (z && z.pan && drag.restorePan !== undefined) z.pan.enabled = drag.restorePan;
+    if (drag.kind === 'pan') canvas.style.cursor = 'grab';
     drag = null;
     try { canvas.releasePointerCapture(ev.pointerId); } catch (e) {}
   };
