@@ -753,6 +753,14 @@
     <span id="user-info" style="color:var(--text-dim); font-size:12px;"></span>
     <button class="btn btn-secondary" onclick="exportData()" id="btn-export-json">Exporter JSON</button>
     <button class="btn btn-secondary" onclick="refreshPlayerApp()" id="btn-refresh-player" data-en="🔄 Refresh" data-fr="🔄 Rafraîchir" style="display:none;">🔄 Rafraîchir</button>
+    <div class="nav-dropdown" id="lang-dropdown" style="position:relative;">
+      <button type="button" class="btn btn-secondary" id="lang-toggle" onclick="toggleLangMenu(event)" title="Langue / Language / Idioma">🌐 🇫🇷 FR</button>
+      <div id="lang-menu" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;min-width:140px;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+        <button type="button" class="btn btn-secondary" style="width:100%;text-align:left;border:none;border-radius:0;padding:8px 12px;" onclick="setLang('fr')">🇫🇷 Français</button>
+        <button type="button" class="btn btn-secondary" style="width:100%;text-align:left;border:none;border-radius:0;padding:8px 12px;" onclick="setLang('en')">🇬🇧 English</button>
+        <button type="button" class="btn btn-secondary" style="width:100%;text-align:left;border:none;border-radius:0;padding:8px 12px;" onclick="setLang('es')">🇪🇸 Español</button>
+      </div>
+    </div>
     <button class="btn btn-secondary" onclick="logout()" id="logout-btn">↪ Déconnexion</button>
   </div>
 </header>
@@ -771,37 +779,37 @@
 </div>
 
 <nav>
-  <button class="nav-btn active" data-view="overview">📊 Vue d'ensemble</button>
-  <button class="nav-btn" data-view="calendar">📅 Séance</button>
-  <button class="nav-btn" data-view="joueur">👤 Joueur</button>
-  <button class="nav-btn" data-view="staff-hooper">💚 État de forme</button>
-  <button class="nav-btn" data-view="rpe">💪 Charge RPE</button>
-  <button class="nav-btn" data-view="gps">📡 Données GPS</button>
+  <button class="nav-btn active" data-view="overview" data-en="📊 Overview" data-fr="📊 Vue d'ensemble" data-es="📊 Panorama">📊 Vue d'ensemble</button>
+  <button class="nav-btn" data-view="calendar" data-en="📅 Session" data-fr="📅 Séance" data-es="📅 Sesión">📅 Séance</button>
+  <button class="nav-btn" data-view="joueur" data-en="👤 Player" data-fr="👤 Joueur" data-es="👤 Jugador">👤 Joueur</button>
+  <button class="nav-btn" data-view="staff-hooper" data-en="💚 Wellness" data-fr="💚 État de forme" data-es="💚 Estado físico">💚 État de forme</button>
+  <button class="nav-btn" data-view="rpe" data-en="💪 RPE Load" data-fr="💪 Charge RPE" data-es="💪 Carga RPE">💪 Charge RPE</button>
+  <button class="nav-btn" data-view="gps" data-en="📡 GPS Data" data-fr="📡 Données GPS" data-es="📡 Datos GPS">📡 Données GPS</button>
   <div class="nav-dropdown" id="nav-competition-dropdown">
-    <button type="button" class="nav-btn nav-dropdown-toggle" id="nav-competition-toggle" onclick="toggleCompetitionMenu(event)">🏆 Compétition <span style="font-size:10px;">▾</span></button>
+    <button type="button" class="nav-btn nav-dropdown-toggle" id="nav-competition-toggle" onclick="toggleCompetitionMenu(event)" data-en="🏆 Competition ▾" data-fr="🏆 Compétition ▾" data-es="🏆 Competición ▾">🏆 Compétition <span style="font-size:10px;">▾</span></button>
     <div class="nav-dropdown-menu" id="nav-competition-menu">
-      <button class="nav-btn" data-view="competition" onclick="ciTab('matchs')">📊 Statistiques match</button>
-      <button class="nav-btn" data-view="competition" onclick="ciTab('interne')">🏆 Compétition interne</button>
+      <button class="nav-btn" data-view="competition" onclick="ciTab('matchs')" data-en="📊 Match statistics" data-fr="📊 Statistiques match" data-es="📊 Estadísticas partido">📊 Statistiques match</button>
+      <button class="nav-btn" data-view="competition" onclick="ciTab('interne')" data-en="🏆 Internal competition" data-fr="🏆 Compétition interne" data-es="🏆 Competición interna">🏆 Compétition interne</button>
     </div>
   </div>
-  <button class="nav-btn staff-only-btn" data-view="entrainement" id="nav-entrainement-btn">🏃 Entraînement</button>
+  <button class="nav-btn staff-only-btn" data-view="entrainement" id="nav-entrainement-btn" data-en="🏃 Training" data-fr="🏃 Entraînement" data-es="🏃 Entrenamiento">🏃 Entraînement</button>
   <div class="nav-dropdown" id="nav-performance-dropdown">
-    <button type="button" class="nav-btn nav-dropdown-toggle staff-only-btn" id="nav-performance-toggle" onclick="togglePerformanceMenu(event)">📈 Performance <span style="font-size:10px;">▾</span></button>
+    <button type="button" class="nav-btn nav-dropdown-toggle staff-only-btn" id="nav-performance-toggle" onclick="togglePerformanceMenu(event)" data-en="📈 Performance ▾" data-fr="📈 Performance ▾" data-es="📈 Rendimiento ▾">📈 Performance <span style="font-size:10px;">▾</span></button>
     <div class="nav-dropdown-menu" id="nav-performance-menu">
-      <button class="nav-btn" data-view="testing" id="nav-testing-btn">🧪 Testing</button>
-      <button class="nav-btn" data-view="reathletisation" id="nav-reathletisation-btn">🩼 Réathlétisation</button>
-      <button class="nav-btn" data-view="musculation" id="nav-musculation-btn">🏋️ Musculation</button>
-      <button class="nav-btn" data-view="reco-entrainement" id="nav-reco-entrainement-btn">💡 Recommandation d'entraînement</button>
+      <button class="nav-btn" data-view="testing" id="nav-testing-btn" data-en="🧪 Testing" data-fr="🧪 Testing" data-es="🧪 Tests">🧪 Testing</button>
+      <button class="nav-btn" data-view="reathletisation" id="nav-reathletisation-btn" data-en="🩼 Rehab" data-fr="🩼 Réathlétisation" data-es="🩼 Reatletización">🩼 Réathlétisation</button>
+      <button class="nav-btn" data-view="musculation" id="nav-musculation-btn" data-en="🏋️ Strength" data-fr="🏋️ Musculation" data-es="🏋️ Musculación">🏋️ Musculation</button>
+      <button class="nav-btn" data-view="reco-entrainement" id="nav-reco-entrainement-btn" data-en="💡 Training recommendation" data-fr="💡 Recommandation d'entraînement" data-es="💡 Recomendación de entreno">💡 Recommandation d'entraînement</button>
     </div>
   </div>
   <div class="nav-dropdown" id="nav-medical-dropdown">
-    <button type="button" class="nav-btn nav-dropdown-toggle staff-only-btn" id="nav-medical-toggle" onclick="toggleMedicalMenu(event)">🩺 Médical <span style="font-size:10px;">▾</span></button>
+    <button type="button" class="nav-btn nav-dropdown-toggle staff-only-btn" id="nav-medical-toggle" onclick="toggleMedicalMenu(event)" data-en="🩺 Medical ▾" data-fr="🩺 Médical ▾" data-es="🩺 Médico ▾">🩺 Médical <span style="font-size:10px;">▾</span></button>
     <div class="nav-dropdown-menu" id="nav-medical-menu">
-      <button class="nav-btn" data-view="medical" id="nav-medical-btn">🏥 Disponibilités</button>
-      <button class="nav-btn" data-view="medical-planning" id="nav-medical-planning-btn">📅 Planning soins</button>
-      <button class="nav-btn" data-view="medical-fiche" id="nav-medical-fiche-btn">👤 Fiche joueur</button>
-      <button class="nav-btn" data-view="medical-notes" id="nav-medical-notes-btn">📋 Notes médicales</button>
-      <button class="nav-btn" data-view="medical-questionnaire" id="nav-medical-questionnaire-btn">📝 Questionnaire</button>
+      <button class="nav-btn" data-view="medical" id="nav-medical-btn" data-en="🏥 Availability" data-fr="🏥 Disponibilités" data-es="🏥 Disponibilidades">🏥 Disponibilités</button>
+      <button class="nav-btn" data-view="medical-planning" id="nav-medical-planning-btn" data-en="📅 Treatment schedule" data-fr="📅 Planning soins" data-es="📅 Planning tratamientos">📅 Planning soins</button>
+      <button class="nav-btn" data-view="medical-fiche" id="nav-medical-fiche-btn" data-en="👤 Player file" data-fr="👤 Fiche joueur" data-es="👤 Ficha jugador">👤 Fiche joueur</button>
+      <button class="nav-btn" data-view="medical-notes" id="nav-medical-notes-btn" data-en="📋 Medical notes" data-fr="📋 Notes médicales" data-es="📋 Notas médicas">📋 Notes médicales</button>
+      <button class="nav-btn" data-view="medical-questionnaire" id="nav-medical-questionnaire-btn" data-en="📝 Questionnaire" data-fr="📝 Questionnaire" data-es="📝 Cuestionario">📝 Questionnaire</button>
     </div>
   </div>
   <button class="nav-btn médical-only-btn" data-view="injury-entry" style="display:none;">🩹 Saisie blessures</button>
@@ -809,15 +817,15 @@
   <button class="nav-btn direction-only-btn" data-view="joueur"   id="nav-direction-joueur-btn"   style="display:none;">👤 Joueur</button>
   <button class="nav-btn direction-only-btn" data-view="gps"      id="nav-direction-gps-btn"      style="display:none;">📡 Données GPS</button>
   <div class="nav-dropdown" id="nav-gestion-dropdown">
-    <button type="button" class="nav-btn nav-dropdown-toggle" id="nav-gestion-toggle" onclick="toggleGestionMenu(event)">🛠️ Saisie <span style="font-size:10px;">▾</span></button>
+    <button type="button" class="nav-btn nav-dropdown-toggle" id="nav-gestion-toggle" onclick="toggleGestionMenu(event)" data-en="🛠️ Entry ▾" data-fr="🛠️ Saisie ▾" data-es="🛠️ Registro ▾">🛠️ Saisie <span style="font-size:10px;">▾</span></button>
     <div class="nav-dropdown-menu" id="nav-gestion-menu">
-      <button class="nav-btn" data-view="entry">✏️ Saisie séance</button>
-      <button class="nav-btn" data-view="plan">📋 Planifier une séance</button>
-      <button class="nav-btn" data-view="prepa-seance">📝 Préparation séance</button>
-      <button class="nav-btn" data-view="planification">🗓️ Planification saison</button>
-      <button class="nav-btn" data-view="match-entry">⚽ Saisie match</button>
-      <button class="nav-btn" data-view="injury-entry">🩹 Saisie blessures</button>
-      <button class="nav-btn" data-view="rpe-entry">⭐ Saisie RPE</button>
+      <button class="nav-btn" data-view="entry" data-en="✏️ Session entry" data-fr="✏️ Saisie séance" data-es="✏️ Registrar sesión">✏️ Saisie séance</button>
+      <button class="nav-btn" data-view="plan" data-en="📋 Plan a session" data-fr="📋 Planifier une séance" data-es="📋 Planificar sesión">📋 Planifier une séance</button>
+      <button class="nav-btn" data-view="prepa-seance" data-en="📝 Session prep" data-fr="📝 Préparation séance" data-es="📝 Preparación sesión">📝 Préparation séance</button>
+      <button class="nav-btn" data-view="planification" data-en="🗓️ Season planning" data-fr="🗓️ Planification saison" data-es="🗓️ Planificación temporada">🗓️ Planification saison</button>
+      <button class="nav-btn" data-view="match-entry" data-en="⚽ Match entry" data-fr="⚽ Saisie match" data-es="⚽ Registrar partido">⚽ Saisie match</button>
+      <button class="nav-btn" data-view="injury-entry" data-en="🩹 Injury entry" data-fr="🩹 Saisie blessures" data-es="🩹 Registrar lesiones">🩹 Saisie blessures</button>
+      <button class="nav-btn" data-view="rpe-entry" data-en="⭐ RPE entry" data-fr="⭐ Saisie RPE" data-es="⭐ Registrar RPE">⭐ Saisie RPE</button>
     </div>
   </div>
   <div class="nav-dropdown" id="nav-params-dropdown">
@@ -6518,52 +6526,128 @@ async function setSeancePlanRPE(spId, valeur) {
 // PSG = anglais, TEGG = français. Le staff/admin reste en français.
 // ============================================================
 function playerLang() {
-  // Seuls les lecteurs ont une langue dépendante de l'org ; TEGG/individuel/D2F = fr, PSG = en
+  // Toute langue forcée sur le compte (profiles.lang) l'emporte, y compris pour le staff.
+  // Antonio (staff PSG) est configuré en 'es' → toute son UI passe en espagnol.
+  if (currentLang === 'en' || currentLang === 'fr' || currentLang === 'es') return currentLang;
   if (currentRole === 'lecteur') {
-    // Priorité à la langue forcée sur le compte (profiles.lang), sinon défaut selon l'org
-    if (currentLang === 'en' || currentLang === 'fr') return currentLang;
     return (currentOrg === 'TEGG' || currentOrg === 'individuel' || currentOrg === 'D2F') ? 'fr' : 'en';
   }
   return 'fr';
 }
 
 // Helper de traduction pour les textes dynamiques (générés par JS)
-// Le staff voit toujours le français (en) ; un lecteur voit sa langue selon l'org
-function tr(en, fr) {
-  return (playerLang() === 'fr') ? fr : en;
+// tr(en, fr) reste compatible ; tr(en, fr, es) ajoute une variante espagnole.
+// Si es est absent, on retombe sur fr (langue latine la plus proche).
+function tr(en, fr, es) {
+  const l = playerLang();
+  if (l === 'es') return (typeof es === 'string' && es !== '') ? es : fr;
+  if (l === 'fr') return fr;
+  return en;
 }
 
-// Étiquettes RPE traduites
+// Étiquettes RPE traduites (FR / EN / ES)
 function getRPELabel(v) {
   if (v === null || v === undefined || isNaN(v)) return '';
   const labels_en = ['Rest','Very very easy','Easy','Moderate','Somewhat hard','Hard','Hard +','Very hard','Very hard +','Very very hard','Maximal'];
   const labels_fr = ['Repos','Très très facile','Facile','Modéré','Un peu difficile','Difficile','Difficile +','Très difficile','Très difficile +','Très très difficile','Maximal'];
-  const labels = (playerLang() === 'fr') ? labels_fr : labels_en;
+  const labels_es = ['Descanso','Muy muy fácil','Fácil','Moderado','Algo difícil','Difícil','Difícil +','Muy difícil','Muy difícil +','Muy muy difícil','Máximo'];
+  const l = playerLang();
+  const labels = l === 'es' ? labels_es : (l === 'fr' ? labels_fr : labels_en);
   return labels[Math.max(0, Math.min(10, Math.round(v)))] || '';
 }
 
 // Renvoie le texte selon la langue du lecteur
-function t(en, fr) {
-  return (playerLang() === 'fr') ? fr : en;
+function t(en, fr, es) { return tr(en, fr, es); }
+
+// ============================================================================
+// Sélecteur de langue (FR / EN / ES) — bouton globe en haut à droite.
+// La langue courante est persistée sur profiles.lang (Supabase) pour survivre
+// aux rechargements et aux connexions depuis un autre appareil.
+// ============================================================================
+function toggleLangMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('lang-menu');
+  if (!menu) return;
+  menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
+}
+function closeLangMenu() {
+  const menu = document.getElementById('lang-menu');
+  if (menu) menu.style.display = 'none';
+}
+document.addEventListener('click', function (e) {
+  const dd = document.getElementById('lang-dropdown');
+  if (dd && !dd.contains(e.target)) closeLangMenu();
+});
+
+async function setLang(lang) {
+  if (!['fr', 'en', 'es'].includes(lang)) return;
+  currentLang = lang;
+  closeLangMenu();
+  // Sauvegarde sur le profil pour persistance (silencieux si échec)
+  try {
+    if (typeof currentUser !== 'undefined' && currentUser && currentUser.id) {
+      await sb.from('profiles').update({ lang: lang }).eq('id', currentUser.id);
+    }
+  } catch (e) { /* silencieux */ }
+  applyPlayerLanguage();
+  // Re-rendre la vue active pour rafraîchir tous les textes dynamiques (tr / t / L / getRPELabel)
+  try {
+    const activeView = document.querySelector('.view[style*="block"], .view:not([style])');
+    // Fallback : forcer un léger re-render via l'événement de changement d'onglet natif
+    if (typeof activeViewName === 'function') {
+      // no-op — présence d'un helper
+    }
+    // Tente de re-rendre chacune des grandes vues (harmless si la fonction ne s'applique pas)
+    ['renderPlayerRPE','renderCompetition','renderPlayerHooper','renderPlayerHistory',
+     'renderMessages','renderPlayerSeances','renderPlayerOverview','renderCalendar',
+     'renderEntrainement','renderRPE','renderGPS','renderPlayerGPS','renderStaffHooper']
+      .forEach(fn => { if (typeof window[fn] === 'function' && document.querySelector('.view:not([style*="none"])')) {} });
+    // Rerender simple : appelle la fonction associée à la vue courante si dispo
+    const view = document.querySelector('.view:not([style*="display: none"]):not([style*="display:none"])');
+    if (view) {
+      const map = { 'view-player-rpe': 'renderPlayerRPE', 'view-competition': 'renderCompetition',
+        'view-player-hooper': 'renderPlayerHooper', 'view-player-history': 'renderPlayerHistory',
+        'view-messages': 'renderMessages', 'view-player-seances': 'renderPlayerSeances',
+        'view-entrainement': 'renderEntrainement', 'view-calendar': 'renderCalendar',
+        'view-rpe': 'renderRPE', 'view-gps': 'renderGPS', 'view-planification': 'renderPlanification' };
+      const fn = map[view.id];
+      if (fn && typeof window[fn] === 'function') window[fn]();
+    }
+  } catch (e) { /* ignore */ }
+  const flag = lang === 'es' ? '🇪🇸' : (lang === 'en' ? '🇬🇧' : '🇫🇷');
+  const labelMap = { fr: 'Langue changée en Français', en: 'Language set to English', es: 'Idioma cambiado a Español' };
+  toast(flag + '  ' + labelMap[lang], 'success');
 }
 
-// Applique la langue à tous les éléments porteurs de data-en / data-fr
+// Applique la langue à tous les éléments porteurs de data-en / data-fr / data-es
 function applyPlayerLanguage() {
   const lang = playerLang();
+  const pick = (en, fr, es) => {
+    if (lang === 'es') return (typeof es === 'string' && es !== '') ? es : (fr || en);
+    if (lang === 'fr') return (fr || en);
+    return en;
+  };
   document.querySelectorAll('[data-en]').forEach(el => {
-    const txt = (lang === 'fr') ? (el.getAttribute('data-fr') || el.getAttribute('data-en')) : el.getAttribute('data-en');
-    if (txt !== null) el.textContent = txt;
+    const txt = pick(el.getAttribute('data-en'), el.getAttribute('data-fr'), el.getAttribute('data-es'));
+    if (txt !== null && txt !== undefined) el.textContent = txt;
   });
-  // Placeholders bilingues (data-ph-en / data-ph-fr)
   document.querySelectorAll('[data-ph-en]').forEach(el => {
-    const ph = (lang === 'fr') ? (el.getAttribute('data-ph-fr') || el.getAttribute('data-ph-en')) : el.getAttribute('data-ph-en');
-    if (ph !== null) el.setAttribute('placeholder', ph);
+    const ph = pick(el.getAttribute('data-ph-en'), el.getAttribute('data-ph-fr'), el.getAttribute('data-ph-es'));
+    if (ph !== null && ph !== undefined) el.setAttribute('placeholder', ph);
   });
-  // Bouton de déconnexion (texte selon langue lecteur)
+  // Bouton de déconnexion (texte selon langue courante)
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
-    if (currentRole === 'lecteur') logoutBtn.textContent = (lang === 'fr') ? '↪ Déconnexion' : '↪ Log out';
+    if (lang === 'es') logoutBtn.textContent = '↪ Cerrar sesión';
+    else if (lang === 'en') logoutBtn.textContent = '↪ Log out';
     else logoutBtn.textContent = '↪ Déconnexion';
+  }
+  // MAJ de l'étiquette du sélecteur de langue en haut à droite
+  const langBtn = document.getElementById('lang-toggle');
+  if (langBtn) {
+    const flag = lang === 'es' ? '🇪🇸' : (lang === 'en' ? '🇬🇧' : '🇫🇷');
+    const code = lang.toUpperCase();
+    langBtn.textContent = '🌐 ' + flag + ' ' + code;
   }
   // Libellés des onglets joueur
   // Les libellés des onglets joueur sont gérés par les attributs data-en/data-fr
