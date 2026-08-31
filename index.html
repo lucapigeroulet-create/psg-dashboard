@@ -2253,7 +2253,7 @@
     </div>
 
     <!-- Zone de réinitialisation -->
-    <div class="card" style="border-color:#7f1d1d;">
+    <div class="card" style="border-color:#7f1d1d;" id="settings-reset-card">
       <h2 style="color:#f87171;">🧹 Réinitialisation des données</h2>
       <p style="color:var(--text-dim); font-size:13px; margin-bottom:14px;">
         Permet d'effacer les données opérationnelles tout en conservant la configuration. Aucun retour en arrière possible — pense à <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="exportData()">exporter en JSON</button> avant.
@@ -7564,7 +7564,10 @@ function applyRoleRestrictions() {
     if (medNotesBtn) medNotesBtn.style.display = (staffLimited && !isFullMedical) ? 'none' : '';
     const settingsBtn = document.querySelector('.nav-btn[data-view="settings"]');
     // 'direction 1.0' (pierre@tegg.fr) : tous les onglets admin SAUF Paramètres.
-    if (settingsBtn) settingsBtn.style.display = (staffLimited || window.isDirectionPlus) ? 'none' : '';
+    // Exception : le staff PSG a accès aux Paramètres uniquement pour créer des vignettes
+    // (renderSettings masque les autres onglets & la zone de réinit pour ce rôle+org).
+    const psgStaffVignettesOnly = staffLimited && currentOrg === 'PSG';
+    if (settingsBtn) settingsBtn.style.display = ((staffLimited && !psgStaffVignettesOnly) || window.isDirectionPlus) ? 'none' : '';
   }
 
   // Comptes "Surveillant" : vue staff limitée aux 2 onglets suivi wellness/charge.
@@ -25884,9 +25887,30 @@ document.addEventListener('change', function(e) {
 let currentSettingsTab = 'groups';
 
 function renderSettings() {
-  // Init la liste interne des groupes si elle n'existe pas
   ensureGroupsList();
   renderResetStats();
+  // Staff PSG : accès Paramètres restreint à l'onglet Vignettes uniquement.
+  // On masque tous les autres onglets, la zone de réinit, et on force l'onglet actif.
+  const psgStaffVignettesOnly = (currentRole === 'staff') && currentOrg === 'PSG';
+  const resetCard = document.getElementById('settings-reset-card');
+  if (resetCard) resetCard.style.display = psgStaffVignettesOnly ? 'none' : '';
+  document.querySelectorAll('.settings-tab').forEach(btn => {
+    const tab = btn.dataset.tab;
+    btn.style.display = (psgStaffVignettesOnly && tab !== 'vignettes') ? 'none' : '';
+  });
+  if (psgStaffVignettesOnly && currentSettingsTab !== 'vignettes') {
+    // Force la vignettes-only view : bascule d'onglet + panes
+    document.querySelectorAll('.settings-pane').forEach(p => p.style.display = 'none');
+    const pane = document.getElementById('settings-vignettes');
+    if (pane) pane.style.display = 'block';
+    document.querySelectorAll('.settings-tab').forEach(b => {
+      const active = (b.dataset.tab === 'vignettes');
+      b.style.background = active ? 'var(--bg-card)' : 'var(--bg-elevated)';
+      b.style.color = active ? 'var(--accent-light)' : 'var(--text-dim)';
+      b.classList.toggle('active', active);
+    });
+    currentSettingsTab = 'vignettes';
+  }
   // Rendre l'onglet actif
   if (currentSettingsTab === 'groups') renderGroupsSettings();
   else if (currentSettingsTab === 'players') renderPlayersSettings();
