@@ -3568,7 +3568,7 @@
   <div class="view" id="view-player-gps">
     <div class="card">
       <h2 style="margin:0 0 12px;" data-en="📡 My GPS data" data-fr="📡 Mes données GPS" data-es="📡 Mis datos GPS">📡 Mes données GPS</h2>
-      <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+      <div id="pgps-filters" style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
         <div style="flex:1 1 120px; min-width:0;">
           <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Category" data-fr="Catégorie" data-es="Categoría">Catégorie</label>
           <select id="pgps-cat" onchange="renderPlayerGPS()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px 10px; font-size:14px;"></select>
@@ -27848,12 +27848,91 @@ function pgpsToggleCumulSplit(sp) {
   renderPlayerGPS();
 }
 
+// Gate d'accès GPS pour un joueur PSG : Hooper du jour + toutes RPE de séances/matchs
+// dont la fenêtre 4h est encore ouverte doivent être remplis.
+function _psgPlayerGPSAccessCheck() {
+  const me = currentJoueurNom;
+  if (!me) return { ok: true };
+  const today = toLocalISO(new Date());
+  const h = getHooper(today, me);
+  const hooperOK = !!(h && h.sleep_quality != null && h.fatigue != null &&
+                     h.stress != null && h.muscle_soreness != null);
+  const cutoff = toLocalISO(new Date(Date.now() - 14 * 86400000));
+  let pending = 0;
+  (state.bdd_ent || []).forEach(pl => {
+    if (pl.joueur !== me) return;
+    if (pl.date > today || pl.date < cutoff) return;
+    if ((pl.seances || []).some(s => STATUTS_INDISPO.includes(s))) return;
+    (pl.seances || []).forEach(s => {
+      if (STATUTS_NON_ENT.includes(s)) return;
+      if (!state.bdd_ent2.some(f => f.date === pl.date && f.nom === s)) return;
+      if (getRPEJoueurSeance(pl.date, me, s) !== null) return;
+      if (isSessionWindowClosed(pl.date, s, me)) return;
+      pending++;
+    });
+  });
+  (state.bdd_matchs || []).forEach(m => {
+    if (!m || !m.date) return;
+    if (m.date > today || m.date < cutoff) return;
+    const compo = (m.composition || []).find(x => x.joueur === me);
+    if (!compo || (compo.total_min || 0) <= 0) return;
+    const seanceNom = matchSeanceNom(m);
+    if (getRPEJoueurSeance(m.date, me, seanceNom) !== null) return;
+    if (isSessionWindowClosed(m.date, seanceNom)) return;
+    pending++;
+  });
+  const rpeOK = pending === 0;
+  return { ok: hooperOK && rpeOK, hooperOK, rpeOK, pendingRPE: pending };
+}
+
 function renderPlayerGPS() {
   const jsel = document.getElementById('pgps-joueur');
   const ssel = document.getElementById('pgps-seance');
   const csel = document.getElementById('pgps-cat');
   const content = document.getElementById('pgps-content');
+  const filters = document.getElementById('pgps-filters');
   if (!content) return;
+
+  // ── PSG joueur : bloque l'accès GPS tant que Hooper du jour + toutes les RPE ouvertes
+  //    ne sont pas remplis. Sur les autres orgs (TEGG, D2F), aucun blocage.
+  if (currentRole === 'lecteur' && currentOrg === 'PSG' && currentJoueurNom) {
+    const gate = _psgPlayerGPSAccessCheck();
+    if (!gate.ok) {
+      if (filters) filters.style.display = 'none';
+      const isFR = playerLang() === 'fr';
+      const lockTitle = tr('GPS locked', 'Accès GPS verrouillé', 'GPS bloqueado');
+      const explain = tr(
+        'Complete your daily obligations to unlock your GPS data.',
+        'Termine tes obligations quotidiennes pour débloquer tes données GPS.',
+        'Completa tus obligaciones diarias para desbloquear tus datos GPS.'
+      );
+      let items = '';
+      if (!gate.hooperOK) {
+        items += '<li>' + tr('You have not filled today\'s wellness check-in.',
+                             'Tu n\'as pas encore rempli ton état de forme du jour.',
+                             'No has completado el check-in de bienestar de hoy.') + '</li>';
+      }
+      if (!gate.rpeOK) {
+        items += '<li>' + tr(
+          'You have ' + gate.pendingRPE + ' session(s) waiting for your rating.',
+          'Tu as ' + gate.pendingRPE + ' séance(s)/match(s) en attente de note RPE.',
+          'Tienes ' + gate.pendingRPE + ' sesión(es)/partido(s) pendientes de calificar.') + '</li>';
+      }
+      let btns = '';
+      if (!gate.hooperOK) btns += '<button class="btn" onclick="document.querySelector(\'.nav-btn[data-view=player-hooper]\').click()">💚 ' + tr('Fill wellness', 'Remplir l\'état de forme', 'Rellenar bienestar') + '</button> ';
+      if (!gate.rpeOK)    btns += '<button class="btn" onclick="document.querySelector(\'.nav-btn[data-view=player-rpe]\').click()">⭐ ' + tr('Rate sessions', 'Noter mes séances', 'Calificar sesiones') + '</button>';
+      content.innerHTML =
+        '<div style="padding:24px; border:1px dashed #f59e0b; background:rgba(245,158,11,0.08); border-radius:10px;">' +
+          '<div style="font-size:20px; font-weight:700; color:#fbbf24; margin-bottom:8px;">🔒 ' + lockTitle + '</div>' +
+          '<div style="font-size:13px; color:var(--text); margin-bottom:10px;">' + explain + '</div>' +
+          '<ul style="margin:0 0 14px 18px; padding:0; font-size:13px; color:var(--text-dim);">' + items + '</ul>' +
+          '<div style="display:flex; gap:8px; flex-wrap:wrap;">' + btns + '</div>' +
+        '</div>';
+      return;
+    } else if (filters) {
+      filters.style.display = '';
+    }
+  }
 
   // Filtre catégorie (Toutes / Séance / Match / Individuelle)
   if (csel) {
