@@ -752,7 +752,7 @@
     <span class="save-status" id="saveStatus">☁️ Connecté à Supabase</span>
     <span id="user-info" style="color:var(--text-dim); font-size:12px;"></span>
     <button class="btn btn-secondary" onclick="exportData()" id="btn-export-json">Exporter JSON</button>
-    <button class="btn btn-secondary" onclick="refreshPlayerApp()" id="btn-refresh-player" data-en="🔄 Refresh" data-fr="🔄 Rafraîchir" style="display:none;">🔄 Rafraîchir</button>
+    <button class="btn btn-secondary" onclick="refreshPlayerApp()" id="btn-refresh-player" data-en="🔄 Refresh" data-fr="🔄 Rafraîchir" data-es="🔄 Actualizar" style="display:none;">🔄 Rafraîchir</button>
     <div class="nav-dropdown" id="lang-dropdown" style="position:relative;">
       <button type="button" class="btn btn-secondary" id="lang-toggle" onclick="toggleLangMenu(event)" title="Langue / Language / Idioma">🌐 🇫🇷 FR</button>
       <div id="lang-menu" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;min-width:140px;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
@@ -840,18 +840,18 @@
     </div>
   </div>
   <!-- Onglets joueur (visibles uniquement pour les lecteurs) -->
-  <button class="nav-btn player-only" data-view="player-overview" style="display:none;" data-en="🏠 Overview" data-fr="🏠 Vue d'ensemble">🏠 Vue d'ensemble</button>
-  <button class="nav-btn player-only" data-view="player-seances" style="display:none;" data-en="📋 My sessions" data-fr="📋 Mes séances">📋 Mes séances</button>
-  <button class="nav-btn player-only" data-view="player-soins" style="display:none;" data-en="🩺 Physio" data-fr="🩺 Soins kiné">🩺 Soins kiné</button>
-  <button class="nav-btn player-only" data-view="player-rpe" style="display:none;" data-en="⭐ Rate sessions" data-fr="⭐ Noter les séances">⭐ Rate sessions</button>
-  <button class="nav-btn player-only" data-view="player-history" style="display:none;" data-en="📊 My ratings" data-fr="📊 Mes notes">📊 My ratings</button>
+  <button class="nav-btn player-only" data-view="player-overview" style="display:none;" data-en="🏠 Overview" data-fr="🏠 Vue d'ensemble" data-es="🏠 Panorama">🏠 Vue d'ensemble</button>
+  <button class="nav-btn player-only" data-view="player-seances" style="display:none;" data-en="📋 My sessions" data-fr="📋 Mes séances" data-es="📋 Mis sesiones">📋 Mes séances</button>
+  <button class="nav-btn player-only" data-view="player-soins" style="display:none;" data-en="🩺 Physio" data-fr="🩺 Soins kiné" data-es="🩺 Tratamientos fisio">🩺 Soins kiné</button>
+  <button class="nav-btn player-only" data-view="player-rpe" style="display:none;" data-en="⭐ Rate sessions" data-fr="⭐ Noter les séances" data-es="⭐ Calificar las sesiones">⭐ Rate sessions</button>
+  <button class="nav-btn player-only" data-view="player-history" style="display:none;" data-en="📊 My ratings" data-fr="📊 Mes notes" data-es="📊 Mis calificaciones">📊 My ratings</button>
   <button class="nav-btn player-only" data-view="player-hooper" style="display:none;" data-en="💚 Daily check-in" data-fr="💚 État de forme">💚 Daily check-in</button>
-  <button class="nav-btn player-only" data-view="player-gps" style="display:none;" data-en="📡 My GPS data" data-fr="📡 Mes données GPS">📡 Mes données GPS</button>
+  <button class="nav-btn player-only" data-view="player-gps" style="display:none;" data-en="📡 My GPS data" data-fr="📡 Mes données GPS" data-es="📡 Mis datos GPS">📡 Mes données GPS</button>
   <button class="nav-btn player-only" data-view="competition" style="display:none;" data-en="🏆 Competition" data-fr="🏆 Compétition">🏆 Compétition</button>
-  <button class="nav-btn player-only" data-view="minijeux" style="display:none;" data-en="🎮 Mini-games" data-fr="🎮 Mini-jeux">🎮 Mini-jeux</button>
-  <button class="nav-btn player-only" data-view="messages" style="display:none;" data-en="📣 Messages" data-fr="📣 Messages">📣 Messages</button>
-  <button class="nav-btn player-only" data-view="player-fiche" style="display:none;" data-en="👤 My profile" data-fr="👤 Ma fiche">👤 Ma fiche</button>
-  <button class="nav-btn player-only" data-view="player-amendes" style="display:none;" data-en="💰 My fines" data-fr="💰 Mes amendes">💰 Mes amendes</button>
+  <button class="nav-btn player-only" data-view="minijeux" style="display:none;" data-en="🎮 Mini-games" data-fr="🎮 Mini-jeux" data-es="🎮 Minijuegos">🎮 Mini-jeux</button>
+  <button class="nav-btn player-only" data-view="messages" style="display:none;" data-en="📣 Messages" data-fr="📣 Messages" data-es="📣 Mensajes">📣 Messages</button>
+  <button class="nav-btn player-only" data-view="player-fiche" style="display:none;" data-en="👤 My profile" data-fr="👤 Ma fiche" data-es="👤 Mi ficha">👤 Ma fiche</button>
+  <button class="nav-btn player-only" data-view="player-amendes" style="display:none;" data-en="💰 My fines" data-fr="💰 Mes amendes" data-es="💰 Mis multas">💰 Mes amendes</button>
 </nav>
 
 <main>
@@ -2490,20 +2490,20 @@
       <div id="minijeu-content"></div>
     </div>
     <div class="card">
-      <h2 id="minijeu-lb-title">🏆 <span data-en="Today's ranking" data-fr="Classement du jour">Classement du jour</span></h2>
+      <h2 id="minijeu-lb-title">🏆 <span data-en="Today's ranking" data-fr="Classement du jour" data-es="Clasificación del día">Classement du jour</span></h2>
       <div id="minijeu-leaderboard"></div>
     </div>
     <div class="card">
-      <h2>📊 <span data-en="Overall standings" data-fr="Classement cumulé">Classement cumulé</span></h2>
-      <p class="mj-sub" style="margin-bottom:10px;" data-en="Every day, 🥇 earns 5 pts, 🥈 2 pts, 🥉 1 pt. Challenge your teammates over time!" data-fr="Chaque jour, la 1re place rapporte 🥇 5 pts, la 2e 🥈 2 pts, la 3e 🥉 1 pt. Défie tes coéquipiers dans la durée !">Chaque jour, la 1re place rapporte 🥇 5 pts, la 2e 🥈 2 pts, la 3e 🥉 1 pt.</p>
+      <h2>📊 <span data-en="Overall standings" data-fr="Classement cumulé" data-es="Clasificación acumulada">Classement cumulé</span></h2>
+      <p class="mj-sub" style="margin-bottom:10px;" data-en="Every day, 🥇 earns 5 pts, 🥈 2 pts, 🥉 1 pt. Challenge your teammates over time!" data-fr="Chaque jour, la 1re place rapporte 🥇 5 pts, la 2e 🥈 2 pts, la 3e 🥉 1 pt. Défie tes coéquipiers dans la durée !" data-es="Cada día, el 1er puesto da 🥇 5 pts, el 2º 🥈 2 pts, el 3º 🥉 1 pt. ¡Reta a tus compañeros a lo largo del tiempo!">Chaque jour, la 1re place rapporte 🥇 5 pts, la 2e 🥈 2 pts, la 3e 🥉 1 pt.</p>
       <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
-        <button class="btn btn-secondary mj-cumul-btn" data-mode="week" onclick="mjSetCumul('week')" data-en="This week" data-fr="Semaine en cours">Semaine en cours</button>
-        <button class="btn btn-secondary mj-cumul-btn" data-mode="month" onclick="mjSetCumul('month')" data-en="This month" data-fr="Mois en cours">Mois en cours</button>
-        <button class="btn btn-secondary mj-cumul-btn" data-mode="custom" onclick="mjSetCumul('custom')" data-en="Custom range" data-fr="Plage personnalisée">Plage personnalisée</button>
+        <button class="btn btn-secondary mj-cumul-btn" data-mode="week" onclick="mjSetCumul('week')" data-en="This week" data-fr="Semaine en cours" data-es="Semana actual">Semaine en cours</button>
+        <button class="btn btn-secondary mj-cumul-btn" data-mode="month" onclick="mjSetCumul('month')" data-en="This month" data-fr="Mois en cours" data-es="Mes actual">Mois en cours</button>
+        <button class="btn btn-secondary mj-cumul-btn" data-mode="custom" onclick="mjSetCumul('custom')" data-en="Custom range" data-fr="Plage personnalisée" data-es="Rango personalizado">Plage personnalisée</button>
       </div>
       <div id="mj-cumul-custom" style="display:none; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
-        <div><label style="display:block; font-size:12px; color:var(--text-dim);" data-en="From" data-fr="Du">Du</label><input type="date" id="mj-cumul-start" onchange="renderMinijeuxCumul()"></div>
-        <div><label style="display:block; font-size:12px; color:var(--text-dim);" data-en="To" data-fr="Au">Au</label><input type="date" id="mj-cumul-end" onchange="renderMinijeuxCumul()"></div>
+        <div><label style="display:block; font-size:12px; color:var(--text-dim);" data-en="From" data-fr="Du" data-es="Desde">Du</label><input type="date" id="mj-cumul-start" onchange="renderMinijeuxCumul()"></div>
+        <div><label style="display:block; font-size:12px; color:var(--text-dim);" data-en="To" data-fr="Au" data-es="Hasta">Au</label><input type="date" id="mj-cumul-end" onchange="renderMinijeuxCumul()"></div>
       </div>
       <div class="mj-sub" id="mj-cumul-range" style="margin-bottom:8px;"></div>
       <div id="minijeu-cumul"></div>
@@ -2523,13 +2523,13 @@
 
     <!-- 1. État de forme du jour -->
     <div class="card" id="po-hooper-card">
-      <h2 data-en="💚 Today's wellness" data-fr="💚 État de forme du jour">💚 État de forme du jour</h2>
+      <h2 data-en="💚 Today's wellness" data-fr="💚 État de forme du jour" data-es="💚 Estado físico del día">💚 État de forme du jour</h2>
       <div id="po-hooper-content"></div>
     </div>
 
     <!-- 2. RPE à noter -->
     <div class="card" id="po-rpe-card">
-      <h2 data-en="⭐ Sessions to rate" data-fr="⭐ Séances à noter">⭐ Séances à noter</h2>
+      <h2 data-en="⭐ Sessions to rate" data-fr="⭐ Séances à noter" data-es="⭐ Sesiones por calificar">⭐ Séances à noter</h2>
       <div id="po-rpe-content"></div>
     </div>
 
@@ -2540,7 +2540,7 @@
 
     <!-- 4. Séances 7 jours à venir -->
     <div class="card" id="po-seances-card">
-      <h2 data-en="📋 Upcoming sessions (7 days)" data-fr="📋 Séances à venir (7 jours)">📋 Séances à venir (7 jours)</h2>
+      <h2 data-en="📋 Upcoming sessions (7 days)" data-fr="📋 Séances à venir (7 jours)" data-es="📋 Próximas sesiones (7 días)">📋 Séances à venir (7 jours)</h2>
       <div id="po-seances-content"></div>
     </div>
 
@@ -2549,13 +2549,13 @@
   <!-- ========== VUE JOUEUR : SAISIR MON RPE ========== -->
   <div class="view" id="view-player-rpe">
     <div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">
-      <h2 style="color:var(--accent-light); font-size:18px;" data-en="⭐ Rate your sessions" data-fr="⭐ Note tes séances">⭐ Rate your sessions</h2>
-      <p style="color:var(--text); font-size:14px; margin-top:4px;" data-en="Rate the difficulty of each session you completed, on a scale from 0 (rest) to 10 (maximal effort)." data-fr="Note la difficulté de chaque séance que tu as effectuée, sur une échelle de 0 (repos) à 10 (effort maximal).">Rate the difficulty of each session you completed, on a scale from 0 (rest) to 10 (maximal effort).</p>
+      <h2 style="color:var(--accent-light); font-size:18px;" data-en="⭐ Rate your sessions" data-fr="⭐ Note tes séances" data-es="⭐ Califica tus sesiones">⭐ Rate your sessions</h2>
+      <p style="color:var(--text); font-size:14px; margin-top:4px;" data-en="Rate the difficulty of each session you completed, on a scale from 0 (rest) to 10 (maximal effort)." data-fr="Note la difficulté de chaque séance que tu as effectuée, sur une échelle de 0 (repos) à 10 (effort maximal)." data-es="Califica la dificultad de cada sesión que hiciste, en una escala de 0 (descanso) a 10 (esfuerzo máximo).">Rate the difficulty of each session you completed, on a scale from 0 (rest) to 10 (maximal effort).</p>
     </div>
 
     <div class="form-row">
       <div>
-        <label data-en="Date to rate" data-fr="Date à noter">Date to rate</label>
+        <label data-en="Date to rate" data-fr="Date à noter" data-es="Fecha a calificar">Date to rate</label>
         <input type="date" id="player-rpe-date" />
       </div>
     </div>
@@ -2569,27 +2569,27 @@
       <!-- Tableau Borg CR-10 sur le côté -->
       <div>
         <div class="card" style="position:sticky; top:20px;">
-          <h2 data-en="📋 Rating scale" data-fr="📋 Échelle de notation">📋 Rating scale</h2>
+          <h2 data-en="📋 Rating scale" data-fr="📋 Échelle de notation" data-es="📋 Escala de calificación">📋 Rating scale</h2>
           <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">
-            <span data-en="Choose the rating that best matches how you felt during the session." data-fr="Choisis la note qui correspond le mieux à ton ressenti pendant la séance.">Choose the rating that best matches how you felt during the session.</span>
+            <span data-en="Choose the rating that best matches how you felt during the session." data-fr="Choisis la note qui correspond le mieux à ton ressenti pendant la séance." data-es="Elige la calificación que mejor corresponda a lo que sentiste durante la sesión.">Choose the rating that best matches how you felt during the session.</span>
           </div>
           <table style="width:100%; font-size:12px;">
             <tbody>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#3b82f6; color:white; font-weight:700;">0</span></td><td style="padding:6px;" data-en="Complete rest" data-fr="Repos complet">Complete rest</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#3b82f6; color:white; font-weight:700;">1</span></td><td style="padding:6px;" data-en="Very very easy" data-fr="Très très facile">Very very easy</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#10b981; color:white; font-weight:700;">2</span></td><td style="padding:6px;" data-en="Easy" data-fr="Facile">Easy</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#10b981; color:white; font-weight:700;">3</span></td><td style="padding:6px;" data-en="Moderate" data-fr="Modéré">Moderate</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#84cc16; color:white; font-weight:700;">4</span></td><td style="padding:6px;" data-en="Somewhat hard" data-fr="Un peu difficile">Somewhat hard</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#84cc16; color:white; font-weight:700;">5</span></td><td style="padding:6px;" data-en="Hard" data-fr="Difficile">Hard</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#eab308; color:white; font-weight:700;">6</span></td><td style="padding:6px;" data-en="Hard +" data-fr="Difficile +">Hard +</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#f59e0b; color:white; font-weight:700;">7</span></td><td style="padding:6px;" data-en="Very hard" data-fr="Très difficile">Very hard</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#f97316; color:white; font-weight:700;">8</span></td><td style="padding:6px;" data-en="Very hard +" data-fr="Très difficile +">Very hard +</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#ef4444; color:white; font-weight:700;">9</span></td><td style="padding:6px;" data-en="Very very hard" data-fr="Très très difficile">Very very hard</td></tr>
-              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#dc2626; color:white; font-weight:700;">10</span></td><td style="padding:6px;" data-en="Maximal" data-fr="Maximal">Maximal</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#3b82f6; color:white; font-weight:700;">0</span></td><td style="padding:6px;" data-en="Complete rest" data-fr="Repos complet" data-es="Descanso completo">Complete rest</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#3b82f6; color:white; font-weight:700;">1</span></td><td style="padding:6px;" data-en="Very very easy" data-fr="Très très facile" data-es="Muy muy fácil">Very very easy</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#10b981; color:white; font-weight:700;">2</span></td><td style="padding:6px;" data-en="Easy" data-fr="Facile" data-es="Fácil">Easy</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#10b981; color:white; font-weight:700;">3</span></td><td style="padding:6px;" data-en="Moderate" data-fr="Modéré" data-es="Moderado">Moderate</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#84cc16; color:white; font-weight:700;">4</span></td><td style="padding:6px;" data-en="Somewhat hard" data-fr="Un peu difficile" data-es="Algo difícil">Somewhat hard</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#84cc16; color:white; font-weight:700;">5</span></td><td style="padding:6px;" data-en="Hard" data-fr="Difficile" data-es="Difícil">Hard</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#eab308; color:white; font-weight:700;">6</span></td><td style="padding:6px;" data-en="Hard +" data-fr="Difficile +" data-es="Difícil +">Hard +</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#f59e0b; color:white; font-weight:700;">7</span></td><td style="padding:6px;" data-en="Very hard" data-fr="Très difficile" data-es="Muy difícil">Very hard</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#f97316; color:white; font-weight:700;">8</span></td><td style="padding:6px;" data-en="Very hard +" data-fr="Très difficile +" data-es="Muy difícil +">Very hard +</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#ef4444; color:white; font-weight:700;">9</span></td><td style="padding:6px;" data-en="Very very hard" data-fr="Très très difficile" data-es="Muy muy difícil">Very very hard</td></tr>
+              <tr><td style="padding:6px; text-align:center;"><span style="display:inline-block; width:24px; height:24px; line-height:24px; border-radius:6px; background:#dc2626; color:white; font-weight:700;">10</span></td><td style="padding:6px;" data-en="Maximal" data-fr="Maximal" data-es="Máximo">Maximal</td></tr>
             </tbody>
           </table>
           <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); font-size:11px; color:var(--text-dim);">
-            <span data-en="💡 Tip: be honest, these ratings help us adapt your training." data-fr="💡 Conseil : sois honnête, ces notes nous aident à adapter ton entraînement.">💡 Tip: be honest, these ratings help us adapt your training.</span>
+            <span data-en="💡 Tip: be honest, these ratings help us adapt your training." data-fr="💡 Conseil : sois honnête, ces notes nous aident à adapter ton entraînement." data-es="💡 Consejo: sé honesto, estas calificaciones nos ayudan a adaptar tu entrenamiento.">💡 Tip: be honest, these ratings help us adapt your training.</span>
           </div>
         </div>
       </div>
@@ -2708,27 +2708,27 @@
   <!-- ========== VUE JOUEUR : MES NOTES ========== -->
   <div class="view" id="view-player-history">
     <div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">
-      <h2 style="color:var(--accent-light); font-size:18px;" data-en="📊 My ratings" data-fr="📊 Mes notes">📊 My ratings</h2>
-      <p style="color:var(--text); font-size:14px; margin-top:4px;" data-en="Here you can find all the ratings you have already submitted." data-fr="Retrouve ici toutes les notes que tu as déjà saisies.">Here you can find all the ratings you have already submitted.</p>
+      <h2 style="color:var(--accent-light); font-size:18px;" data-en="📊 My ratings" data-fr="📊 Mes notes" data-es="📊 Mis calificaciones">📊 My ratings</h2>
+      <p style="color:var(--text); font-size:14px; margin-top:4px;" data-en="Here you can find all the ratings you have already submitted." data-fr="Retrouve ici toutes les notes que tu as déjà saisies." data-es="Encuentra aquí todas las calificaciones que ya has enviado.">Here you can find all the ratings you have already submitted.</p>
     </div>
 
     <div class="stats-grid">
-      <div class="stat"><div class="stat-label" data-en="Ratings submitted" data-fr="Notes saisies">Ratings submitted</div><div class="stat-value" id="player-stat-count">—</div></div>
-      <div class="stat"><div class="stat-label" data-en="Average RPE" data-fr="RPE moyen">Average RPE</div><div class="stat-value" id="player-stat-avg">—</div></div>
-      <div class="stat"><div class="stat-label" data-en="Rated sessions" data-fr="Séances notées">Rated sessions</div><div class="stat-value" id="player-stat-sessions">—</div></div>
-      <div class="stat"><div class="stat-label" data-en="Active days" data-fr="Jours actifs">Active days</div><div class="stat-value" id="player-stat-days">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Ratings submitted" data-fr="Notes saisies" data-es="Calificaciones enviadas">Ratings submitted</div><div class="stat-value" id="player-stat-count">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Average RPE" data-fr="RPE moyen" data-es="RPE promedio">Average RPE</div><div class="stat-value" id="player-stat-avg">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Rated sessions" data-fr="Séances notées" data-es="Sesiones calificadas">Rated sessions</div><div class="stat-value" id="player-stat-sessions">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Active days" data-fr="Jours actifs" data-es="Días activos">Active days</div><div class="stat-value" id="player-stat-days">—</div></div>
     </div>
 
     <div class="card">
-      <h2 data-en="RPE evolution" data-fr="Évolution du RPE">RPE evolution</h2>
+      <h2 data-en="RPE evolution" data-fr="Évolution du RPE" data-es="Evolución del RPE">RPE evolution</h2>
       <div class="chart-container tall"><canvas id="player-chart-evolution"></canvas></div>
     </div>
 
     <div class="card">
-      <h2 data-en="Detailed history" data-fr="Historique détaillé">Detailed history</h2>
+      <h2 data-en="Detailed history" data-fr="Historique détaillé" data-es="Historial detallado">Detailed history</h2>
       <div class="table-wrap" style="max-height:500px;">
         <table id="player-history-table">
-          <thead><tr><th data-en="Date" data-fr="Date">Date</th><th data-en="Session" data-fr="Séance">Session</th><th data-en="Drill" data-fr="Exercice">Drill</th><th data-en="RPE" data-fr="RPE">RPE</th><th data-en="Feeling" data-fr="Ressenti">Feeling</th></tr></thead>
+          <thead><tr><th data-en="Date" data-fr="Date" data-es="Fecha">Date</th><th data-en="Session" data-fr="Séance" data-es="Sesión">Session</th><th data-en="Drill" data-fr="Exercice" data-es="Ejercicio">Drill</th><th data-en="RPE" data-fr="RPE" data-es="RPE">RPE</th><th data-en="Feeling" data-fr="Ressenti" data-es="Sensación">Feeling</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -2739,8 +2739,8 @@
   <!-- ========== VUE JOUEUR : DAILY HOOPER CHECK-IN ========== -->
   <div class="view" id="view-player-hooper">
     <div class="card" style="background:linear-gradient(135deg, var(--bg-card), #14532d); border:none;">
-      <h2 style="color:var(--green); font-size:18px;" data-en="💚 Daily check-in" data-fr="💚 État de forme du jour">💚 Daily check-in</h2>
-      <p style="color:var(--text); font-size:14px; margin-top:4px;" data-en="Tell us how you feel today. This takes 30 seconds and helps us monitor your wellness." data-fr="Dis-nous comment tu te sens aujourd&#39;hui. Cela prend 30 secondes et nous aide à suivre ta forme.">Tell us how you feel today. This takes 30 seconds and helps us monitor your wellness.</p>
+      <h2 style="color:var(--green); font-size:18px;" data-en="💚 Daily check-in" data-fr="💚 État de forme du jour" data-es="💚 Estado físico del día">💚 Daily check-in</h2>
+      <p style="color:var(--text); font-size:14px; margin-top:4px;" data-en="Tell us how you feel today. This takes 30 seconds and helps us monitor your wellness." data-fr="Dis-nous comment tu te sens aujourd&#39;hui. Cela prend 30 secondes et nous aide à suivre ta forme." data-es="Cuéntanos cómo te sientes hoy. Toma 30 segundos y nos ayuda a seguir tu forma.">Tell us how you feel today. This takes 30 seconds and helps us monitor your wellness.</p>
     </div>
 
     <div class="form-row">
@@ -2766,38 +2766,38 @@
     <!-- 4 questions Hooper -->
     <div class="card">
       <div class="hooper-question" data-key="sleep_quality">
-        <h3 style="font-size:15px; margin-bottom:4px;" data-en="😴 Sleep quality" data-fr="😴 Qualité du sommeil">😴 Sleep quality</h3>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="How well did you sleep last night?" data-fr="Comment as-tu dormi la nuit dernière ?">How well did you sleep last night?</p>
+        <h3 style="font-size:15px; margin-bottom:4px;" data-en="😴 Sleep quality" data-fr="😴 Qualité du sommeil" data-es="😴 Calidad del sueño">😴 Sleep quality</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="How well did you sleep last night?" data-fr="Comment as-tu dormi la nuit dernière ?" data-es="¿Cómo dormiste anoche?">How well did you sleep last night?</p>
         <div class="hooper-scale" data-key="sleep_quality"></div>
       </div>
     </div>
 
     <div class="card">
       <div class="hooper-question" data-key="fatigue">
-        <h3 style="font-size:15px; margin-bottom:4px;" data-en="⚡ Fatigue level" data-fr="⚡ Niveau de fatigue">⚡ Fatigue level</h3>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="How tired do you feel right now?" data-fr="À quel point te sens-tu fatigué en ce moment ?">How tired do you feel right now?</p>
+        <h3 style="font-size:15px; margin-bottom:4px;" data-en="⚡ Fatigue level" data-fr="⚡ Niveau de fatigue" data-es="⚡ Nivel de fatiga">⚡ Fatigue level</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="How tired do you feel right now?" data-fr="À quel point te sens-tu fatigué en ce moment ?" data-es="¿Qué tan cansado te sientes ahora mismo?">How tired do you feel right now?</p>
         <div class="hooper-scale" data-key="fatigue"></div>
       </div>
     </div>
 
     <div class="card">
       <div class="hooper-question" data-key="stress">
-        <h3 style="font-size:15px; margin-bottom:4px;" data-en="🧠 Stress level" data-fr="🧠 Niveau de stress">🧠 Stress level</h3>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="How stressed do you feel today?" data-fr="À quel point te sens-tu stressé aujourd&#39;hui ?">How stressed do you feel today?</p>
+        <h3 style="font-size:15px; margin-bottom:4px;" data-en="🧠 Stress level" data-fr="🧠 Niveau de stress" data-es="🧠 Nivel de estrés">🧠 Stress level</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="How stressed do you feel today?" data-fr="À quel point te sens-tu stressé aujourd&#39;hui ?" data-es="¿Qué tan estresado te sientes hoy?">How stressed do you feel today?</p>
         <div class="hooper-scale" data-key="stress"></div>
       </div>
     </div>
 
     <div class="card">
       <div class="hooper-question" data-key="muscle_soreness">
-        <h3 style="font-size:15px; margin-bottom:4px;" data-en="💪 Muscle soreness" data-fr="💪 Douleurs musculaires">💪 Muscle soreness</h3>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="Do you feel any muscle pain or soreness? Rate the overall intensity." data-fr="Ressens-tu des douleurs musculaires ? Évalue l&#39;intensité globale.">Do you feel any muscle pain or soreness? Rate the overall intensity.</p>
+        <h3 style="font-size:15px; margin-bottom:4px;" data-en="💪 Muscle soreness" data-fr="💪 Douleurs musculaires" data-es="💪 Dolores musculares">💪 Muscle soreness</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="Do you feel any muscle pain or soreness? Rate the overall intensity." data-fr="Ressens-tu des douleurs musculaires ? Évalue l&#39;intensité globale." data-es="¿Sientes dolores musculares? Evalúa la intensidad global.">Do you feel any muscle pain or soreness? Rate the overall intensity.</p>
         <div class="hooper-scale" data-key="muscle_soreness"></div>
 
         <!-- Zone de localisation (apparaît si soreness > 1) -->
         <div id="pain-localization" style="display:none; margin-top:20px; padding-top:20px; border-top:1px solid var(--border);">
-          <h4 style="font-size:14px; margin-bottom:4px;" data-en="🎯 Where do you feel the pain?" data-fr="🎯 Où ressens-tu la douleur ?">🎯 Where do you feel the pain?</h4>
-          <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="Click on the body parts where you feel pain. Click again to deselect." data-fr="Clique sur les zones où tu ressens une douleur. Reclique pour désélectionner.">Click on the body parts where you feel pain. Click again to deselect.</p>
+          <h4 style="font-size:14px; margin-bottom:4px;" data-en="🎯 Where do you feel the pain?" data-fr="🎯 Où ressens-tu la douleur ?" data-es="🎯 ¿Dónde sientes el dolor?">🎯 Where do you feel the pain?</h4>
+          <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="Click on the body parts where you feel pain. Click again to deselect." data-fr="Clique sur les zones où tu ressens une douleur. Reclique pour désélectionner." data-es="Haz clic en las zonas donde sientes dolor. Vuelve a hacer clic para deseleccionar.">Click on the body parts where you feel pain. Click again to deselect.</p>
           <div id="mannequin-container" style="background:var(--bg-elevated); border-radius:10px; padding:16px; overflow-x:auto;"><svg viewBox="0 0 640 720" xmlns="http://www.w3.org/2000/svg" style="max-width:100%; height:auto;">
   <defs>
     <style>
@@ -2813,7 +2813,7 @@
 
   <!-- ============================== VUE AVANT ============================== -->
   <g transform="translate(0,0)">
-    <text x="160" y="22" class="body-label" data-en="FRONT" data-fr="DEVANT">FRONT</text>
+    <text x="160" y="22" class="body-label" data-en="FRONT" data-fr="DEVANT" data-es="FRENTE">FRONT</text>
 
     <!-- Silhouette de fond (anatomique stylisée) -->
     <!-- Tête -->
@@ -2913,7 +2913,7 @@
 
   <!-- ============================== VUE ARRIÈRE ============================== -->
   <g transform="translate(320,0)">
-    <text x="160" y="22" class="body-label" data-en="BACK" data-fr="DOS">BACK</text>
+    <text x="160" y="22" class="body-label" data-en="BACK" data-fr="DOS" data-es="ESPALDA">BACK</text>
 
     <!-- Silhouette miroir (mêmes courbes) -->
     <ellipse cx="160" cy="65" rx="32" ry="38" class="body-base"/>
@@ -3016,20 +3016,20 @@
 
     <!-- Notes facultatives -->
     <div class="card">
-      <h3 style="font-size:15px; margin-bottom:4px;"><span data-en="📝 Anything else?" data-fr="📝 Autre chose à signaler ?">📝 Anything else?</span> <span style="font-size:11px; color:var(--text-dim); font-weight:normal;">(<span data-en="optional" data-fr="facultatif">optional</span>)</span></h3>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;"><span data-en="Share any information you think might be useful for the staff." data-fr="Partage toute information qui pourrait être utile au staff.">Share any information you think might be useful for the staff.</span></p>
+      <h3 style="font-size:15px; margin-bottom:4px;"><span data-en="📝 Anything else?" data-fr="📝 Autre chose à signaler ?" data-es="📝 ¿Algo más que señalar?">📝 Anything else?</span> <span style="font-size:11px; color:var(--text-dim); font-weight:normal;">(<span data-en="optional" data-fr="facultatif" data-es="opcional">optional</span>)</span></h3>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;"><span data-en="Share any information you think might be useful for the staff." data-fr="Partage toute information qui pourrait être utile au staff." data-es="Comparte cualquier información que pueda ser útil para el staff.">Share any information you think might be useful for the staff.</span></p>
       <textarea id="hooper-notes" rows="3" placeholder="E.g. slight headache, didn't sleep well after a noisy night..." data-ph-en="E.g. slight headache, didn't sleep well after a noisy night..." data-ph-fr="Ex : léger mal de tête, mauvaise nuit à cause du bruit..."
                 style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
       <div style="text-align:right; margin-top:8px;">
-        <button class="btn" onclick="saveHooperNotes()" id="btn-save-notes" data-en="💾 Save notes" data-fr="💾 Enregistrer les notes">💾 Save notes</button>
+        <button class="btn" onclick="saveHooperNotes()" id="btn-save-notes" data-en="💾 Save notes" data-fr="💾 Enregistrer les notes" data-es="💾 Guardar las notas">💾 Save notes</button>
       </div>
     </div>
 
     <div class="card" id="hooper-completion" style="display:none; background:rgba(74,222,128,0.10); border:1px solid var(--green);">
       <div style="text-align:center; padding:12px;">
         <div style="font-size:24px; margin-bottom:4px;">✅</div>
-        <div style="color:var(--green); font-weight:600;"data-en="All your answers are submitted for today" data-fr="Toutes tes réponses sont enregistrées pour aujourd'hui">All your answers are submitted for today</div>
-        <div style="color:var(--text-dim); font-size:12px; margin-top:4px;" data-en="You can update any answer above if needed." data-fr="Tu peux modifier une réponse ci-dessus si besoin.">You can update any answer above if needed.</div>
+        <div style="color:var(--green); font-weight:600;"data-en="All your answers are submitted for today" data-fr="Toutes tes réponses sont enregistrées pour aujourd'hui" data-es="Todas tus respuestas están guardadas para hoy">All your answers are submitted for today</div>
+        <div style="color:var(--text-dim); font-size:12px; margin-top:4px;" data-en="You can update any answer above if needed." data-fr="Tu peux modifier une réponse ci-dessus si besoin." data-es="Puedes modificar una respuesta arriba si es necesario.">You can update any answer above if needed.</div>
       </div>
     </div>
   </div>
@@ -3567,22 +3567,22 @@
   <!-- ========== ESPACE JOUEUR — MES DONNÉES GPS (lecteur) ========== -->
   <div class="view" id="view-player-gps">
     <div class="card">
-      <h2 style="margin:0 0 12px;" data-en="📡 My GPS data" data-fr="📡 Mes données GPS">📡 Mes données GPS</h2>
+      <h2 style="margin:0 0 12px;" data-en="📡 My GPS data" data-fr="📡 Mes données GPS" data-es="📡 Mis datos GPS">📡 Mes données GPS</h2>
       <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
         <div style="flex:1 1 120px; min-width:0;">
-          <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Category" data-fr="Catégorie">Catégorie</label>
+          <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Category" data-fr="Catégorie" data-es="Categoría">Catégorie</label>
           <select id="pgps-cat" onchange="renderPlayerGPS()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px 10px; font-size:14px;"></select>
         </div>
         <div id="pgps-joueur-group" style="flex:1 1 120px; min-width:0;">
-          <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Player" data-fr="Joueur">Joueur</label>
+          <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Player" data-fr="Joueur" data-es="Jugador">Joueur</label>
           <select id="pgps-joueur" onchange="renderPlayerGPS()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px 10px; font-size:14px;"></select>
         </div>
         <div style="flex:2 1 200px; min-width:0;">
-          <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Session" data-fr="Séance">Séance</label>
+          <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Session" data-fr="Séance" data-es="Sesión">Séance</label>
           <select id="pgps-seance" onchange="renderPlayerGPS()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px 10px; font-size:14px;"></select>
         </div>
         <div id="pgps-split-group" style="flex:1 1 140px; min-width:0; display:none;">
-          <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Display" data-fr="Affichage">Affichage</label>
+          <label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;" data-en="Display" data-fr="Affichage" data-es="Visualización">Affichage</label>
           <select id="pgps-split" onchange="renderPlayerGPS()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px 10px; font-size:14px;"></select>
         </div>
       </div>
@@ -3777,15 +3777,15 @@
   <!-- ========== JOUEUR : MES SÉANCES PLANIFIÉES ========== -->
   <div class="view" id="view-player-seances">
     <div class="card">
-      <h2 data-en="📋 My schedule" data-fr="📋 Mon planning">📋 My schedule</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="The sessions assigned to you by the staff, day by day. Tap a session to see the details and mark it as done." data-fr="Les séances que le staff t'a assignées, jour par jour. Clique sur une séance pour le détail et marque-la comme faite.">The sessions assigned to you by the staff, day by day. Tap a session to see the details and mark it as done.</p>
+      <h2 data-en="📋 My schedule" data-fr="📋 Mon planning" data-es="📋 Mi planificación">📋 My schedule</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="The sessions assigned to you by the staff, day by day. Tap a session to see the details and mark it as done." data-fr="Les séances que le staff t'a assignées, jour par jour. Clique sur une séance pour le détail et marque-la comme faite." data-es="Las sesiones que el staff te ha asignado, día por día. Haz clic en una sesión para ver el detalle y marcarla como hecha.">The sessions assigned to you by the staff, day by day. Tap a session to see the details and mark it as done.</p>
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px;">
-        <button class="btn btn-secondary" onclick="playerWeekNav(-1)" data-en="← Prev week" data-fr="← Semaine préc.">← Prev week</button>
+        <button class="btn btn-secondary" onclick="playerWeekNav(-1)" data-en="← Prev week" data-fr="← Semaine préc." data-es="← Semana ant.">← Prev week</button>
         <div id="player-week-label" style="font-weight:700; font-size:14px; text-align:center;"></div>
-        <button class="btn btn-secondary" onclick="playerWeekNav(1)" data-en="Next week →" data-fr="Semaine suiv. →">Next week →</button>
+        <button class="btn btn-secondary" onclick="playerWeekNav(1)" data-en="Next week →" data-fr="Semaine suiv. →" data-es="Semana sig. →">Next week →</button>
       </div>
       <div style="text-align:center; margin-bottom:14px;">
-        <button class="btn btn-secondary" style="padding:4px 14px; font-size:12px;" onclick="playerWeekToday()" data-en="This week" data-fr="Cette semaine">This week</button>
+        <button class="btn btn-secondary" style="padding:4px 14px; font-size:12px;" onclick="playerWeekToday()" data-en="This week" data-fr="Cette semaine" data-es="Esta semana">This week</button>
       </div>
       <div id="player-seances-week"></div>
     </div>
@@ -3794,8 +3794,8 @@
   <!-- ===== VUE SOINS KINÉ (joueur) ===== -->
   <div class="view" id="view-player-soins">
     <div class="card">
-      <h2 data-en="🩺 Physio appointments" data-fr="🩺 Créneaux de soins">🩺 Créneaux de soins</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="Pick a free slot to get treated by the physio. Tap a slot to book it; tap your booking to cancel." data-fr="Choisis un créneau libre pour te faire soigner par le/la kiné. Clique sur un créneau pour réserver ; clique sur ta réservation pour l'annuler.">Choisis un créneau libre pour te faire soigner par le/la kiné. Clique sur un créneau pour réserver ; clique sur ta réservation pour l'annuler.</p>
+      <h2 data-en="🩺 Physio appointments" data-fr="🩺 Créneaux de soins" data-es="🩺 Franjas de tratamiento">🩺 Créneaux de soins</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="Pick a free slot to get treated by the physio. Tap a slot to book it; tap your booking to cancel." data-fr="Choisis un créneau libre pour te faire soigner par le/la kiné. Clique sur un créneau pour réserver ; clique sur ta réservation pour l'annuler." data-es="Elige una franja libre para ser tratado por el/la fisio. Haz clic en una franja para reservar; haz clic en tu reserva para cancelarla.">Choisis un créneau libre pour te faire soigner par le/la kiné. Clique sur un créneau pour réserver ; clique sur ta réservation pour l'annuler.</p>
       <div id="player-soins-list"></div>
     </div>
   </div>
@@ -3804,8 +3804,8 @@
   <!-- ===== VUE MA FICHE (joueur, lecture seule) ===== -->
   <div class="view" id="view-player-fiche">
     <div class="card">
-      <h2 data-en="👤 My profile" data-fr="👤 Ma fiche">👤 Ma fiche</h2>
-      <p style="color:var(--text-dim); font-size:12px;" data-en="Your medical & sport profile kept by the physio/staff." data-fr="Ta fiche médicale et sportive tenue par le kiné/staff.">Ta fiche médicale et sportive tenue par le kiné/staff.</p>
+      <h2 data-en="👤 My profile" data-fr="👤 Ma fiche" data-es="👤 Mi ficha">👤 Ma fiche</h2>
+      <p style="color:var(--text-dim); font-size:12px;" data-en="Your medical & sport profile kept by the physio/staff." data-fr="Ta fiche médicale et sportive tenue par le kiné/staff." data-es="Tu ficha médica y deportiva mantenida por el/la fisio/staff.">Ta fiche médicale et sportive tenue par le kiné/staff.</p>
     </div>
     <div id="player-fiche-body"></div>
   </div>
@@ -3814,16 +3814,16 @@
   <!-- ========== VUE JOUEUR : MES AMENDES ========== -->
   <div class="view" id="view-player-amendes">
     <div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">
-      <h2 style="color:var(--accent-light); font-size:18px;" data-en="💰 My fines" data-fr="💰 Mes amendes">💰 Mes amendes</h2>
-      <p style="color:var(--text); font-size:13px; margin-top:4px;" data-en="Track your fines and payment deadlines." data-fr="Suivi de tes amendes et de tes échéances de paiement.">Suivi de tes amendes et de tes échéances de paiement.</p>
-      <p style="color:var(--text-dim); font-size:12px; margin-top:6px; margin-bottom:0;" data-en="Payment is due monthly on the first Tuesday of the month. You have one week to settle the amount — otherwise the total is doubled." data-fr="Le paiement se fait par mois, le premier mardi du mois. Tu as une semaine pour régler la somme due. Passé ce délai, la somme est doublée.">Le paiement se fait par mois, le premier mardi du mois. Tu as une semaine pour régler la somme due. <b style="color:#f87171;">Passé ce délai, la somme est doublée.</b></p>
+      <h2 style="color:var(--accent-light); font-size:18px;" data-en="💰 My fines" data-fr="💰 Mes amendes" data-es="💰 Mis multas">💰 Mes amendes</h2>
+      <p style="color:var(--text); font-size:13px; margin-top:4px;" data-en="Track your fines and payment deadlines." data-fr="Suivi de tes amendes et de tes échéances de paiement." data-es="Seguimiento de tus multas y de tus plazos de pago.">Suivi de tes amendes et de tes échéances de paiement.</p>
+      <p style="color:var(--text-dim); font-size:12px; margin-top:6px; margin-bottom:0;" data-en="Payment is due monthly on the first Tuesday of the month. You have one week to settle the amount — otherwise the total is doubled." data-fr="Le paiement se fait par mois, le premier mardi du mois. Tu as une semaine pour régler la somme due. Passé ce délai, la somme est doublée." data-es="El pago se hace mensualmente, el primer martes del mes. Tienes una semana para pagar la cantidad debida. Pasado este plazo, la cantidad se duplica.">Le paiement se fait par mois, le premier mardi du mois. Tu as une semaine pour régler la somme due. <b style="color:#f87171;">Passé ce délai, la somme est doublée.</b></p>
     </div>
 
     <div class="stats-grid">
-      <div class="stat"><div class="stat-label" data-en="Total due" data-fr="Total à régler">Total à régler</div><div class="stat-value" id="pa-stat-du">—</div></div>
-      <div class="stat"><div class="stat-label" data-en="Current period" data-fr="Période en cours">Période en cours</div><div class="stat-value" id="pa-stat-current">—</div></div>
-      <div class="stat"><div class="stat-label" data-en="Payment window" data-fr="Fenêtre de paiement">Fenêtre de paiement</div><div class="stat-value" id="pa-stat-deadline" style="font-size:15px; line-height:1.35;">—</div></div>
-      <div class="stat"><div class="stat-label" data-en="Overdue" data-fr="En retard">En retard</div><div class="stat-value" id="pa-stat-overdue" style="color:#f87171;">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Total due" data-fr="Total à régler" data-es="Total a pagar">Total à régler</div><div class="stat-value" id="pa-stat-du">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Current period" data-fr="Période en cours" data-es="Período actual">Période en cours</div><div class="stat-value" id="pa-stat-current">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Payment window" data-fr="Fenêtre de paiement" data-es="Ventana de pago">Fenêtre de paiement</div><div class="stat-value" id="pa-stat-deadline" style="font-size:15px; line-height:1.35;">—</div></div>
+      <div class="stat"><div class="stat-label" data-en="Overdue" data-fr="En retard" data-es="Atrasado">En retard</div><div class="stat-value" id="pa-stat-overdue" style="color:#f87171;">—</div></div>
     </div>
 
     <div id="pa-alert" style="display:none;"></div>
@@ -11286,12 +11286,12 @@ async function renderEntrainement() {
   const view = document.getElementById('view-entrainement');
   if (!view) return;
   if (currentRole === 'lecteur') {
-    view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Réservé au staff.</p></div>';
+    view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">' + tr('Staff only.', 'Réservé au staff.', 'Reservado al staff.') + '</p></div>';
     return;
   }
-  planifInjectStyle(); // partage les mêmes styles pf-* que la Planification saison
+  planifInjectStyle();
   _entrainementInjectStyle();
-  view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Chargement…</p></div>';
+  view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">' + tr('Loading…', 'Chargement…', 'Cargando…') + '</p></div>';
   const org = currentOrg;
   const { data: catRows } = await sb.from('planification').select('categorie, saison').eq('org', org);
   const cats = Array.from(new Set((catRows || []).map(r => r.categorie).filter(Boolean))).sort();
@@ -11301,7 +11301,7 @@ async function renderEntrainement() {
   if (!entTrainState.categorie || !cats.includes(entTrainState.categorie)) entTrainState.categorie = cats[0] || '';
   if (!entTrainState.saison || !seasons.includes(entTrainState.saison)) entTrainState.saison = seasons[0] || '';
   if (!entTrainState.categorie) {
-    view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Aucune catégorie planifiée pour cette entité.</p></div>';
+    view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">' + tr('No planned category for this organization.', 'Aucune catégorie planifiée pour cette entité.', 'Ninguna categoría planificada para esta entidad.') + '</p></div>';
     return;
   }
   await _loadEntrainementData(view);
@@ -11330,17 +11330,17 @@ function _drawEntrainement(view) {
   ).join('');
   const orgLbl = (typeof orgLabelText === 'function') ? orgLabelText(currentOrg) : currentOrg;
   const seasonSelHTML = entTrainState.seasons.length > 1
-    ? '<span style="font-size:12px; color:var(--text-dim);">Saison</span><select id="ent-saison-sel" class="pf-weeksel">' + seasonsOpts + '</select>'
+    ? '<span style="font-size:12px; color:var(--text-dim);">' + tr('Season', 'Saison', 'Temporada') + '</span><select id="ent-saison-sel" class="pf-weeksel">' + seasonsOpts + '</select>'
     : '';
 
   view.innerHTML = '<div class="card">' +
     '<div class="pf-head" style="align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:0;">' +
       '<div>' +
-        '<h2 style="margin:0;">🏃 Entraînement — ' + escapeHtml(orgLbl) + '</h2>' +
-        '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">Microcycle de la catégorie sélectionnée (lecture seule).</p>' +
+        '<h2 style="margin:0;">' + tr('🏃 Training', '🏃 Entraînement', '🏃 Entrenamiento') + ' — ' + escapeHtml(orgLbl) + '</h2>' +
+        '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">' + tr('Microcycle of the selected category (read only).', 'Microcycle de la catégorie sélectionnée (lecture seule).', 'Microciclo de la categoría seleccionada (solo lectura).') + '</p>' +
       '</div>' +
       '<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">' +
-        '<span style="font-size:12px; color:var(--text-dim);">Catégorie</span>' +
+        '<span style="font-size:12px; color:var(--text-dim);">' + tr('Category', 'Catégorie', 'Categoría') + '</span>' +
         '<select id="ent-cat-sel" class="pf-weeksel">' + catsOpts + '</select>' +
         seasonSelHTML +
       '</div>' +
@@ -11365,13 +11365,13 @@ function _renderEntrainementMicroCard() {
   const c = document.getElementById('ent-micro-container');
   if (!c) return;
   if (!entTrainState.microRows.length) {
-    c.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Aucun microcycle défini pour cette catégorie.</p></div>';
+    c.innerHTML = '<div class="card"><p style="color:var(--text-dim);">' + tr('No microcycle defined for this category.', 'Aucun microcycle défini pour cette catégorie.', 'Ningún microciclo definido para esta categoría.') + '</p></div>';
     return;
   }
   const cal = entTrainState.semaineCal;
   const m = entTrainState.microRows.find(r => r.semaine_cal === cal);
   if (!m) {
-    c.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Semaine introuvable.</p></div>';
+    c.innerHTML = '<div class="card"><p style="color:var(--text-dim);">' + tr('Week not found.', 'Semaine introuvable.', 'Semana no encontrada.') + '</p></div>';
     return;
   }
   const plan = entTrainState.planifRows.find(r => r.semaine_cal === cal);
@@ -11388,22 +11388,30 @@ function _renderEntrainementMicroCard() {
   if (plan) {
     const ch = planifCharge(plan);
     recap = '<div class="pf-micro-recap" style="margin:0;">' +
-      '<span>Volume <b style="color:#38b6ff">' + (plan.volume || 0) + '</b></span>' +
-      '<span>Intensité <b style="color:#fb7185">' + (plan.intensite || 0) + '</b></span>' +
-      '<span>Charge <b style="color:' + planifChargeColor(ch) + '">' + ch + '</b></span>' +
-      (plan.nb_entrainements != null ? '<span>Entraînements <b>' + plan.nb_entrainements + '</b></span>' : '') +
-      (plan.nb_matchs ? '<span>Matchs <b>' + plan.nb_matchs + '</b></span>' : '') +
+      '<span>' + tr('Volume', 'Volume', 'Volumen') + ' <b style="color:#38b6ff">' + (plan.volume || 0) + '</b></span>' +
+      '<span>' + tr('Intensity', 'Intensité', 'Intensidad') + ' <b style="color:#fb7185">' + (plan.intensite || 0) + '</b></span>' +
+      '<span>' + tr('Load', 'Charge', 'Carga') + ' <b style="color:' + planifChargeColor(ch) + '">' + ch + '</b></span>' +
+      (plan.nb_entrainements != null ? '<span>' + tr('Trainings', 'Entraînements', 'Entrenamientos') + ' <b>' + plan.nb_entrainements + '</b></span>' : '') +
+      (plan.nb_matchs ? '<span>' + tr('Matches', 'Matchs', 'Partidos') + ' <b>' + plan.nb_matchs + '</b></span>' : '') +
     '</div>';
   }
   const athle = PLANIF_BARS.filter(b => b.sec === 'athle');
+  const athleLabelES = {
+    'Explo + Réactivité': 'Explosividad + Reactividad',
+    'Submax (HSR / RSA)': 'Submax (HSR / RSA)',
+    'Vitesse + Appui':    'Velocidad + Apoyo',
+    'Chgt direction / Coordination': 'Cambio de dirección / Coordinación',
+    'VMA / Récup':        'VAM / Recuperación',
+  };
+  const trAthle = (fr) => (playerLang() === 'es' ? (athleLabelES[fr] || fr) : fr);
   const chips = plan ? '<div style="display:flex; flex-direction:column; gap:6px; min-width:220px;">' +
-    '<div style="font-size:18px; font-weight:700;">Contenus athlétiques</div>' +
+    '<div style="font-size:18px; font-weight:700;">' + tr('Athletic contents', 'Contenus athlétiques', 'Contenidos atléticos') + '</div>' +
     athle.map(b => {
       const v = plan[b.key] || 0;
       const op = v > 0 ? '1' : '0.35';
       return '<div style="display:flex; align-items:center; gap:8px; font-size:13px; opacity:' + op + ';">' +
         '<span style="width:12px; height:12px; border-radius:3px; background:' + b.color + '; flex-shrink:0;"></span>' +
-        '<span>' + escapeHtml(b.label) + '</span>' +
+        '<span>' + escapeHtml(trAthle(b.label)) + '</span>' +
         '<span style="margin-left:auto; font-weight:700;">' + v + '/5</span>' +
       '</div>';
     }).join('') +
@@ -11411,18 +11419,20 @@ function _renderEntrainementMicroCard() {
 
   const jours = Array.isArray(m.jours) ? m.jours : [];
   const rowSpecs = [
-    { key: 's1', label: 'Séance Matin',        kind: 'seance' },
-    { key: 'e1', label: 'Espace/séquence',     kind: 'duree'  },
-    { key: 'd1', label: 'Durée séance matin',  kind: 'duree'  },
+    { key: 's1', label: tr('Morning session',    'Séance Matin',        'Sesión Mañana'),                kind: 'seance' },
+    { key: 'e1', label: tr('Space/sequence',     'Espace/séquence',     'Espacio/secuencia'),            kind: 'duree'  },
+    { key: 'd1', label: tr('Morning duration',   'Durée séance matin',  'Duración sesión mañana'),       kind: 'duree'  },
     { kind: 'spacer' },
-    { key: 's2', label: 'Séance Après-midi',   kind: 'seance' },
-    { key: 'e2', label: 'Espace/séquence',     kind: 'duree'  },
-    { key: 'd2', label: 'Durée séance A-M',    kind: 'duree'  },
+    { key: 's2', label: tr('Afternoon session',  'Séance Après-midi',   'Sesión Tarde'),                 kind: 'seance' },
+    { key: 'e2', label: tr('Space/sequence',     'Espace/séquence',     'Espacio/secuencia'),            kind: 'duree'  },
+    { key: 'd2', label: tr('Afternoon duration', 'Durée séance A-M',    'Duración sesión tarde'),        kind: 'duree'  },
     { kind: 'spacer' },
-    { key: 's3', label: 'Séance Salle',        kind: 'seance' }
+    { key: 's3', label: tr('Gym session',        'Séance Salle',        'Sesión Gimnasio'),              kind: 'seance' }
   ];
+  const daysES = { 'Lundi': 'Lunes', 'Mardi': 'Martes', 'Mercredi': 'Miércoles', 'Jeudi': 'Jueves', 'Vendredi': 'Viernes', 'Samedi': 'Sábado', 'Dimanche': 'Domingo' };
+  const trDay = (j) => (playerLang() === 'es' ? (daysES[j] || j) : j);
   let head = '<tr><th class="pf-lbl pf-mlbl"></th>';
-  jours.forEach((jr, i) => { head += '<th class="pf-mday">' + escapeHtml(jr.j || ('J' + (i + 1))) + '</th>'; });
+  jours.forEach((jr, i) => { head += '<th class="pf-mday">' + escapeHtml(trDay(jr.j) || ('J' + (i + 1))) + '</th>'; });
   head += '</tr>';
   let body = '';
   rowSpecs.forEach(spec => {
@@ -11443,26 +11453,29 @@ function _renderEntrainementMicroCard() {
 
   const meta = (m.theme || m.note) ?
     '<div class="pf-micro-meta" style="margin:8px 0 10px;">' +
-      (m.theme ? '<div><b>Thème :</b> ' + escapeHtml(m.theme) + '</div>' : '') +
-      (m.note  ? '<div><b>Note :</b> '  + escapeHtml(m.note)  + '</div>' : '') +
+      (m.theme ? '<div><b>' + tr('Theme:', 'Thème :', 'Tema:') + '</b> ' + escapeHtml(m.theme) + '</div>' : '') +
+      (m.note  ? '<div><b>' + tr('Note:',  'Note :',  'Nota:')  + '</b> ' + escapeHtml(m.note)  + '</div>' : '') +
     '</div>' : '';
 
   const debut = m.date_debut ? new Date(m.date_debut + 'T00:00:00') : null;
   const fin = debut ? new Date(debut.getTime() + 6 * 24 * 3600 * 1000) : null;
-  const weekRange = (debut && fin) ? 'semaine du ' + dFRfull(debut.toISOString().slice(0, 10)) + ' au ' + dFRfull(fin.toISOString().slice(0, 10)) : '';
+  const weekRange = (debut && fin) ?
+    tr('week of ', 'semaine du ', 'semana del ') + dFRfull(debut.toISOString().slice(0, 10)) +
+    tr(' to ',     ' au ',        ' al ')        + dFRfull(fin.toISOString().slice(0, 10))
+    : '';
 
   c.innerHTML = '<div class="card pf-micro-card">' +
     '<div class="pf-head" style="align-items:flex-start; gap:12px;">' +
       '<div class="pf-micro-titleblock" style="min-width:0;">' +
-        '<h2 style="margin:0;">📅 Microcycle — ' + escapeHtml(cal || '') + escapeHtml(curDate) + '</h2>' +
-        '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">' + escapeHtml(entTrainState.categorie) + ' · ' + escapeHtml(entTrainState.saison) + (weekRange ? ' · ' + escapeHtml(weekRange) : '') + ' <span style="opacity:.7;">(lecture seule)</span></p>' +
+        '<h2 style="margin:0;">📅 ' + tr('Microcycle', 'Microcycle', 'Microciclo') + ' — ' + escapeHtml(cal || '') + escapeHtml(curDate) + '</h2>' +
+        '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">' + escapeHtml(entTrainState.categorie) + ' · ' + escapeHtml(entTrainState.saison) + (weekRange ? ' · ' + escapeHtml(weekRange) : '') + ' <span style="opacity:.7;">(' + tr('read only', 'lecture seule', 'solo lectura') + ')</span></p>' +
         recap +
       '</div>' +
       '<div style="flex:1 1 auto; padding-left:24px; min-width:200px;">' + chips + '</div>' +
       '<div style="display:flex; gap:8px; align-items:center;">' +
-        '<button class="pf-navbtn" id="ent-prev" title="Semaine précédente" type="button"' + (idx <= 0 ? ' disabled' : '') + '>‹</button>' +
+        '<button class="pf-navbtn" id="ent-prev" title="' + tr('Previous week', 'Semaine précédente', 'Semana anterior') + '" type="button"' + (idx <= 0 ? ' disabled' : '') + '>‹</button>' +
         '<select id="ent-week-sel" class="pf-weeksel">' + weeksOpts + '</select>' +
-        '<button class="pf-navbtn" id="ent-next" title="Semaine suivante" type="button"' + (idx >= entTrainState.microRows.length - 1 ? ' disabled' : '') + '>›</button>' +
+        '<button class="pf-navbtn" id="ent-next" title="' + tr('Next week', 'Semaine suivante', 'Semana siguiente') + '" type="button"' + (idx >= entTrainState.microRows.length - 1 ? ' disabled' : '') + '>›</button>' +
       '</div>' +
     '</div>' +
     meta +
