@@ -784,6 +784,7 @@
       <button class="nav-btn" data-view="competition" onclick="ciTab('interne')">🏆 Compétition interne</button>
     </div>
   </div>
+  <button class="nav-btn staff-only-btn" data-view="entrainement" id="nav-entrainement-btn">🏃 Entraînement</button>
   <div class="nav-dropdown" id="nav-performance-dropdown">
     <button type="button" class="nav-btn nav-dropdown-toggle staff-only-btn" id="nav-performance-toggle" onclick="togglePerformanceMenu(event)">📈 Performance <span style="font-size:10px;">▾</span></button>
     <div class="nav-dropdown-menu" id="nav-performance-menu">
@@ -2185,6 +2186,7 @@
 
   <!-- ========== PLANIFICATION SAISON (macrocycle, staff) ========== -->
   <div class="view" id="view-planification"></div>
+  <div class="view" id="view-entrainement"></div>
 
   <!-- ========== HISTORIQUE DES SÉANCES ========== -->
   <div class="view" id="view-history">
@@ -7321,6 +7323,7 @@ async function switchOrg(org) {
   if (v === 'entry' && typeof renderEntry === 'function') renderEntry();
   if (v === 'reco-entrainement' && typeof renderRecoEntrainement === 'function') renderRecoEntrainement();
   if (v === 'planification' && typeof renderPlanification === 'function') renderPlanification();
+  if (v === 'entrainement' && typeof renderEntrainement === 'function') renderEntrainement();
   toast('Vue ' + orgLabelText(org) + ' activée', 'success');
 }
 
@@ -7442,7 +7445,7 @@ function applyRoleRestrictions() {
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = 'none';
     // Masquer Charge RPE, Données GPS et Testing (réservé staff/admin)
-    document.querySelectorAll('.nav-btn[data-view="rpe"], .nav-btn[data-view="gps"], .nav-btn[data-view="testing"], .nav-btn[data-view="competition"]').forEach(b => b.style.display = 'none');
+    document.querySelectorAll('.nav-btn[data-view="rpe"], .nav-btn[data-view="gps"], .nav-btn[data-view="testing"], .nav-btn[data-view="competition"], .nav-btn[data-view="entrainement"]').forEach(b => b.style.display = 'none');
     // Afficher le bouton Saisie blessures direct
     document.querySelectorAll('.médical-only-btn').forEach(b => b.style.display = '');
   } else {
@@ -9118,6 +9121,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'reathletisation') renderReathletisation();
     else if (view === 'musculation') renderMusculation();
     else if (view === 'competition') renderCompetition();
+    else if (view === 'entrainement') renderEntrainement();
     else if (view === 'minijeux') renderMinijeux();
   });
 });
@@ -11180,6 +11184,232 @@ function planifExportPDF() {
 
   const safe = (PLANIF_CTX.org + '-' + PLANIF_CTX.categorie + '-' + PLANIF_CTX.saison).replace(/[^a-z0-9\-]+/gi, '_');
   doc.save('planification-' + safe + '.pdf');
+}
+
+// ============================================================================
+// VUE ENTRAÎNEMENT — microcycle en lecture seule pour les coachs, avec sélecteur
+// de catégorie. Réutilise les mêmes tables planification/microcycle que la vue
+// Planification saison — aucune écriture.
+// ============================================================================
+let entTrainState = {
+  categorie: '', saison: '',
+  cats: [], seasons: [],
+  microRows: [], planifRows: [],
+  semaineCal: null,
+};
+
+async function renderEntrainement() {
+  const view = document.getElementById('view-entrainement');
+  if (!view) return;
+  if (currentRole === 'lecteur') {
+    view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Réservé au staff.</p></div>';
+    return;
+  }
+  planifInjectStyle(); // partage les mêmes styles pf-* que la Planification saison
+  _entrainementInjectStyle();
+  view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Chargement…</p></div>';
+  const org = currentOrg;
+  const { data: catRows } = await sb.from('planification').select('categorie, saison').eq('org', org);
+  const cats = Array.from(new Set((catRows || []).map(r => r.categorie).filter(Boolean))).sort();
+  const seasons = Array.from(new Set((catRows || []).map(r => r.saison).filter(Boolean))).sort().reverse();
+  entTrainState.cats = cats;
+  entTrainState.seasons = seasons;
+  if (!entTrainState.categorie || !cats.includes(entTrainState.categorie)) entTrainState.categorie = cats[0] || '';
+  if (!entTrainState.saison || !seasons.includes(entTrainState.saison)) entTrainState.saison = seasons[0] || '';
+  if (!entTrainState.categorie) {
+    view.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Aucune catégorie planifiée pour cette entité.</p></div>';
+    return;
+  }
+  await _loadEntrainementData(view);
+}
+
+async function _loadEntrainementData(view) {
+  const org = currentOrg;
+  const [planRes, microRes] = await Promise.all([
+    sb.from('planification').select('*').eq('org', org).eq('categorie', entTrainState.categorie).eq('saison', entTrainState.saison).order('ordre', { ascending: true }),
+    sb.from('microcycle').select('*').eq('org', org).eq('categorie', entTrainState.categorie).eq('saison', entTrainState.saison).order('ordre', { ascending: true }),
+  ]);
+  entTrainState.planifRows = planRes.data || [];
+  entTrainState.microRows = microRes.data || [];
+  const curCal = _getCurrentSemaineCal();
+  const cur = entTrainState.microRows.find(r => r.semaine_cal === curCal);
+  entTrainState.semaineCal = cur ? cur.semaine_cal : (entTrainState.microRows[0] ? entTrainState.microRows[0].semaine_cal : null);
+  _drawEntrainement(view);
+}
+
+function _drawEntrainement(view) {
+  const catsOpts = entTrainState.cats.map(c =>
+    '<option value="' + escapeHtml(c) + '"' + (c === entTrainState.categorie ? ' selected' : '') + '>' + escapeHtml(c) + '</option>'
+  ).join('');
+  const seasonsOpts = entTrainState.seasons.map(s =>
+    '<option value="' + escapeHtml(s) + '"' + (s === entTrainState.saison ? ' selected' : '') + '>' + escapeHtml(s) + '</option>'
+  ).join('');
+  const orgLbl = (typeof orgLabelText === 'function') ? orgLabelText(currentOrg) : currentOrg;
+  const seasonSelHTML = entTrainState.seasons.length > 1
+    ? '<span style="font-size:12px; color:var(--text-dim);">Saison</span><select id="ent-saison-sel" class="pf-weeksel">' + seasonsOpts + '</select>'
+    : '';
+
+  view.innerHTML = '<div class="card">' +
+    '<div class="pf-head" style="align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:0;">' +
+      '<div>' +
+        '<h2 style="margin:0;">🏃 Entraînement — ' + escapeHtml(orgLbl) + '</h2>' +
+        '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">Microcycle de la catégorie sélectionnée (lecture seule).</p>' +
+      '</div>' +
+      '<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">' +
+        '<span style="font-size:12px; color:var(--text-dim);">Catégorie</span>' +
+        '<select id="ent-cat-sel" class="pf-weeksel">' + catsOpts + '</select>' +
+        seasonSelHTML +
+      '</div>' +
+    '</div>' +
+  '</div>' +
+  '<div id="ent-micro-container"></div>';
+
+  document.getElementById('ent-cat-sel').addEventListener('change', async (e) => {
+    entTrainState.categorie = e.target.value;
+    await _loadEntrainementData(view);
+  });
+  const seasonSel = document.getElementById('ent-saison-sel');
+  if (seasonSel) seasonSel.addEventListener('change', async (e) => {
+    entTrainState.saison = e.target.value;
+    await _loadEntrainementData(view);
+  });
+
+  _renderEntrainementMicroCard();
+}
+
+function _renderEntrainementMicroCard() {
+  const c = document.getElementById('ent-micro-container');
+  if (!c) return;
+  if (!entTrainState.microRows.length) {
+    c.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Aucun microcycle défini pour cette catégorie.</p></div>';
+    return;
+  }
+  const cal = entTrainState.semaineCal;
+  const m = entTrainState.microRows.find(r => r.semaine_cal === cal);
+  if (!m) {
+    c.innerHTML = '<div class="card"><p style="color:var(--text-dim);">Semaine introuvable.</p></div>';
+    return;
+  }
+  const plan = entTrainState.planifRows.find(r => r.semaine_cal === cal);
+  const idx = entTrainState.microRows.findIndex(r => r.semaine_cal === cal);
+  const dFR = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '';
+  const dFRfull = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '';
+  const curDate = (m && m.date_debut) ? ' — ' + dFR(m.date_debut) : '';
+  const weeksOpts = entTrainState.microRows.map(w =>
+    '<option value="' + escapeHtml(w.semaine_cal) + '"' + (w.semaine_cal === cal ? ' selected' : '') + '>' +
+    escapeHtml(w.semaine_cal) + (w.date_debut ? ' — ' + dFR(w.date_debut) : '') + '</option>'
+  ).join('');
+
+  let recap = '<div class="pf-micro-recap" style="margin:0;"></div>';
+  if (plan) {
+    const ch = planifCharge(plan);
+    recap = '<div class="pf-micro-recap" style="margin:0;">' +
+      '<span>Volume <b style="color:#38b6ff">' + (plan.volume || 0) + '</b></span>' +
+      '<span>Intensité <b style="color:#fb7185">' + (plan.intensite || 0) + '</b></span>' +
+      '<span>Charge <b style="color:' + planifChargeColor(ch) + '">' + ch + '</b></span>' +
+      (plan.nb_entrainements != null ? '<span>Entraînements <b>' + plan.nb_entrainements + '</b></span>' : '') +
+      (plan.nb_matchs ? '<span>Matchs <b>' + plan.nb_matchs + '</b></span>' : '') +
+    '</div>';
+  }
+  const athle = PLANIF_BARS.filter(b => b.sec === 'athle');
+  const chips = plan ? '<div style="display:flex; flex-direction:column; gap:6px; min-width:220px;">' +
+    '<div style="font-size:18px; font-weight:700;">Contenus athlétiques</div>' +
+    athle.map(b => {
+      const v = plan[b.key] || 0;
+      const op = v > 0 ? '1' : '0.35';
+      return '<div style="display:flex; align-items:center; gap:8px; font-size:13px; opacity:' + op + ';">' +
+        '<span style="width:12px; height:12px; border-radius:3px; background:' + b.color + '; flex-shrink:0;"></span>' +
+        '<span>' + escapeHtml(b.label) + '</span>' +
+        '<span style="margin-left:auto; font-weight:700;">' + v + '/5</span>' +
+      '</div>';
+    }).join('') +
+  '</div>' : '';
+
+  const jours = Array.isArray(m.jours) ? m.jours : [];
+  const rowSpecs = [
+    { key: 's1', label: 'Séance Matin',        kind: 'seance' },
+    { key: 'e1', label: 'Espace/séquence',     kind: 'duree'  },
+    { key: 'd1', label: 'Durée séance matin',  kind: 'duree'  },
+    { kind: 'spacer' },
+    { key: 's2', label: 'Séance Après-midi',   kind: 'seance' },
+    { key: 'e2', label: 'Espace/séquence',     kind: 'duree'  },
+    { key: 'd2', label: 'Durée séance A-M',    kind: 'duree'  },
+    { kind: 'spacer' },
+    { key: 's3', label: 'Séance Salle',        kind: 'seance' }
+  ];
+  let head = '<tr><th class="pf-lbl pf-mlbl"></th>';
+  jours.forEach((jr, i) => { head += '<th class="pf-mday">' + escapeHtml(jr.j || ('J' + (i + 1))) + '</th>'; });
+  head += '</tr>';
+  let body = '';
+  rowSpecs.forEach(spec => {
+    if (spec.kind === 'spacer') {
+      body += '<tr class="pf-mspacer"><th class="pf-lbl pf-mlbl pf-mspacer-lbl"></th>' +
+        jours.map(() => '<td class="pf-mspacer-cell"></td>').join('') + '</tr>';
+      return;
+    }
+    let tr = '<tr><th class="pf-lbl pf-mlbl">' + escapeHtml(spec.label) + '</th>';
+    jours.forEach((jr, i) => {
+      const val = (jr[spec.key] != null) ? String(jr[spec.key]) : '';
+      const cls = 'pf-mrocell' + (spec.kind === 'duree' ? ' pf-mrocell-dur' : '') + (val.trim() ? ' pf-mrocell-filled' : '');
+      tr += '<td><div class="' + cls + '">' + escapeHtml(val).replace(/\n/g, '<br>') + '</div></td>';
+    });
+    tr += '</tr>';
+    body += tr;
+  });
+
+  const meta = (m.theme || m.note) ?
+    '<div class="pf-micro-meta" style="margin:8px 0 10px;">' +
+      (m.theme ? '<div><b>Thème :</b> ' + escapeHtml(m.theme) + '</div>' : '') +
+      (m.note  ? '<div><b>Note :</b> '  + escapeHtml(m.note)  + '</div>' : '') +
+    '</div>' : '';
+
+  const debut = m.date_debut ? new Date(m.date_debut + 'T00:00:00') : null;
+  const fin = debut ? new Date(debut.getTime() + 6 * 24 * 3600 * 1000) : null;
+  const weekRange = (debut && fin) ? 'semaine du ' + dFRfull(debut.toISOString().slice(0, 10)) + ' au ' + dFRfull(fin.toISOString().slice(0, 10)) : '';
+
+  c.innerHTML = '<div class="card pf-micro-card">' +
+    '<div class="pf-head" style="align-items:flex-start; gap:12px;">' +
+      '<div class="pf-micro-titleblock" style="min-width:0;">' +
+        '<h2 style="margin:0;">📅 Microcycle — ' + escapeHtml(cal || '') + escapeHtml(curDate) + '</h2>' +
+        '<p style="margin:4px 0 0; color:var(--text-dim); font-size:13px;">' + escapeHtml(entTrainState.categorie) + ' · ' + escapeHtml(entTrainState.saison) + (weekRange ? ' · ' + escapeHtml(weekRange) : '') + ' <span style="opacity:.7;">(lecture seule)</span></p>' +
+        recap +
+      '</div>' +
+      '<div style="flex:1 1 auto; padding-left:24px; min-width:200px;">' + chips + '</div>' +
+      '<div style="display:flex; gap:8px; align-items:center;">' +
+        '<button class="pf-navbtn" id="ent-prev" title="Semaine précédente" type="button"' + (idx <= 0 ? ' disabled' : '') + '>‹</button>' +
+        '<select id="ent-week-sel" class="pf-weeksel">' + weeksOpts + '</select>' +
+        '<button class="pf-navbtn" id="ent-next" title="Semaine suivante" type="button"' + (idx >= entTrainState.microRows.length - 1 ? ' disabled' : '') + '>›</button>' +
+      '</div>' +
+    '</div>' +
+    meta +
+    '<div class="pf-scroll"><table class="pf-table pf-mtable"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
+  '</div>';
+
+  document.getElementById('ent-week-sel').addEventListener('change', (e) => {
+    entTrainState.semaineCal = e.target.value;
+    _renderEntrainementMicroCard();
+  });
+  document.getElementById('ent-prev').addEventListener('click', () => {
+    const ci = entTrainState.microRows.findIndex(r => r.semaine_cal === entTrainState.semaineCal);
+    if (ci > 0) { entTrainState.semaineCal = entTrainState.microRows[ci - 1].semaine_cal; _renderEntrainementMicroCard(); }
+  });
+  document.getElementById('ent-next').addEventListener('click', () => {
+    const ci = entTrainState.microRows.findIndex(r => r.semaine_cal === entTrainState.semaineCal);
+    if (ci >= 0 && ci < entTrainState.microRows.length - 1) { entTrainState.semaineCal = entTrainState.microRows[ci + 1].semaine_cal; _renderEntrainementMicroCard(); }
+  });
+}
+
+function _entrainementInjectStyle() {
+  if (document.getElementById('ent-style')) return;
+  const css = `
+  #view-entrainement .pf-mrocell{min-height:52px;font-size:11px;line-height:1.35;padding:6px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg-elevated);color:var(--text-dim);text-align:center;display:flex;align-items:center;justify-content:center;word-break:break-word;}
+  #view-entrainement .pf-mrocell-dur{min-height:26px;opacity:.9;}
+  #view-entrainement .pf-mrocell-filled{background:#ffffff;color:#0b2942;border-color:#c8d5e6;font-weight:600;}
+  `;
+  const st = document.createElement('style');
+  st.id = 'ent-style';
+  st.textContent = css;
+  document.head.appendChild(st);
 }
 
 function planifInjectStyle() {
