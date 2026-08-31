@@ -10151,8 +10151,33 @@ async function renderPlanification() {
   planifRows = planRes.data || [];
   microRows = microRes.data || [];
   planifLogos = logoRes.data || [];
-  if (!microSelCal && microRows.length) microSelCal = microRows[0].semaine_cal;
+  if (microRows.length) {
+    // À l'ouverture de la vue : sélectionne automatiquement la semaine calendaire en cours
+    // (ex. S36 pour la semaine du 31/08/2026) et ouvre le détail du microcycle.
+    const curCal = _getCurrentSemaineCal();
+    const curRow = curCal ? microRows.find(r => r.semaine_cal === curCal) : null;
+    if (curRow) {
+      microSelCal = curRow.semaine_cal;
+      microOpen = true;
+    } else if (!microSelCal) {
+      microSelCal = microRows[0].semaine_cal;
+    }
+  }
   drawPlanification();
+}
+
+// Numéro de semaine ISO (1..53) de la date passée. Semaine ISO = celle du jeudi.
+function _isoWeekNumber(d) {
+  const target = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7;   // Lun=0 … Dim=6
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const diff = target - firstThursday;
+  return 1 + Math.round(diff / (7 * 24 * 3600 * 1000));
+}
+function _getCurrentSemaineCal() {
+  const n = _isoWeekNumber(new Date());
+  return 'S' + String(n).padStart(2, '0');
 }
 
 // Copie la planification d'une org source (par défaut TEGG) vers l'org courante,
