@@ -6649,6 +6649,13 @@ function applyPlayerLanguage() {
     const code = lang.toUpperCase();
     langBtn.textContent = '🌐 ' + flag + ' ' + code;
   }
+  // Override PSG joueur : l'onglet "Amendes" devient "Croix" (Red cross / Cruces)
+  const amendesBtn = document.querySelector('.nav-btn.player-only[data-view="player-amendes"]');
+  if (amendesBtn && currentOrg === 'PSG' && currentRole === 'lecteur') {
+    if (lang === 'es') amendesBtn.textContent = '❌ Cruces';
+    else if (lang === 'en') amendesBtn.textContent = '❌ Red cross';
+    else amendesBtn.textContent = '❌ Croix';
+  }
   // Libellés des onglets joueur
   // Les libellés des onglets joueur sont gérés par les attributs data-en/data-fr
   // (déjà traités par la boucle querySelectorAll('[data-en]') ci-dessus)
@@ -29368,7 +29375,38 @@ function amPaymentWindowLabel(ym) {
 async function renderPlayerAmendes() {
   const alertEl = document.getElementById('pa-alert');
   const content = document.getElementById('pa-content');
+  const view = document.getElementById('view-player-amendes');
+  const headerCard = view ? view.querySelector('.card') : null;
+  const statsGrid = view ? view.querySelector('.stats-grid') : null;
   const setStat = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
+  // ── Override PSG : l'onglet "Amendes" devient "Croix". Contenu = annonce "à venir"
+  //    tant que le module croix n'est pas encore développé. Rien à charger depuis la DB.
+  if (currentOrg === 'PSG') {
+    if (headerCard) headerCard.style.display = 'none';
+    if (statsGrid)  statsGrid.style.display  = 'none';
+    if (alertEl)    { alertEl.style.display = 'none'; alertEl.innerHTML = ''; }
+    if (content) {
+      content.innerHTML = '<div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">' +
+        '<h2 style="color:var(--accent-light); margin:0 0 8px; font-size:18px;">❌ ' + tr('Red cross', 'Croix', 'Cruces') + '</h2>' +
+        '<p style="color:var(--text); font-size:14px; line-height:1.5; margin:0;">' +
+          tr('You will soon be able to see the recap of the red cards you received throughout the season.',
+             'Tu auras bientôt accès au récapitulatif des croix que tu as reçues au cours de la saison.',
+             'Pronto podrás ver el resumen de las cruces que recibiste a lo largo de la temporada.') +
+        '</p>' +
+        '<p style="color:var(--text-dim); font-size:12px; margin:12px 0 0;">' +
+          tr('This feature is coming soon.',
+             'Cette fonctionnalité arrive bientôt.',
+             'Esta funcionalidad llegará pronto.') +
+        '</p>' +
+      '</div>';
+    }
+    return;
+  }
+
+  // ── Autres orgs (TEGG / D2F) : affichage normal des amendes (header + stats + contenu)
+  if (headerCard) headerCard.style.display = '';
+  if (statsGrid)  statsGrid.style.display  = '';
 
   if (!currentJoueurNom) {
     if (content) content.innerHTML = '<div class="card"><div class="empty-state">Joueur non identifié.</div></div>';
