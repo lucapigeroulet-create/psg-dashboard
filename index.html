@@ -27848,8 +27848,10 @@ function pgpsToggleCumulSplit(sp) {
   renderPlayerGPS();
 }
 
-// Gate d'accès GPS pour un joueur PSG : Hooper du jour + toutes RPE de séances/matchs
-// dont la fenêtre 4h est encore ouverte doivent être remplis.
+// Gate d'accès GPS pour un joueur PSG : Hooper du jour + toutes RPE des séances/matchs
+// passés (14 derniers jours) doivent être remplis. Les séances dont la fenêtre 4h est
+// fermée bloquent AUSSI l'accès — le joueur doit alors demander à un coach de saisir
+// sa note pour lui (via l'onglet staff "Saisie RPE").
 function _psgPlayerGPSAccessCheck() {
   const me = currentJoueurNom;
   if (!me) return { ok: true };
@@ -27858,7 +27860,8 @@ function _psgPlayerGPSAccessCheck() {
   const hooperOK = !!(h && h.sleep_quality != null && h.fatigue != null &&
                      h.stress != null && h.muscle_soreness != null);
   const cutoff = toLocalISO(new Date(Date.now() - 14 * 86400000));
-  let pending = 0;
+  let pendingOpen = 0;  // fenêtre encore ouverte (joueur peut noter lui-même)
+  let pendingClosed = 0; // fenêtre fermée (uniquement staff peut débloquer)
   (state.bdd_ent || []).forEach(pl => {
     if (pl.joueur !== me) return;
     if (pl.date > today || pl.date < cutoff) return;
@@ -27867,8 +27870,7 @@ function _psgPlayerGPSAccessCheck() {
       if (STATUTS_NON_ENT.includes(s)) return;
       if (!state.bdd_ent2.some(f => f.date === pl.date && f.nom === s)) return;
       if (getRPEJoueurSeance(pl.date, me, s) !== null) return;
-      if (isSessionWindowClosed(pl.date, s, me)) return;
-      pending++;
+      if (isSessionWindowClosed(pl.date, s, me)) pendingClosed++; else pendingOpen++;
     });
   });
   (state.bdd_matchs || []).forEach(m => {
@@ -27878,11 +27880,12 @@ function _psgPlayerGPSAccessCheck() {
     if (!compo || (compo.total_min || 0) <= 0) return;
     const seanceNom = matchSeanceNom(m);
     if (getRPEJoueurSeance(m.date, me, seanceNom) !== null) return;
-    if (isSessionWindowClosed(m.date, seanceNom)) return;
-    pending++;
+    if (isSessionWindowClosed(m.date, seanceNom)) pendingClosed++; else pendingOpen++;
   });
+  const pending = pendingOpen + pendingClosed;
   const rpeOK = pending === 0;
-  return { ok: hooperOK && rpeOK, hooperOK, rpeOK, pendingRPE: pending };
+  return { ok: hooperOK && rpeOK, hooperOK, rpeOK,
+           pendingRPE: pending, pendingOpen, pendingClosed };
 }
 
 function renderPlayerGPS() {
@@ -27913,14 +27916,23 @@ function renderPlayerGPS() {
                              'No has completado el check-in de bienestar de hoy.') + '</li>';
       }
       if (!gate.rpeOK) {
-        items += '<li>' + tr(
-          'You have ' + gate.pendingRPE + ' session(s) waiting for your rating.',
-          'Tu as ' + gate.pendingRPE + ' séance(s)/match(s) en attente de note RPE.',
-          'Tienes ' + gate.pendingRPE + ' sesión(es)/partido(s) pendientes de calificar.') + '</li>';
+        if (gate.pendingOpen > 0) {
+          items += '<li>' + tr(
+            'You have ' + gate.pendingOpen + ' session(s) waiting for your rating (4h window still open).',
+            'Tu as ' + gate.pendingOpen + ' séance(s)/match(s) en attente de note RPE (fenêtre 4h encore ouverte).',
+            'Tienes ' + gate.pendingOpen + ' sesión(es)/partido(s) pendientes de calificar (ventana de 4h aún abierta).') + '</li>';
+        }
+        if (gate.pendingClosed > 0) {
+          items += '<li style="color:#f87171;">' + tr(
+            gate.pendingClosed + ' past session(s) with an expired 4h window — ask a coach to submit your rating.',
+            gate.pendingClosed + ' séance(s)/match(s) passé(s) dont la fenêtre 4h est fermée — demande à un coach de saisir ta note à ta place.',
+            gate.pendingClosed + ' sesión(es)/partido(s) pasado(s) con la ventana de 4h cerrada — pide a un entrenador que registre tu calificación por ti.') + '</li>';
+        }
       }
       let btns = '';
       if (!gate.hooperOK) btns += '<button class="btn" onclick="document.querySelector(\'.nav-btn[data-view=player-hooper]\').click()">💚 ' + tr('Fill wellness', 'Remplir l\'état de forme', 'Rellenar bienestar') + '</button> ';
-      if (!gate.rpeOK)    btns += '<button class="btn" onclick="document.querySelector(\'.nav-btn[data-view=player-rpe]\').click()">⭐ ' + tr('Rate sessions', 'Noter mes séances', 'Calificar sesiones') + '</button>';
+      if (gate.pendingOpen > 0) btns += '<button class="btn" onclick="document.querySelector(\'.nav-btn[data-view=player-rpe]\').click()">⭐ ' + tr('Rate my sessions', 'Noter mes séances', 'Calificar mis sesiones') + '</button>';
+      if (gate.pendingClosed > 0) btns += '<button class="btn btn-secondary" disabled style="opacity:.8;cursor:not-allowed;">🧑‍🏫 ' + tr('Contact a coach', 'Voir un coach', 'Contactar entrenador') + '</button>';
       content.innerHTML =
         '<div style="padding:24px; border:1px dashed #f59e0b; background:rgba(245,158,11,0.08); border-radius:10px;">' +
           '<div style="font-size:20px; font-weight:700; color:#fbbf24; margin-bottom:8px;">🔒 ' + lockTitle + '</div>' +
