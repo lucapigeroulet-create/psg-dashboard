@@ -25892,8 +25892,9 @@ function renderSettings() {
   // Staff PSG : accès Paramètres restreint à l'onglet Vignettes uniquement.
   // On masque tous les autres onglets, la zone de réinit, et on force l'onglet actif.
   const psgStaffVignettesOnly = (currentRole === 'staff') && currentOrg === 'PSG';
+  // Zone de réinit : action destructive → réservée admin. Cachée pour staff (coach) et tout autre rôle.
   const resetCard = document.getElementById('settings-reset-card');
-  if (resetCard) resetCard.style.display = psgStaffVignettesOnly ? 'none' : '';
+  if (resetCard) resetCard.style.display = (currentRole === 'admin') ? '' : 'none';
   document.querySelectorAll('.settings-tab').forEach(btn => {
     const tab = btn.dataset.tab;
     btn.style.display = (psgStaffVignettesOnly && tab !== 'vignettes') ? 'none' : '';
