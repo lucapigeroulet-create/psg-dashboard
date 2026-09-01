@@ -24168,7 +24168,7 @@ window.addEventListener('message', async (e) => {
     const date = String(msg.date || '').slice(0, 10);
     if (!date) return reply({ type: 'reco:plan', date, plan: null });
     const { data, error } = await sb.from('reco_generated_plan')
-      .select('plan,generated_at,generated_by,model').eq('org', currentOrg).eq('date', date).maybeSingle();
+      .select('plan,generated_at,generated_by,model,status,error_message,job_started_at').eq('org', currentOrg).eq('date', date).maybeSingle();
     if (error && error.code !== 'PGRST116') console.warn('reco load-plan', error);
     reply({
       type: 'reco:plan', date,
@@ -24176,34 +24176,70 @@ window.addEventListener('message', async (e) => {
       generated_at: data ? data.generated_at : null,
       generated_by: data ? data.generated_by : null,
       model: data ? data.model : null,
+      status: (data && data.status) || (data && data.plan ? 'ready' : null),
+      error_message: data ? data.error_message : null,
+      job_started_at: data ? data.job_started_at : null,
     });
   } else if (msg.type === 'reco:generate-plan') {
     const date = String(msg.date || '').slice(0, 10);
     const suggestion = String(msg.suggestion || '');
     if (!date) return reply({ type: 'reco:generate-error', date, error: 'date manquante' });
     try {
-      const { data, error } = await sb.functions.invoke('reco-generate', { body: { org: currentOrg, date, suggestion } });
-      // Supabase masque le body sur non-2xx : essayer d'extraire l'erreur détaillée
-      if (error) {
-        let detail = error.message || String(error);
+      // 1) Lance le job en background (retourne 202 immédiatement)
+      const { data: kickoff, error: kickErr } = await sb.functions.invoke('reco-generate', { body: { org: currentOrg, date, suggestion } });
+      if (kickErr) {
+        let detail = kickErr.message || String(kickErr);
         try {
-          if (error.context && typeof error.context.text === 'function') {
-            const bodyTxt = await error.context.text();
+          if (kickErr.context && typeof kickErr.context.text === 'function') {
+            const bodyTxt = await kickErr.context.text();
             try { const j = JSON.parse(bodyTxt); if (j && j.error) detail = j.error; else detail = bodyTxt.slice(0, 400); }
             catch (_e) { if (bodyTxt) detail = bodyTxt.slice(0, 400); }
           }
-        } catch (_e) { /* garde le message générique */ }
+        } catch (_e) { /* fallback */ }
         throw new Error(detail);
       }
-      if (data && data.error) throw new Error(data.error);
-      reply({
-        type: 'reco:generated', date,
-        plan: (data && data.plan) || null,
-        generated_at: (data && data.generated_at) || null,
-        generated_by: (data && data.generated_by) || null,
-        model: (data && data.model) || null,
-        ms: (data && data.ms) || null,
-      });
+      if (kickoff && kickoff.error) throw new Error(kickoff.error);
+
+      // 2) Poll la table reco_generated_plan jusqu'à status='ready' ou 'error'
+      const jobStart = (kickoff && kickoff.job_started_at) ? Date.parse(kickoff.job_started_at) : Date.now();
+      const POLL_INTERVAL_MS = 2500;
+      const POLL_TIMEOUT_MS = 8 * 60 * 1000; // 8 min max
+      const t0 = Date.now();
+      let attempt = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        if (Date.now() - t0 > POLL_TIMEOUT_MS) throw new Error("Génération trop longue (>8 min). Réessaie ou contacte l'admin.");
+        await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+        attempt += 1;
+        const { data: row, error: pollErr } = await sb.from('reco_generated_plan')
+          .select('plan,generated_at,generated_by,model,status,error_message,job_started_at')
+          .eq('org', currentOrg).eq('date', date).maybeSingle();
+        if (pollErr && pollErr.code !== 'PGRST116') {
+          console.warn('reco poll', pollErr);
+          continue; // retry
+        }
+        if (!row) continue;
+        // Optionnel : reply progress au front toutes les ~5s
+        if (attempt % 2 === 0) {
+          const elapsed = Math.round((Date.now() - jobStart) / 1000);
+          reply({ type: 'reco:generate-progress', date, status: row.status || 'generating', elapsed_s: elapsed });
+        }
+        if (row.status === 'ready' && row.plan) {
+          reply({
+            type: 'reco:generated', date,
+            plan: row.plan,
+            generated_at: row.generated_at,
+            generated_by: row.generated_by,
+            model: row.model,
+            ms: Date.now() - jobStart,
+          });
+          return;
+        }
+        if (row.status === 'error') {
+          throw new Error(row.error_message || 'Erreur inconnue côté worker.');
+        }
+        // sinon status === 'generating' → continue polling
+      }
     } catch (e) {
       console.error('reco-generate', e);
       const errMsg = (e && e.message) ? e.message : String(e);
