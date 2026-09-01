@@ -2544,6 +2544,15 @@
       <div id="po-seances-content"></div>
     </div>
 
+    <!-- 5. Créneaux kiné (mes réservations + prochains libres) -->
+    <div class="card" id="po-soins-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
+        <h2 style="margin:0;" data-en="🩺 Physio slots" data-fr="🩺 Créneaux kiné" data-es="🩺 Turnos fisio">🩺 Créneaux kiné</h2>
+        <button class="btn btn-secondary" style="padding:5px 12px; font-size:12px;" onclick="document.querySelector('.nav-btn[data-view=player-soins]').click()" data-en="See all →" data-fr="Voir tous →" data-es="Ver todos →">Voir tous →</button>
+      </div>
+      <div id="po-soins-content"></div>
+    </div>
+
   </div>
 
   <!-- ========== VUE JOUEUR : SAISIR MON RPE ========== -->
@@ -25424,7 +25433,69 @@ async function renderPlayerOverview() {
       }).join('');
     }
   }
+
+  // ── 4. Créneaux kiné : mes réservations à venir + prochains libres ────────
+  const soinsCard = document.getElementById('po-soins-card');
+  const soinsEl   = document.getElementById('po-soins-content');
+  if (soinsCard && soinsEl) {
+    if (currentOrg === 'individuel') {
+      soinsCard.style.display = 'none';
+    } else {
+      soinsCard.style.display = '';
+      // Refetch léger (le kiné a pu créer/supprimer des créneaux hors app ouverte)
+      try {
+        const { data } = await sb.from('creneaux_medicaux').select('*')
+          .gte('date', today).order('date').order('heure');
+        if (data) state.bdd_creneaux_medicaux = data;
+      } catch (e) {}
+      // RLS filtre déjà à l'entité éligible ; ici on garde libres + les miens
+      const visibles = (state.bdd_creneaux_medicaux || [])
+        .filter(s => s.date >= today && (!s.joueur || s.joueur === currentJoueurNom));
+      const mine   = visibles.filter(s => s.joueur === currentJoueurNom).slice(0, 3);
+      const libres = visibles.filter(s => !s.joueur).slice(0, 4);
+      const bookedDates = new Set(visibles.filter(s => s.joueur === currentJoueurNom).map(s => s.date));
+      const rowStyle = 'display:flex; align-items:center; justify-content:space-between; gap:10px; border-radius:8px; padding:9px 11px; margin-bottom:5px;';
+      const fmtSlot = s => {
+        const fin = _cmAddMinutes(s.heure, s.duree_min || 15);
+        const [ , m, dd] = s.date.split('-');
+        const jour = new Date(s.date + 'T12:00:00').toLocaleDateString(isFR ? 'fr-FR' : 'en-GB', {weekday:'short'});
+        return jour.charAt(0).toUpperCase() + jour.slice(1) + ' ' + dd + '/' + m + ' · <b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b>';
+      };
+      let html = '';
+      if (mine.length) {
+        html += '<div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--green); margin-bottom:5px;">' + (isFR ? '✓ Réservé' : '✓ Booked') + '</div>';
+        mine.forEach(s => {
+          html += '<div style="' + rowStyle + ' background:rgba(22,101,52,0.25); border-left:3px solid var(--green);">' +
+            '<div style="font-size:13px;">' + fmtSlot(s) + ' <span style="color:var(--text-dim);">· ' + mpFmtDuree(s.duree_min || 15) + '</span></div>' +
+            '<button onclick="_poCancelSlot(\'' + s.id + '\')" style="background:none; border:1px solid var(--red); color:var(--red); font-size:11px; font-weight:600; cursor:pointer; padding:4px 10px; border-radius:6px;">' + (isFR ? 'Annuler' : 'Cancel') + '</button>' +
+          '</div>';
+        });
+      }
+      if (libres.length) {
+        html += '<div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--accent-light); margin:' + (mine.length ? '10px 0 5px' : '0 0 5px') + ';">' + (isFR ? 'Créneaux libres' : 'Available slots') + '</div>';
+        libres.forEach(s => {
+          const locked = bookedDates.has(s.date);
+          const click  = locked ? '' : ('onclick="_poBookSlot(\'' + s.id + '\')"');
+          const cur    = locked ? 'opacity:.5;' : 'cursor:pointer;';
+          html += '<div ' + click + ' style="' + rowStyle + cur + ' background:var(--bg-elevated); border-left:3px solid var(--accent);">' +
+            '<div style="font-size:13px;">' + fmtSlot(s) + ' <span style="color:var(--text-dim);">· ' + mpFmtDuree(s.duree_min || 15) + '</span></div>' +
+            '<span style="font-size:12px; font-weight:600; color:' + (locked ? 'var(--text-dim)' : 'var(--accent-light)') + ';">' +
+              (locked ? (isFR ? '1/jour max' : '1/day max') : (isFR ? 'Réserver →' : 'Book →')) +
+            '</span>' +
+          '</div>';
+        });
+      }
+      if (!mine.length && !libres.length) {
+        html = '<div style="color:var(--text-dim); font-size:13px;">' + (isFR ? 'Aucun créneau proposé pour le moment.' : 'No slots offered right now.') + '</div>';
+      }
+      soinsEl.innerHTML = html;
+    }
+  }
 }
+
+// Wrappers vue d'ensemble joueur : réserver / annuler puis re-render la carte
+async function _poBookSlot(id)   { await reserverCreneau(id);    renderPlayerOverview(); }
+async function _poCancelSlot(id) { await annulerReservation(id); renderPlayerOverview(); }
 
 function renderPlayerRPE() {
   const dateInput = document.getElementById('player-rpe-date');
