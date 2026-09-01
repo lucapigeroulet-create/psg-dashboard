@@ -841,7 +841,6 @@
   </div>
   <!-- Onglets joueur (visibles uniquement pour les lecteurs) -->
   <button class="nav-btn player-only" data-view="player-overview" style="display:none;" data-en="🏠 Overview" data-fr="🏠 Vue d'ensemble" data-es="🏠 Panorama">🏠 Vue d'ensemble</button>
-  <button class="nav-btn player-only" data-view="player-seances" style="display:none;" data-en="📋 My sessions" data-fr="📋 Mes séances" data-es="📋 Mis sesiones">📋 Mes séances</button>
   <button class="nav-btn player-only" data-view="player-soins" style="display:none;" data-en="🩺 Physio" data-fr="🩺 Soins kiné" data-es="🩺 Tratamientos fisio">🩺 Soins kiné</button>
   <button class="nav-btn player-only" data-view="player-rpe" style="display:none;" data-en="⭐ Rate sessions" data-fr="⭐ Noter les séances" data-es="⭐ Calificar las sesiones">⭐ Rate sessions</button>
   <button class="nav-btn player-only" data-view="player-history" style="display:none;" data-en="📊 My ratings" data-fr="📊 Mes notes" data-es="📊 Mis calificaciones">📊 My ratings</button>
@@ -852,6 +851,7 @@
   <button class="nav-btn player-only" data-view="messages" style="display:none;" data-en="📣 Messages" data-fr="📣 Messages" data-es="📣 Mensajes">📣 Messages</button>
   <button class="nav-btn player-only" data-view="player-fiche" style="display:none;" data-en="👤 My profile" data-fr="👤 Ma fiche" data-es="👤 Mi ficha">👤 Ma fiche</button>
   <button class="nav-btn player-only" data-view="player-amendes" style="display:none;" data-en="💰 My fines" data-fr="💰 Mes amendes" data-es="💰 Mis multas">💰 Mes amendes</button>
+  <button class="nav-btn player-only" data-view="player-seances" style="display:none;" data-en="📋 My sessions" data-fr="📋 Mes séances" data-es="📋 Mis sesiones">📋 Mes séances</button>
 </nav>
 
 <main>
@@ -2538,13 +2538,7 @@
       <div id="po-minijeu-content"></div>
     </div>
 
-    <!-- 4. Séances 7 jours à venir -->
-    <div class="card" id="po-seances-card">
-      <h2 data-en="📋 Upcoming sessions (7 days)" data-fr="📋 Séances à venir (7 jours)" data-es="📋 Próximas sesiones (7 días)">📋 Séances à venir (7 jours)</h2>
-      <div id="po-seances-content"></div>
-    </div>
-
-    <!-- 5. Créneaux kiné (mes réservations + prochains libres) -->
+    <!-- 4. Créneaux kiné (mes réservations + prochains libres) -->
     <div class="card" id="po-soins-card">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
         <h2 style="margin:0;" data-en="🩺 Physio slots" data-fr="🩺 Créneaux kiné" data-es="🩺 Turnos fisio">🩺 Créneaux kiné</h2>
@@ -25394,47 +25388,7 @@ async function renderPlayerOverview() {
     }
   }
 
-  // ── 3. Séances à venir sur 7 jours ───────────────────────────────────────
-  const seancesEl = document.getElementById('po-seances-content');
-  if (seancesEl) {
-    const jours = [];
-    for (let i = 0; i < 7; i++) {
-      const dt = new Date(); dt.setDate(dt.getDate() + i);
-      jours.push(toLocalISO(dt));
-    }
-    const aVenir = (state.bdd_seances_plan || []).filter(sp =>
-      seancePlanCibleJoueur(sp, currentJoueurNom) && jours.includes(sp.date)
-    ).sort((a, b) => a.date.localeCompare(b.date));
-
-    if (aVenir.length === 0) {
-      seancesEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px;">' + (isFR ? 'Aucune séance planifiée sur les 7 prochains jours.' : 'No sessions planned for the next 7 days.') + '</div>';
-    } else {
-      seancesEl.innerHTML = aVenir.map(sp => {
-        const faite = seancePlanEstFaite(sp.id, currentJoueurNom);
-        const isToday = (sp.date === today);
-        const routineData = parseRoutineConsignes(sp.consignes);
-        const resume = routineData
-          ? '🏋️ ' + (routineData.groupes || []).reduce((s,g) => s + (g.exercices||[]).length, 0) + ' exercices'
-          : (sp.consignes ? escapeHtml(sp.consignes.slice(0, 60)) + (sp.consignes.length > 60 ? '…' : '') : '');
-        return '<div onclick="openSeancePlanDetail(\'' + sp.id + '\', \'' + currentJoueurNom.replace(/'/g, "\\'") + '\')" ' +
-          'style="display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg-elevated); border:1px solid ' + (isToday ? 'var(--accent)' : 'var(--border)') + '; border-radius:8px; margin-bottom:6px; cursor:pointer;" ' +
-          'onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'' + (isToday ? 'var(--accent)' : 'var(--border)') + '\'">' +
-          '<div style="min-width:42px; text-align:center;">' +
-            '<div style="font-size:16px; font-weight:700; color:' + (isToday ? 'var(--accent-light)' : 'var(--text)') + ';">' + sp.date.split('-')[2] + '</div>' +
-            '<div style="font-size:10px; color:var(--text-dim); text-transform:uppercase;">' + new Date(sp.date + 'T12:00:00').toLocaleDateString(isFR ? 'fr-FR' : 'en-GB', {weekday:'short'}) + '</div>' +
-          '</div>' +
-          '<div style="width:1px; height:32px; background:var(--border);"></div>' +
-          '<div style="flex:1;">' +
-            '<div style="font-weight:600; font-size:13px;">' + escapeHtml(sp.type || (isFR ? 'Séance' : 'Session')) + (sp.duree_min ? ' <span style="color:var(--text-dim); font-weight:400;">· ' + sp.duree_min + ' min</span>' : '') + '</div>' +
-            (resume ? '<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">' + resume + '</div>' : '') +
-          '</div>' +
-          '<span style="font-size:13px;">' + (faite ? '✅' : '⬜') + '</span>' +
-        '</div>';
-      }).join('');
-    }
-  }
-
-  // ── 4. Créneaux kiné : mes réservations à venir + prochains libres ────────
+  // ── 3. Créneaux kiné : mes réservations à venir + prochains libres ────────
   const soinsCard = document.getElementById('po-soins-card');
   const soinsEl   = document.getElementById('po-soins-content');
   if (soinsCard && soinsEl) {
