@@ -14084,6 +14084,145 @@ async function saveGpsSessionEdit() {
   renderGPS();
 }
 
+// ── Ajuster manuellement le temps de séance d'UN joueur ─────────────────────
+// Cas d'usage : un joueur arrive en retard / part tôt / ne participe qu'à une partie.
+// La distance GPS reste celle mesurée, on ne corrige que la durée de participation
+// (et donc l'intensité m/min, recalculée automatiquement).
+let gpsPlayerAdjustData = null;
+function openGpsPlayerAdjust(joueur, date, seance) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const rows = state.bdd_gps.filter(g =>
+    g.joueur === joueur && g.date === date && (g.seance || g.session_title || '') === seance
+  );
+  if (rows.length === 0) { toast('Données GPS introuvables pour ce joueur', 'error'); return; }
+  const splitsSorted = rows.slice().sort((a, b) => {
+    const sa = (a.split_name || 'all').toLowerCase();
+    const sb = (b.split_name || 'all').toLowerCase();
+    if (sa === 'all') return -1;
+    if (sb === 'all') return 1;
+    return (a.id || 0) - (b.id || 0);
+  });
+  gpsPlayerAdjustData = { joueur, date, seance, rows: splitsSorted };
+
+  let ov = document.getElementById('gps-player-adjust-modal');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'gps-player-adjust-modal';
+    ov.style.cssText = 'display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; padding:20px;';
+    ov.addEventListener('click', e => { if (e.target === ov) closeGpsPlayerAdjust(); });
+    document.body.appendChild(ov);
+  }
+
+  let inner =
+    '<div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:640px; width:100%; max-height:85vh; overflow-y:auto;">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
+        '<h3 style="margin:0; color:var(--accent-light); font-size:16px;">✏️ Ajuster le temps — ' + escapeHtml(joueur) + '</h3>' +
+        '<button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="closeGpsPlayerAdjust()">✕</button>' +
+      '</div>' +
+      '<div style="font-size:12px; color:var(--text-dim); margin-bottom:14px;">' +
+        formatDateFR(date) + ' · ' + escapeHtml(seance) +
+        ' — corrige le temps réel de participation par découpage. La distance mesurée reste inchangée ; le m/min (intensité) est recalculé automatiquement.' +
+      '</div>' +
+      '<div class="table-wrap"><table style="width:100%; font-size:13px;"><thead><tr style="text-align:left; color:var(--text-dim); font-size:11px;">' +
+        '<th style="padding:4px 8px;">Découpage</th>' +
+        '<th style="padding:4px 8px; text-align:right;">Distance</th>' +
+        '<th style="padding:4px 8px; text-align:center;">Durée actuelle</th>' +
+        '<th style="padding:4px 8px; text-align:center;">m/min actuel</th>' +
+        '<th style="padding:4px 8px; text-align:center;">Nouvelle durée (min)</th>' +
+      '</tr></thead><tbody>';
+
+  splitsSorted.forEach((r, i) => {
+    const split = r.split_name || 'all';
+    const isAll = split.toLowerCase() === 'all';
+    const cur   = (r.duree_min === null || r.duree_min === undefined || r.duree_min === '') ? '' : parseFloat(r.duree_min);
+    const dist  = parseFloat(r.distance_km) || 0;
+    const mmin  = (cur !== '' && cur > 0 && dist > 0) ? Math.round((dist * 1000 / cur) * 10) / 10 : null;
+    inner +=
+      '<tr style="border-top:1px solid var(--border);">' +
+        '<td style="padding:6px 8px; font-weight:600;">' + (isAll ? 'Séance entière' : escapeHtml(split)) + '</td>' +
+        '<td style="padding:6px 8px; text-align:right; color:var(--text-dim);">' + (dist > 0 ? (dist.toFixed(2) + ' km') : '—') + '</td>' +
+        '<td style="padding:6px 8px; text-align:center; color:var(--text-dim);">' + (cur !== '' ? (cur + ' min') : '—') + '</td>' +
+        '<td style="padding:6px 8px; text-align:center; color:var(--text-dim);">' + (mmin !== null ? mmin : '—') + '</td>' +
+        '<td style="padding:6px 8px; text-align:center;">' +
+          '<input type="number" id="gps-pa-dur-' + i + '" data-dist="' + dist + '" min="0.1" step="0.1" value="' + cur + '" ' +
+          'oninput="_gpsPaPreview(' + i + ')" ' +
+          'style="width:90px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:14px; text-align:center;">' +
+          '<div id="gps-pa-mmin-new-' + i + '" style="font-size:10px; color:var(--accent-light); margin-top:2px; min-height:12px;"></div>' +
+        '</td>' +
+      '</tr>';
+  });
+
+  inner +=
+      '</tbody></table></div>' +
+      '<div style="margin-top:16px; padding:10px 12px; background:var(--bg-elevated); border-radius:8px; font-size:11px; color:var(--text-dim);">' +
+        '💡 Laisser un champ vide = durée inchangée. Pour un ajustement uniforme sur toute l\'équipe (pas par joueur), utilise « ✏️ Modifier » dans l\'historique GPS.' +
+      '</div>' +
+      '<div style="margin-top:16px; display:flex; justify-content:flex-end; gap:10px;">' +
+        '<button type="button" class="btn btn-secondary" onclick="closeGpsPlayerAdjust()">Annuler</button>' +
+        '<button type="button" class="btn" onclick="saveGpsPlayerAdjust()">💾 Enregistrer</button>' +
+      '</div>' +
+    '</div>';
+  ov.innerHTML = inner;
+  ov.style.display = 'flex';
+}
+function closeGpsPlayerAdjust() {
+  const ov = document.getElementById('gps-player-adjust-modal');
+  if (ov) ov.style.display = 'none';
+  gpsPlayerAdjustData = null;
+}
+function _gpsPaPreview(i) {
+  const inp = document.getElementById('gps-pa-dur-' + i);
+  const out = document.getElementById('gps-pa-mmin-new-' + i);
+  if (!inp || !out) return;
+  const val  = parseFloat(inp.value);
+  const dist = parseFloat(inp.dataset.dist) || 0;
+  if (!(val > 0) || dist === 0) { out.textContent = ''; return; }
+  const mmin = Math.round((dist * 1000 / val) * 10) / 10;
+  out.textContent = '→ ' + mmin + ' m/min';
+}
+async function saveGpsPlayerAdjust() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  if (!gpsPlayerAdjustData) return;
+  const payloads = [];
+  let invalid = false;
+  gpsPlayerAdjustData.rows.forEach((r, i) => {
+    const inp = document.getElementById('gps-pa-dur-' + i);
+    if (!inp || inp.value === '') return;
+    const val = parseFloat(inp.value);
+    if (!(val > 0)) { invalid = true; return; }
+    const cur = (r.duree_min === null || r.duree_min === undefined || r.duree_min === '') ? null : parseFloat(r.duree_min);
+    if (cur === val) return;
+    const distKm = parseFloat(r.distance_km) || 0;
+    payloads.push({
+      ref: r,
+      patch: {
+        duree_min: val,
+        dist_per_min: distKm > 0 ? Math.round((distKm * 1000 / val) * 10) / 10 : null
+      }
+    });
+  });
+  if (invalid) { toast('Durée invalide (doit être > 0)', 'error'); return; }
+  if (payloads.length === 0) { toast('Aucune modification', 'info'); closeGpsPlayerAdjust(); return; }
+
+  const results = await Promise.all(payloads.map(o =>
+    sb.from('gps_data').update(o.patch).eq('id', o.ref.id)
+  ));
+  let failed = 0;
+  results.forEach((res, idx) => {
+    if (res && res.error) { failed++; return; }
+    Object.assign(payloads[idx].ref, payloads[idx].patch);
+  });
+  if (failed > 0) {
+    toast(failed + ' ligne(s) en erreur sur ' + payloads.length, 'error');
+  } else {
+    const n = payloads.length;
+    toast('Temps ajusté · m/min recalculé (' + n + ' découpage' + (n > 1 ? 's' : '') + ')', 'success');
+  }
+  _writeCache('gps_data', currentOrg, state.bdd_gps);
+  closeGpsPlayerAdjust();
+  renderGPS();
+}
+
 // ── Réattribuer une séance GPS d'un joueur à un autre ──
 // Cas typique : un joueur a porté le GPS d'un autre → toutes ses lignes GPS de la
 // séance (tous les découpages) sont transférées vers le vrai joueur.
@@ -15925,7 +16064,11 @@ function renderGPSSession() {
     prevPoste = rowPoste;
     const trStyle = (newGroup && idx > 0) ? ' style="border-top:3px solid var(--accent);"' : '';
     const posteTag = newGroup ? '<div style="font-size:9px;font-weight:700;color:var(--accent-light);text-transform:uppercase;letter-spacing:0.4px;">' + escapeHtml(rowPoste) + '</div>' : '';
-    html += '<tr' + trStyle + '><td style="text-align:left;font-weight:600;">' + posteTag + escapeHtml(r.joueur) + '</td>';
+    const canEditRow = !resolved.isCumul && canWrite();
+    const editBtn = canEditRow
+      ? ' <button type="button" onclick="openGpsPlayerAdjust(\'' + r.joueur.replace(/'/g, "\\'") + '\', \'' + r.date + '\', \'' + (r.seance || r.session_title || '').replace(/'/g, "\\'") + '\')" title="Ajuster le temps de séance de ce joueur" style="background:none;border:1px solid var(--border);color:var(--text-dim);cursor:pointer;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:6px;vertical-align:middle;">✏️</button>'
+      : '';
+    html += '<tr' + trStyle + '><td style="text-align:left;font-weight:600;">' + posteTag + escapeHtml(r.joueur) + editBtn + '</td>';
     if (showBestPct) {
       const vol = getVolumeScore(r.joueur, r);
       const inten = getIntensityScore(r.joueur, r);
