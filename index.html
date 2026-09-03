@@ -25297,11 +25297,14 @@ function resetHooperAllFilters() {
   const playerSel = document.getElementById('hooper-all-player');
   const dateEl = document.getElementById('hooper-all-date');
   if (playerSel) playerSel.value = '';
-  if (dateEl) dateEl.value = '';
+  if (dateEl) dateEl.value = toLocalISO(new Date()); // défaut = aujourd'hui
   renderStaffHooperAllTable();
 }
 
 function renderStaffHooperAllTable() {
+  // Défaut : filtrer sur aujourd'hui à la première ouverture
+  const _dateEl = document.getElementById('hooper-all-date');
+  if (_dateEl && !_dateEl.value) _dateEl.value = toLocalISO(new Date());
   const tbody = document.querySelector('#hooper-all-table tbody');
 
   // SECONDE LIGUE : colonnes supplémentaires Motivation / Humeur / Règles
