@@ -5706,10 +5706,45 @@ async function deleteRecoveryCreneau(id) {
 }
 
 // ---- Joueur ----
+// Blocage réservation récup : le joueur doit être à jour Hooper (du jour)
+// ET RPE (aucune séance/match en attente dans les 14 derniers jours, fenêtre 4h encore ouverte).
+// Retourne { ok, hooperMissing, rpePending: [] }.
+function _recoveryEligibility() {
+  const today = toLocalISO(new Date());
+  const hooperMissing = computeHooperIndex(getHooper(today, currentJoueurNom)) === null;
+  const cutoff = toLocalISO(new Date(Date.now() - 14 * 86400000));
+  const pending = [];
+  (state.bdd_ent || []).forEach(pl => {
+    if (pl.joueur !== currentJoueurNom) return;
+    if (pl.date > today || pl.date < cutoff) return;
+    if ((pl.seances || []).some(s => STATUTS_INDISPO.includes(s))) return;
+    (pl.seances || []).forEach(s => {
+      if (STATUTS_NON_ENT.includes(s)) return;
+      if (!state.bdd_ent2.some(f => f.date === pl.date && f.nom === s)) return;
+      if (getRPEJoueurSeance(pl.date, currentJoueurNom, s) !== null) return;
+      if (!isRPEPublished(pl.date, s, currentJoueurNom)) return;
+      if (isSessionWindowClosed(pl.date, s, currentJoueurNom)) return;
+      pending.push({ date: pl.date, seance: s });
+    });
+  });
+  (state.bdd_matchs || []).forEach(m => {
+    if (!m || !m.date) return;
+    if (m.date > today || m.date < cutoff) return;
+    const compo = (m.composition || []).find(x => x.joueur === currentJoueurNom);
+    if (!compo || (compo.total_min || 0) <= 0) return;
+    const seanceNom = matchSeanceNom(m);
+    if (getRPEJoueurSeance(m.date, currentJoueurNom, seanceNom) !== null) return;
+    if (isSessionWindowClosed(m.date, seanceNom)) return;
+    pending.push({ date: m.date, seance: seanceNom });
+  });
+  return { ok: !hooperMissing && pending.length === 0, hooperMissing, rpePending: pending };
+}
+
 async function renderPlayerRecovery() {
   const listEl = document.getElementById('player-recovery-list');
   if (!listEl || !currentJoueurNom) return;
   const today = toLocalISO(new Date());
+  const elig = _recoveryEligibility();
   const { data, error } = await sb.from('creneaux_recuperation').select('*')
     .gte('date', today).order('date').order('heure');
   if (error) { listEl.innerHTML = '<div style="color:var(--red);">' + escapeHtml(error.message) + '</div>'; return; }
@@ -5725,6 +5760,21 @@ async function renderPlayerRecovery() {
     return;
   }
   let html = '';
+  // Bandeau bloquant si Hooper du jour ou RPE en attente
+  if (!elig.ok) {
+    const items = [];
+    if (elig.hooperMissing) items.push(tr('today\'s wellness check-in', 'ton check-in bien-être du jour'));
+    if (elig.rpePending.length > 0) items.push(tr(elig.rpePending.length + ' pending RPE rating(s)', elig.rpePending.length + ' note(s) RPE en attente'));
+    html += '<div style="margin-bottom:14px; padding:12px 14px; background:rgba(248,113,113,0.10); border-left:3px solid var(--red); border-radius:6px;">' +
+      '<div style="font-weight:700; color:#fca5a5; font-size:13px; margin-bottom:6px;">🔒 ' + tr('Booking blocked', 'Réservation bloquée') + '</div>' +
+      '<div style="font-size:12px; color:var(--text);">' + tr('Complete the following to book a recovery slot:', 'Complète les éléments suivants pour réserver un créneau récupération :') + '</div>' +
+      '<ul style="margin:6px 0 8px 20px; padding:0; font-size:12px; color:var(--text);">' + items.map(x => '<li>' + x + '</li>').join('') + '</ul>' +
+      '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+        (elig.hooperMissing ? '<button class="btn" style="padding:5px 12px; font-size:12px;" onclick="document.querySelector(\'.nav-btn[data-view=player-hooper]\').click()">💚 ' + tr('Fill wellness', 'Remplir l\'état de forme') + '</button>' : '') +
+        (elig.rpePending.length > 0 ? '<button class="btn" style="padding:5px 12px; font-size:12px;" onclick="document.querySelector(\'.nav-btn[data-view=player-rpe]\').click()">⭐ ' + tr('Rate my sessions', 'Noter mes séances') + '</button>' : '') +
+      '</div>' +
+    '</div>';
+  }
   Object.keys(RECOVERY_TYPES).forEach(type => {
     const byType = visibles.filter(s => s.type === type);
     if (byType.length === 0) return;
@@ -5753,6 +5803,9 @@ async function renderPlayerRecovery() {
           clickFn = ''; bg = 'transparent'; bord = 'var(--border)';
         } else if (full) {
           action = '<span style="color:var(--text-dim);">' + tr('Full', 'Complet') + '</span>';
+          clickFn = ''; bg = 'transparent'; bord = 'var(--border)';
+        } else if (!elig.ok) {
+          action = '<span style="color:var(--text-dim);">🔒 ' + tr('Complete Hooper/RPE first', 'Complète Hooper/RPE d\'abord') + '</span>';
           clickFn = ''; bg = 'transparent'; bord = 'var(--border)';
         } else {
           action = tr('Book', 'Réserver');
