@@ -780,6 +780,7 @@
 
 <nav>
   <button class="nav-btn active" data-view="overview" data-en="📊 Overview" data-fr="📊 Vue d'ensemble" data-es="📊 Panorama">📊 Vue d'ensemble</button>
+  <button class="nav-btn" data-view="surveillant-overview" id="nav-surveillant-overview-btn" style="display:none;" data-en="👀 Overview" data-fr="👀 Vue d'ensemble" data-es="👀 Panorama">👀 Vue d'ensemble</button>
   <button class="nav-btn" data-view="calendar" data-en="📅 Session" data-fr="📅 Séance" data-es="📅 Sesión">📅 Séance</button>
   <button class="nav-btn" data-view="joueur" data-en="👤 Player" data-fr="👤 Joueur" data-es="👤 Jugador">👤 Joueur</button>
   <button class="nav-btn" data-view="staff-hooper" data-en="💚 Wellness" data-fr="💚 État de forme" data-es="💚 Estado físico">💚 État de forme</button>
@@ -3056,6 +3057,31 @@
         <div style="color:var(--green); font-weight:600;"data-en="All your answers are submitted for today" data-fr="Toutes tes réponses sont enregistrées pour aujourd'hui" data-es="Todas tus respuestas están guardadas para hoy">All your answers are submitted for today</div>
         <div style="color:var(--text-dim); font-size:12px; margin-top:4px;" data-en="You can update any answer above if needed." data-fr="Tu peux modifier une réponse ci-dessus si besoin." data-es="Puedes modificar una respuesta arriba si es necesario.">You can update any answer above if needed.</div>
       </div>
+    </div>
+  </div>
+
+  <!-- ========== VUE SURVEILLANT : RÉSUMÉ ÉTAT DE FORME + RPE MANQUANTES ========== -->
+  <div class="view" id="view-surveillant-overview">
+    <div class="card">
+      <h2 style="margin:0;">👀 Vue d'ensemble surveillant</h2>
+      <p style="color:var(--text-dim); font-size:13px; margin-top:4px;">Résumé rapide de l'état de forme du jour et des RPE manquantes. Sélectionne une date pour changer la référence.</p>
+      <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
+        <label style="font-size:12px; color:var(--text-dim);">Date</label>
+        <input type="date" id="sv-date" onchange="renderSurveillantOverview()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:13px;">
+        <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="renderSurveillantOverview()">↻</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px;">💚 État de forme du jour</h2>
+      <div class="stats-grid" id="sv-hooper-stats" style="margin-bottom:12px;"></div>
+      <div id="sv-hooper-list"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px;">⭐ RPE manquantes du jour</h2>
+      <div id="sv-rpe-content"></div>
+      <p style="font-size:11px; color:var(--text-dim); margin-top:8px;">💡 Seules les séances dont la RPE a été envoyée aux joueurs sont comptées.</p>
     </div>
   </div>
 
@@ -7601,7 +7627,7 @@ function applyRoleRestrictions() {
   const SURVEILLANT_EMAILS = ['surveillant@psg.fr'];
   const isSurveillant = SURVEILLANT_EMAILS.includes(((currentUser && currentUser.email) || '').toLowerCase());
   if (isSurveillant) {
-    const KEEP_VIEWS = new Set(['staff-hooper', 'rpe-entry']);
+    const KEEP_VIEWS = new Set(['surveillant-overview', 'staff-hooper', 'rpe-entry']);
     document.querySelectorAll('.nav-btn').forEach(btn => {
       const v = btn.dataset.view;
       if (v && !KEEP_VIEWS.has(v)) btn.style.display = 'none';
@@ -7613,14 +7639,17 @@ function applyRoleRestrictions() {
       .forEach(id => { const d = document.getElementById(id); if (d) d.style.display = 'none'; });
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = 'none';
+    // Révéler le bouton de la vue surveillant (masqué par défaut)
+    const svBtn = document.getElementById('nav-surveillant-overview-btn');
+    if (svBtn) svBtn.style.display = '';
     // Badge SURVEILLANT à la place de STAFF
     const badge = document.querySelector('#user-info .role-badge');
     if (badge) { badge.textContent = 'SURVEILLANT'; badge.className = 'role-badge role-coach'; }
-    // Vue par défaut : État de forme
+    // Vue par défaut : la nouvelle vue d'ensemble surveillant
     setTimeout(() => {
       const cur = (typeof getCurrentView === 'function') ? getCurrentView() : null;
       if (!cur || !KEEP_VIEWS.has(cur)) {
-        const b = document.querySelector('.nav-btn[data-view="staff-hooper"]');
+        const b = document.querySelector('.nav-btn[data-view="surveillant-overview"]');
         if (b) b.click();
       }
     }, 100);
@@ -9245,6 +9274,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (currentRole === 'lecteur') setTimeout(applyPlayerLanguage, 0);
     // Render on demand
     if (view === 'overview') renderOverview();
+    else if (view === 'surveillant-overview') renderSurveillantOverview();
     else if (view === 'joueur') renderPlayerDashboard();
     else if (view === 'calendar') renderCalendar();
     else if (view === 'rpe') renderRPE();
@@ -10097,6 +10127,85 @@ function goToRPEEntry(date, joueur) {
       const dateInput = document.getElementById('rpe-entry-date');
       if (dateInput) { dateInput.value = date; if (typeof renderRPEEntry === 'function') renderRPEEntry(); }
     }, 100);
+  }
+}
+
+// ============================================================================
+// Vue d'ensemble SURVEILLANT : résumé État de forme (Hooper) + RPE manquantes.
+// Onglet par défaut pour les comptes de la liste SURVEILLANT_EMAILS.
+// ============================================================================
+function renderSurveillantOverview() {
+  const dateInput = document.getElementById('sv-date');
+  if (!dateInput) return;
+  const today = toLocalISO(new Date());
+  if (!dateInput.value) dateInput.value = today;
+  const date = dateInput.value;
+
+  // ── État de forme (Hooper) ────────────────────────────────────────────────
+  const statsEl = document.getElementById('sv-hooper-stats');
+  const listEl  = document.getElementById('sv-hooper-list');
+  const joueurs = (state.joueurs || []).map(j => j.nom);
+  const buckets = { none: [], green: [], yellow: [], red: [] };
+  joueurs.forEach(j => {
+    const idx = computeHooperIndex(getHooper(date, j));
+    if (idx === null) buckets.none.push(j);
+    else if (idx <= 12) buckets.green.push({ j, idx });
+    else if (idx <= 16) buckets.yellow.push({ j, idx });
+    else buckets.red.push({ j, idx });
+  });
+  const total = joueurs.length;
+  const done  = total - buckets.none.length;
+  if (statsEl) {
+    statsEl.innerHTML =
+      '<div class="stat"><div class="stat-label">Check-ins remplis</div><div class="stat-value">' + done + ' / ' + total + '</div></div>' +
+      '<div class="stat" style="background:rgba(52,211,153,0.08);"><div class="stat-label">🟢 Bien (≤12)</div><div class="stat-value" style="color:var(--green);">' + buckets.green.length + '</div></div>' +
+      '<div class="stat" style="background:rgba(251,191,36,0.08);"><div class="stat-label">🟡 Vigilance (13–16)</div><div class="stat-value" style="color:var(--yellow);">' + buckets.yellow.length + '</div></div>' +
+      '<div class="stat" style="background:rgba(239,68,68,0.08);"><div class="stat-label">🔴 Fatigue (≥17)</div><div class="stat-value" style="color:var(--red);">' + buckets.red.length + '</div></div>';
+  }
+  if (listEl) {
+    const rowStyle = 'display:flex; justify-content:space-between; align-items:center; padding:7px 10px; border-bottom:1px solid var(--border);';
+    let html = '';
+    if (buckets.red.length) {
+      html += '<div style="font-size:12px; font-weight:700; color:var(--red); margin:8px 4px 4px; text-transform:uppercase;">🔴 À surveiller (' + buckets.red.length + ')</div>';
+      buckets.red.sort((a,b) => b.idx - a.idx).forEach(x => {
+        html += '<div style="' + rowStyle + '"><b>' + escapeHtml(x.j) + '</b><span style="color:var(--red); font-weight:700;">' + x.idx + '/28</span></div>';
+      });
+    }
+    if (buckets.yellow.length) {
+      html += '<div style="font-size:12px; font-weight:700; color:var(--yellow); margin:12px 4px 4px; text-transform:uppercase;">🟡 Vigilance (' + buckets.yellow.length + ')</div>';
+      buckets.yellow.sort((a,b) => b.idx - a.idx).forEach(x => {
+        html += '<div style="' + rowStyle + '"><b>' + escapeHtml(x.j) + '</b><span style="color:var(--yellow); font-weight:700;">' + x.idx + '/28</span></div>';
+      });
+    }
+    if (buckets.none.length) {
+      html += '<div style="font-size:12px; font-weight:700; color:var(--text-dim); margin:12px 4px 4px; text-transform:uppercase;">⏳ Non remplis (' + buckets.none.length + ')</div>';
+      buckets.none.sort().forEach(j => {
+        html += '<div style="' + rowStyle + '"><b>' + escapeHtml(j) + '</b><span style="color:var(--text-dim); font-size:11px;">—</span></div>';
+      });
+    }
+    if (!html) html = '<div style="color:var(--green); font-size:13px; padding:8px 4px;">✅ Tous les check-ins sont remplis et au vert pour ' + formatDateFR(date) + '.</div>';
+    listEl.innerHTML = html;
+  }
+
+  // ── RPE manquantes (utilise la logique overview, respecte isRPEPublished) ─
+  const rpeEl = document.getElementById('sv-rpe-content');
+  if (rpeEl) {
+    const missing = getPlayersMissingRPE(date);
+    if (missing.length === 0) {
+      const hasSession = state.bdd_ent.some(e => e.date === date && e.seances.some(s => !STATUTS_NON_ENT.includes(s)));
+      rpeEl.innerHTML = hasSession
+        ? '<div style="color:var(--green); font-size:13px; padding:8px 4px;">✅ Toutes les RPE ouvertes sont saisies pour ' + formatDateFR(date) + '.</div>'
+        : '<div style="color:var(--text-dim); font-size:13px; padding:8px 4px;">Aucune séance d\'entraînement ouverte à noter ce jour.</div>';
+    } else {
+      const rowStyle = 'display:flex; justify-content:space-between; align-items:center; padding:7px 10px; border-bottom:1px solid var(--border);';
+      let html = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">' + missing.length + ' joueur(s) sans RPE — ' + formatDateFR(date) + '</div>';
+      missing.forEach(j => {
+        const info = getJoueurInfo(j);
+        html += '<div style="' + rowStyle + '"><div><b>' + escapeHtml(j) + '</b> <span style="font-size:11px; color:var(--text-dim);">' + escapeHtml(info.groupe || '') + '</span></div>' +
+          '<button class="btn" style="padding:3px 10px; font-size:11px;" onclick="goToRPEEntry(\'' + date + '\', \'' + j.replace(/'/g, "\\'") + '\')">Saisir</button></div>';
+      });
+      rpeEl.innerHTML = html;
+    }
   }
 }
 
