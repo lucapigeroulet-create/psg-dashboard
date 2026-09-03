@@ -7606,8 +7606,10 @@ function applyRoleRestrictions() {
       const v = btn.dataset.view;
       if (v && !KEEP_VIEWS.has(v)) btn.style.display = 'none';
     });
-    // Masquer aussi les dropdowns dont on ne garde aucun enfant
-    ['nav-gestion-dropdown','nav-params-dropdown','nav-competition-dropdown','nav-performance-dropdown','nav-medical-dropdown']
+    // Masquer les dropdowns dont on ne garde aucun enfant.
+    // On garde 'nav-gestion-dropdown' visible car il contient "⭐ Saisie RPE" (rpe-entry),
+    // la boucle ci-dessus masquant automatiquement ses autres items hors KEEP_VIEWS.
+    ['nav-params-dropdown','nav-competition-dropdown','nav-performance-dropdown','nav-medical-dropdown']
       .forEach(id => { const d = document.getElementById(id); if (d) d.style.display = 'none'; });
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = 'none';
