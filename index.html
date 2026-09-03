@@ -26475,11 +26475,13 @@ function renderPlayerSeanceNotation(date, joueur, seance) {
 
   // Bandeau de statut verrou / éditable — fenêtre unique de 4h depuis l'affectation
   if (locked) {
+    const alertBtn = ' <button onclick="contactCoachExpiredRPE(1, this)" style="margin-left:8px;background:var(--red);color:white;border:none;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">🧑‍🏫 ' + tr('Alert the coach', 'Alerter le coach', 'Alertar al entrenador') + '</button>';
+    const bannerStyle = 'margin-top:8px;padding:8px 12px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:#fca5a5;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;';
     if (!hasEntry) {
       // 4h dépassées sans aucune saisie → verrou total, contacter Lucas P.
-      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:#fca5a5;">🔒 ' + tr('The 4h window has closed. Please contact Lucas P. to enter your rating.', 'Le délai de 4 h est dépassé. Contacte Lucas P. pour saisir ta note.') + '</div>';
+      html += '<div style="' + bannerStyle + '"><span>🔒 ' + tr('The 4h window has closed. Please contact Lucas P. to enter your rating.', 'Le délai de 4 h est dépassé. Contacte Lucas P. pour saisir ta note.') + '</span>' + alertBtn + '</div>';
     } else {
-      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:#fca5a5;">🔒 ' + tr('The 4h window has closed. Your rating can no longer be edited — contact Lucas P.', 'Le délai de 4 h est dépassé. Ta note ne peut plus être modifiée — contacte Lucas P.') + '</div>';
+      html += '<div style="' + bannerStyle + '"><span>🔒 ' + tr('The 4h window has closed. Your rating can no longer be edited — contact Lucas P.', 'Le délai de 4 h est dépassé. Ta note ne peut plus être modifiée — contacte Lucas P.') + '</span>' + alertBtn + '</div>';
     }
   } else if (lockInfo !== null) {
     const hrs = Math.floor(lockInfo.minutes / 60);
