@@ -10009,8 +10009,13 @@ function getPlayersMissingRPE(date) {
   state.bdd_ent.filter(e => e.date === date).forEach(e => {
     // Joueur indisponible ce jour (essai/blessé/malade/absent/suspendu) → aucune note RPE attendue
     if (e.seances.some(s => STATUTS_INDISPO.includes(s))) return;
-    // Ne garder que les séances dont la fiche existe encore (ignore les références orphelines après suppression)
-    const trainingSeances = e.seances.filter(s => !STATUTS_NON_ENT.includes(s) && state.bdd_ent2.some(f => f.date === date && f.nom === s));
+    // Ne garder que les séances dont la fiche existe encore ET dont la RPE a été envoyée aux joueurs
+    // (une séance planifiée sans "Envoyer RPE" ne compte pas comme manquante).
+    const trainingSeances = e.seances.filter(s =>
+      !STATUTS_NON_ENT.includes(s) &&
+      state.bdd_ent2.some(f => f.date === date && f.nom === s) &&
+      isRPEPublished(date, s, e.joueur)
+    );
     if (trainingSeances.length === 0) return;
     const incomplete = trainingSeances.some(s => {
       const detail = getRPEDetailJoueurSeance(date, e.joueur, s);
@@ -10043,7 +10048,12 @@ function getPlayersMissingRPE(date) {
       if (!planning) return;
       // Joueur indisponible ce jour → aucune note attendue
       if (planning.seances.some(s => STATUTS_INDISPO.includes(s))) return;
-      const sesSeances = planning.seances.filter(s => !STATUTS_NON_ENT.includes(s) && state.bdd_ent2.some(f => f.date === date && f.nom === s));
+      // Ignorer les séances dont la RPE n'a pas encore été envoyée par le staff
+      const sesSeances = planning.seances.filter(s =>
+        !STATUTS_NON_ENT.includes(s) &&
+        state.bdd_ent2.some(f => f.date === date && f.nom === s) &&
+        isRPEPublished(date, s, joueur)
+      );
       const incomplete = sesSeances.some(s => {
         const detail = getRPEDetailJoueurSeance(date, joueur, s);
         if (!detail) return true;
@@ -16128,7 +16138,7 @@ function renderGPSSession() {
     const posteTag = newGroup ? '<div style="font-size:9px;font-weight:700;color:var(--accent-light);text-transform:uppercase;letter-spacing:0.4px;">' + escapeHtml(rowPoste) + '</div>' : '';
     const canEditRow = !resolved.isCumul && canWrite();
     const editBtn = canEditRow
-      ? ' <button type="button" onclick="openGpsPlayerAdjust(\'' + r.joueur.replace(/'/g, "\\'") + '\', \'' + r.date + '\', \'' + (r.seance || r.session_title || '').replace(/'/g, "\\'") + '\')" title="Ajuster le temps de séance de ce joueur" style="background:none;border:1px solid var(--border);color:var(--text-dim);cursor:pointer;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:6px;vertical-align:middle;">✏️</button>'
+      ? ' <button type="button" onclick="openGpsPlayerAdjust(\'' + r.joueur.replace(/'/g, "\\'") + '\', \'' + r.date + '\', \'' + (r.seance || r.session_title || '').replace(/'/g, "\\'") + '\')" title="Ajuster le temps de séance de ce joueur" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:16px;padding:0;margin-left:6px;background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-dim);cursor:pointer;font-size:10px;line-height:1;vertical-align:-2px;">✎</button>'
       : '';
     html += '<tr' + trStyle + '><td style="text-align:left;font-weight:600;">' + posteTag + escapeHtml(r.joueur) + editBtn + '</td>';
     if (showBestPct) {
