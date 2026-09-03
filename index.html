@@ -10141,50 +10141,24 @@ function renderSurveillantOverview() {
   if (!dateInput.value) dateInput.value = today;
   const date = dateInput.value;
 
-  // ── État de forme (Hooper) ────────────────────────────────────────────────
+  // ── État de forme : uniquement les joueurs qui N'ONT PAS rempli le Hooper ──
   const statsEl = document.getElementById('sv-hooper-stats');
   const listEl  = document.getElementById('sv-hooper-list');
+  if (statsEl) statsEl.innerHTML = '';
   const joueurs = (state.joueurs || []).map(j => j.nom);
-  const buckets = { none: [], green: [], yellow: [], red: [] };
-  joueurs.forEach(j => {
-    const idx = computeHooperIndex(getHooper(date, j));
-    if (idx === null) buckets.none.push(j);
-    else if (idx <= 12) buckets.green.push({ j, idx });
-    else if (idx <= 16) buckets.yellow.push({ j, idx });
-    else buckets.red.push({ j, idx });
-  });
-  const total = joueurs.length;
-  const done  = total - buckets.none.length;
-  if (statsEl) {
-    statsEl.innerHTML =
-      '<div class="stat"><div class="stat-label">Check-ins remplis</div><div class="stat-value">' + done + ' / ' + total + '</div></div>' +
-      '<div class="stat" style="background:rgba(52,211,153,0.08);"><div class="stat-label">🟢 Bien (≤12)</div><div class="stat-value" style="color:var(--green);">' + buckets.green.length + '</div></div>' +
-      '<div class="stat" style="background:rgba(251,191,36,0.08);"><div class="stat-label">🟡 Vigilance (13–16)</div><div class="stat-value" style="color:var(--yellow);">' + buckets.yellow.length + '</div></div>' +
-      '<div class="stat" style="background:rgba(239,68,68,0.08);"><div class="stat-label">🔴 Fatigue (≥17)</div><div class="stat-value" style="color:var(--red);">' + buckets.red.length + '</div></div>';
-  }
+  const missingHooper = joueurs.filter(j => computeHooperIndex(getHooper(date, j)) === null).sort();
   if (listEl) {
-    const rowStyle = 'display:flex; justify-content:space-between; align-items:center; padding:7px 10px; border-bottom:1px solid var(--border);';
-    let html = '';
-    if (buckets.red.length) {
-      html += '<div style="font-size:12px; font-weight:700; color:var(--red); margin:8px 4px 4px; text-transform:uppercase;">🔴 À surveiller (' + buckets.red.length + ')</div>';
-      buckets.red.sort((a,b) => b.idx - a.idx).forEach(x => {
-        html += '<div style="' + rowStyle + '"><b>' + escapeHtml(x.j) + '</b><span style="color:var(--red); font-weight:700;">' + x.idx + '/28</span></div>';
+    if (missingHooper.length === 0) {
+      listEl.innerHTML = '<div style="color:var(--green); font-size:13px; padding:8px 4px;">✅ Tous les joueurs ont rempli le check-in du jour.</div>';
+    } else {
+      const rowStyle = 'display:flex; justify-content:space-between; align-items:center; padding:7px 10px; border-bottom:1px solid var(--border);';
+      let html = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">' + missingHooper.length + ' joueur(s) sans check-in — ' + formatDateFR(date) + '</div>';
+      missingHooper.forEach(j => {
+        const info = getJoueurInfo(j);
+        html += '<div style="' + rowStyle + '"><div><b>' + escapeHtml(j) + '</b> <span style="font-size:11px; color:var(--text-dim);">' + escapeHtml(info.groupe || '') + '</span></div><span style="color:var(--text-dim); font-size:11px;">—</span></div>';
       });
+      listEl.innerHTML = html;
     }
-    if (buckets.yellow.length) {
-      html += '<div style="font-size:12px; font-weight:700; color:var(--yellow); margin:12px 4px 4px; text-transform:uppercase;">🟡 Vigilance (' + buckets.yellow.length + ')</div>';
-      buckets.yellow.sort((a,b) => b.idx - a.idx).forEach(x => {
-        html += '<div style="' + rowStyle + '"><b>' + escapeHtml(x.j) + '</b><span style="color:var(--yellow); font-weight:700;">' + x.idx + '/28</span></div>';
-      });
-    }
-    if (buckets.none.length) {
-      html += '<div style="font-size:12px; font-weight:700; color:var(--text-dim); margin:12px 4px 4px; text-transform:uppercase;">⏳ Non remplis (' + buckets.none.length + ')</div>';
-      buckets.none.sort().forEach(j => {
-        html += '<div style="' + rowStyle + '"><b>' + escapeHtml(j) + '</b><span style="color:var(--text-dim); font-size:11px;">—</span></div>';
-      });
-    }
-    if (!html) html = '<div style="color:var(--green); font-size:13px; padding:8px 4px;">✅ Tous les check-ins sont remplis et au vert pour ' + formatDateFR(date) + '.</div>';
-    listEl.innerHTML = html;
   }
 
   // ── RPE manquantes (utilise la logique overview, respecte isRPEPublished) ─
