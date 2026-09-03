@@ -5723,7 +5723,7 @@ function _recoveryEligibility() {
       if (!state.bdd_ent2.some(f => f.date === pl.date && f.nom === s)) return;
       if (getRPEJoueurSeance(pl.date, currentJoueurNom, s) !== null) return;
       if (!isRPEPublished(pl.date, s, currentJoueurNom)) return;
-      if (isSessionWindowClosed(pl.date, s, currentJoueurNom)) return;
+      // On compte AUSSI les RPE en retard (fenêtre 4h fermée sans note) — blocage réservation récup
       pending.push({ date: pl.date, seance: s });
     });
   });
@@ -5734,7 +5734,7 @@ function _recoveryEligibility() {
     if (!compo || (compo.total_min || 0) <= 0) return;
     const seanceNom = matchSeanceNom(m);
     if (getRPEJoueurSeance(m.date, currentJoueurNom, seanceNom) !== null) return;
-    if (isSessionWindowClosed(m.date, seanceNom)) return;
+    // Compter aussi les matchs en retard (fenêtre 4h fermée) pour bloquer la récup
     pending.push({ date: m.date, seance: seanceNom });
   });
   return { ok: !hooperMissing && pending.length === 0, hooperMissing, rpePending: pending };
