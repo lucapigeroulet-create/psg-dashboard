@@ -801,6 +801,7 @@
       <button class="nav-btn" data-view="reathletisation" id="nav-reathletisation-btn" data-en="🩼 Rehab" data-fr="🩼 Réathlétisation" data-es="🩼 Reatletización">🩼 Réathlétisation</button>
       <button class="nav-btn" data-view="musculation" id="nav-musculation-btn" data-en="🏋️ Strength" data-fr="🏋️ Musculation" data-es="🏋️ Musculación">🏋️ Musculation</button>
       <button class="nav-btn" data-view="reco-entrainement" id="nav-reco-entrainement-btn" data-en="💡 Training recommendation" data-fr="💡 Recommandation d'entraînement" data-es="💡 Recomendación de entreno">💡 Recommandation d'entraînement</button>
+      <button class="nav-btn" data-view="recovery-planning" id="nav-recovery-planning-btn" data-en="🧊 Recovery" data-fr="🧊 Récupération" data-es="🧊 Recuperación">🧊 Récupération</button>
     </div>
   </div>
   <div class="nav-dropdown" id="nav-medical-dropdown">
@@ -842,7 +843,16 @@
   </div>
   <!-- Onglets joueur (visibles uniquement pour les lecteurs) -->
   <button class="nav-btn player-only" data-view="player-overview" style="display:none;" data-en="🏠 Overview" data-fr="🏠 Vue d'ensemble" data-es="🏠 Panorama">🏠 Vue d'ensemble</button>
-  <button class="nav-btn player-only" data-view="player-soins" style="display:none;" data-en="🩺 Physio" data-fr="🩺 Soins kiné" data-es="🩺 Tratamientos fisio">🩺 Soins kiné</button>
+  <!-- Bouton simple "Soins kiné" pour les joueurs NON-PSG (affiché par applyRoleRestrictions) -->
+  <button class="nav-btn player-only" data-view="player-soins" id="nav-player-soins-btn" style="display:none;" data-en="🩺 Physio" data-fr="🩺 Soins kiné" data-es="🩺 Tratamientos fisio">🩺 Soins kiné</button>
+  <!-- Dropdown "Recovery" (Physio + Récupération) pour les joueurs PSG uniquement -->
+  <div class="nav-dropdown player-only" id="nav-player-recovery-dropdown" style="display:none;">
+    <button type="button" class="nav-btn nav-dropdown-toggle" id="nav-player-recovery-toggle" onclick="togglePlayerRecoveryMenu(event)" data-en="🧊 Recovery ▾" data-fr="🧊 Recovery ▾" data-es="🧊 Recovery ▾">🧊 Recovery <span style="font-size:10px;">▾</span></button>
+    <div class="nav-dropdown-menu" id="nav-player-recovery-menu">
+      <button class="nav-btn" data-view="player-soins" data-en="🩺 Physio" data-fr="🩺 Physio" data-es="🩺 Fisio">🩺 Physio</button>
+      <button class="nav-btn" data-view="player-recovery" data-en="🧊 Recovery" data-fr="🧊 Récupération" data-es="🧊 Recuperación">🧊 Récupération</button>
+    </div>
+  </div>
   <button class="nav-btn player-only" data-view="player-rpe" style="display:none;" data-en="⭐ Rate sessions" data-fr="⭐ Noter les séances" data-es="⭐ Calificar las sesiones">⭐ Rate sessions</button>
   <button class="nav-btn player-only" data-view="player-history" style="display:none;" data-en="📊 My ratings" data-fr="📊 Mes notes" data-es="📊 Mis calificaciones">📊 My ratings</button>
   <button class="nav-btn player-only" data-view="player-hooper" style="display:none;" data-en="💚 Daily check-in" data-fr="💚 État de forme">💚 Daily check-in</button>
@@ -3760,6 +3770,16 @@
   </div>
   <!-- ===== FIN VUE SOINS KINÉ ===== -->
 
+  <!-- ===== VUE JOUEUR : RECOVERY (bottes de récup / bain froid, PSG) ===== -->
+  <div class="view" id="view-player-recovery">
+    <div class="card">
+      <h2 data-en="🧊 Recovery slots" data-fr="🧊 Créneaux récupération" data-es="🧊 Franjas de recuperación">🧊 Créneaux récupération</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="Pick a free recovery slot (compression boots / cold bath). You can book one boots slot AND one cold-bath slot per day." data-fr="Choisis un créneau libre (bottes de récupération / bain froid). Tu peux réserver 1 créneau bottes ET 1 créneau bain froid par jour." data-es="Elige una franja libre (botas / baño frío). Puedes reservar 1 franja de botas Y 1 de baño frío al día.">Choisis un créneau libre (bottes de récupération / bain froid). Tu peux réserver 1 créneau bottes ET 1 créneau bain froid par jour.</p>
+      <div id="player-recovery-list"></div>
+    </div>
+  </div>
+  <!-- ===== FIN VUE RECOVERY JOUEUR ===== -->
+
   <!-- ===== VUE MA FICHE (joueur, lecture seule) ===== -->
   <div class="view" id="view-player-fiche">
     <div class="card">
@@ -4053,6 +4073,60 @@
   <!-- ===== FIN VUE QUESTIONNAIRE ===== -->
 
   <!-- ===== VUE PLANNING SOINS (kiné) ===== -->
+  <!-- ===== VUE STAFF : PLANNING RÉCUPÉRATION (bottes / bain froid, PSG) ===== -->
+  <div class="view" id="view-recovery-planning">
+    <div class="card">
+      <h2>🧊 Planning récupération — PSG</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:14px;">Crée des créneaux de récupération (bottes de récupération / bain froid). Les joueurs PSG réservent un créneau libre depuis leur onglet <b>Recovery</b>. Chaque joueur peut réserver <b>1 créneau par type et par jour</b>.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+        <div class="filter-group">
+          <label style="font-size:11px; color:var(--text-dim);">Type</label>
+          <select id="rc-type" style="min-width:150px;">
+            <option value="bottes">🦵 Bottes de récup</option>
+            <option value="bain-froid">🧊 Bain froid</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label style="font-size:11px; color:var(--text-dim);">Date</label>
+          <input type="date" id="rc-date" style="min-width:150px;" />
+        </div>
+        <div class="filter-group">
+          <label style="font-size:11px; color:var(--text-dim);">Heure de début</label>
+          <input type="time" id="rc-heure" value="14:00" style="min-width:120px;" />
+        </div>
+        <div class="filter-group">
+          <label style="font-size:11px; color:var(--text-dim);">Durée</label>
+          <select id="rc-duree" style="min-width:110px;">
+            <option value="10">10 min</option>
+            <option value="15" selected>15 min</option>
+            <option value="20">20 min</option>
+            <option value="25">25 min</option>
+            <option value="30">30 min</option>
+            <option value="40">40 min</option>
+            <option value="45">45 min</option>
+            <option value="60">1h</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label style="font-size:11px; color:var(--text-dim);">Nombre de créneaux</label>
+          <input type="number" id="rc-count" value="1" min="1" max="30" style="min-width:90px;" />
+        </div>
+        <button class="btn" onclick="addRecoveryCreneaux()">➕ Ajouter</button>
+      </div>
+      <p style="color:var(--text-dim); font-size:11px; margin-top:8px;">Plusieurs créneaux = créés à la suite, sans pause (ex. 3 × 15 min dès 14:00 → 14:00, 14:15, 14:30).</p>
+    </div>
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+        <h2 style="margin:0;">🗓️ Créneaux à venir</h2>
+        <label style="font-size:12px; color:var(--text-dim); display:flex; align-items:center; gap:6px; cursor:pointer;">
+          <input type="checkbox" id="rc-show-past" onchange="renderRecoveryPlanning()" /> Afficher les créneaux passés
+        </label>
+      </div>
+      <div id="rc-list"></div>
+    </div>
+  </div>
+  <!-- ===== FIN VUE RÉCUP STAFF ===== -->
+
   <div class="view" id="view-medical-planning">
     <div id="mp-push-banner"></div>
     <div class="card">
@@ -5438,6 +5512,184 @@ async function annulerReservation(id) {
   if (error) { toast(tr('Error: ', 'Erreur : ') + error.message, 'error'); return; }
   toast(tr('Booking cancelled', 'Réservation annulée'), 'success');
   renderPlayerSoins();
+}
+
+// ============================================================================
+// PLANNING RÉCUPÉRATION (creneaux_recuperation) — bottes / bain froid, PSG.
+// Structure calquée sur soins kiné mais table séparée. 1 créneau par TYPE par jour.
+// ============================================================================
+const RECOVERY_TYPES = {
+  'bottes':     { label: 'Bottes de récup', emoji: '🦵' },
+  'bain-froid': { label: 'Bain froid',      emoji: '🧊' }
+};
+function _rcLabel(t)  { return (RECOVERY_TYPES[t] || {}).label || t; }
+function _rcEmoji(t)  { return (RECOVERY_TYPES[t] || {}).emoji || '❄️'; }
+function _rcAddMin(hhmm, mins) { return _cmAddMinutes(hhmm, mins); }
+
+// ---- Staff ----
+async function renderRecoveryPlanning() {
+  const list = document.getElementById('rc-list');
+  if (!list) return;
+  const dateInput = document.getElementById('rc-date');
+  if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+  list.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Chargement…</div>';
+  const showPast = !!(document.getElementById('rc-show-past') || {}).checked;
+  const today = new Date().toISOString().slice(0, 10);
+  let q = sb.from('creneaux_recuperation').select('*').eq('org', currentOrg);
+  if (!showPast) q = q.gte('date', today);
+  const { data, error } = await q.order('date').order('heure');
+  if (error) { list.innerHTML = '<div style="color:var(--red);">' + escapeHtml(error.message) + '</div>'; return; }
+  const slots = data || [];
+  if (slots.length === 0) {
+    list.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Aucun créneau ' + (showPast ? '' : 'à venir') + '.</div>';
+    return;
+  }
+  const byDate = {};
+  slots.forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
+  let html = '';
+  Object.keys(byDate).sort().forEach(d => {
+    html += '<div style="margin-bottom:16px;">';
+    html += '<div style="font-weight:700; font-size:13px; margin-bottom:6px; color:var(--accent-light);">' + formatDateFR(d) + '</div>';
+    byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => {
+      const fin  = _rcAddMin(s.heure, s.duree_min || 15);
+      const free = !s.joueur;
+      html += '<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; border-radius:8px; padding:9px 12px; margin-bottom:5px; background:' + (free ? 'var(--bg-elevated)' : 'rgba(22,101,52,0.20)') + '; border-left:3px solid ' + (free ? 'var(--accent)' : 'var(--green)') + ';">' +
+        '<div style="font-size:13px;">' + _rcEmoji(s.type) + ' <b>' + _rcLabel(s.type) + '</b> · ' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + ' <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min</span>' +
+          (free ? '' : ' · <span style="color:var(--green); font-weight:600;">' + escapeHtml(s.joueur) + '</span>') +
+        '</div>' +
+        '<button class="btn btn-secondary" style="padding:3px 10px; font-size:11px;" onclick="deleteRecoveryCreneau(' + s.id + ')">🗑️</button>' +
+      '</div>';
+    });
+    html += '</div>';
+  });
+  list.innerHTML = html;
+}
+
+async function addRecoveryCreneaux() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const date  = (document.getElementById('rc-date')  || {}).value;
+  const heure = (document.getElementById('rc-heure') || {}).value;
+  const duree = parseInt((document.getElementById('rc-duree') || {}).value || '15', 10);
+  const count = Math.max(1, Math.min(30, parseInt((document.getElementById('rc-count') || {}).value || '1', 10)));
+  const type  = (document.getElementById('rc-type') || {}).value;
+  if (!date || !heure || !type) { toast('Renseigne date, heure et type', 'error'); return; }
+  const rows = [];
+  let h = heure;
+  for (let i = 0; i < count; i++) {
+    rows.push({ org: currentOrg, date, heure: h, duree_min: duree, type });
+    h = _rcAddMin(h, duree);
+  }
+  const { data, error } = await sb.from('creneaux_recuperation').insert(rows).select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  toast((data || []).length + ' créneau(x) créé(s)', 'success');
+  renderRecoveryPlanning();
+}
+
+async function deleteRecoveryCreneau(id) {
+  if (!canWrite()) return;
+  if (!confirm('Supprimer ce créneau ?')) return;
+  const { error } = await sb.from('creneaux_recuperation').delete().eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  toast('Créneau supprimé', 'success');
+  renderRecoveryPlanning();
+}
+
+// ---- Joueur ----
+async function renderPlayerRecovery() {
+  const listEl = document.getElementById('player-recovery-list');
+  if (!listEl || !currentJoueurNom) return;
+  const today = toLocalISO(new Date());
+  const { data, error } = await sb.from('creneaux_recuperation').select('*')
+    .gte('date', today).order('date').order('heure');
+  if (error) { listEl.innerHTML = '<div style="color:var(--red);">' + escapeHtml(error.message) + '</div>'; return; }
+  const slots = data || [];
+  const visibles = slots.filter(s => !s.joueur || s.joueur === currentJoueurNom);
+  if (visibles.length === 0) {
+    listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px 0;">' + tr('No recovery slot available right now.', 'Aucun créneau de récupération disponible pour le moment.') + '</div>';
+    return;
+  }
+  // 1 par jour PAR TYPE : dates où j'ai déjà réservé (pour chaque type)
+  const bookedKeys = new Set(
+    slots.filter(s => s.joueur === currentJoueurNom).map(s => s.date + '|' + s.type)
+  );
+  let html = '';
+  Object.keys(RECOVERY_TYPES).forEach(type => {
+    const byType = visibles.filter(s => s.type === type);
+    if (byType.length === 0) return;
+    html += '<div style="margin-top:14px;"><div style="font-weight:700; font-size:13px; color:var(--accent-light); margin-bottom:8px;">' + _rcEmoji(type) + ' ' + _rcLabel(type) + '</div>';
+    const byDate = {};
+    byType.forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
+    Object.keys(byDate).sort().forEach(d => {
+      const [y, m, dd] = d.split('-');
+      const jour = new Date(d + 'T00:00:00').toLocaleDateString(playerLang() === 'fr' ? 'fr-FR' : 'en-GB', { weekday: 'long' });
+      html += '<div style="margin-bottom:10px;">';
+      html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">' + jour.charAt(0).toUpperCase() + jour.slice(1) + ' ' + dd + '/' + m + '</div>';
+      byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => {
+        const fin  = _rcAddMin(s.heure, s.duree_min || 15);
+        const mine = (s.joueur === currentJoueurNom);
+        const locked = !mine && bookedKeys.has(d + '|' + type); // déjà un de ce type ce jour
+        const clickFn = mine ? ('annulerReservationRecovery(\'' + s.id + '\')') : (locked ? '' : ('reserverRecovery(\'' + s.id + '\')'));
+        const bg = mine ? 'rgba(22,101,52,0.25)' : (locked ? 'transparent' : 'var(--bg-elevated)');
+        const bord = mine ? 'var(--green)' : (locked ? 'var(--border)' : 'var(--accent)');
+        html += '<div ' + (clickFn ? 'onclick="' + clickFn + '"' : '') + ' style="' + (clickFn ? 'cursor:pointer;' : 'opacity:.5;') + ' display:flex; align-items:center; justify-content:space-between; gap:10px; border-radius:8px; padding:9px 11px; margin-bottom:5px; background:' + bg + '; border-left:3px solid ' + bord + ';">';
+        html += '<div style="font-size:13px;"><b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b> <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min</span></div>';
+        html += '<span style="font-size:12px; font-weight:600; color:' + (mine ? 'var(--green)' : 'var(--accent-light)') + ';">' + (mine ? ('✓ ' + tr('Booked — tap to cancel', 'Réservé — clique pour annuler')) : (locked ? '<span style="color:var(--text-dim);">' + tr('1/day of this type', '1/jour de ce type') + '</span>' : tr('Book', 'Réserver'))) + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+  listEl.innerHTML = html;
+}
+
+async function reserverRecovery(id) {
+  if (!currentJoueurNom) return;
+  const { data, error } = await sb.from('creneaux_recuperation')
+    .update({ joueur: currentJoueurNom, org: currentOrg, booked_at: new Date().toISOString() })
+    .eq('id', id).is('joueur', null).select();
+  if (error) {
+    const msg = /par jour/i.test(error.message || '')
+      ? tr('Only one slot per type per day.', 'Un seul créneau de ce type par jour.')
+      : (tr('Error: ', 'Erreur : ') + error.message);
+    toast(msg, 'error'); return;
+  }
+  if (!data || data.length === 0) { toast(tr('This slot was just taken.', 'Ce créneau vient d\'être pris.'), 'error'); renderPlayerRecovery(); return; }
+  toast(tr('Slot booked ✓', 'Créneau réservé ✓'), 'success');
+  renderPlayerRecovery();
+}
+
+async function annulerReservationRecovery(id) {
+  if (!currentJoueurNom) return;
+  if (!confirm(tr('Cancel this booking?', 'Annuler cette réservation ?'))) return;
+  const { error } = await sb.from('creneaux_recuperation')
+    .update({ joueur: null, booked_at: null, motif: null })
+    .eq('id', id).eq('joueur', currentJoueurNom).select();
+  if (error) { toast(tr('Error: ', 'Erreur : ') + error.message, 'error'); return; }
+  toast(tr('Booking cancelled', 'Réservation annulée'), 'success');
+  renderPlayerRecovery();
+}
+
+// Toggle du dropdown joueur "Recovery" (pattern copié de togglePerformanceMenu)
+function togglePlayerRecoveryMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('nav-player-recovery-menu');
+  const toggle = document.getElementById('nav-player-recovery-toggle');
+  if (!menu) return;
+  const willOpen = !menu.classList.contains('open');
+  menu.classList.toggle('open');
+  if (willOpen && toggle) {
+    const r = toggle.getBoundingClientRect();
+    menu.style.top = (r.bottom + 2) + 'px';
+    let left = r.left;
+    const menuWidth = menu.offsetWidth || 220;
+    if (left + menuWidth > window.innerWidth - 8) left = Math.max(8, window.innerWidth - menuWidth - 8);
+    menu.style.left = left + 'px';
+  }
+}
+function closePlayerRecoveryMenu() {
+  const menu = document.getElementById('nav-player-recovery-menu');
+  if (menu) menu.classList.remove('open');
 }
 
 // ============================================================
@@ -7432,6 +7684,19 @@ function applyRoleRestrictions() {
         document.querySelectorAll('.nav-btn.player-only[data-view="' + v + '"]').forEach(b => b.style.display = 'none');
       });
     }
+    // Nav "Physio / Recovery" : PSG → dropdown avec Physio + Récupération ; autre org → bouton simple Physio
+    const soinsSimpleBtn = document.getElementById('nav-player-soins-btn');
+    const recoveryDD     = document.getElementById('nav-player-recovery-dropdown');
+    if (currentOrg === 'PSG') {
+      if (soinsSimpleBtn) soinsSimpleBtn.style.display = 'none';
+      if (recoveryDD) recoveryDD.style.display = '';
+    } else if (currentOrg === 'individuel') {
+      if (soinsSimpleBtn) soinsSimpleBtn.style.display = 'none';
+      if (recoveryDD) recoveryDD.style.display = 'none';
+    } else {
+      if (soinsSimpleBtn) soinsSimpleBtn.style.display = '';
+      if (recoveryDD) recoveryDD.style.display = 'none';
+    }
     if (gestionDropdown) gestionDropdown.style.display = 'none'; // Cacher le menu Gestion
     if (paramsDropdown) paramsDropdown.style.display = 'none'; // Cacher le menu Paramètres
     const btnExport = document.getElementById('btn-export-json');
@@ -8261,7 +8526,7 @@ let realtimeChannels = [];
 
 function setupRealtime() {
   if (realtimeChannels.length > 0) return; // déjà configuré
-  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores', 'creneaux_medicaux', 'medical_notes', 'medical_questionnaires', 'prepa_colonnes', 'prepa_items', 'seance_affectations'];
+  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores', 'creneaux_medicaux', 'creneaux_recuperation', 'medical_notes', 'medical_questionnaires', 'prepa_colonnes', 'prepa_items', 'seance_affectations'];
 
   tables.forEach(table => {
     const channel = sb.channel('realtime-' + table)
@@ -8295,6 +8560,16 @@ function handleRealtimeChange(table, payload) {
     const v = getCurrentView();
     if (v === 'minijeux') { renderMinijeuxLeaderboard(); renderMinijeuxCumul(); }
     if (v === 'player-overview') renderPlayerOverviewMinijeu();
+    return;
+  }
+
+  // ===== Créneaux récupération : re-render vues staff/joueur en direct =====
+  if (table === 'creneaux_recuperation') {
+    const rowOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (rowOrg && rowOrg !== currentOrg) return;
+    const v = getCurrentView();
+    if (v === 'recovery-planning') renderRecoveryPlanning();
+    if (v === 'player-recovery')   renderPlayerRecovery();
     return;
   }
 
@@ -8991,7 +9266,7 @@ function formatDateDMY(dateStr) {
 // ============================================================================
 // ===== Menu déroulant Gestion =====
 function closeOtherNavMenus(exceptId) {
-  ['nav-gestion-menu','nav-params-menu','nav-medical-menu','nav-competition-menu','nav-performance-menu']
+  ['nav-gestion-menu','nav-params-menu','nav-medical-menu','nav-competition-menu','nav-performance-menu','nav-player-recovery-menu']
     .filter(id => id !== exceptId)
     .forEach(id => { const m = document.getElementById(id); if (m) m.classList.remove('open'); });
 }
@@ -9126,6 +9401,8 @@ document.addEventListener('click', (e) => {
   if (cd && !cd.contains(e.target)) closeCompetitionMenu();
   const pd = document.getElementById('nav-performance-dropdown');
   if (pd && !pd.contains(e.target)) closePerformanceMenu();
+  const prd = document.getElementById('nav-player-recovery-dropdown');
+  if (prd && !prd.contains(e.target)) closePlayerRecoveryMenu();
 });
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -9167,22 +9444,32 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
       else competitionToggle.classList.remove('has-active');
     }
     // Gérer l'état visuel du menu déroulant Performance
-    const performanceViews = ['testing', 'reathletisation', 'musculation'];
+    const performanceViews = ['testing', 'reathletisation', 'musculation', 'reco-entrainement', 'recovery-planning'];
     const performanceToggle = document.getElementById('nav-performance-toggle');
     if (performanceToggle) {
       if (performanceViews.includes(view)) performanceToggle.classList.add('has-active');
       else performanceToggle.classList.remove('has-active');
+    }
+    // Gérer l'état visuel du menu déroulant Player Recovery
+    const playerRecoveryViews = ['player-soins', 'player-recovery'];
+    const playerRecoveryToggle = document.getElementById('nav-player-recovery-toggle');
+    if (playerRecoveryToggle) {
+      if (playerRecoveryViews.includes(view)) playerRecoveryToggle.classList.add('has-active');
+      else playerRecoveryToggle.classList.remove('has-active');
     }
     closeGestionMenu();
     closeParamsMenu();
     closeMedicalMenu();
     closeCompetitionMenu();
     closePerformanceMenu();
+    closePlayerRecoveryMenu();
     // Si on est lecteur, ré-appliquer la langue à chaque changement de vue (au cas où la vue contient du nouveau contenu)
     if (currentRole === 'lecteur') setTimeout(applyPlayerLanguage, 0);
     // Render on demand
     if (view === 'overview') renderOverview();
     else if (view === 'surveillant-overview') renderSurveillantOverview();
+    else if (view === 'recovery-planning') renderRecoveryPlanning();
+    else if (view === 'player-recovery') renderPlayerRecovery();
     else if (view === 'joueur') renderPlayerDashboard();
     else if (view === 'calendar') renderCalendar();
     else if (view === 'rpe') renderRPE();
