@@ -2175,8 +2175,8 @@
         <div>
           <label>Mode d'affichage</label>
           <div style="display:flex; gap:0; border:1px solid var(--border); border-radius:6px; overflow:hidden;">
-            <button id="rpe-mode-table" onclick="setRPEMode('table')" style="flex:1; background:var(--accent); color:white; border:none; padding:8px; cursor:pointer; font-size:13px; font-weight:600;">📋 Tableau</button>
-            <button id="rpe-mode-card" onclick="setRPEMode('card')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:8px; cursor:pointer; font-size:13px; font-weight:600;">🎴 Carte joueur</button>
+            <button id="rpe-mode-table" onclick="setRPEMode('table')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:8px; cursor:pointer; font-size:13px; font-weight:600;">📋 Tableau</button>
+            <button id="rpe-mode-card" onclick="setRPEMode('card')" style="flex:1; background:var(--accent); color:white; border:none; padding:8px; cursor:pointer; font-size:13px; font-weight:600;">🎴 Carte joueur</button>
           </div>
         </div>
       </div>
@@ -2191,7 +2191,7 @@
       <div id="rpe-match-section"></div>
 
       <!-- Vue tableau (existante) -->
-      <div id="rpe-view-table">
+      <div id="rpe-view-table" style="display:none;">
         <div class="table-wrap" style="max-height:600px;">
           <table id="rpe-entry-table">
             <thead><tr><th>Joueur</th><th>Groupe</th><th>Séances → RPE</th></tr></thead>
@@ -2200,8 +2200,8 @@
         </div>
       </div>
 
-      <!-- Vue carte joueur -->
-      <div id="rpe-view-card" style="display:none;">
+      <!-- Vue carte joueur (défaut) -->
+      <div id="rpe-view-card">
         <div id="rpe-card-container"></div>
       </div>
     </div>
@@ -22672,7 +22672,7 @@ function bindEntryDirtyTracking() {
   view.addEventListener('change', mark);
 }
 let overviewRPEShowAll = false; // déplier la liste des RPE non remplis // empêche le re-render realtime pendant la saisie
-let rpeMode = 'table';
+let rpeMode = 'card';
 let rpeCardIndex = 0;
 
 function setRPEMode(mode) {
