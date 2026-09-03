@@ -4175,8 +4175,8 @@
       <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
         <div class="filter-group">
           <label style="font-size:11px; color:var(--text-dim);">Type</label>
-          <select id="rc-type" style="min-width:150px;">
-            <option value="bottes">🦵 Bottes de récup</option>
+          <select id="rc-type" style="min-width:180px;">
+            <option value="bottes">🦵 Bottes de récupérations</option>
             <option value="bain-froid">🧊 Bain froid</option>
           </select>
         </div>
@@ -4202,12 +4202,16 @@
           </select>
         </div>
         <div class="filter-group">
+          <label style="font-size:11px; color:var(--text-dim);">Places (1-5)</label>
+          <input type="number" id="rc-capacity" value="1" min="1" max="5" style="min-width:80px;" />
+        </div>
+        <div class="filter-group">
           <label style="font-size:11px; color:var(--text-dim);">Nombre de créneaux</label>
           <input type="number" id="rc-count" value="1" min="1" max="30" style="min-width:90px;" />
         </div>
         <button class="btn" onclick="addRecoveryCreneaux()">➕ Ajouter</button>
       </div>
-      <p style="color:var(--text-dim); font-size:11px; margin-top:8px;">Plusieurs créneaux = créés à la suite, sans pause (ex. 3 × 15 min dès 14:00 → 14:00, 14:15, 14:30).</p>
+      <p style="color:var(--text-dim); font-size:11px; margin-top:8px;">Plusieurs créneaux = créés à la suite, sans pause (ex. 3 × 15 min dès 14:00 → 14:00, 14:15, 14:30). <b>Places</b> = nombre de joueurs pouvant s'inscrire sur le même créneau (max 5).</p>
     </div>
     <div class="card">
       <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
@@ -5613,10 +5617,15 @@ async function annulerReservation(id) {
 // Structure calquée sur soins kiné mais table séparée. 1 créneau par TYPE par jour.
 // ============================================================================
 const RECOVERY_TYPES = {
-  'bottes':     { label: 'Bottes de récup', emoji: '🦵' },
-  'bain-froid': { label: 'Bain froid',      emoji: '🧊' }
+  'bottes':     { label_fr: 'Bottes de récupérations', label_en: 'Recovery boots', label_es: 'Botas de recuperación', emoji: '🦵' },
+  'bain-froid': { label_fr: 'Bain froid',              label_en: 'Cold bath',      label_es: 'Baño frío',             emoji: '🧊' }
 };
-function _rcLabel(t)  { return (RECOVERY_TYPES[t] || {}).label || t; }
+function _rcLang() { try { return (typeof playerLang === 'function') ? playerLang() : 'fr'; } catch(e) { return 'fr'; } }
+function _rcLabel(t) {
+  const e = RECOVERY_TYPES[t] || {};
+  const l = _rcLang();
+  return e['label_' + l] || e.label_fr || t;
+}
 function _rcEmoji(t)  { return (RECOVERY_TYPES[t] || {}).emoji || '❄️'; }
 function _rcAddMin(hhmm, mins) { return _cmAddMinutes(hhmm, mins); }
 
@@ -5645,12 +5654,19 @@ async function renderRecoveryPlanning() {
     html += '<div style="margin-bottom:16px;">';
     html += '<div style="font-weight:700; font-size:13px; margin-bottom:6px; color:var(--accent-light);">' + formatDateFR(d) + '</div>';
     byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => {
-      const fin  = _rcAddMin(s.heure, s.duree_min || 15);
-      const free = !s.joueur;
-      html += '<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; border-radius:8px; padding:9px 12px; margin-bottom:5px; background:' + (free ? 'var(--bg-elevated)' : 'rgba(22,101,52,0.20)') + '; border-left:3px solid ' + (free ? 'var(--accent)' : 'var(--green)') + ';">' +
-        '<div style="font-size:13px;">' + _rcEmoji(s.type) + ' <b>' + _rcLabel(s.type) + '</b> · ' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + ' <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min</span>' +
-          (free ? '' : ' · <span style="color:var(--green); font-weight:600;">' + escapeHtml(s.joueur) + '</span>') +
-        '</div>' +
+      const fin      = _rcAddMin(s.heure, s.duree_min || 15);
+      const joueurs  = Array.isArray(s.joueurs) ? s.joueurs : [];
+      const capacity = s.capacity || 1;
+      const taken    = joueurs.length;
+      const free     = taken === 0;
+      const full     = taken >= capacity;
+      const bg   = free ? 'var(--bg-elevated)' : (full ? 'rgba(22,101,52,0.20)' : 'rgba(251,191,36,0.10)');
+      const bord = free ? 'var(--accent)'      : (full ? 'var(--green)'         : 'var(--yellow)');
+      const inscritsHtml = joueurs.length
+        ? ' · <span style="color:var(--green); font-weight:600;">' + joueurs.map(escapeHtml).join(', ') + '</span>'
+        : '';
+      html += '<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; border-radius:8px; padding:9px 12px; margin-bottom:5px; background:' + bg + '; border-left:3px solid ' + bord + ';">' +
+        '<div style="font-size:13px;">' + _rcEmoji(s.type) + ' <b>' + _rcLabel(s.type) + '</b> · ' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + ' <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min · ' + taken + '/' + capacity + ' place' + (capacity > 1 ? 's' : '') + '</span>' + inscritsHtml + '</div>' +
         '<button class="btn btn-secondary" style="padding:3px 10px; font-size:11px;" onclick="deleteRecoveryCreneau(' + s.id + ')">🗑️</button>' +
       '</div>';
     });
@@ -5661,16 +5677,17 @@ async function renderRecoveryPlanning() {
 
 async function addRecoveryCreneaux() {
   if (!canWrite()) { toast('Lecture seule', 'error'); return; }
-  const date  = (document.getElementById('rc-date')  || {}).value;
-  const heure = (document.getElementById('rc-heure') || {}).value;
-  const duree = parseInt((document.getElementById('rc-duree') || {}).value || '15', 10);
-  const count = Math.max(1, Math.min(30, parseInt((document.getElementById('rc-count') || {}).value || '1', 10)));
-  const type  = (document.getElementById('rc-type') || {}).value;
+  const date     = (document.getElementById('rc-date')     || {}).value;
+  const heure    = (document.getElementById('rc-heure')    || {}).value;
+  const duree    = parseInt((document.getElementById('rc-duree')    || {}).value || '15', 10);
+  const count    = Math.max(1, Math.min(30, parseInt((document.getElementById('rc-count') || {}).value || '1', 10)));
+  const capacity = Math.max(1, Math.min(5,  parseInt((document.getElementById('rc-capacity') || {}).value || '1', 10)));
+  const type     = (document.getElementById('rc-type')     || {}).value;
   if (!date || !heure || !type) { toast('Renseigne date, heure et type', 'error'); return; }
   const rows = [];
   let h = heure;
   for (let i = 0; i < count; i++) {
-    rows.push({ org: currentOrg, date, heure: h, duree_min: duree, type });
+    rows.push({ org: currentOrg, date, heure: h, duree_min: duree, type, capacity });
     h = _rcAddMin(h, duree);
   }
   const { data, error } = await sb.from('creneaux_recuperation').insert(rows).select();
@@ -5696,16 +5713,17 @@ async function renderPlayerRecovery() {
   const { data, error } = await sb.from('creneaux_recuperation').select('*')
     .gte('date', today).order('date').order('heure');
   if (error) { listEl.innerHTML = '<div style="color:var(--red);">' + escapeHtml(error.message) + '</div>'; return; }
-  const slots = data || [];
-  const visibles = slots.filter(s => !s.joueur || s.joueur === currentJoueurNom);
+  const slots = (data || []).map(s => Object.assign({}, s, { joueurs: Array.isArray(s.joueurs) ? s.joueurs : [] }));
+  // Un joueur peut être dans UN seul créneau par (date, type)
+  const bookedKeys = new Set(
+    slots.filter(s => s.joueurs.includes(currentJoueurNom)).map(s => s.date + '|' + s.type)
+  );
+  // Visibles : ceux avec des places libres OU dont je fais partie
+  const visibles = slots.filter(s => s.joueurs.includes(currentJoueurNom) || s.joueurs.length < (s.capacity || 1));
   if (visibles.length === 0) {
     listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px 0;">' + tr('No recovery slot available right now.', 'Aucun créneau de récupération disponible pour le moment.') + '</div>';
     return;
   }
-  // 1 par jour PAR TYPE : dates où j'ai déjà réservé (pour chaque type)
-  const bookedKeys = new Set(
-    slots.filter(s => s.joueur === currentJoueurNom).map(s => s.date + '|' + s.type)
-  );
   let html = '';
   Object.keys(RECOVERY_TYPES).forEach(type => {
     const byType = visibles.filter(s => s.type === type);
@@ -5719,15 +5737,33 @@ async function renderPlayerRecovery() {
       html += '<div style="margin-bottom:10px;">';
       html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">' + jour.charAt(0).toUpperCase() + jour.slice(1) + ' ' + dd + '/' + m + '</div>';
       byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => {
-        const fin  = _rcAddMin(s.heure, s.duree_min || 15);
-        const mine = (s.joueur === currentJoueurNom);
-        const locked = !mine && bookedKeys.has(d + '|' + type); // déjà un de ce type ce jour
-        const clickFn = mine ? ('annulerReservationRecovery(\'' + s.id + '\')') : (locked ? '' : ('reserverRecovery(\'' + s.id + '\')'));
-        const bg = mine ? 'rgba(22,101,52,0.25)' : (locked ? 'transparent' : 'var(--bg-elevated)');
-        const bord = mine ? 'var(--green)' : (locked ? 'var(--border)' : 'var(--accent)');
-        html += '<div ' + (clickFn ? 'onclick="' + clickFn + '"' : '') + ' style="' + (clickFn ? 'cursor:pointer;' : 'opacity:.5;') + ' display:flex; align-items:center; justify-content:space-between; gap:10px; border-radius:8px; padding:9px 11px; margin-bottom:5px; background:' + bg + '; border-left:3px solid ' + bord + ';">';
-        html += '<div style="font-size:13px;"><b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b> <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min</span></div>';
-        html += '<span style="font-size:12px; font-weight:600; color:' + (mine ? 'var(--green)' : 'var(--accent-light)') + ';">' + (mine ? ('✓ ' + tr('Booked — tap to cancel', 'Réservé — clique pour annuler')) : (locked ? '<span style="color:var(--text-dim);">' + tr('1/day of this type', '1/jour de ce type') + '</span>' : tr('Book', 'Réserver'))) + '</span>';
+        const fin      = _rcAddMin(s.heure, s.duree_min || 15);
+        const mine     = s.joueurs.includes(currentJoueurNom);
+        const capacity = s.capacity || 1;
+        const taken    = s.joueurs.length;
+        const full     = taken >= capacity;
+        const locked   = !mine && bookedKeys.has(d + '|' + type); // déjà un créneau de ce type ce jour
+        let action, clickFn, bg, bord;
+        if (mine) {
+          action = '✓ ' + tr('Booked — tap to cancel', 'Réservé — clique pour annuler');
+          clickFn = 'annulerReservationRecovery(\'' + s.id + '\')';
+          bg = 'rgba(22,101,52,0.25)'; bord = 'var(--green)';
+        } else if (locked) {
+          action = '<span style="color:var(--text-dim);">' + tr('1/day of this type', '1/jour de ce type') + '</span>';
+          clickFn = ''; bg = 'transparent'; bord = 'var(--border)';
+        } else if (full) {
+          action = '<span style="color:var(--text-dim);">' + tr('Full', 'Complet') + '</span>';
+          clickFn = ''; bg = 'transparent'; bord = 'var(--border)';
+        } else {
+          action = tr('Book', 'Réserver');
+          clickFn = 'reserverRecovery(\'' + s.id + '\')';
+          bg = 'var(--bg-elevated)'; bord = 'var(--accent)';
+        }
+        const clickable = !!clickFn;
+        const inscrits = s.joueurs.length ? ('<span style="color:var(--text-dim); font-size:11px; margin-left:6px;">· ' + s.joueurs.map(escapeHtml).join(', ') + '</span>') : '';
+        html += '<div ' + (clickable ? 'onclick="' + clickFn + '"' : '') + ' style="' + (clickable ? 'cursor:pointer;' : 'opacity:.55;') + ' display:flex; align-items:center; justify-content:space-between; gap:10px; border-radius:8px; padding:9px 11px; margin-bottom:5px; background:' + bg + '; border-left:3px solid ' + bord + ';">';
+        html += '<div style="font-size:13px;"><b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b> <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min · ' + taken + '/' + capacity + '</span>' + inscrits + '</div>';
+        html += '<span style="font-size:12px; font-weight:600; color:' + (mine ? 'var(--green)' : 'var(--accent-light)') + ';">' + action + '</span>';
         html += '</div>';
       });
       html += '</div>';
@@ -5739,16 +5775,14 @@ async function renderPlayerRecovery() {
 
 async function reserverRecovery(id) {
   if (!currentJoueurNom) return;
-  const { data, error } = await sb.from('creneaux_recuperation')
-    .update({ joueur: currentJoueurNom, org: currentOrg, booked_at: new Date().toISOString() })
-    .eq('id', id).is('joueur', null).select();
+  const { error } = await sb.rpc('book_recovery_slot', { slot_id: Number(id) });
   if (error) {
-    const msg = /par jour/i.test(error.message || '')
-      ? tr('Only one slot per type per day.', 'Un seul créneau de ce type par jour.')
-      : (tr('Error: ', 'Erreur : ') + error.message);
+    const m = error.message || '';
+    const msg = /Créneau complet/i.test(m) ? tr('Slot full.', 'Créneau complet.')
+      : /par jour/i.test(m) ? tr('Only one slot per type per day.', 'Un seul créneau de ce type par jour.')
+      : (tr('Error: ', 'Erreur : ') + m);
     toast(msg, 'error'); return;
   }
-  if (!data || data.length === 0) { toast(tr('This slot was just taken.', 'Ce créneau vient d\'être pris.'), 'error'); renderPlayerRecovery(); return; }
   toast(tr('Slot booked ✓', 'Créneau réservé ✓'), 'success');
   renderPlayerRecovery();
 }
@@ -5756,9 +5790,7 @@ async function reserverRecovery(id) {
 async function annulerReservationRecovery(id) {
   if (!currentJoueurNom) return;
   if (!confirm(tr('Cancel this booking?', 'Annuler cette réservation ?'))) return;
-  const { error } = await sb.from('creneaux_recuperation')
-    .update({ joueur: null, booked_at: null, motif: null })
-    .eq('id', id).eq('joueur', currentJoueurNom).select();
+  const { error } = await sb.rpc('cancel_recovery_slot', { slot_id: Number(id) });
   if (error) { toast(tr('Error: ', 'Erreur : ') + error.message, 'error'); return; }
   toast(tr('Booking cancelled', 'Réservation annulée'), 'success');
   renderPlayerRecovery();
