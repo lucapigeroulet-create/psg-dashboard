@@ -10155,7 +10155,11 @@ function renderSurveillantOverview() {
       let html = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">' + missingHooper.length + ' joueur(s) sans check-in — ' + formatDateFR(date) + '</div>';
       missingHooper.forEach(j => {
         const info = getJoueurInfo(j);
-        html += '<div style="' + rowStyle + '"><div><b>' + escapeHtml(j) + '</b> <span style="font-size:11px; color:var(--text-dim);">' + escapeHtml(info.groupe || '') + '</span></div><span style="color:var(--text-dim); font-size:11px;">—</span></div>';
+        const je = j.replace(/'/g, "\\'");
+        html += '<div style="' + rowStyle + '">' +
+          '<div><b>' + escapeHtml(j) + '</b> <span style="font-size:11px; color:var(--text-dim);">' + escapeHtml(info.groupe || '') + '</span></div>' +
+          '<button class="btn" style="padding:3px 10px; font-size:11px;" onclick="goToHooperForPlayer(\'' + date + '\', \'' + je + '\')">Remplir</button>' +
+        '</div>';
       });
       listEl.innerHTML = html;
     }
