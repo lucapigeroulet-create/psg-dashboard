@@ -8322,7 +8322,7 @@ let realtimeChannels = [];
 
 function setupRealtime() {
   if (realtimeChannels.length > 0) return; // déjà configuré
-  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores', 'creneaux_medicaux', 'medical_notes', 'medical_questionnaires', 'prepa_colonnes', 'prepa_items'];
+  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores', 'creneaux_medicaux', 'medical_notes', 'medical_questionnaires', 'prepa_colonnes', 'prepa_items', 'seance_affectations'];
 
   tables.forEach(table => {
     const channel = sb.channel('realtime-' + table)
@@ -8373,6 +8373,29 @@ function handleRealtimeChange(table, payload) {
       }
     }
     if (getCurrentView() === 'medical-planning') renderMedicalPlanning();
+    return;
+  }
+
+  // ===== Affectations séance : merger dans le state + re-render vues concernées =====
+  if (table === 'seance_affectations') {
+    const rowOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (rowOrg && rowOrg !== currentOrg) return;
+    state.bdd_affectations = state.bdd_affectations || [];
+    if (eventType === 'DELETE') {
+      state.bdd_affectations = state.bdd_affectations.filter(a =>
+        !(a.date === oldRow.date && a.joueur === oldRow.joueur && a.seance === oldRow.seance)
+      );
+    } else {
+      const norm = { date: newRow.date, joueur: newRow.joueur, seance: newRow.seance, affected_at: newRow.affected_at || null, rpe_published_at: newRow.rpe_published_at || null };
+      const idx = state.bdd_affectations.findIndex(a =>
+        a.date === norm.date && a.joueur === norm.joueur && a.seance === norm.seance
+      );
+      if (idx >= 0) state.bdd_affectations[idx] = norm;
+      else state.bdd_affectations.push(norm);
+    }
+    const v = getCurrentView();
+    if (v === 'entry' && typeof renderEntryJourTable === 'function') renderEntryJourTable();
+    if (v === 'player-overview' && typeof renderPlayerOverview === 'function') renderPlayerOverview();
     return;
   }
 
@@ -21609,11 +21632,26 @@ function renderEntry() {
 
 // Récap des séances existantes pour la date choisie : nb joueurs affectés, durée totale,
 // statut RPE (envoyée / en attente), bouton "Envoyer RPE" (démarre le chrono 4h côté joueur).
-function renderEntryJourTable() {
+async function renderEntryJourTable() {
   const c = document.getElementById('entry-jour-content');
   const dt = document.getElementById('entry-jour-date');
   if (!c || !dt) return;
   const date = dt.value || new Date().toISOString().slice(0, 10);
+
+  // Refetch ciblé : garantit que les affectations créées hors app ouverte sont visibles
+  try {
+    const { data: fresh } = await sb.from('seance_affectations')
+      .select('*').eq('org', currentOrg).eq('date', date);
+    if (fresh) {
+      const merged = (state.bdd_affectations || []).filter(a => a.date !== date);
+      fresh.forEach(a => merged.push({
+        date: a.date, joueur: a.joueur, seance: a.seance,
+        affected_at: a.affected_at || null,
+        rpe_published_at: a.rpe_published_at || null
+      }));
+      state.bdd_affectations = merged;
+    }
+  } catch (e) {}
 
   const seances = (state.bdd_ent2 || []).filter(x => x.date === date)
     .sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
