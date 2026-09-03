@@ -1982,6 +1982,22 @@
         </table>
       </div>
     </div>
+
+    <!-- ========== SÉANCES DU JOUR (récap + envoi RPE) ========== -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px;">
+        <div>
+          <h2 style="margin:0;">📋 Séances du jour</h2>
+          <p style="color:var(--text-dim); font-size:12px; margin-top:4px; margin-bottom:0;">Récapitulatif des séances existantes pour la date choisie. À la fin de la séance, clique <b>📢 Envoyer RPE</b> : le chrono 4h démarre et les joueurs peuvent noter. Tant que ce n'est pas envoyé, ils voient uniquement le programme du jour.</p>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <label style="font-size:12px; color:var(--text-dim);">Date</label>
+          <input type="date" id="entry-jour-date" onchange="renderEntryJourTable()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:13px;">
+          <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="renderEntryJourTable()">↻</button>
+        </div>
+      </div>
+      <div id="entry-jour-content"></div>
+    </div>
   </div>
 
   <!-- ========== SAISIE RPE ========== -->
@@ -2527,7 +2543,13 @@
       <div id="po-hooper-content"></div>
     </div>
 
-    <!-- 2. RPE à noter -->
+    <!-- 2. Programme du jour (séances affectées, RPE pas encore publiée) -->
+    <div class="card" id="po-programme-card" style="display:none;">
+      <h2 data-en="📋 Today's programme" data-fr="📋 Programme du jour" data-es="📋 Programa del día">📋 Programme du jour</h2>
+      <div id="po-programme-content"></div>
+    </div>
+
+    <!-- 3. RPE à noter (visible uniquement pour les séances dont le staff a publié la RPE) -->
     <div class="card" id="po-rpe-card">
       <h2 data-en="⭐ Sessions to rate" data-fr="⭐ Séances à noter" data-es="⭐ Sesiones por calificar">⭐ Séances à noter</h2>
       <div id="po-rpe-content"></div>
@@ -7646,19 +7668,32 @@ function getSeancePublishedMs(date, seanceNom, joueur) {
     const ms = new Date(m.created_at).getTime();
     return isNaN(ms) ? null : ms;
   }
-  // Séance normale : fenêtre = affectation au joueur
+  // Séance normale : fenêtre = publication RPE explicite (bouton "Envoyer RPE" côté staff).
+  // Une affectation existante sans rpe_published_at signifie "affecté au programme du jour,
+  // mais RPE pas encore ouvert" → on retourne null (le joueur ne voit rien à noter).
   if (joueur) {
     const a = (state.bdd_affectations || []).find(x => x.date === date && x.joueur === joueur && x.seance === seanceNom);
-    if (a && a.affected_at) {
-      const ms = new Date(a.affected_at).getTime();
-      if (!isNaN(ms)) return ms;
+    if (a) {
+      if (a.rpe_published_at) {
+        const ms = new Date(a.rpe_published_at).getTime();
+        if (!isNaN(ms)) return ms;
+      }
+      return null; // affectation présente mais pas publiée → pas de chrono
     }
   }
-  // Fallback : ancienne référence (création de la fiche séance)
+  // Fallback historique (aucune affectation trouvée) : ancienne référence (création de la fiche séance)
   const s = state.bdd_ent2.find(x => x.date === date && x.nom === seanceNom);
   if (!s || !s.created_at) return null;
   const ms = new Date(s.created_at).getTime();
   return isNaN(ms) ? null : ms;
+}
+
+// Le staff a-t-il publié la RPE de cette séance à ce joueur ?
+// (fallback true pour les séances sans affectation trackée = comportement historique)
+function isRPEPublished(date, seance, joueur) {
+  const a = (state.bdd_affectations || []).find(x => x.date === date && x.joueur === joueur && x.seance === seance);
+  if (!a) return true; // pas d'affectation trackée : historique ou match → laisser la logique existante décider
+  return !!a.rpe_published_at;
 }
 
 // Timestamp (ms) de la première saisie du RPE (figé), ou null si pas encore saisi
@@ -7698,7 +7733,9 @@ function isEditWindowClosed(date, joueur) {
 // 'date' = jour, 'joueur' = nom, 'seanceNom' = nom de la séance concernée
 function isRPELockedForSession(date, joueur, seanceNom) {
   if (currentRole !== 'lecteur') return false;
-  // Fenêtre de séance fermée (4h après affectation au joueur) → verrou total
+  // RPE pas encore publiée par le staff → verrou (le joueur voit le programme, pas la note)
+  if (!isRPEPublished(date, seanceNom, joueur)) return true;
+  // Fenêtre de séance fermée (4h après publication RPE) → verrou total
   if (isSessionWindowClosed(date, seanceNom, joueur)) return true;
   return false;
 }
@@ -7820,7 +7857,9 @@ async function loadState() {
     const { data: affectations } = await sb.from('seance_affectations')
       .select('*').eq('org', currentOrg).gte('affected_at', affCutoff);
     state.bdd_affectations = (affectations || []).map(a => ({
-      date: a.date, joueur: a.joueur, seance: a.seance, affected_at: a.affected_at || null
+      date: a.date, joueur: a.joueur, seance: a.seance,
+      affected_at: a.affected_at || null,
+      rpe_published_at: a.rpe_published_at || null
     }));
 
     setLoad('Chargement des RPE...');
@@ -21561,6 +21600,104 @@ function renderEntry() {
   clearVignettes();
   refreshVignetteSelects();
   renderAffectation();
+
+  // Pré-remplir la date du récap "Séances du jour" avec aujourd'hui et le rendre
+  const jourDate = document.getElementById('entry-jour-date');
+  if (jourDate && !jourDate.value) jourDate.value = new Date().toISOString().slice(0, 10);
+  renderEntryJourTable();
+}
+
+// Récap des séances existantes pour la date choisie : nb joueurs affectés, durée totale,
+// statut RPE (envoyée / en attente), bouton "Envoyer RPE" (démarre le chrono 4h côté joueur).
+function renderEntryJourTable() {
+  const c = document.getElementById('entry-jour-content');
+  const dt = document.getElementById('entry-jour-date');
+  if (!c || !dt) return;
+  const date = dt.value || new Date().toISOString().slice(0, 10);
+
+  const seances = (state.bdd_ent2 || []).filter(x => x.date === date)
+    .sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+  if (seances.length === 0) {
+    c.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px 4px;">Aucune séance saisie pour ' + formatDateFR(date) + '.</div>';
+    return;
+  }
+
+  const affects = (state.bdd_affectations || []).filter(a => a.date === date);
+  const nowMs   = Date.now();
+
+  let html = '<div class="table-wrap"><table style="width:100%; font-size:13px;"><thead><tr style="text-align:left; color:var(--text-dim); font-size:11px;">' +
+    '<th style="padding:6px 8px;">Séance</th>' +
+    '<th style="padding:6px 8px; text-align:center;">Durée</th>' +
+    '<th style="padding:6px 8px; text-align:center;">Joueurs affectés</th>' +
+    '<th style="padding:6px 8px;">Statut RPE</th>' +
+    '<th style="padding:6px 8px; text-align:right;">Action</th>' +
+    '</tr></thead><tbody>';
+
+  seances.forEach(s => {
+    const affSeance = affects.filter(a => a.seance === s.nom);
+    const nAff = affSeance.length;
+    const nPub = affSeance.filter(a => a.rpe_published_at).length;
+    const nPending = nAff - nPub;
+    let statut, action;
+    if (nAff === 0) {
+      statut = '<span style="color:var(--text-dim);">Aucun joueur affecté</span>';
+      action = '<span style="color:var(--text-dim); font-size:11px;">—</span>';
+    } else if (nPub === 0) {
+      statut = '<span style="color:var(--yellow);">🕐 En attente d\'envoi</span>';
+      action = '<button class="btn" style="padding:5px 12px; font-size:12px; white-space:nowrap;" onclick="publishRPEForSeance(\'' + date + '\', \'' + s.nom.replace(/'/g, "\\'") + '\')">📢 Envoyer RPE</button>';
+    } else if (nPending === 0) {
+      // Tous publiés : afficher l'âge du plus récent envoi
+      const latest = affSeance.reduce((m, a) => Math.max(m, new Date(a.rpe_published_at).getTime()), 0);
+      const ageMin = Math.floor((nowMs - latest) / 60000);
+      const closed = ageMin >= SESSION_WINDOW_HOURS * 60;
+      const remainMin = SESSION_WINDOW_HOURS * 60 - ageMin;
+      statut = closed
+        ? '<span style="color:var(--text-dim);">⛔ Fenêtre 4h fermée</span>'
+        : '<span style="color:var(--green);">✅ Envoyée · ' + Math.floor(remainMin / 60) + 'h' + String(remainMin % 60).padStart(2, '0') + ' restant</span>';
+      action = '<span style="color:var(--text-dim); font-size:11px;">—</span>';
+    } else {
+      statut = '<span style="color:var(--accent-light);">⚠️ Partiel : ' + nPub + '/' + nAff + '</span>';
+      action = '<button class="btn btn-secondary" style="padding:5px 12px; font-size:12px; white-space:nowrap;" onclick="publishRPEForSeance(\'' + date + '\', \'' + s.nom.replace(/'/g, "\\'") + '\')">📢 Envoyer aux ' + nPending + ' restants</button>';
+    }
+    html += '<tr style="border-top:1px solid var(--border);">' +
+      '<td style="padding:8px; font-weight:600;">' + escapeHtml(s.nom) + (s.type_seance ? ' <span style="color:var(--text-dim); font-weight:400; font-size:11px;">· ' + escapeHtml(s.type_seance) + '</span>' : '') + '</td>' +
+      '<td style="padding:8px; text-align:center; color:var(--text-dim);">' + (s.duree_totale ? (s.duree_totale + ' min') : '—') + '</td>' +
+      '<td style="padding:8px; text-align:center; font-weight:600;">' + nAff + '</td>' +
+      '<td style="padding:8px;">' + statut + '</td>' +
+      '<td style="padding:8px; text-align:right;">' + action + '</td>' +
+      '</tr>';
+  });
+  html += '</tbody></table></div>';
+  c.innerHTML = html;
+}
+
+// Publie la RPE pour une séance : démarre le chrono 4h pour tous les joueurs affectés
+// dont la RPE n'est pas encore publiée. Idempotent : ne touche pas ceux déjà publiés.
+async function publishRPEForSeance(date, seance) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const pending = (state.bdd_affectations || []).filter(a =>
+    a.date === date && a.seance === seance && !a.rpe_published_at
+  );
+  if (pending.length === 0) { toast('Aucun joueur en attente pour cette séance', 'info'); return; }
+  if (!confirm('Envoyer la RPE aux ' + pending.length + ' joueur(s) affecté(s) à « ' + seance + ' » ?\nLe chrono 4h démarre immédiatement.')) return;
+
+  const nowIso = new Date().toISOString();
+  const { data, error } = await sb.from('seance_affectations')
+    .update({ rpe_published_at: nowIso })
+    .eq('org', currentOrg).eq('date', date).eq('seance', seance)
+    .is('rpe_published_at', null)
+    .select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  const n = (data || []).length;
+  // Maj état local (les hooks realtime peuvent aussi le rafraîchir, on double-écrit pour instantanéité)
+  (data || []).forEach(row => {
+    const a = (state.bdd_affectations || []).find(x =>
+      x.date === row.date && x.joueur === row.joueur && x.seance === row.seance
+    );
+    if (a) a.rpe_published_at = row.rpe_published_at;
+  });
+  toast('RPE envoyée à ' + n + ' joueur(s) · chrono 4h démarré', 'success');
+  renderEntryJourTable();
 }
 
 // Remplit le sélecteur "Séance / statut à affecter" avec les séances créées pour la date 
@@ -25427,7 +25564,40 @@ async function renderPlayerOverview() {
     }
   }
 
-  // ── 2. Séances à noter (faites sans RPE, fenêtre encore ouverte) ──────────
+  // ── 2. Programme du jour (séances affectées AUJOURD'HUI dont la RPE n'est pas publiée) ──
+  const progCard = document.getElementById('po-programme-card');
+  const progEl   = document.getElementById('po-programme-content');
+  if (progCard && progEl) {
+    const jourProg = [];
+    (state.bdd_ent || []).forEach(pl => {
+      if (pl.joueur !== currentJoueurNom) return;
+      if (pl.date !== today) return;
+      if ((pl.seances || []).some(s => STATUTS_INDISPO.includes(s))) return; // indispo → rien à montrer
+      (pl.seances || []).forEach(s => {
+        if (STATUTS_NON_ENT.includes(s)) return;
+        const fiche = state.bdd_ent2.find(f => f.date === pl.date && f.nom === s);
+        if (!fiche) return;
+        if (isRPEPublished(pl.date, s, currentJoueurNom)) return; // déjà en mode "à noter", pas dans le programme
+        jourProg.push({ seance: s, duree: fiche.duree_totale || null });
+      });
+    });
+    if (jourProg.length === 0) {
+      progCard.style.display = 'none';
+    } else {
+      progCard.style.display = '';
+      progEl.innerHTML = jourProg.map(it =>
+        '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; margin-bottom:6px;">' +
+          '<div>' +
+            '<div style="font-weight:600; font-size:13px;">' + escapeHtml(it.seance) + (it.duree ? ' <span style="color:var(--text-dim); font-weight:400;">· ' + it.duree + ' min</span>' : '') + '</div>' +
+            '<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">' + (isFR ? '⏳ La note RPE s\'ouvrira à la fin de la séance' : '⏳ Rating will open at the end of the session') + '</div>' +
+          '</div>' +
+          '<span style="font-size:11px; color:var(--text-dim); font-weight:600; white-space:nowrap;">' + (isFR ? 'À faire' : 'To do') + '</span>' +
+        '</div>'
+      ).join('');
+    }
+  }
+
+  // ── 3. Séances à noter (faites sans RPE, fenêtre encore ouverte) ──────────
   const rpeEl = document.getElementById('po-rpe-content');
   if (rpeEl) {
     // ── Séances planifiées (autonomie) : pas encore notées, fenêtre ouverte ──
@@ -25450,6 +25620,7 @@ async function renderPlayerOverview() {
         if (STATUTS_NON_ENT.includes(s)) return;                                  // statut, pas une séance
         if (!state.bdd_ent2.some(f => f.date === pl.date && f.nom === s)) return;   // fiche supprimée → référence orpheline
         if (getRPEJoueurSeance(pl.date, currentJoueurNom, s) !== null) return;      // déjà notée
+        if (!isRPEPublished(pl.date, s, currentJoueurNom)) return;                 // RPE pas encore ouverte par le staff
         if (isSessionWindowClosed(pl.date, s, currentJoueurNom)) return;           // fenêtre 4 h fermée
         liveANoter.push({ date: pl.date, seance: s });
       });
