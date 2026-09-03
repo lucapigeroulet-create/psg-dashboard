@@ -3868,7 +3868,7 @@
   <div class="view" id="view-player-recovery">
     <div class="card">
       <h2 data-en="🧊 Recovery slots" data-fr="🧊 Créneaux récupération" data-es="🧊 Franjas de recuperación">🧊 Créneaux récupération</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="Pick a free recovery slot (compression boots / cold bath). You can book one boots slot AND one cold-bath slot per day." data-fr="Choisis un créneau libre (bottes de récupération / bain froid). Tu peux réserver 1 créneau bottes ET 1 créneau bain froid par jour." data-es="Elige una franja libre (botas / baño frío). Puedes reservar 1 franja de botas Y 1 de baño frío al día.">Choisis un créneau libre (bottes de récupération / bain froid). Tu peux réserver 1 créneau bottes ET 1 créneau bain froid par jour.</p>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="Pick a free recovery slot: recovery boots OR cold bath. You can book only one recovery slot per day (not both)." data-fr="Choisis un créneau libre : bottes de récupérations OU bain froid. Tu ne peux réserver qu'un seul créneau de récupération par jour (pas les deux)." data-es="Elige una franja libre: botas de recuperación O baño frío. Solo puedes reservar una franja de recuperación al día (no ambas).">Choisis un créneau libre : bottes de récupérations OU bain froid. Tu ne peux réserver qu'un seul créneau de récupération par jour (pas les deux).</p>
       <div id="player-recovery-list"></div>
     </div>
   </div>
@@ -5714,9 +5714,9 @@ async function renderPlayerRecovery() {
     .gte('date', today).order('date').order('heure');
   if (error) { listEl.innerHTML = '<div style="color:var(--red);">' + escapeHtml(error.message) + '</div>'; return; }
   const slots = (data || []).map(s => Object.assign({}, s, { joueurs: Array.isArray(s.joueurs) ? s.joueurs : [] }));
-  // Un joueur peut être dans UN seul créneau par (date, type)
-  const bookedKeys = new Set(
-    slots.filter(s => s.joueurs.includes(currentJoueurNom)).map(s => s.date + '|' + s.type)
+  // Un joueur peut être dans UN seul créneau par jour, TOUT type confondu (bottes OU bain froid)
+  const bookedDays = new Set(
+    slots.filter(s => s.joueurs.includes(currentJoueurNom)).map(s => s.date)
   );
   // Visibles : ceux avec des places libres OU dont je fais partie
   const visibles = slots.filter(s => s.joueurs.includes(currentJoueurNom) || s.joueurs.length < (s.capacity || 1));
@@ -5742,14 +5742,14 @@ async function renderPlayerRecovery() {
         const capacity = s.capacity || 1;
         const taken    = s.joueurs.length;
         const full     = taken >= capacity;
-        const locked   = !mine && bookedKeys.has(d + '|' + type); // déjà un créneau de ce type ce jour
+        const locked   = !mine && bookedDays.has(d); // déjà un créneau ce jour, tout type confondu
         let action, clickFn, bg, bord;
         if (mine) {
           action = '✓ ' + tr('Booked — tap to cancel', 'Réservé — clique pour annuler');
           clickFn = 'annulerReservationRecovery(\'' + s.id + '\')';
           bg = 'rgba(22,101,52,0.25)'; bord = 'var(--green)';
         } else if (locked) {
-          action = '<span style="color:var(--text-dim);">' + tr('1/day of this type', '1/jour de ce type') + '</span>';
+          action = '<span style="color:var(--text-dim);">' + tr('1 recovery slot per day', '1 créneau récup par jour') + '</span>';
           clickFn = ''; bg = 'transparent'; bord = 'var(--border)';
         } else if (full) {
           action = '<span style="color:var(--text-dim);">' + tr('Full', 'Complet') + '</span>';
@@ -5779,7 +5779,7 @@ async function reserverRecovery(id) {
   if (error) {
     const m = error.message || '';
     const msg = /Créneau complet/i.test(m) ? tr('Slot full.', 'Créneau complet.')
-      : /par jour/i.test(m) ? tr('Only one slot per type per day.', 'Un seul créneau de ce type par jour.')
+      : /par jour/i.test(m) ? tr('Only one recovery slot per day (boots OR cold bath).', 'Un seul créneau de récupération par jour (bottes OU bain froid).')
       : (tr('Error: ', 'Erreur : ') + m);
     toast(msg, 'error'); return;
   }
