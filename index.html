@@ -8009,11 +8009,17 @@ function applyRoleRestrictions() {
       const v = btn.dataset.view;
       if (v && !KEEP_VIEWS.has(v)) btn.style.display = 'none';
     });
-    // Masquer les dropdowns dont on ne garde aucun enfant.
-    // On garde 'nav-gestion-dropdown' visible car il contient "⭐ Saisie RPE" (rpe-entry),
-    // la boucle ci-dessus masquant automatiquement ses autres items hors KEEP_VIEWS.
-    ['nav-params-dropdown','nav-competition-dropdown','nav-performance-dropdown','nav-medical-dropdown']
+    // Masquer tous les dropdowns : le bouton "⭐ Saisie RPE" est sorti du menu Gestion
+    // et hissé au niveau principal de la nav pour être accessible en 1 clic.
+    ['nav-gestion-dropdown','nav-params-dropdown','nav-competition-dropdown','nav-performance-dropdown','nav-medical-dropdown']
       .forEach(id => { const d = document.getElementById(id); if (d) d.style.display = 'none'; });
+    // Sortir le bouton rpe-entry du dropdown Gestion et le placer juste après "État de forme"
+    const rpeEntryBtn = document.querySelector('.nav-btn[data-view="rpe-entry"]');
+    const hooperNavBtn = document.querySelector('.nav-btn[data-view="staff-hooper"]');
+    if (rpeEntryBtn && hooperNavBtn && hooperNavBtn.parentNode) {
+      hooperNavBtn.parentNode.insertBefore(rpeEntryBtn, hooperNavBtn.nextSibling);
+      rpeEntryBtn.style.display = '';
+    }
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = 'none';
     // Révéler le bouton de la vue surveillant (masqué par défaut)
