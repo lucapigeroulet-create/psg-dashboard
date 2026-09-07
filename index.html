@@ -5999,8 +5999,8 @@ function veToggleAllJoueurs(on) {
 }
 
 // ---- Vignettes vidéo (dropdown groupé par aspect, chips dédupliqués) ----
-const _VE_ASPECT_META = { physique:'🏃 Physique', technique:'⚽ Technique', tactique:'🧠 Tactique', mental:'💭 Mental' };
-const _VE_ASPECT_COLOR = { physique:'#f97316', technique:'#22d3ee', tactique:'#a78bfa', mental:'#fbbf24' };
+const _VE_ASPECT_META = { video:'🎥 Vidéo', physique:'🏃 Physique', technique:'⚽ Technique', tactique:'🧠 Tactique', mental:'💭 Mental' };
+const _VE_ASPECT_COLOR = { video:'#ec4899', physique:'#f97316', technique:'#22d3ee', tactique:'#a78bfa', mental:'#fbbf24' };
 
 function veRefreshVignSelect() {
   const sel = document.getElementById('ve-vign-select');
@@ -22801,7 +22801,10 @@ const VIGNETTE_ASPECTS = [
   { key: 'physique',  label: 'Physique',  icon: '🏃' },
   { key: 'technique', label: 'Technique', icon: '⚽' },
   { key: 'tactique',  label: 'Tactique',  icon: '🧠' },
-  { key: 'mental',    label: 'Mental',    icon: '💭' }
+  { key: 'mental',    label: 'Mental',    icon: '💭' },
+  // Aspect "Vidéo" : géré dans Paramètres → Vignettes, mais utilisé UNIQUEMENT
+  // dans la Saisie vidéo (la Saisie séance n'a pas de champ HTML pour cet aspect).
+  { key: 'video',     label: 'Vidéo',     icon: '🎥' }
 ];
 
 // Sélection d'une vignette depuis la bibliothèque (menu déroulant) → ajoute la pastille
