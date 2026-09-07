@@ -2214,8 +2214,10 @@
       </div>
 
       <div style="margin-top:12px;">
-        <label>Thèmes abordés <span style="color:var(--text-dim); font-weight:400; font-size:11px;">— séparés par une virgule</span></label>
-        <input type="text" id="ve-themes" placeholder="Ex : Bloc médian, Pressing haut, Sorties de balle" style="width:100%;" />
+        <label>Thèmes abordés <span style="color:var(--text-dim); font-weight:400; font-size:11px;">— choisis dans la bibliothèque (Paramètres → Vignettes) ou ajoute des thèmes libres ci-dessous</span></label>
+        <div id="ve-vign-chips" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0;"></div>
+        <select id="ve-vign-select" onchange="onVeVignSelect()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:13px;"><option value="">+ Ajouter une vignette…</option></select>
+        <input type="text" id="ve-themes" placeholder="Thèmes libres, séparés par une virgule (ex : Sorties de balle, Bloc médian)" style="width:100%; margin-top:6px;" />
       </div>
 
       <div style="margin-top:12px;">
@@ -5988,11 +5990,102 @@ async function renderVideoEntry() {
       '</label>'
     ).join('');
   }
+  veRefreshVignSelect();
   await renderVideoList();
 }
 
 function veToggleAllJoueurs(on) {
   document.querySelectorAll('.ve-joueur-cb').forEach(cb => { cb.checked = !!on; });
+}
+
+// ---- Vignettes vidéo (dropdown groupé par aspect, chips dédupliqués) ----
+const _VE_ASPECT_META = { physique:'🏃 Physique', technique:'⚽ Technique', tactique:'🧠 Tactique', mental:'💭 Mental' };
+const _VE_ASPECT_COLOR = { physique:'#f97316', technique:'#22d3ee', tactique:'#a78bfa', mental:'#fbbf24' };
+
+function veRefreshVignSelect() {
+  const sel = document.getElementById('ve-vign-select');
+  if (!sel) return;
+  const cont = document.getElementById('ve-vign-chips');
+  const used = cont ? Array.from(cont.querySelectorAll('.ve-vign-chip')).map(c => (c.dataset.val || '').toLowerCase()) : [];
+  const lib  = state.vignettes_lib || [];
+  const groups = {};
+  lib.forEach(v => {
+    if (!v.aspect || !v.nom) return;
+    if (used.includes(v.nom.toLowerCase())) return;
+    (groups[v.aspect] = groups[v.aspect] || []).push(v.nom);
+  });
+  const aspects = Object.keys(groups).sort((a, b) => Object.keys(_VE_ASPECT_META).indexOf(a) - Object.keys(_VE_ASPECT_META).indexOf(b));
+  const placeholder = lib.length === 0
+    ? '<option value="">Aucune vignette — à créer dans Paramètres</option>'
+    : '<option value="">+ Ajouter une vignette…</option>';
+  let html = placeholder;
+  aspects.forEach(a => {
+    const label = _VE_ASPECT_META[a] || a;
+    html += '<optgroup label="' + escapeHtml(label) + '">';
+    groups[a].sort().forEach(nom => {
+      html += '<option value="' + escapeHtml(a) + '::' + escapeHtml(nom) + '">' + escapeHtml(nom) + '</option>';
+    });
+    html += '</optgroup>';
+  });
+  sel.innerHTML = html;
+}
+
+function onVeVignSelect() {
+  const sel = document.getElementById('ve-vign-select');
+  if (!sel || !sel.value) return;
+  const [aspect, nom] = sel.value.split('::');
+  addVeVignChip(nom, aspect);
+  sel.value = '';
+}
+
+function addVeVignChip(nom, aspect) {
+  const v = (nom || '').trim();
+  if (!v) return;
+  const cont = document.getElementById('ve-vign-chips');
+  if (!cont) return;
+  const existing = Array.from(cont.querySelectorAll('.ve-vign-chip')).map(c => (c.dataset.val || '').toLowerCase());
+  if (existing.includes(v.toLowerCase())) return;
+  const col = _VE_ASPECT_COLOR[aspect] || 'var(--accent)';
+  const chip = document.createElement('span');
+  chip.className = 've-vign-chip';
+  chip.dataset.val = v;
+  chip.dataset.aspect = aspect || '';
+  chip.style.cssText = 'display:inline-flex; align-items:center; gap:5px; background:var(--bg-elevated); border:1px solid ' + col + '; border-radius:12px; padding:2px 9px; font-size:11px; color:' + col + ';';
+  chip.innerHTML = escapeHtml(v) + ' <span style="cursor:pointer; color:var(--text-dim); font-weight:700;" onclick="removeVeVignChip(this)">✕</span>';
+  cont.appendChild(chip);
+  veRefreshVignSelect();
+}
+
+function removeVeVignChip(el) {
+  const chip = el.closest('.ve-vign-chip');
+  if (chip) chip.remove();
+  veRefreshVignSelect();
+}
+
+function _veCollectThemes() {
+  const cont = document.getElementById('ve-vign-chips');
+  const chipNames = cont ? Array.from(cont.querySelectorAll('.ve-vign-chip')).map(c => c.dataset.val) : [];
+  const raw = ((document.getElementById('ve-themes') || {}).value || '').trim();
+  const free = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const seen = new Set(); const out = [];
+  chipNames.concat(free).forEach(t => { const k = t.toLowerCase(); if (!seen.has(k)) { seen.add(k); out.push(t); } });
+  return out;
+}
+
+function _veFillThemes(themes) {
+  const cont = document.getElementById('ve-vign-chips');
+  if (cont) cont.innerHTML = '';
+  const libByName = {};
+  (state.vignettes_lib || []).forEach(v => { if (v.nom) libByName[v.nom.toLowerCase()] = v.aspect; });
+  const freeParts = [];
+  (themes || []).forEach(t => {
+    const asp = libByName[(t || '').toLowerCase()];
+    if (asp) addVeVignChip(t, asp);
+    else freeParts.push(t);
+  });
+  const inp = document.getElementById('ve-themes');
+  if (inp) inp.value = freeParts.join(', ');
+  veRefreshVignSelect();
 }
 
 function resetVideoForm() {
@@ -6001,6 +6094,8 @@ function resetVideoForm() {
   const dt = document.getElementById('ve-date'); if (dt) dt.value = new Date().toISOString().slice(0, 10);
   const ty = document.getElementById('ve-type'); if (ty) ty.value = '';
   document.querySelectorAll('.ve-joueur-cb').forEach(cb => { cb.checked = false; });
+  const chips = document.getElementById('ve-vign-chips'); if (chips) chips.innerHTML = '';
+  veRefreshVignSelect();
   const note = document.getElementById('ve-editing-note'); if (note) note.style.display = 'none';
 }
 
@@ -6011,8 +6106,7 @@ async function saveVideoSeance() {
   if (!date || !titre) { toast('Date et titre requis', 'error'); return; }
   const type_analyse = (document.getElementById('ve-type') || {}).value || null;
   const duree = parseInt((document.getElementById('ve-duree') || {}).value || '', 10);
-  const themesRaw = ((document.getElementById('ve-themes') || {}).value || '').trim();
-  const themes = themesRaw ? themesRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const themes = _veCollectThemes(); // vignettes bibliothèque + thèmes libres, dédupliqués
   const joueurs = Array.from(document.querySelectorAll('.ve-joueur-cb:checked')).map(cb => cb.value);
   const notes = ((document.getElementById('ve-notes') || {}).value || '').trim() || null;
   const row = {
@@ -6090,7 +6184,7 @@ function editVideoSeance(id) {
   document.getElementById('ve-titre').value = r.titre || '';
   document.getElementById('ve-type').value = r.type_analyse || '';
   document.getElementById('ve-duree').value = r.duree_min || '';
-  document.getElementById('ve-themes').value = (r.themes || []).join(', ');
+  _veFillThemes(r.themes || []);
   document.getElementById('ve-notes').value = r.notes || '';
   const joueurs = new Set(r.joueurs || []);
   document.querySelectorAll('.ve-joueur-cb').forEach(cb => { cb.checked = joueurs.has(cb.value); });
