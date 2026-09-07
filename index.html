@@ -16390,12 +16390,20 @@ function _fgSaison() {
 }
 
 function _fgCompute(joueur) {
-  // Agrège les stats depuis le state (GPS + matchs + planning)
-  const gps = (state.bdd_gps || []).filter(g => g.joueur === joueur);
-  const seances = (state.bdd_ent || []).filter(e => e.joueur === joueur && (e.seances || []).some(s => !STATUTS_NON_ENT.includes(s))).length;
-  const matchsJoues = (state.bdd_matchs || []).filter(m => (m.composition || []).some(c => c.joueur === joueur && (c.total_min || 0) > 0)).length;
+  // Respecte le sélecteur de période (7/30/90 derniers jours ou toute la saison)
+  const periodSel = document.getElementById('joueur-dash-period');
+  const periodDays = (periodSel && periodSel.value && periodSel.value !== 'all') ? parseInt(periodSel.value, 10) : null;
+  const today = toLocalISO(new Date());
+  const cutoff = periodDays ? toLocalISO(new Date(Date.now() - periodDays * 86400000)) : null;
+  const inPeriod = d => !cutoff || (d >= cutoff && d <= today);
+
+  // Agrège les stats depuis le state (GPS + matchs + planning), filtrées par période
+  const gps = (state.bdd_gps || []).filter(g => g.joueur === joueur && inPeriod(g.date));
+  const seances = (state.bdd_ent || []).filter(e => e.joueur === joueur && inPeriod(e.date) && (e.seances || []).some(s => !STATUTS_NON_ENT.includes(s))).length;
+  const matchsFiltres = (state.bdd_matchs || []).filter(m => inPeriod(m.date));
+  const matchsJoues = matchsFiltres.filter(m => (m.composition || []).some(c => c.joueur === joueur && (c.total_min || 0) > 0)).length;
   let totalMinMatch = 0, buts = 0, passes = 0;
-  (state.bdd_matchs || []).forEach(m => {
+  matchsFiltres.forEach(m => {
     (m.composition || []).forEach(c => {
       if (c.joueur !== joueur) return;
       totalMinMatch += (c.total_min || 0);
@@ -16491,7 +16499,10 @@ async function renderFicheGlobale(joueur) {
         '</div>' +
         // Colonne droite : stats
         '<div style="background:var(--bg-elevated); border-radius:8px; padding:14px;">' +
-          '<div style="font-size:11px; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:8px;">📊 Cumulatif saison</div>' +
+          '<div style="font-size:11px; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:8px;">📊 Cumulatif ' + (function() {
+            const pv = (document.getElementById('joueur-dash-period') || {}).value || 'all';
+            return pv === 'all' ? 'saison' : (pv === '7' ? '7 derniers jours' : (pv === '30' ? '30 derniers jours' : (pv === '90' ? '90 derniers jours' : 'période')));
+          })() + '</div>' +
           '<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; font-size:12px; margin-bottom:10px;">' +
             _fgStatTile('Séances', stats.seances) +
             _fgStatTile('Matchs joués', stats.matchsJoues) +
