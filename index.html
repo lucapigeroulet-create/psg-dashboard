@@ -25925,8 +25925,13 @@ const HOOPER_TREND_THRESHOLD = 3;
 
 function computePlayersToWatch() {
   // Pour chaque joueur, prendre ses 3 dernières saisies complètes et calculer la moyenne
+  // Exclure les archivés (leur nom n'est plus dans state.joueurs)
+  const archived = new Set((state.joueurs_archived || []).map(j => j.nom));
+  const active   = new Set((state.joueurs || []).map(j => j.nom));
   const byPlayer = {};
   hooperData.forEach(h => {
+    if (archived.has(h.joueur)) return;      // archivé PSG → skip
+    if (active.size && !active.has(h.joueur)) return; // pas dans l'effectif actif de l'org courante → skip
     const idx = computeHooperIndex(h);
     if (idx === null) return;
     if (!byPlayer[h.joueur]) byPlayer[h.joueur] = [];
