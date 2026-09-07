@@ -828,6 +828,7 @@
       <button class="nav-btn" data-view="match-entry" data-en="⚽ Match entry" data-fr="⚽ Saisie match" data-es="⚽ Registrar partido">⚽ Saisie match</button>
       <button class="nav-btn" data-view="injury-entry" data-en="🩹 Injury entry" data-fr="🩹 Saisie blessures" data-es="🩹 Registrar lesiones">🩹 Saisie blessures</button>
       <button class="nav-btn" data-view="rpe-entry" data-en="⭐ RPE entry" data-fr="⭐ Saisie RPE" data-es="⭐ Registrar RPE">⭐ Saisie RPE</button>
+      <button class="nav-btn" data-view="video-entry" data-en="🎥 Video entry" data-fr="🎥 Saisie vidéo" data-es="🎥 Registrar video">🎥 Saisie vidéo</button>
     </div>
   </div>
   <div class="nav-dropdown" id="nav-params-dropdown">
@@ -2175,6 +2176,78 @@
       <div id="competition-pane-interne" style="display:none;">
         <div id="competition-interne-content"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ========== SAISIE VIDÉO (recense les séances vidéo + thèmes abordés) ========== -->
+  <div class="view" id="view-video-entry">
+    <div class="card">
+      <h2 style="margin:0;">🎥 Saisie vidéo</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-top:4px;">Recense les séances d'analyse vidéo faites avec les joueurs : date, type d'analyse, thèmes abordés, participants et notes.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 10px;">➕ Nouvelle séance vidéo</h3>
+      <div class="form-row">
+        <div>
+          <label>Date <span style="color:var(--red);">*</span></label>
+          <input type="date" id="ve-date" />
+        </div>
+        <div>
+          <label>Titre <span style="color:var(--red);">*</span></label>
+          <input type="text" id="ve-titre" placeholder="Ex : Analyse défensive vs Rennes" maxlength="120" />
+        </div>
+        <div>
+          <label>Type d'analyse</label>
+          <select id="ve-type">
+            <option value="">—</option>
+            <option value="Collective">🎬 Collective</option>
+            <option value="Individuelle">👤 Individuelle</option>
+            <option value="Adversaire">🕵️ Adversaire</option>
+            <option value="Auto-analyse">🪞 Auto-analyse</option>
+            <option value="Autre">Autre</option>
+          </select>
+        </div>
+        <div>
+          <label>Durée (min)</label>
+          <input type="number" id="ve-duree" min="0" max="240" placeholder="Ex : 30" style="width:100px;" />
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <label>Thèmes abordés <span style="color:var(--text-dim); font-weight:400; font-size:11px;">— séparés par une virgule</span></label>
+        <input type="text" id="ve-themes" placeholder="Ex : Bloc médian, Pressing haut, Sorties de balle" style="width:100%;" />
+      </div>
+
+      <div style="margin-top:12px;">
+        <label>Joueurs concernés <span style="color:var(--text-dim); font-weight:400; font-size:11px;">— cliquer pour sélectionner</span></label>
+        <div id="ve-joueurs-wrap" style="display:flex; flex-wrap:wrap; gap:6px; padding:8px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; max-height:180px; overflow:auto;"></div>
+        <div style="margin-top:6px;">
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="veToggleAllJoueurs(true)">Tout cocher</button>
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="veToggleAllJoueurs(false)">Tout décocher</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <label>Notes (optionnel)</label>
+        <textarea id="ve-notes" rows="3" placeholder="Contexte, extraits utilisés, consignes données…" style="width:100%;"></textarea>
+      </div>
+
+      <div style="margin-top:14px; display:flex; gap:8px;">
+        <button class="btn" onclick="saveVideoSeance()">💾 Enregistrer</button>
+        <button class="btn btn-secondary" onclick="resetVideoForm()">✕ Réinitialiser</button>
+        <span id="ve-editing-note" style="font-size:12px; color:var(--yellow); display:none; align-self:center;">✏️ Édition en cours</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:8px;">
+        <h3 style="margin:0;">📚 Historique</h3>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="text" id="ve-search" placeholder="Recherche (titre, thème, joueur…)" oninput="renderVideoList()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:220px;" />
+          <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="renderVideoList()">↻</button>
+        </div>
+      </div>
+      <div id="ve-list"></div>
     </div>
   </div>
 
@@ -5889,6 +5962,153 @@ async function contactCoachExpiredRPE(pendingCount, btn) {
   }
 }
 
+// ============================================================================
+// SAISIE VIDÉO — recense les séances d'analyse vidéo (thèmes + participants).
+// Table : seances_video (RLS staff CRUD / direction lit son org / lecteur lit si listé).
+// ============================================================================
+let _veEditingId = null;
+let _veCache = null; // Cache local des vidéos chargées
+
+async function renderVideoEntry() {
+  if (!canWrite()) {
+    document.getElementById('view-video-entry').innerHTML = '<div class="card"><p style="color:var(--text-dim);">Réservé au staff.</p></div>';
+    return;
+  }
+  // Pré-remplir la date par défaut
+  const dt = document.getElementById('ve-date');
+  if (dt && !dt.value) dt.value = new Date().toISOString().slice(0, 10);
+  // Peupler la liste des joueurs
+  const wrap = document.getElementById('ve-joueurs-wrap');
+  if (wrap && wrap.children.length === 0) {
+    const players = getAllPlayers();
+    wrap.innerHTML = players.map(p =>
+      '<label style="display:inline-flex; align-items:center; gap:5px; font-size:12px; padding:4px 8px; background:var(--bg-card); border:1px solid var(--border); border-radius:14px; cursor:pointer;">' +
+        '<input type="checkbox" class="ve-joueur-cb" value="' + escapeHtml(p) + '" style="margin:0;">' +
+        escapeHtml(p) +
+      '</label>'
+    ).join('');
+  }
+  await renderVideoList();
+}
+
+function veToggleAllJoueurs(on) {
+  document.querySelectorAll('.ve-joueur-cb').forEach(cb => { cb.checked = !!on; });
+}
+
+function resetVideoForm() {
+  _veEditingId = null;
+  ['ve-titre','ve-themes','ve-notes','ve-duree'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const dt = document.getElementById('ve-date'); if (dt) dt.value = new Date().toISOString().slice(0, 10);
+  const ty = document.getElementById('ve-type'); if (ty) ty.value = '';
+  document.querySelectorAll('.ve-joueur-cb').forEach(cb => { cb.checked = false; });
+  const note = document.getElementById('ve-editing-note'); if (note) note.style.display = 'none';
+}
+
+async function saveVideoSeance() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const date  = (document.getElementById('ve-date')  || {}).value;
+  const titre = ((document.getElementById('ve-titre') || {}).value || '').trim();
+  if (!date || !titre) { toast('Date et titre requis', 'error'); return; }
+  const type_analyse = (document.getElementById('ve-type') || {}).value || null;
+  const duree = parseInt((document.getElementById('ve-duree') || {}).value || '', 10);
+  const themesRaw = ((document.getElementById('ve-themes') || {}).value || '').trim();
+  const themes = themesRaw ? themesRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const joueurs = Array.from(document.querySelectorAll('.ve-joueur-cb:checked')).map(cb => cb.value);
+  const notes = ((document.getElementById('ve-notes') || {}).value || '').trim() || null;
+  const row = {
+    org: currentOrg, date, titre, type_analyse, duree_min: isNaN(duree) ? null : duree,
+    themes, joueurs, notes,
+    auteur: currentUser ? (currentUser.email || 'Staff') : 'Staff'
+  };
+  let res;
+  if (_veEditingId) {
+    res = await sb.from('seances_video').update(row).eq('id', _veEditingId).select();
+  } else {
+    res = await sb.from('seances_video').insert(row).select();
+  }
+  if (res.error) { toast('Erreur : ' + res.error.message, 'error'); return; }
+  toast(_veEditingId ? 'Séance vidéo mise à jour' : 'Séance vidéo enregistrée', 'success');
+  _veCache = null;
+  resetVideoForm();
+  renderVideoList();
+}
+
+async function renderVideoList() {
+  const list = document.getElementById('ve-list');
+  if (!list) return;
+  if (!_veCache) {
+    list.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Chargement…</div>';
+    const { data, error } = await sb.from('seances_video').select('*')
+      .eq('org', currentOrg).order('date', { ascending: false }).order('created_at', { ascending: false });
+    if (error) { list.innerHTML = '<div style="color:var(--red);">' + escapeHtml(error.message) + '</div>'; return; }
+    _veCache = data || [];
+  }
+  const q = ((document.getElementById('ve-search') || {}).value || '').toLowerCase().trim();
+  let rows = _veCache;
+  if (q) {
+    rows = rows.filter(r =>
+      (r.titre || '').toLowerCase().includes(q) ||
+      (r.type_analyse || '').toLowerCase().includes(q) ||
+      (r.notes || '').toLowerCase().includes(q) ||
+      (r.themes || []).some(t => (t || '').toLowerCase().includes(q)) ||
+      (r.joueurs || []).some(j => (j || '').toLowerCase().includes(q))
+    );
+  }
+  if (rows.length === 0) {
+    list.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:12px;">Aucune séance vidéo enregistrée.</div>';
+    return;
+  }
+  list.innerHTML = rows.map(r => {
+    const themesHtml = (r.themes || []).length
+      ? '<div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:4px;">' + r.themes.map(t => '<span style="background:rgba(0,163,255,0.15); color:var(--accent-light); font-size:11px; padding:2px 8px; border-radius:10px;">' + escapeHtml(t) + '</span>').join('') + '</div>'
+      : '';
+    const joueursHtml = (r.joueurs || []).length
+      ? '<div style="margin-top:4px; font-size:11px; color:var(--text-dim);">👥 ' + (r.joueurs || []).map(escapeHtml).join(', ') + '</div>'
+      : '';
+    return '<div style="padding:10px 12px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; background:var(--bg-elevated);">' +
+      '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-weight:600; font-size:13px;">' + escapeHtml(r.titre) + (r.type_analyse ? ' <span style="color:var(--text-dim); font-weight:400; font-size:11px;">· ' + escapeHtml(r.type_analyse) + '</span>' : '') + '</div>' +
+          '<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">📅 ' + formatDateFR(r.date) + (r.duree_min ? ' · ' + r.duree_min + ' min' : '') + (r.auteur ? ' · ' + escapeHtml(r.auteur) : '') + '</div>' +
+          themesHtml + joueursHtml +
+          (r.notes ? '<div style="margin-top:6px; font-size:12px; color:var(--text); white-space:pre-wrap;">' + escapeHtml(r.notes) + '</div>' : '') +
+        '</div>' +
+        '<div style="display:flex; gap:5px; flex-shrink:0;">' +
+          '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="editVideoSeance(' + r.id + ')">✏️</button>' +
+          '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px; color:var(--red);" onclick="deleteVideoSeance(' + r.id + ')">🗑️</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function editVideoSeance(id) {
+  const r = (_veCache || []).find(x => x.id === id);
+  if (!r) return;
+  _veEditingId = id;
+  document.getElementById('ve-date').value = r.date;
+  document.getElementById('ve-titre').value = r.titre || '';
+  document.getElementById('ve-type').value = r.type_analyse || '';
+  document.getElementById('ve-duree').value = r.duree_min || '';
+  document.getElementById('ve-themes').value = (r.themes || []).join(', ');
+  document.getElementById('ve-notes').value = r.notes || '';
+  const joueurs = new Set(r.joueurs || []);
+  document.querySelectorAll('.ve-joueur-cb').forEach(cb => { cb.checked = joueurs.has(cb.value); });
+  const note = document.getElementById('ve-editing-note'); if (note) note.style.display = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function deleteVideoSeance(id) {
+  if (!canWrite()) return;
+  if (!confirm('Supprimer cette séance vidéo ?')) return;
+  const { error } = await sb.from('seances_video').delete().eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  toast('Séance vidéo supprimée', 'success');
+  _veCache = null;
+  if (_veEditingId === id) resetVideoForm();
+  renderVideoList();
+}
+
 // Toggle du dropdown joueur "Recovery" (pattern copié de togglePerformanceMenu)
 function togglePlayerRecoveryMenu(e) {
   if (e) e.stopPropagation();
@@ -8753,7 +8973,7 @@ let realtimeChannels = [];
 
 function setupRealtime() {
   if (realtimeChannels.length > 0) return; // déjà configuré
-  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores', 'creneaux_medicaux', 'creneaux_recuperation', 'medical_notes', 'medical_questionnaires', 'prepa_colonnes', 'prepa_items', 'seance_affectations'];
+  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores', 'creneaux_medicaux', 'creneaux_recuperation', 'medical_notes', 'medical_questionnaires', 'prepa_colonnes', 'prepa_items', 'seance_affectations', 'seances_video'];
 
   tables.forEach(table => {
     const channel = sb.channel('realtime-' + table)
@@ -8787,6 +9007,15 @@ function handleRealtimeChange(table, payload) {
     const v = getCurrentView();
     if (v === 'minijeux') { renderMinijeuxLeaderboard(); renderMinijeuxCumul(); }
     if (v === 'player-overview') renderPlayerOverviewMinijeu();
+    return;
+  }
+
+  // ===== Séances vidéo : invalider cache local et re-render si vue ouverte =====
+  if (table === 'seances_video') {
+    const rowOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (rowOrg && rowOrg !== currentOrg) return;
+    _veCache = null;
+    if (getCurrentView() === 'video-entry' && typeof renderVideoList === 'function') renderVideoList();
     return;
   }
 
@@ -9644,7 +9873,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (!viewEl) return;
     viewEl.classList.add('active');
     // Gérer l'état visuel du menu déroulant Gestion
-    const gestionViews = ['entry', 'plan', 'prepa-seance', 'planification', 'match-entry', 'injury-entry', 'rpe-entry'];
+    const gestionViews = ['entry', 'plan', 'prepa-seance', 'planification', 'match-entry', 'injury-entry', 'rpe-entry', 'video-entry'];
     const gestionToggle = document.getElementById('nav-gestion-toggle');
     if (gestionToggle) {
       if (gestionViews.includes(view)) gestionToggle.classList.add('has-active');
@@ -9708,6 +9937,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'match-entry') renderMatchEntry();
     else if (view === 'injury-entry') renderInjuryEntry();
     else if (view === 'rpe-entry') renderRPEEntry();
+    else if (view === 'video-entry') renderVideoEntry();
     else if (view === 'history') renderHistory();
     else if (view === 'settings') renderSettings();
     else if (view === 'best-match') renderBestMatch();
