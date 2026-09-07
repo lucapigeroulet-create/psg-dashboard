@@ -1291,6 +1291,7 @@
         Vue individuelle consolidée : temps de jeu, temps et charge d'entraînement, meilleur match et rapport GPS. Le détail (graphiques) est sous les chiffres clés.
       </p>
     </div>
+    <div id="joueur-fiche-globale"></div>
     <div id="joueur-dash-kpis"></div>
     <div id="joueur-dash-charts"></div>
   </div>
@@ -16347,6 +16348,244 @@ async function saveJoueurPhoto(nom, photo) {
   renderPlayerDashboard();
 }
 
+// ============================================================================
+// FICHE GLOBALE JOUEUR — vue d'ensemble éditable en tête du tableau de bord.
+// Table : fiches_globales (RLS staff CRUD / direction lecture / lecteur soi-même)
+// ============================================================================
+const _FG_CACHE = {}; // joueur -> row DB
+let _fgEditMode = false;
+const _FG_ASPECTS = { fs: 'Points forts', ax: 'Axes d\'amélioration', pa: 'Plans d\'action' };
+
+function _fgSaison() {
+  const y = new Date().getFullYear();
+  const m = new Date().getMonth() + 1;
+  // Saison sportive : commence en août
+  return (m >= 8) ? (y + '-' + (y + 1)) : ((y - 1) + '-' + y);
+}
+
+function _fgCompute(joueur) {
+  // Agrège les stats depuis le state (GPS + matchs + planning)
+  const gps = (state.bdd_gps || []).filter(g => g.joueur === joueur);
+  const seances = (state.bdd_ent || []).filter(e => e.joueur === joueur && (e.seances || []).some(s => !STATUTS_NON_ENT.includes(s))).length;
+  const matchsJoues = (state.bdd_matchs || []).filter(m => (m.composition || []).some(c => c.joueur === joueur && (c.total_min || 0) > 0)).length;
+  let totalMinMatch = 0, buts = 0, passes = 0;
+  (state.bdd_matchs || []).forEach(m => {
+    (m.composition || []).forEach(c => {
+      if (c.joueur !== joueur) return;
+      totalMinMatch += (c.total_min || 0);
+      buts += (c.buts || 0);
+      passes += (c.passes_dec || 0);
+    });
+  });
+  const num = v => (v === null || v === undefined || isNaN(v)) ? 0 : parseFloat(v);
+  const distTot   = gps.reduce((s, g) => s + num(g.distance_km) * 1000, 0);
+  const dureeTot  = gps.reduce((s, g) => s + num(g.duree_min), 0);
+  const distMin   = dureeTot > 0 ? distTot / dureeTot : 0;
+  const hsr       = gps.reduce((s, g) => s + num(g.hsr_m || g.hsr), 0);
+  const sprint    = gps.reduce((s, g) => s + num(g.sprint_dist_m), 0);
+  const vmax      = gps.reduce((mx, g) => Math.max(mx, num(g.top_speed)), 0);
+  const accMax    = gps.reduce((mx, g) => Math.max(mx, num(g.max_accel)), 0);
+  const decMax    = gps.reduce((mn, g) => { const v = num(g.max_decel); return v < mn ? v : mn; }, 0);
+  return { seances, matchsJoues, totalMinMatch, buts, passes, distTot, dureeTot, distMin, hsr, sprint, vmax, accMax, decMax };
+}
+
+async function _fgLoad(joueur) {
+  if (_FG_CACHE[joueur] !== undefined) return _FG_CACHE[joueur];
+  try {
+    const { data } = await sb.from('fiches_globales').select('*').eq('org', currentOrg).eq('joueur', joueur).maybeSingle();
+    _FG_CACHE[joueur] = data || null;
+  } catch (e) { _FG_CACHE[joueur] = null; }
+  return _FG_CACHE[joueur];
+}
+
+async function renderFicheGlobale(joueur) {
+  const host = document.getElementById('joueur-fiche-globale');
+  if (!host) return;
+  host.innerHTML = '<div class="card"><div style="color:var(--text-dim); font-size:13px;">Chargement de la fiche…</div></div>';
+  const row = await _fgLoad(joueur) || {};
+  const info = getJoueurInfo(joueur);
+  const fiche = (state.bdd_fiches || []).find(f => f.joueur === joueur) || {};
+  const stats = _fgCompute(joueur);
+  const isStaff = canWrite();
+
+  // Age depuis fiche médicale date_naissance
+  let ageStr = '—', ddnStr = '';
+  if (fiche.date_naissance) {
+    const dn = new Date(fiche.date_naissance);
+    if (!isNaN(dn)) {
+      const now = new Date();
+      const years = ((now - dn) / (365.25 * 86400000));
+      ageStr = years.toFixed(1) + ' ans';
+      ddnStr = fiche.date_naissance.split('-').reverse().join('.');
+    }
+  }
+  const poids = fiche.poids != null ? fiche.poids + ' Kg' : '—';
+  const taille = fiche.taille != null ? Math.round(fiche.taille) + ' cm' : '—';
+
+  const val = (v) => v ? escapeHtml(v) : '<span style="color:var(--text-dim);">—</span>';
+  const listVal = (arr) => (arr && arr.length) ? arr.map(escapeHtml) : ['—','—','—'];
+  const [pf1, pf2, pf3] = (row.points_forts && row.points_forts.length) ? [row.points_forts[0] || '', row.points_forts[1] || '', row.points_forts[2] || ''] : ['','',''];
+  const [ax1, ax2, ax3] = (row.axes_amelioration && row.axes_amelioration.length) ? [row.axes_amelioration[0] || '', row.axes_amelioration[1] || '', row.axes_amelioration[2] || ''] : ['','',''];
+  const [pa1, pa2, pa3] = (row.plans_action && row.plans_action.length) ? [row.plans_action[0] || '', row.plans_action[1] || '', row.plans_action[2] || ''] : ['','',''];
+
+  if (!_fgEditMode) {
+    // MODE CONSULTATION
+    const badgeStyle = 'display:inline-block; background:rgba(0,163,255,0.15); color:var(--accent-light); font-size:11px; padding:2px 10px; border-radius:10px; font-weight:600;';
+    let html = '<div class="card" style="background:linear-gradient(135deg, rgba(0,163,255,0.05), rgba(167,139,250,0.05));">' +
+      '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap;">' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:1px;">Fiche globale numérique · Saison ' + escapeHtml(row.saison || _fgSaison()) + '</div>' +
+          '<div style="font-size:28px; font-weight:800; margin-top:4px;">' + escapeHtml(joueur.toUpperCase()) + '</div>' +
+          '<div style="display:flex; flex-wrap:wrap; gap:16px; margin-top:10px; font-size:12px;">' +
+            '<div><span style="color:var(--text-dim);">Groupe entraînement :</span> <b>' + val(info.groupe || row.groupe_entrainement) + '</b></div>' +
+            '<div><span style="color:var(--text-dim);">Groupe compétition :</span> <span style="' + badgeStyle + '">' + (row.groupe_competition ? escapeHtml(row.groupe_competition) : '—') + '</span></div>' +
+            '<div><span style="color:var(--text-dim);">Contrat :</span> <b>' + val(row.contrat) + '</b></div>' +
+            '<div><span style="color:var(--text-dim);">Ancienneté :</span> <b>' + val(row.anciennete) + '</b></div>' +
+            '<div><span style="color:var(--text-dim);">Sélection :</span> <b>' + val(row.selection) + '</b></div>' +
+          '</div>' +
+        '</div>' +
+        (isStaff ? '<button class="btn" style="padding:6px 14px; font-size:12px;" onclick="editFicheGlobale()">✏️ Éditer</button>' : '') +
+      '</div>' +
+
+      '<div style="display:grid; grid-template-columns:1fr 2fr; gap:16px; margin-top:16px;">' +
+        // Colonne gauche : identité
+        '<div style="background:var(--bg-elevated); border-radius:8px; padding:14px; font-size:13px;">' +
+          '<div style="display:grid; grid-template-columns:22px 1fr; gap:8px 10px; align-items:center;">' +
+            '<span>🎂</span><div>' + ageStr + (ddnStr ? ' · <span style="color:var(--text-dim);">' + ddnStr + '</span>' : '') + '</div>' +
+            '<span>⚽</span><div>Poste : <b>' + val(info.poste) + '</b></div>' +
+            '<span>📏</span><div>' + taille + '</div>' +
+            '<span>⚖️</span><div>' + poids + '</div>' +
+            '<span>👟</span><div>Pied : <b>' + val(row.pied_fort) + '</b></div>' +
+          '</div>' +
+          (row.qualites ? '<div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:12px; color:var(--text-dim); font-style:italic;">🧠 ' + escapeHtml(row.qualites) + '</div>' : '') +
+        '</div>' +
+        // Colonne droite : stats
+        '<div style="background:var(--bg-elevated); border-radius:8px; padding:14px;">' +
+          '<div style="font-size:11px; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:8px;">📊 Cumulatif saison</div>' +
+          '<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; font-size:12px; margin-bottom:10px;">' +
+            _fgStatTile('Séances', stats.seances) +
+            _fgStatTile('Matchs joués', stats.matchsJoues) +
+            _fgStatTile('Min. match', stats.totalMinMatch) +
+            _fgStatTile('Buts / P.dec.', stats.buts + ' / ' + stats.passes) +
+          '</div>' +
+          '<div style="font-size:11px; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:8px;">📡 GPS cumulé</div>' +
+          '<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; font-size:12px;">' +
+            _fgStatTile('D. totale', Math.round(stats.distTot) + ' m') +
+            _fgStatTile('m/min', (stats.distMin ? stats.distMin.toFixed(1) : '—')) +
+            _fgStatTile('HSR', Math.round(stats.hsr) + ' m') +
+            _fgStatTile('Sprint', Math.round(stats.sprint) + ' m') +
+            _fgStatTile('Vmax', stats.vmax ? stats.vmax.toFixed(1) : '—') +
+            _fgStatTile('Acc max', stats.accMax ? stats.accMax.toFixed(1) : '—') +
+            _fgStatTile('Dec max', stats.decMax ? stats.decMax.toFixed(1) : '—') +
+            _fgStatTile('Durée GPS', Math.round(stats.dureeTot) + ' min') +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      // Superpouvoir + Points forts / Axes / Plans
+      '<div style="margin-top:16px; padding:12px 14px; background:rgba(236,72,153,0.08); border-left:3px solid #ec4899; border-radius:6px;">' +
+        '<div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:#f472b6; font-weight:700;">🖐 Superpouvoir</div>' +
+        '<div style="font-size:15px; margin-top:4px; font-weight:600;">' + (row.superpouvoir ? escapeHtml(row.superpouvoir) : '<span style="color:var(--text-dim);">Non renseigné</span>') + '</div>' +
+      '</div>' +
+
+      '<div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px;">' +
+        _fgTripletHTML('POINTS FORTS', '#34d399', [pf1, pf2, pf3]) +
+        _fgTripletHTML('AXES D\'AMÉLIORATIONS', '#fbbf24', [ax1, ax2, ax3]) +
+      '</div>' +
+
+      '<div style="margin-top:14px;">' +
+        _fgTripletHTML('PLANS D\'ACTIONS', '#a78bfa', [pa1, pa2, pa3]) +
+      '</div>' +
+
+      '</div>';
+    host.innerHTML = html;
+    return;
+  }
+
+  // MODE ÉDITION
+  const inp = (id, val, w) => '<input type="text" id="fg-' + id + '" value="' + escapeHtml(val || '') + '" style="width:' + (w || '100%') + '; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;" />';
+  const txt = (id, val, ph) => '<input type="text" id="fg-' + id + '" placeholder="' + escapeHtml(ph || '') + '" value="' + escapeHtml(val || '') + '" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;" />';
+  let html = '<div class="card">' +
+    '<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">' +
+      '<h3 style="margin:0;">✏️ Fiche globale — ' + escapeHtml(joueur) + '</h3>' +
+      '<div style="display:flex; gap:8px;">' +
+        '<button class="btn btn-secondary" onclick="cancelEditFicheGlobale()">Annuler</button>' +
+        '<button class="btn" onclick="saveFicheGlobale(\'' + joueur.replace(/'/g, "\\'") + '\')">💾 Enregistrer</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Groupe compétition</label>' + inp('groupe_competition', row.groupe_competition) + '</div>' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Contrat</label>' + inp('contrat', row.contrat) + '</div>' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Ancienneté</label>' + inp('anciennete', row.anciennete) + '</div>' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Sélection</label>' + inp('selection', row.selection) + '</div>' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Pied fort</label>' + inp('pied_fort', row.pied_fort) + '</div>' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Saison</label>' + inp('saison', row.saison || _fgSaison()) + '</div>' +
+    '</div>' +
+    '<div style="margin-top:10px;"><label style="font-size:11px; color:var(--text-dim);">Qualités (texte libre)</label>' + txt('qualites', row.qualites, 'Ex: Technique - Tactique - Motivateur - Compétiteur') + '</div>' +
+    '<div style="margin-top:14px; padding:10px 12px; background:rgba(236,72,153,0.08); border-left:3px solid #ec4899; border-radius:6px;">' +
+      '<label style="font-size:11px; color:#f472b6; font-weight:700; text-transform:uppercase;">🖐 Superpouvoir</label>' +
+      inp('superpouvoir', row.superpouvoir) +
+    '</div>' +
+    _fgTripletEditHTML('POINTS FORTS', '#34d399', 'fs', [pf1, pf2, pf3]) +
+    _fgTripletEditHTML('AXES D\'AMÉLIORATIONS', '#fbbf24', 'ax', [ax1, ax2, ax3]) +
+    _fgTripletEditHTML('PLANS D\'ACTIONS', '#a78bfa', 'pa', [pa1, pa2, pa3]) +
+  '</div>';
+  host.innerHTML = html;
+}
+
+function _fgStatTile(label, value) {
+  return '<div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:6px 8px; text-align:center;">' +
+    '<div style="font-size:10px; color:var(--text-dim); text-transform:uppercase;">' + escapeHtml(label) + '</div>' +
+    '<div style="font-size:14px; font-weight:700; margin-top:2px;">' + escapeHtml(String(value)) + '</div>' +
+  '</div>';
+}
+function _fgTripletHTML(title, color, items) {
+  const rows = items.map((v, i) => '<li style="margin-bottom:4px;"><b style="color:' + color + ';">' + (i + 1) + '</b> ' + (v ? escapeHtml(v) : '<span style="color:var(--text-dim);">—</span>') + '</li>').join('');
+  return '<div style="background:var(--bg-elevated); border-radius:8px; padding:12px 14px;">' +
+    '<div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:' + color + '; font-weight:700; border-bottom:2px solid ' + color + '; padding-bottom:4px; margin-bottom:8px;">' + title + '</div>' +
+    '<ol style="margin:0; padding:0 0 0 4px; list-style:none; font-size:13px;">' + rows + '</ol>' +
+  '</div>';
+}
+function _fgTripletEditHTML(title, color, prefix, items) {
+  const rows = items.map((v, i) => '<div style="display:flex; gap:6px; align-items:center; margin-bottom:5px;">' +
+    '<span style="font-weight:700; color:' + color + '; min-width:16px;">' + (i + 1) + '</span>' +
+    '<input type="text" id="fg-' + prefix + (i + 1) + '" value="' + escapeHtml(v) + '" style="flex:1; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:13px;" />' +
+  '</div>').join('');
+  return '<div style="margin-top:14px; background:var(--bg-elevated); border-radius:8px; padding:12px 14px;">' +
+    '<div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:' + color + '; font-weight:700; margin-bottom:8px;">' + title + '</div>' +
+    rows +
+  '</div>';
+}
+
+function editFicheGlobale() { _fgEditMode = true; const sel = document.getElementById('joueur-dash-select'); if (sel && sel.value) renderFicheGlobale(sel.value); }
+function cancelEditFicheGlobale() { _fgEditMode = false; const sel = document.getElementById('joueur-dash-select'); if (sel && sel.value) renderFicheGlobale(sel.value); }
+
+async function saveFicheGlobale(joueur) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const val = id => (document.getElementById('fg-' + id) || {}).value || null;
+  const cleanArr = ids => ids.map(id => val(id)).filter(v => v && v.trim()).map(v => v.trim());
+  const row = {
+    org: currentOrg, joueur: joueur,
+    saison: val('saison'),
+    groupe_competition: val('groupe_competition'),
+    contrat: val('contrat'),
+    anciennete: val('anciennete'),
+    selection: val('selection'),
+    pied_fort: val('pied_fort'),
+    qualites: val('qualites'),
+    superpouvoir: val('superpouvoir'),
+    points_forts: cleanArr(['fs1','fs2','fs3']),
+    axes_amelioration: cleanArr(['ax1','ax2','ax3']),
+    plans_action: cleanArr(['pa1','pa2','pa3'])
+  };
+  const { data, error } = await sb.from('fiches_globales').upsert(row, { onConflict: 'org,joueur' }).select().single();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  _FG_CACHE[joueur] = data;
+  toast('Fiche enregistrée', 'success');
+  _fgEditMode = false;
+  renderFicheGlobale(joueur);
+}
+
 function renderPlayerDashboard() {
   const sel = document.getElementById('joueur-dash-select');
   const kpiEl = document.getElementById('joueur-dash-kpis');
@@ -16363,12 +16602,15 @@ function renderPlayerDashboard() {
   }
 
   const player = sel.value;
+  const ficheEl = document.getElementById('joueur-fiche-globale');
   if (!player) {
     kpiEl.innerHTML = '<div class="card"><div class="empty-state">Sélectionne un joueur pour voir son tableau de bord.</div></div>';
     ['chart-jdash-charge', 'chart-jdash-gps', 'chart-jdash-matchs'].forEach(destroyChart);
     chartsEl.innerHTML = '';
+    if (ficheEl) ficheEl.innerHTML = '';
     return;
   }
+  if (ficheEl) renderFicheGlobale(player);
 
   const periodSel = document.getElementById('joueur-dash-period');
   const periodDays = (periodSel && periodSel.value !== 'all') ? parseInt(periodSel.value, 10) : null;
