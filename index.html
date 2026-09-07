@@ -5116,6 +5116,8 @@ function closeMedNoteDetail() {
 
 // Ouvre le détail d'un passage kiné : compte-rendu (ce qui a été réalisé), type, restrictions.
 function openKineDetail(id) {
+  // Direction : confidentialité médicale — aucun détail kiné accessible
+  if (currentRole === 'direction') return;
   const s = (state.bdd_creneaux_medicaux || []).find(x => x.id === id);
   const modal = document.getElementById('kine-detail-modal');
   const titleEl = document.getElementById('kine-detail-title');
@@ -12376,7 +12378,8 @@ function renderCalendar() {
       }).join('');
       // Passage chez le kiné : créneau de soin réservé par ce joueur ce jour-là.
       // Pastille cliquable → détail du compte-rendu (ce qui a été réalisé).
-      const kineContent = getKineCreneaux(d, p).map(s => {
+      // Direction : les créneaux kiné restent invisibles (confidentialité médicale).
+      const kineContent = (currentRole === 'direction') ? '' : getKineCreneaux(d, p).map(s => {
         const done = !!s.realise;
         const heure = s.heure ? (' ' + escapeHtml(s.heure)) : '';
         const title = done ? 'Passage kiné — voir le compte-rendu' : 'Rendez-vous kiné (compte-rendu pas encore saisi)';
