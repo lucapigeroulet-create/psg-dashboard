@@ -29994,7 +29994,8 @@ function renderReaBlessureOptions(preselectId) {
   if (preselectId) sel.value = preselectId;
 }
 
-// Quand on choisit une blessure du dossier médical : préremplit libellé + date de blessure.
+// Quand on choisit une blessure du dossier médical : force la date de blessure et la
+// date de retour depuis la fiche (source de vérité). Le libellé n'est écrit que s'il est vide.
 function onReaBlessurePick() {
   const sel = document.getElementById('rea-blessure-id');
   if (!sel || !sel.value) return;
@@ -30003,7 +30004,13 @@ function onReaBlessurePick() {
   const blessInp = document.getElementById('rea-blessure');
   if (blessInp && !blessInp.value.trim()) blessInp.value = reaBlessureLabel(b).split(' · ').slice(0, 2).join(' · ');
   const dateInp = document.getElementById('rea-date-blessure');
-  if (dateInp && !dateInp.value && b.date_blessure) dateInp.value = b.date_blessure;
+  if (dateInp && b.date_blessure) dateInp.value = b.date_blessure; // TOUJOURS écraser
+  // Date de fin/retour depuis la fiche blessure (details.date_fin ou date_retour)
+  const retInp = document.getElementById('rea-date-retour');
+  if (retInp) {
+    const df = (b.details && (b.details.date_fin || b.details.date_retour)) || null;
+    if (df) retInp.value = df;
+  }
 }
 
 // --- Journal jour-par-jour ---------------------------------------------------
