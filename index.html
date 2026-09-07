@@ -889,6 +889,12 @@
           </select>
         </div>
         <div class="filter-group">
+          <label>Type de séance</label>
+          <select id="overview-charge-type" onchange="renderOverviewCharges()">
+            <option value="">Tous</option>
+          </select>
+        </div>
+        <div class="filter-group">
           <label>Filtrer par</label>
           <select id="overview-charge-scope" onchange="onOverviewScopeChange()">
             <option value="all">Tout l'effectif (moyenne)</option>
@@ -10216,7 +10222,21 @@ function renderOverviewCharges() {
   if (fromVal) dates = dates.filter(d => d >= fromVal);
   if (toVal) dates = dates.filter(d => d <= toVal);
 
-  const srpeData = computeSRPE();
+  // (Re)peupler le sélecteur "Type de séance" à partir de state.types_seances (hors statuts)
+  const typeSel = document.getElementById('overview-charge-type');
+  const typeVal = (typeSel && typeSel.value) || '';
+  if (typeSel) {
+    const availTypes = (state.types_seances || []).filter(t => t && t !== '?' && !STATUTS_NON_ENT.includes(t)).sort();
+    const key = availTypes.join('|');
+    if (typeSel.dataset.key !== key) {
+      const prev = typeSel.value;
+      typeSel.innerHTML = '<option value="">Tous</option>' + availTypes.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
+      typeSel.dataset.key = key;
+      if (prev && availTypes.includes(prev)) typeSel.value = prev;
+    }
+  }
+
+  const srpeData = computeSRPEFiltered(typeVal || null);
   const dayLoadForPlayer = (p, d) => srpeData.filter(x => x.joueur === p && x.date === d).reduce((s, x) => s + x.sRPE, 0);
 
   let label, values, xLabels;
