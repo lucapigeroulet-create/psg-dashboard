@@ -9283,6 +9283,8 @@ function handleRealtimeChange(table, payload) {
   }
 
   if (table === 'seances') {
+    const evtOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (evtOrg && evtOrg !== currentOrg) return;
     if (eventType === 'DELETE') {
       state.bdd_ent2 = state.bdd_ent2.filter(s => !(s.date === oldRow.date && s.nom === oldRow.nom));
     } else {
@@ -9300,6 +9302,9 @@ function handleRealtimeChange(table, payload) {
       else state.bdd_ent2.push(obj);
     }
   } else if (table === 'plannings') {
+    // Ignorer les événements d'une autre org (comptes multi-club)
+    const evtOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (evtOrg && evtOrg !== currentOrg) return;
     if (eventType === 'DELETE') {
       state.bdd_ent = state.bdd_ent.filter(p => !(p.date === oldRow.date && p.joueur === oldRow.joueur));
     } else {
@@ -9309,6 +9314,8 @@ function handleRealtimeChange(table, payload) {
       else state.bdd_ent.push(obj);
     }
   } else if (table === 'rpe_declarations') {
+    const evtOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (evtOrg && evtOrg !== currentOrg) return;
     if (eventType === 'DELETE') {
       state.bdd_rpe = state.bdd_rpe.filter(r => !(r.date === oldRow.date && r.joueur === oldRow.joueur));
     } else {
@@ -9342,6 +9349,8 @@ function handleRealtimeChange(table, payload) {
     if (eventType === 'DELETE') state.types_seances = state.types_seances.filter(t => t !== oldRow.nom);
     else if (!state.types_seances.includes(newRow.nom)) state.types_seances.push(newRow.nom);
   } else if (table === 'hooper_tests') {
+    const evtOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (evtOrg && evtOrg !== currentOrg) return;
     if (eventType === 'DELETE') {
       hooperData = hooperData.filter(h => h.id !== oldRow.id);
     } else {
@@ -9350,6 +9359,8 @@ function handleRealtimeChange(table, payload) {
       else hooperData.push(newRow);
     }
   } else if (table === 'gps_data') {
+    const evtOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (evtOrg && evtOrg !== currentOrg) return;
     if (eventType === 'DELETE') {
       state.bdd_gps = state.bdd_gps.filter(g => g.id !== oldRow.id);
     } else {
