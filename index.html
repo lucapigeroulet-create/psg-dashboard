@@ -877,10 +877,17 @@
       <div class="stat"><div class="stat-label">RPE déclarés</div><div class="stat-value" id="stat-rpe">—</div></div>
     </div>
 
-    <!-- 1) Charges quotidiennes avec filtre équipe/joueur + intervalle de dates -->
+    <!-- 1) Charges quotidiennes / hebdo avec filtre équipe/joueur + intervalle de dates -->
     <div class="card">
-      <h2>Charges quotidiennes (sRPE)</h2>
+      <h2 id="overview-charge-title">Charges quotidiennes (sRPE)</h2>
       <div class="filters" style="margin-bottom:12px;">
+        <div class="filter-group">
+          <label>Granularité</label>
+          <select id="overview-charge-granularity" onchange="renderOverviewCharges()">
+            <option value="day" selected>Jour</option>
+            <option value="week">Semaine</option>
+          </select>
+        </div>
         <div class="filter-group">
           <label>Filtrer par</label>
           <select id="overview-charge-scope" onchange="onOverviewScopeChange()">
@@ -10198,6 +10205,8 @@ function resetOverviewActivityDates() {
 // Graphique des charges quotidiennes selon le filtre + intervalle de dates
 function renderOverviewCharges() {
   const scope = document.getElementById('overview-charge-scope').value;
+  const granEl = document.getElementById('overview-charge-granularity');
+  const gran   = (granEl && granEl.value === 'week') ? 'week' : 'day';
   // Ne pas afficher au-delà d'aujourd'hui (on s'arrête au jour, pas aux séances planifiées)
   let dates = getDatesUpToToday();
 
@@ -10208,38 +10217,80 @@ function renderOverviewCharges() {
   if (toVal) dates = dates.filter(d => d <= toVal);
 
   const srpeData = computeSRPE();
+  const dayLoadForPlayer = (p, d) => srpeData.filter(x => x.joueur === p && x.date === d).reduce((s, x) => s + x.sRPE, 0);
 
-  let label, dailyValues;
+  let label, values, xLabels;
 
-  if (scope === 'player') {
-    const player = document.getElementById('overview-charge-player').value;
-    label = 'Charge de ' + player;
-    dailyValues = dates.map(d => srpeData.filter(x => x.joueur === player && x.date === d).reduce((s, x) => s + x.sRPE, 0));
-  } else if (scope === 'group') {
-    const group = document.getElementById('overview-charge-group').value;
-    const players = getAllPlayers().filter(p => getJoueurInfo(p).groupe === group);
-    label = 'Charge moyenne — ' + group;
-    dailyValues = dates.map(d => {
-      const dayLoads = players.map(p => srpeData.filter(x => x.joueur === p && x.date === d).reduce((s, x) => s + x.sRPE, 0)).filter(v => v > 0);
-      return dayLoads.length > 0 ? Math.round(dayLoads.reduce((a, b) => a + b, 0) / dayLoads.length) : 0;
+  if (gran === 'week') {
+    // Regrouper les dates par lundi (semaine ISO). Charge d'un joueur/semaine = SOMME des sRPE de la semaine.
+    // Charge équipe/semaine = MOYENNE des charges hebdo des joueurs ayant travaillé (>0).
+    const weeks = {}; // mondayIso -> { mondayIso, iso, dates: [] }
+    dates.forEach(d => {
+      const monday = toLocalISO(getMondayOf(d));
+      if (!weeks[monday]) {
+        const iso = getISOWeek(d);
+        weeks[monday] = { mondayIso: monday, iso: iso, dates: [] };
+      }
+      weeks[monday].dates.push(d);
     });
+    const weekList = Object.values(weeks).sort((a, b) => a.mondayIso.localeCompare(b.mondayIso));
+    xLabels = weekList.map(w => 'S' + w.iso.week + ' · ' + formatDateFR(w.mondayIso));
+
+    if (scope === 'player') {
+      const player = document.getElementById('overview-charge-player').value;
+      label = 'Charge hebdo — ' + player;
+      values = weekList.map(w => Math.round(w.dates.reduce((s, d) => s + dayLoadForPlayer(player, d), 0)));
+    } else if (scope === 'group') {
+      const group = document.getElementById('overview-charge-group').value;
+      const players = getAllPlayers().filter(p => getJoueurInfo(p).groupe === group);
+      label = 'Charge hebdo moyenne — ' + group;
+      values = weekList.map(w => {
+        const weekLoads = players.map(p => w.dates.reduce((s, d) => s + dayLoadForPlayer(p, d), 0)).filter(v => v > 0);
+        return weekLoads.length > 0 ? Math.round(weekLoads.reduce((a, b) => a + b, 0) / weekLoads.length) : 0;
+      });
+    } else {
+      label = 'Charge hebdo moyenne — tout l\'effectif';
+      values = weekList.map(w => {
+        const weekLoads = getAllPlayers().map(p => w.dates.reduce((s, d) => s + dayLoadForPlayer(p, d), 0)).filter(v => v > 0);
+        return weekLoads.length > 0 ? Math.round(weekLoads.reduce((a, b) => a + b, 0) / weekLoads.length) : 0;
+      });
+    }
   } else {
-    label = 'Charge moyenne — tout l\'effectif';
-    dailyValues = dates.map(d => {
-      const dayLoads = getAllPlayers().map(p => srpeData.filter(x => x.joueur === p && x.date === d).reduce((s, x) => s + x.sRPE, 0)).filter(v => v > 0);
-      return dayLoads.length > 0 ? Math.round(dayLoads.reduce((a, b) => a + b, 0) / dayLoads.length) : 0;
-    });
+    xLabels = dates.map(formatDateFR);
+    if (scope === 'player') {
+      const player = document.getElementById('overview-charge-player').value;
+      label = 'Charge de ' + player;
+      values = dates.map(d => dayLoadForPlayer(player, d));
+    } else if (scope === 'group') {
+      const group = document.getElementById('overview-charge-group').value;
+      const players = getAllPlayers().filter(p => getJoueurInfo(p).groupe === group);
+      label = 'Charge moyenne — ' + group;
+      values = dates.map(d => {
+        const dayLoads = players.map(p => dayLoadForPlayer(p, d)).filter(v => v > 0);
+        return dayLoads.length > 0 ? Math.round(dayLoads.reduce((a, b) => a + b, 0) / dayLoads.length) : 0;
+      });
+    } else {
+      label = 'Charge moyenne — tout l\'effectif';
+      values = dates.map(d => {
+        const dayLoads = getAllPlayers().map(p => dayLoadForPlayer(p, d)).filter(v => v > 0);
+        return dayLoads.length > 0 ? Math.round(dayLoads.reduce((a, b) => a + b, 0) / dayLoads.length) : 0;
+      });
+    }
   }
+
+  // Titre de la carte selon granularité
+  const titleEl = document.getElementById('overview-charge-title');
+  if (titleEl) titleEl.textContent = (gran === 'week') ? 'Charges hebdomadaires (sRPE)' : 'Charges quotidiennes (sRPE)';
 
   destroyChart('chart-overview-charges');
   charts['chart-overview-charges'] = new Chart(document.getElementById('chart-overview-charges'), {
     type: 'bar',
     data: {
-      labels: dates.map(formatDateFR),
+      labels: xLabels,
       datasets: [{
         label: label,
-        data: dailyValues,
-        backgroundColor: dailyValues.map(v => srpeLoadColor(v)),
+        data: values,
+        backgroundColor: values.map(v => srpeLoadColor(gran === 'week' ? v / 7 : v)),
         borderRadius: 4
       }]
     },
