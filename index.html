@@ -17284,7 +17284,7 @@ async function applyGpsSimulation() {
   const splitsMode = (document.getElementById('gsim-splits') || {}).value || 'all';
   const { rows, warnings } = _gsimBuildRows(base, ecart, splitsMode);
   if (rows.length === 0) { toast('Aucune ligne à générer', 'info'); return; }
-  if (!confirm('Générer ' + rows.length + ' ligne(s) GPS simulée(s) ?\n\nElles seront marquées "simulated" et visibles dans les rapports comme les vraies données.')) return;
+  if (!confirm('Générer ' + rows.length + ' ligne(s) GPS simulée(s) ?\n\nElles apparaîtront comme des vraies données dans les rapports (staff, direction, joueur). Seul le compte admin verra un badge 🧪 « simulé » pour les identifier.')) return;
   const payloads = rows.map(r => r.row);
   const { data, error } = await sb.from('gps_data').insert(payloads).select();
   if (error) { toast('Erreur : ' + error.message, 'error'); return; }
@@ -17431,6 +17431,7 @@ function gpsCombineRows(list) {
   list.forEach(r => { if (r.work_ratio !== null && r.work_ratio !== undefined && !isNaN(r.work_ratio) && r.duree_min) { wSum += parseFloat(r.work_ratio) * r.duree_min; wDur += r.duree_min; } });
   base.work_ratio = wDur ? wSum / wDur : null;
   base.split_name = '__cumul__';
+  base.simulated  = list.some(r => r.simulated); // trace admin conservée en mode cumul
   return base;
 }
 
@@ -17696,7 +17697,11 @@ function renderGPSSession() {
     const editBtn = canEditRow
       ? ' <button type="button" onclick="openGpsPlayerAdjust(\'' + r.joueur.replace(/'/g, "\\'") + '\', \'' + r.date + '\', \'' + (r.seance || r.session_title || '').replace(/'/g, "\\'") + '\')" title="Ajuster le temps de séance de ce joueur" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:16px;padding:0;margin-left:6px;background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-dim);cursor:pointer;font-size:10px;line-height:1;vertical-align:-2px;">✎</button>'
       : '';
-    html += '<tr' + trStyle + '><td style="text-align:left;font-weight:600;">' + posteTag + escapeHtml(r.joueur) + editBtn + '</td>';
+    // Marqueur "simulé" — visible uniquement pour le compte admin (trace privée).
+    const simBadge = (currentRole === 'admin' && r.simulated)
+      ? ' <span title="Données simulées (générées à partir de la moyenne coéquipiers)" style="display:inline-block; background:rgba(236,72,153,0.20); color:#f472b6; font-size:10px; padding:1px 6px; border-radius:8px; margin-left:6px; vertical-align:middle;">🧪 simulé</span>'
+      : '';
+    html += '<tr' + trStyle + '><td style="text-align:left;font-weight:600;">' + posteTag + escapeHtml(r.joueur) + editBtn + simBadge + '</td>';
     if (showBestPct) {
       const vol = getVolumeScore(r.joueur, r);
       const inten = getIntensityScore(r.joueur, r);
