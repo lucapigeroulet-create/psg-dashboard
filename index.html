@@ -15254,7 +15254,28 @@ function openGpsPlayerAdjust(joueur, date, seance) {
 
   inner +=
       '</tbody></table></div>' +
-      '<div style="margin-top:16px; padding:10px 12px; background:var(--bg-elevated); border-radius:8px; font-size:11px; color:var(--text-dim);">' +
+      // ─── Ajouter un découpage oublié ──────────────────────────────────────
+      '<div style="margin-top:14px; padding:12px 14px; background:var(--bg-elevated); border:1px dashed var(--accent); border-radius:8px;">' +
+        '<div style="font-weight:700; font-size:12px; color:var(--accent-light); margin-bottom:8px; text-transform:uppercase;">➕ Ajouter un découpage oublié</div>' +
+        '<div style="display:flex; flex-wrap:wrap; gap:8px; align-items:end;">' +
+          '<div><label style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:3px;">Nom du découpage</label>' +
+            '<input type="text" id="gps-pa-new-name" placeholder="Ex : Circuit Passe" style="width:180px; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;" /></div>' +
+          '<div><label style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:3px;">Durée (min)</label>' +
+            '<input type="number" id="gps-pa-new-duree" min="0.1" step="0.1" placeholder="20" style="width:90px; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;" /></div>' +
+          '<div><label style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:3px;">Distance (km)</label>' +
+            '<input type="number" id="gps-pa-new-dist" min="0" step="0.001" placeholder="1.20" style="width:100px; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;" /></div>' +
+          '<div><label style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:3px;">HSR (m)</label>' +
+            '<input type="number" id="gps-pa-new-hsr" min="0" step="1" placeholder="—" style="width:80px; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;" /></div>' +
+          '<div><label style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:3px;">Sprint (m)</label>' +
+            '<input type="number" id="gps-pa-new-sprint" min="0" step="1" placeholder="—" style="width:80px; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;" /></div>' +
+          '<div><label style="font-size:11px; color:var(--text-dim); display:block; margin-bottom:3px;">Vmax (km/h ou m/s)</label>' +
+            '<input type="number" id="gps-pa-new-vmax" min="0" step="0.1" placeholder="—" style="width:100px; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;" /></div>' +
+          '<button type="button" class="btn" style="padding:6px 14px; font-size:12px;" onclick="addGpsPlayerSplit()">➕ Ajouter</button>' +
+        '</div>' +
+        '<div style="font-size:11px; color:var(--text-dim); margin-top:6px;">💡 Le m/min est calculé automatiquement à partir de distance ÷ durée. Les autres métriques non renseignées restent vides.</div>' +
+      '</div>' +
+      // ─── Aide + boutons ───────────────────────────────────────────────────
+      '<div style="margin-top:14px; padding:10px 12px; background:var(--bg-elevated); border-radius:8px; font-size:11px; color:var(--text-dim);">' +
         '💡 Laisser un champ vide = durée inchangée. Pour un ajustement uniforme sur toute l\'équipe (pas par joueur), utilise « ✏️ Modifier » dans l\'historique GPS.' +
       '</div>' +
       '<div style="margin-top:16px; display:flex; justify-content:flex-end; gap:10px;">' +
@@ -15264,6 +15285,51 @@ function openGpsPlayerAdjust(joueur, date, seance) {
     '</div>';
   ov.innerHTML = inner;
   ov.style.display = 'flex';
+}
+
+async function addGpsPlayerSplit() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  if (!gpsPlayerAdjustData) return;
+  const name  = ((document.getElementById('gps-pa-new-name')  || {}).value || '').trim();
+  const duree = parseFloat((document.getElementById('gps-pa-new-duree') || {}).value || '');
+  const dist  = parseFloat((document.getElementById('gps-pa-new-dist')  || {}).value || '');
+  if (!name)  { toast('Nom du découpage requis', 'error'); return; }
+  if (!(duree > 0)) { toast('Durée invalide (doit être > 0)', 'error'); return; }
+  const { joueur, date, seance } = gpsPlayerAdjustData;
+  // Refuser un doublon exact (même nom de split)
+  const exists = gpsPlayerAdjustData.rows.some(r => (r.split_name || '').toLowerCase() === name.toLowerCase());
+  if (exists) { toast('Ce découpage existe déjà pour ce joueur', 'error'); return; }
+  const hsr    = parseFloat((document.getElementById('gps-pa-new-hsr')    || {}).value || '');
+  const sprint = parseFloat((document.getElementById('gps-pa-new-sprint') || {}).value || '');
+  const vmax   = parseFloat((document.getElementById('gps-pa-new-vmax')   || {}).value || '');
+  // Base = première ligne existante du joueur (pour copier org/session_title/categorie)
+  const base = gpsPlayerAdjustData.rows[0] || {};
+  const row = {
+    org: base.org || currentOrg,
+    date,
+    joueur,
+    seance: base.seance || seance || null,
+    session_title: base.session_title || seance || null,
+    categorie: base.categorie || 'seance',
+    split_name: name,
+    duree_min: duree,
+    distance_km: isNaN(dist) ? null : dist,
+    dist_per_min: (!isNaN(dist) && dist > 0) ? Math.round((dist * 1000 / duree) * 10) / 10 : null,
+    hsr_m: isNaN(hsr) ? null : hsr,
+    sprint_dist_m: isNaN(sprint) ? null : sprint,
+    top_speed: isNaN(vmax) ? null : vmax
+  };
+  const { data, error } = await sb.from('gps_data').insert(row).select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (data && data[0]) {
+    state.bdd_gps.push(data[0]);
+    try { _writeCache('gps_data', currentOrg, state.bdd_gps); } catch(e) {}
+  }
+  toast('Découpage « ' + name + ' » ajouté', 'success');
+  closeGpsPlayerAdjust();
+  renderGPS();
+  // Rouvrir la modal sur le même joueur pour continuer les ajustements
+  setTimeout(() => openGpsPlayerAdjust(joueur, date, seance), 200);
 }
 function closeGpsPlayerAdjust() {
   const ov = document.getElementById('gps-player-adjust-modal');
