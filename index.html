@@ -1553,9 +1553,14 @@
           <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">Ctrl/Cmd + clic pour sélectionner plusieurs séances. Liste triée récent-first.</div>
         </div>
         <div style="flex:2;">
-          <label>Joueurs à simuler (sans données GPS)</label>
-          <select id="gsim-joueurs" multiple size="6" style="width:100%; min-height:120px;"></select>
-          <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">Affiche les joueurs de l'effectif <b>absents</b> de la première séance sélectionnée.</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <label style="margin:0;">Joueurs à simuler (sans données GPS)</label>
+            <select id="gsim-group-filter" onchange="refreshGpsSimJoueurs()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:11px;">
+              <option value="">Tous les groupes</option>
+            </select>
+          </div>
+          <select id="gsim-joueurs" multiple size="6" style="width:100%; min-height:120px; margin-top:4px;"></select>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">Uniquement les joueurs qui avaient une <b>séance affectée</b> ce jour-là (absents/blessés exclus).</div>
         </div>
       </div>
 
@@ -17119,16 +17124,49 @@ function populateGpsSimSelectors() {
 function refreshGpsSimJoueurs() {
   const seSel = document.getElementById('gsim-seances');
   const jSel  = document.getElementById('gsim-joueurs');
+  const gSel  = document.getElementById('gsim-group-filter');
   if (!seSel || !jSel) return;
   const firstKey = seSel.value || (seSel.options[0] && seSel.options[0].value) || '';
   const [date, title] = firstKey.split('||');
+
+  // Peupler / rafraîchir la liste des groupes une fois
+  if (gSel) {
+    ensureGroupsList();
+    const groups = (state.groupes || []).slice().sort();
+    const key = groups.join('|');
+    if (gSel.dataset.key !== key) {
+      const prev = gSel.value;
+      gSel.innerHTML = '<option value="">Tous les groupes</option>' + groups.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+      gSel.dataset.key = key;
+      if (prev && groups.includes(prev)) gSel.value = prev;
+    }
+  }
+  const groupFilter = (gSel && gSel.value) || '';
+
   const presents = new Set((state.bdd_gps || []).filter(g => g.date === date && (g.seance || g.session_title || '') === title).map(g => g.joueur));
-  const players = getAllPlayers();
-  const absents = players.filter(p => !presents.has(p));
+
+  // Joueurs AFFECTÉS ce jour-là avec une vraie séance (statut non-ent + indispo exclus)
+  const affectesCeJour = new Set();
+  (state.bdd_ent || []).filter(e => e.date === date).forEach(e => {
+    if (!e.joueur) return;
+    if ((e.seances || []).some(s => STATUTS_INDISPO.includes(s))) return; // absent/blessé/malade/susp./essai
+    const hasTraining = (e.seances || []).some(s => !STATUTS_NON_ENT.includes(s));
+    if (hasTraining) affectesCeJour.add(e.joueur);
+  });
+
   const info = p => getJoueurInfo(p);
-  jSel.innerHTML = absents.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + (info(p).poste ? ' · ' + info(p).poste : '') + (info(p).groupe ? ' (' + info(p).groupe + ')' : '') + '</option>').join('');
-  if (absents.length === 0) {
-    jSel.innerHTML = '<option value="" disabled>Tous les joueurs de l\'effectif ont des données pour cette séance.</option>';
+  const candidates = getAllPlayers().filter(p =>
+    affectesCeJour.has(p)                                       // affecté ce jour à une séance
+    && !presents.has(p)                                         // pas déjà de données GPS
+    && (!groupFilter || info(p).groupe === groupFilter)         // filtre groupe si actif
+  );
+  jSel.innerHTML = candidates.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + (info(p).poste ? ' · ' + info(p).poste : '') + (info(p).groupe ? ' (' + info(p).groupe + ')' : '') + '</option>').join('');
+  if (candidates.length === 0) {
+    if (affectesCeJour.size === 0) {
+      jSel.innerHTML = '<option value="" disabled>Aucune affectation trouvée pour ' + escapeHtml(date || '?') + '. Vérifie l\'onglet Séance.</option>';
+    } else {
+      jSel.innerHTML = '<option value="" disabled>Tous les joueurs affectés ont déjà des données GPS' + (groupFilter ? ' dans ' + escapeHtml(groupFilter) : '') + '.</option>';
+    }
   }
 }
 
