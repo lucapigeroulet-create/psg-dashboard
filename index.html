@@ -5839,8 +5839,10 @@ function _recoveryEligibility() {
       if (STATUTS_NON_ENT.includes(s)) return;
       if (!state.bdd_ent2.some(f => f.date === pl.date && f.nom === s)) return;
       if (getRPEJoueurSeance(pl.date, currentJoueurNom, s) !== null) return;
-      if (!isRPEPublished(pl.date, s, currentJoueurNom)) return;
-      // On compte AUSSI les RPE en retard (fenêtre 4h fermée sans note) — blocage réservation récup
+      // Ne bloque que si l'affectation est trackée ET la RPE a été publiée par le staff.
+      // Sans publication ("Envoyer RPE"), le joueur ne peut rien noter → ne doit pas être bloqué.
+      const aff = (state.bdd_affectations || []).find(x => x.date === pl.date && x.joueur === currentJoueurNom && x.seance === s);
+      if (!aff || !aff.rpe_published_at) return;
       pending.push({ date: pl.date, seance: s });
     });
   });
@@ -29664,6 +29666,10 @@ function _psgPlayerGPSAccessCheck() {
       if (STATUTS_NON_ENT.includes(s)) return;
       if (!state.bdd_ent2.some(f => f.date === pl.date && f.nom === s)) return;
       if (getRPEJoueurSeance(pl.date, me, s) !== null) return;
+      // Ne compte que si l'affectation existe ET la RPE a été publiée par le staff.
+      // Sans publication ("Envoyer RPE"), le joueur n'a rien à noter → ne peut pas être bloqué.
+      const aff = (state.bdd_affectations || []).find(x => x.date === pl.date && x.joueur === me && x.seance === s);
+      if (!aff || !aff.rpe_published_at) return;
       if (isSessionWindowClosed(pl.date, s, me)) pendingClosed++; else pendingOpen++;
     });
   });
