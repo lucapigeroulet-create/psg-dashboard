@@ -8350,7 +8350,10 @@ function applyRoleRestrictions() {
     // 'direction 1.0' (pierre@tegg.fr) : tous les onglets admin SAUF Paramètres.
     // Exception : le staff PSG a accès aux Paramètres uniquement pour créer des vignettes
     // (renderSettings masque les autres onglets & la zone de réinit pour ce rôle+org).
-    const psgStaffVignettesOnly = staffLimited && currentOrg === 'PSG';
+    // Exceptions : comptes staff PSG débloqués (accès à tous les onglets Paramètres).
+    const FULL_SETTINGS_STAFF_EMAILS = ['elise@psg.fr','israel@psg.fr'];
+    const myEmail = ((currentUser && currentUser.email) || '').toLowerCase();
+    const psgStaffVignettesOnly = staffLimited && currentOrg === 'PSG' && !FULL_SETTINGS_STAFF_EMAILS.includes(myEmail);
     if (settingsBtn) settingsBtn.style.display = ((staffLimited && !psgStaffVignettesOnly) || window.isDirectionPlus) ? 'none' : '';
   }
 
@@ -27578,7 +27581,10 @@ function renderSettings() {
   renderResetStats();
   // Staff PSG : accès Paramètres restreint à l'onglet Vignettes uniquement.
   // On masque tous les autres onglets, la zone de réinit, et on force l'onglet actif.
-  const psgStaffVignettesOnly = (currentRole === 'staff') && currentOrg === 'PSG';
+  // Exceptions : comptes staff PSG débloqués (accès à tous les onglets Paramètres).
+  const FULL_SETTINGS_STAFF_EMAILS = ['elise@psg.fr','israel@psg.fr'];
+  const myEmail = ((currentUser && currentUser.email) || '').toLowerCase();
+  const psgStaffVignettesOnly = (currentRole === 'staff') && currentOrg === 'PSG' && !FULL_SETTINGS_STAFF_EMAILS.includes(myEmail);
   // Zone de réinit : action destructive → réservée admin. Cachée pour staff (coach) et tout autre rôle.
   const resetCard = document.getElementById('settings-reset-card');
   if (resetCard) resetCard.style.display = (currentRole === 'admin') ? '' : 'none';
