@@ -3444,6 +3444,36 @@
       </div>
     </div>
 
+    <!-- 2bis) Saisie GROUPÉE par joueur (tableau ligne par ligne) -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+        <div style="flex:1; min-width:0;">
+          <h2 style="margin:0;">🧮 Saisie groupée (tableau)</h2>
+          <p style="color:var(--text-dim); font-size:12px; margin:4px 0 0;">Renseigne le même test pour plusieurs joueurs à la suite. Laisse les champs vides pour ceux que tu ne veux pas enregistrer. Un clic « Enregistrer » sauve toutes les lignes remplies d'un coup.</p>
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:10px;">
+        <div style="flex:1;">
+          <label>Test</label>
+          <select id="bt-type" onchange="renderBulkTestTable()"></select>
+        </div>
+        <div>
+          <label>Date</label>
+          <input type="date" id="bt-date" onchange="renderBulkTestTable()" />
+        </div>
+        <div style="flex:1;">
+          <label>Filtrer par groupe</label>
+          <select id="bt-group" onchange="renderBulkTestTable()"><option value="">Tous les groupes</option></select>
+        </div>
+        <div style="display:flex; align-items:end; gap:8px;">
+          <button class="btn" onclick="saveBulkTestResults()">💾 Enregistrer les valeurs remplies</button>
+          <button class="btn btn-secondary" onclick="renderBulkTestTable()" title="Rafraîchir">↻</button>
+        </div>
+      </div>
+      <div id="bt-hint" style="font-size:11px; color:var(--text-dim); margin-top:6px;"></div>
+      <div id="bt-table-wrap" style="margin-top:10px;"></div>
+    </div>
+
     <!-- 3) Résultats enregistrés -->
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -31478,6 +31508,7 @@ function renderTesting() {
   populateTestingSelects();
   renderTestTypesList();
   renderTestResults();
+  renderBulkTestTable(); // tableau de saisie groupée
   switchTestingTab(currentTestingTab); // ré-applique le sous-onglet actif (et rafraîchit la viz si active)
 }
 
@@ -32151,6 +32182,127 @@ async function saveTestResult() {
   renderTestTypesList();
   renderTestResults();
   toast('Résultat enregistré ✓', 'success');
+}
+
+// ============================================================================
+// SAISIE GROUPÉE PAR JOUEUR (tableau ligne par ligne pour prendre tous les résultats)
+// ============================================================================
+function populateBulkTestSelects() {
+  const types = (state.bdd_test_types || []).slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+  const typeSel = document.getElementById('bt-type');
+  if (typeSel) {
+    const prev = typeSel.value;
+    typeSel.innerHTML = types.length
+      ? types.map(t => '<option value="' + t.id + '">' + escapeHtml(t.nom) + (t.unite ? ' (' + escapeHtml(t.unite) + ')' : '') + '</option>').join('')
+      : '<option value="">— Crée d\'abord un test —</option>';
+    if (prev && types.some(t => String(t.id) === prev)) typeSel.value = prev;
+  }
+  const groupSel = document.getElementById('bt-group');
+  if (groupSel) {
+    ensureGroupsList();
+    const prev = groupSel.value;
+    const groups = (state.groupes || []).slice().sort();
+    groupSel.innerHTML = '<option value="">Tous les groupes</option>' + groups.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+    if (prev) groupSel.value = prev;
+  }
+  const dtEl = document.getElementById('bt-date');
+  if (dtEl && !dtEl.value) dtEl.value = new Date().toISOString().slice(0, 10);
+}
+
+function renderBulkTestTable() {
+  populateBulkTestSelects();
+  const wrap = document.getElementById('bt-table-wrap');
+  const hint = document.getElementById('bt-hint');
+  if (!wrap) return;
+  const typeId = (document.getElementById('bt-type') || {}).value || '';
+  const date   = (document.getElementById('bt-date') || {}).value || '';
+  const group  = (document.getElementById('bt-group') || {}).value || '';
+  const t = typeId ? testTypeById(typeId) : null;
+  if (!t || !date) {
+    wrap.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Choisis un test et une date pour afficher le tableau.</div>';
+    if (hint) hint.textContent = '';
+    return;
+  }
+  const isTime = isTimeTest(t.unite);
+  if (hint) hint.textContent = isTime ? 'Format temps mm:ss (ex : 3:45)' : (t.unite ? 'Unité : ' + t.unite : '');
+
+  const players = getAllPlayers().filter(p => !group || getJoueurInfo(p).groupe === group);
+  if (players.length === 0) {
+    wrap.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Aucun joueur dans ce groupe.</div>';
+    return;
+  }
+  const results = (state.bdd_test_results || []).filter(r => r.test_type_id === typeId);
+  const lastForPlayer = {};
+  results.forEach(r => {
+    const prev = lastForPlayer[r.joueur];
+    if (!prev || r.date > prev.date) lastForPlayer[r.joueur] = r;
+  });
+  const onSameDate = {};
+  results.filter(r => r.date === date).forEach(r => { onSameDate[r.joueur] = r; });
+  const formatVal = v => (v === null || v === undefined) ? '—' : (isTime ? _btFmtTime(v) : String(v));
+
+  let html = '<div class="table-wrap"><table style="font-size:13px;"><thead><tr>' +
+    '<th style="text-align:left;">Joueur</th>' +
+    '<th>Groupe</th>' +
+    '<th style="text-align:center;">Dernière valeur</th>' +
+    '<th style="text-align:center;">Déjà noté (' + date.split('-').reverse().join('/') + ')</th>' +
+    '<th>Valeur</th>' +
+    '<th>Notes</th>' +
+    '</tr></thead><tbody>';
+  players.forEach((p, i) => {
+    const info = getJoueurInfo(p);
+    const last = lastForPlayer[p];
+    const same = onSameDate[p];
+    const lastTxt = last ? (formatVal(last.valeur) + '<div style="font-size:10px; color:var(--text-dim);">' + last.date.split('-').reverse().join('/') + '</div>') : '<span style="color:var(--text-dim);">—</span>';
+    const sameTxt = same ? '<span style="color:var(--green); font-weight:600;">✓ ' + formatVal(same.valeur) + '</span>' : '<span style="color:var(--text-dim);">—</span>';
+    html += '<tr style="border-top:1px solid var(--border);">' +
+      '<td style="text-align:left; font-weight:600;">' + escapeHtml(p) + '</td>' +
+      '<td style="color:var(--text-dim);">' + escapeHtml(info.groupe || '') + '</td>' +
+      '<td style="text-align:center;">' + lastTxt + '</td>' +
+      '<td style="text-align:center;">' + sameTxt + '</td>' +
+      '<td><input type="text" class="bt-val" data-joueur="' + escapeHtml(p) + '" placeholder="' + (isTime ? 'mm:ss' : '0') + '" style="width:100px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:13px;" /></td>' +
+      '<td><input type="text" class="bt-notes" data-joueur="' + escapeHtml(p) + '" placeholder="Notes" style="width:100%; min-width:120px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:13px;" /></td>' +
+    '</tr>';
+  });
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
+}
+
+function _btFmtTime(sec) {
+  if (sec === null || sec === undefined || isNaN(sec)) return '—';
+  const m = Math.floor(sec / 60), s = sec - m * 60;
+  return m + ':' + (s < 10 ? '0' : '') + (Math.round(s * 100) / 100);
+}
+
+async function saveBulkTestResults() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const typeId = (document.getElementById('bt-type') || {}).value || '';
+  const date   = (document.getElementById('bt-date') || {}).value || '';
+  if (!typeId || !date) { toast('Choisis un test et une date', 'error'); return; }
+  const t = testTypeById(typeId);
+  const isTime = t && isTimeTest(t.unite);
+  const valInputs = Array.from(document.querySelectorAll('.bt-val'));
+  const rows = [];
+  let invalid = 0;
+  valInputs.forEach(inp => {
+    const raw = (inp.value || '').trim();
+    if (!raw) return;
+    let v;
+    if (isTime) { v = parseTimeValue(raw); if (v === null) { invalid++; return; } }
+    else { v = parseFloat(raw.replace(',', '.')); if (isNaN(v)) { invalid++; return; } }
+    const joueur = inp.dataset.joueur;
+    const notesEl = document.querySelector('.bt-notes[data-joueur="' + joueur.replace(/"/g, '\\"') + '"]');
+    const notes = notesEl && notesEl.value.trim() ? notesEl.value.trim() : null;
+    rows.push({ org: currentOrg, test_type_id: typeId, joueur, date, valeur: v, notes });
+  });
+  if (invalid > 0) { toast(invalid + ' valeur(s) invalide(s) — corrige avant enregistrement', 'error'); return; }
+  if (rows.length === 0) { toast('Aucune valeur à enregistrer', 'info'); return; }
+  const { data, error } = await sb.from('test_results').insert(rows).select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (data) data.forEach(r => state.bdd_test_results.unshift(r));
+  toast(rows.length + ' résultat(s) enregistré(s) ✓', 'success');
+  renderBulkTestTable();
+  renderTestResults();
 }
 
 async function deleteTestResult(id) {
