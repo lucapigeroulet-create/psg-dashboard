@@ -1536,6 +1536,62 @@
     </div>
 
     <div id="gps-content"></div>
+
+    <!-- ===== SIMULATEUR GPS : générer des données pour les joueurs sans GPS ===== -->
+    <div class="card" style="margin-top:18px; border:1px dashed var(--accent);">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+        <div style="flex:1; min-width:0;">
+          <h2 style="margin:0;">🧪 Simuler des données GPS manquantes</h2>
+          <p style="color:var(--text-dim); font-size:12px; margin:4px 0 0;">Pour un joueur qui a oublié son GPS : génère des données réalistes à partir de la moyenne des coéquipiers présents (groupe ou poste) avec un écart réglable. Les lignes créées sont marquées <code>simulated</code> pour être identifiables.</p>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top:12px;">
+        <div style="flex:2;">
+          <label>Séances</label>
+          <select id="gsim-seances" multiple size="6" style="width:100%; min-height:120px;"></select>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">Ctrl/Cmd + clic pour sélectionner plusieurs séances. Liste triée récent-first.</div>
+        </div>
+        <div style="flex:2;">
+          <label>Joueurs à simuler (sans données GPS)</label>
+          <select id="gsim-joueurs" multiple size="6" style="width:100%; min-height:120px;"></select>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">Affiche les joueurs de l'effectif <b>absents</b> de la première séance sélectionnée.</div>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top:10px;">
+        <div>
+          <label>Base de calcul</label>
+          <select id="gsim-base">
+            <option value="poste">Moyenne du poste</option>
+            <option value="groupe">Moyenne du groupe</option>
+            <option value="all" selected>Moyenne équipe (présents)</option>
+          </select>
+        </div>
+        <div>
+          <label>Écart aléatoire (±%)</label>
+          <input type="number" id="gsim-ecart" min="0" max="50" value="8" style="width:100px;" />
+          <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">Ex : 8 = variation ±8 % autour de la moyenne, par joueur et par métrique.</div>
+        </div>
+        <div>
+          <label>Découpages</label>
+          <select id="gsim-splits">
+            <option value="all" selected>Séance entière (all) uniquement</option>
+            <option value="all_and_splits">Séance entière + tous les découpages</option>
+          </select>
+        </div>
+        <div style="display:flex; align-items:end;">
+          <button class="btn btn-secondary" style="padding:8px 14px;" onclick="renderGpsSimPreview()">🔍 Prévisualiser</button>
+        </div>
+        <div style="display:flex; align-items:end;">
+          <button class="btn" style="padding:8px 14px;" onclick="applyGpsSimulation()">✅ Générer & enregistrer</button>
+        </div>
+      </div>
+
+      <div id="gsim-preview" style="margin-top:12px;"></div>
+    </div>
+    <!-- ===== FIN simulateur GPS ===== -->
+
   </div>
 
   <!-- ========== DISPONIBILITÉ ========== -->
@@ -17025,6 +17081,181 @@ function gpsAnalysisRows() {
   return f ? all.filter(r => gpsCategorie(r) === f) : all;
 }
 
+// ============================================================================
+// SIMULATEUR GPS : génère des lignes gps_data pour les joueurs qui ont oublié
+// leur GPS, à partir de la moyenne des présents (équipe / groupe / poste) avec
+// un écart aléatoire ±%. Les lignes sont marquées simulated=true.
+// ============================================================================
+const _GSIM_METRICS = [
+  'duree_min','distance_km','sprint_dist_m','energy_kcal','player_load','top_speed',
+  'dist_per_min','hsr','hsr_m','max_decel','max_accel','power_plays','impacts',
+  'work_ratio','hr_max','dist_zone1','dist_zone2','dist_zone3','dist_zone4','dist_zone5','decel_count_high'
+];
+const _GSIM_INT_METRICS = new Set(['power_plays','impacts','hr_max','decel_count_high']);
+
+function _gsimSessionsList() {
+  const map = {};
+  (state.bdd_gps || []).forEach(g => {
+    const title = g.seance || g.session_title || '';
+    const key = g.date + '||' + title;
+    if (!map[key]) map[key] = { date: g.date, title: title, key };
+  });
+  return Object.values(map).sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title));
+}
+
+function populateGpsSimSelectors() {
+  const seSel = document.getElementById('gsim-seances');
+  if (!seSel) return;
+  const sessions = _gsimSessionsList();
+  const key = sessions.map(s => s.key).join('|');
+  if (seSel.dataset.key !== key) {
+    seSel.innerHTML = sessions.map(s => '<option value="' + escapeHtml(s.key) + '">' + escapeHtml(formatDateFR(s.date) + (s.title ? ' — ' + s.title : '')) + '</option>').join('');
+    seSel.dataset.key = key;
+    seSel.onchange = () => refreshGpsSimJoueurs();
+  }
+  refreshGpsSimJoueurs();
+}
+
+function refreshGpsSimJoueurs() {
+  const seSel = document.getElementById('gsim-seances');
+  const jSel  = document.getElementById('gsim-joueurs');
+  if (!seSel || !jSel) return;
+  const firstKey = seSel.value || (seSel.options[0] && seSel.options[0].value) || '';
+  const [date, title] = firstKey.split('||');
+  const presents = new Set((state.bdd_gps || []).filter(g => g.date === date && (g.seance || g.session_title || '') === title).map(g => g.joueur));
+  const players = getAllPlayers();
+  const absents = players.filter(p => !presents.has(p));
+  const info = p => getJoueurInfo(p);
+  jSel.innerHTML = absents.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + (info(p).poste ? ' · ' + info(p).poste : '') + (info(p).groupe ? ' (' + info(p).groupe + ')' : '') + '</option>').join('');
+  if (absents.length === 0) {
+    jSel.innerHTML = '<option value="" disabled>Tous les joueurs de l\'effectif ont des données pour cette séance.</option>';
+  }
+}
+
+function _gsimComputeAverages(rows, base, joueur) {
+  // rows = toutes les lignes GPS d'une (date, seance, split) donné, joueurs présents
+  const info = getJoueurInfo(joueur);
+  let filtered = rows;
+  if (base === 'poste' && info.poste) {
+    const same = rows.filter(r => getJoueurInfo(r.joueur).poste === info.poste);
+    if (same.length > 0) filtered = same;
+  } else if (base === 'groupe' && info.groupe) {
+    const same = rows.filter(r => getJoueurInfo(r.joueur).groupe === info.groupe);
+    if (same.length > 0) filtered = same;
+  }
+  if (filtered.length === 0) return null;
+  const avg = {};
+  _GSIM_METRICS.forEach(k => {
+    const vals = filtered.map(r => (r[k] === null || r[k] === undefined || isNaN(r[k])) ? null : parseFloat(r[k])).filter(v => v !== null);
+    avg[k] = vals.length > 0 ? (vals.reduce((s, v) => s + v, 0) / vals.length) : null;
+  });
+  return { avg, count: filtered.length };
+}
+
+function _gsimJitter(v, ecartPct, isInt) {
+  if (v === null || v === undefined) return null;
+  const jitter = 1 + (Math.random() * 2 - 1) * (ecartPct / 100);
+  let out = v * jitter;
+  if (isInt) return Math.max(0, Math.round(out));
+  return Math.round(out * 100) / 100;
+}
+
+function _gsimBuildRows(base, ecartPct, splitsMode) {
+  const seSel = document.getElementById('gsim-seances');
+  const jSel  = document.getElementById('gsim-joueurs');
+  if (!seSel || !jSel) return { rows: [], warnings: [] };
+  const seKeys = Array.from(seSel.selectedOptions).map(o => o.value);
+  const joueurs = Array.from(jSel.selectedOptions).map(o => o.value).filter(Boolean);
+  const rows = []; const warnings = [];
+  seKeys.forEach(key => {
+    const [date, title] = key.split('||');
+    const sessionRows = (state.bdd_gps || []).filter(g => g.date === date && (g.seance || g.session_title || '') === title);
+    if (sessionRows.length === 0) return;
+    // Ne simuler que sur les splits présents dans la session (ou juste 'all')
+    let splitsToProcess;
+    if (splitsMode === 'all') {
+      splitsToProcess = ['all'];
+    } else {
+      const set = new Set(sessionRows.map(r => (r.split_name || 'all')));
+      splitsToProcess = Array.from(set);
+    }
+    joueurs.forEach(j => {
+      // Skip si le joueur a déjà des données sur cette séance
+      if (sessionRows.some(r => r.joueur === j)) { warnings.push(j + ' a déjà des données sur ' + title + ' — ignoré'); return; }
+      splitsToProcess.forEach(sp => {
+        const presents = sessionRows.filter(r => (r.split_name || 'all') === sp);
+        if (presents.length === 0) return;
+        const stats = _gsimComputeAverages(presents, base, j);
+        if (!stats) return;
+        const row = {
+          org: currentOrg, date, joueur: j,
+          seance: title || null, session_title: title || null, split_name: sp,
+          categorie: presents[0].categorie || 'seance',
+          simulated: true
+        };
+        _GSIM_METRICS.forEach(k => {
+          row[k] = _gsimJitter(stats.avg[k], ecartPct, _GSIM_INT_METRICS.has(k));
+        });
+        // Recalc dist_per_min si duree_min + distance_km connus (cohérence)
+        if (row.duree_min && row.distance_km) row.dist_per_min = Math.round((row.distance_km * 1000 / row.duree_min) * 10) / 10;
+        rows.push({ row, sourceCount: stats.count });
+      });
+    });
+  });
+  return { rows, warnings };
+}
+
+function renderGpsSimPreview() {
+  const previewEl = document.getElementById('gsim-preview');
+  if (!previewEl) return;
+  const base = (document.getElementById('gsim-base') || {}).value || 'all';
+  const ecart = Math.max(0, Math.min(50, parseFloat((document.getElementById('gsim-ecart') || {}).value || '8')));
+  const splitsMode = (document.getElementById('gsim-splits') || {}).value || 'all';
+  const { rows, warnings } = _gsimBuildRows(base, ecart, splitsMode);
+  if (rows.length === 0) {
+    previewEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Sélectionne au moins 1 séance et 1 joueur, puis clique Prévisualiser.</div>';
+    return;
+  }
+  let html = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">Aperçu : ' + rows.length + ' ligne(s) à créer</div>';
+  if (warnings.length) html += '<div style="color:var(--yellow); font-size:11px; margin-bottom:6px;">⚠️ ' + warnings.map(escapeHtml).join(' · ') + '</div>';
+  html += '<div class="table-wrap" style="max-height:280px;"><table style="width:100%; font-size:12px;"><thead><tr>' +
+    '<th style="text-align:left;">Joueur</th><th>Séance</th><th>Split</th><th>Durée</th><th>Dist (km)</th><th>Sprint (m)</th><th>HSR (m)</th><th>Vmax</th><th>Réf.</th>' +
+    '</tr></thead><tbody>';
+  rows.slice(0, 60).forEach(({ row, sourceCount }) => {
+    html += '<tr style="border-top:1px solid var(--border);">' +
+      '<td style="text-align:left; font-weight:600;">' + escapeHtml(row.joueur) + '</td>' +
+      '<td style="color:var(--text-dim);">' + escapeHtml(formatDateFR(row.date) + ' · ' + (row.seance || '')) + '</td>' +
+      '<td>' + escapeHtml(row.split_name) + '</td>' +
+      '<td>' + (row.duree_min || '—') + '</td>' +
+      '<td>' + (row.distance_km !== null ? row.distance_km : '—') + '</td>' +
+      '<td>' + (row.sprint_dist_m !== null ? Math.round(row.sprint_dist_m) : '—') + '</td>' +
+      '<td>' + (row.hsr_m !== null ? Math.round(row.hsr_m) : '—') + '</td>' +
+      '<td>' + (row.top_speed !== null ? row.top_speed : '—') + '</td>' +
+      '<td style="color:var(--text-dim);">n=' + sourceCount + '</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table></div>';
+  if (rows.length > 60) html += '<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">… + ' + (rows.length - 60) + ' autres lignes non affichées.</div>';
+  previewEl.innerHTML = html;
+}
+
+async function applyGpsSimulation() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const base = (document.getElementById('gsim-base') || {}).value || 'all';
+  const ecart = Math.max(0, Math.min(50, parseFloat((document.getElementById('gsim-ecart') || {}).value || '8')));
+  const splitsMode = (document.getElementById('gsim-splits') || {}).value || 'all';
+  const { rows, warnings } = _gsimBuildRows(base, ecart, splitsMode);
+  if (rows.length === 0) { toast('Aucune ligne à générer', 'info'); return; }
+  if (!confirm('Générer ' + rows.length + ' ligne(s) GPS simulée(s) ?\n\nElles seront marquées "simulated" et visibles dans les rapports comme les vraies données.')) return;
+  const payloads = rows.map(r => r.row);
+  const { data, error } = await sb.from('gps_data').insert(payloads).select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (data) data.forEach(d => state.bdd_gps.push(d));
+  try { _writeCache('gps_data', currentOrg, state.bdd_gps); } catch(e) {}
+  toast(payloads.length + ' ligne(s) GPS simulée(s) créée(s)', 'success');
+  renderGPS();
+}
+
 function renderGPS() {
   // Vue direction sportive : masquer les outils de gestion GPS
   if (currentRole === 'direction') {
@@ -17034,6 +17265,7 @@ function renderGPS() {
     const rg = document.querySelector('#gps-report-type')?.closest('.filter-group');
     if (rg) rg.style.display = 'none';
   }
+  populateGpsSimSelectors();
   if (!state.bdd_gps || state.bdd_gps.length === 0) {
     document.getElementById('gps-content').innerHTML = '<div class="card"><div class="empty-state">Aucune donnée GPS disponible.</div></div>';
     return;
