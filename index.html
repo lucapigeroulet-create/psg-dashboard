@@ -780,6 +780,7 @@
 
 <nav>
   <button class="nav-btn active" data-view="overview" data-en="📊 Overview" data-fr="📊 Vue d'ensemble" data-es="📊 Panorama">📊 Vue d'ensemble</button>
+  <button class="nav-btn" data-view="surveillant-overview" id="nav-surveillant-overview-btn" style="display:none;" data-en="👀 Overview" data-fr="👀 Vue d'ensemble" data-es="👀 Panorama">👀 Vue d'ensemble</button>
   <button class="nav-btn" data-view="calendar" data-en="📅 Session" data-fr="📅 Séance" data-es="📅 Sesión">📅 Séance</button>
   <button class="nav-btn" data-view="joueur" data-en="👤 Player" data-fr="👤 Joueur" data-es="👤 Jugador">👤 Joueur</button>
   <button class="nav-btn" data-view="staff-hooper" data-en="💚 Wellness" data-fr="💚 État de forme" data-es="💚 Estado físico">💚 État de forme</button>
@@ -800,6 +801,7 @@
       <button class="nav-btn" data-view="reathletisation" id="nav-reathletisation-btn" data-en="🩼 Rehab" data-fr="🩼 Réathlétisation" data-es="🩼 Reatletización">🩼 Réathlétisation</button>
       <button class="nav-btn" data-view="musculation" id="nav-musculation-btn" data-en="🏋️ Strength" data-fr="🏋️ Musculation" data-es="🏋️ Musculación">🏋️ Musculation</button>
       <button class="nav-btn" data-view="reco-entrainement" id="nav-reco-entrainement-btn" data-en="💡 Training recommendation" data-fr="💡 Recommandation d'entraînement" data-es="💡 Recomendación de entreno">💡 Recommandation d'entraînement</button>
+      <button class="nav-btn" data-view="recovery-planning" id="nav-recovery-planning-btn" data-en="🧊 Recovery" data-fr="🧊 Récupération" data-es="🧊 Recuperación">🧊 Récupération</button>
     </div>
   </div>
   <div class="nav-dropdown" id="nav-medical-dropdown">
@@ -826,6 +828,7 @@
       <button class="nav-btn" data-view="match-entry" data-en="⚽ Match entry" data-fr="⚽ Saisie match" data-es="⚽ Registrar partido">⚽ Saisie match</button>
       <button class="nav-btn" data-view="injury-entry" data-en="🩹 Injury entry" data-fr="🩹 Saisie blessures" data-es="🩹 Registrar lesiones">🩹 Saisie blessures</button>
       <button class="nav-btn" data-view="rpe-entry" data-en="⭐ RPE entry" data-fr="⭐ Saisie RPE" data-es="⭐ Registrar RPE">⭐ Saisie RPE</button>
+      <button class="nav-btn" data-view="video-entry" data-en="🎥 Video entry" data-fr="🎥 Saisie vidéo" data-es="🎥 Registrar video">🎥 Saisie vidéo</button>
     </div>
   </div>
   <div class="nav-dropdown" id="nav-params-dropdown">
@@ -841,8 +844,16 @@
   </div>
   <!-- Onglets joueur (visibles uniquement pour les lecteurs) -->
   <button class="nav-btn player-only" data-view="player-overview" style="display:none;" data-en="🏠 Overview" data-fr="🏠 Vue d'ensemble" data-es="🏠 Panorama">🏠 Vue d'ensemble</button>
-  <button class="nav-btn player-only" data-view="player-seances" style="display:none;" data-en="📋 My sessions" data-fr="📋 Mes séances" data-es="📋 Mis sesiones">📋 Mes séances</button>
-  <button class="nav-btn player-only" data-view="player-soins" style="display:none;" data-en="🩺 Physio" data-fr="🩺 Soins kiné" data-es="🩺 Tratamientos fisio">🩺 Soins kiné</button>
+  <!-- Bouton simple "Soins kiné" pour les joueurs NON-PSG (affiché par applyRoleRestrictions) -->
+  <button class="nav-btn player-only" data-view="player-soins" id="nav-player-soins-btn" style="display:none;" data-en="🩺 Physio" data-fr="🩺 Soins kiné" data-es="🩺 Tratamientos fisio">🩺 Soins kiné</button>
+  <!-- Dropdown "Recovery" (Physio + Récupération) pour les joueurs PSG uniquement -->
+  <div class="nav-dropdown player-only" id="nav-player-recovery-dropdown" style="display:none;">
+    <button type="button" class="nav-btn nav-dropdown-toggle player-only" id="nav-player-recovery-toggle" onclick="togglePlayerRecoveryMenu(event)" data-en="🧊 Recovery ▾" data-fr="🧊 Recovery ▾" data-es="🧊 Recovery ▾">🧊 Recovery <span style="font-size:10px;">▾</span></button>
+    <div class="nav-dropdown-menu" id="nav-player-recovery-menu">
+      <button class="nav-btn player-only" data-view="player-soins" data-en="🩺 Physio" data-fr="🩺 Physio" data-es="🩺 Fisio">🩺 Physio</button>
+      <button class="nav-btn player-only" data-view="player-recovery" data-en="🧊 Recovery" data-fr="🧊 Récupération" data-es="🧊 Recuperación">🧊 Récupération</button>
+    </div>
+  </div>
   <button class="nav-btn player-only" data-view="player-rpe" style="display:none;" data-en="⭐ Rate sessions" data-fr="⭐ Noter les séances" data-es="⭐ Calificar las sesiones">⭐ Rate sessions</button>
   <button class="nav-btn player-only" data-view="player-history" style="display:none;" data-en="📊 My ratings" data-fr="📊 Mes notes" data-es="📊 Mis calificaciones">📊 My ratings</button>
   <button class="nav-btn player-only" data-view="player-hooper" style="display:none;" data-en="💚 Daily check-in" data-fr="💚 État de forme">💚 Daily check-in</button>
@@ -852,6 +863,7 @@
   <button class="nav-btn player-only" data-view="messages" style="display:none;" data-en="📣 Messages" data-fr="📣 Messages" data-es="📣 Mensajes">📣 Messages</button>
   <button class="nav-btn player-only" data-view="player-fiche" style="display:none;" data-en="👤 My profile" data-fr="👤 Ma fiche" data-es="👤 Mi ficha">👤 Ma fiche</button>
   <button class="nav-btn player-only" data-view="player-amendes" style="display:none;" data-en="💰 My fines" data-fr="💰 Mes amendes" data-es="💰 Mis multas">💰 Mes amendes</button>
+  <button class="nav-btn player-only" data-view="player-seances" style="display:none;" data-en="📋 My sessions" data-fr="📋 Mes séances" data-es="📋 Mis sesiones">📋 Mes séances</button>
 </nav>
 
 <main>
@@ -866,10 +878,23 @@
       <div class="stat"><div class="stat-label">RPE déclarés</div><div class="stat-value" id="stat-rpe">—</div></div>
     </div>
 
-    <!-- 1) Charges quotidiennes avec filtre équipe/joueur + intervalle de dates -->
+    <!-- 1) Charges quotidiennes / hebdo avec filtre équipe/joueur + intervalle de dates -->
     <div class="card">
-      <h2>Charges quotidiennes (sRPE)</h2>
+      <h2 id="overview-charge-title">Charges quotidiennes (sRPE)</h2>
       <div class="filters" style="margin-bottom:12px;">
+        <div class="filter-group">
+          <label>Granularité</label>
+          <select id="overview-charge-granularity" onchange="renderOverviewCharges()">
+            <option value="day" selected>Jour</option>
+            <option value="week">Semaine</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Type de séance</label>
+          <select id="overview-charge-type" onchange="renderOverviewCharges()">
+            <option value="">Tous</option>
+          </select>
+        </div>
         <div class="filter-group">
           <label>Filtrer par</label>
           <select id="overview-charge-scope" onchange="onOverviewScopeChange()">
@@ -1254,7 +1279,11 @@
     <div class="card">
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <h2 style="margin:0;">👤 Tableau de bord joueur</h2>
-        <select id="joueur-dash-select" onchange="renderPlayerDashboard()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:14px; min-width:180px;"></select>
+        <div style="display:flex; gap:4px; align-items:center;">
+          <button class="btn btn-secondary" onclick="stepPlayerDash(-1)" title="Joueur précédent" style="padding:6px 10px; font-size:15px; font-weight:700;">◀</button>
+          <select id="joueur-dash-select" onchange="renderPlayerDashboard()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:14px; min-width:180px;"></select>
+          <button class="btn btn-secondary" onclick="stepPlayerDash(1)" title="Joueur suivant" style="padding:6px 10px; font-size:15px; font-weight:700;">▶</button>
+        </div>
         <select id="joueur-dash-period" onchange="renderPlayerDashboard()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:13px;">
           <option value="all">Toute la saison</option>
           <option value="90">90 derniers jours</option>
@@ -1266,6 +1295,7 @@
         Vue individuelle consolidée : temps de jeu, temps et charge d'entraînement, meilleur match et rapport GPS. Le détail (graphiques) est sous les chiffres clés.
       </p>
     </div>
+    <div id="joueur-fiche-globale"></div>
     <div id="joueur-dash-kpis"></div>
     <div id="joueur-dash-charts"></div>
   </div>
@@ -1506,6 +1536,73 @@
     </div>
 
     <div id="gps-content"></div>
+
+    <!-- ===== SIMULATEUR GPS : générer des données pour les joueurs sans GPS ===== -->
+    <div class="card" style="margin-top:18px; border:1px dashed var(--accent);">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+        <div style="flex:1; min-width:0;">
+          <h2 style="margin:0;">🧪 Simuler des données GPS manquantes</h2>
+          <p style="color:var(--text-dim); font-size:12px; margin:4px 0 0;">Pour un joueur qui a oublié son GPS : génère des données réalistes à partir de la moyenne des coéquipiers présents (groupe ou poste) avec un écart réglable. Les lignes créées sont marquées <code>simulated</code> pour être identifiables.</p>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top:12px;">
+        <div style="flex:2;">
+          <label>Séances</label>
+          <select id="gsim-seances" multiple size="6" style="width:100%; min-height:120px;"></select>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">Ctrl/Cmd + clic pour sélectionner plusieurs séances. Liste triée récent-first.</div>
+        </div>
+        <div style="flex:2;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <label style="margin:0;">Joueurs à simuler (sans données GPS)</label>
+            <select id="gsim-group-filter" onchange="refreshGpsSimJoueurs()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:11px;">
+              <option value="">Tous les groupes</option>
+            </select>
+          </div>
+          <select id="gsim-joueurs" multiple size="6" style="width:100%; min-height:120px; margin-top:4px;"></select>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">Uniquement les joueurs qui avaient une <b>séance affectée</b> ce jour-là (absents/blessés exclus).</div>
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top:10px;">
+        <div>
+          <label>Base de calcul</label>
+          <select id="gsim-base">
+            <option value="poste">Moyenne du poste</option>
+            <option value="groupe">Moyenne du groupe</option>
+            <option value="all" selected>Moyenne équipe (présents)</option>
+          </select>
+        </div>
+        <div>
+          <label>Écart aléatoire (±%)</label>
+          <input type="number" id="gsim-ecart" min="0" max="50" value="8" style="width:100px;" />
+          <div style="font-size:11px; color:var(--text-dim); margin-top:3px;">Ex : 8 = variation ±8 % autour de la moyenne, par joueur et par métrique.</div>
+        </div>
+        <div>
+          <label>Découpages</label>
+          <select id="gsim-splits">
+            <option value="all" selected>Séance entière (all) uniquement</option>
+            <option value="all_and_splits">Séance entière + tous les découpages</option>
+          </select>
+        </div>
+        <div style="display:flex; align-items:end;">
+          <button class="btn btn-secondary" style="padding:8px 14px;" onclick="renderGpsSimPreview()">🔍 Prévisualiser</button>
+        </div>
+        <div style="display:flex; align-items:end;">
+          <button class="btn" style="padding:8px 14px;" onclick="applyGpsSimulation()">✅ Générer & enregistrer</button>
+        </div>
+      </div>
+
+      <div style="margin-top:10px; padding:10px 12px; background:rgba(167,139,250,0.08); border:1px dashed #a78bfa; border-radius:8px;">
+        <div style="font-size:12px; font-weight:700; color:#c4b5fd; margin-bottom:6px;">🔧 Compléter les découpages manquants</div>
+        <div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Ajoute les découpages (splits) manquants sur les joueurs qui n'ont que la ligne « all » sur la séance sélectionnée — utile si tu as généré une première fois avec l'option « Séance entière uniquement ».</div>
+        <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="completeGpsSimulationSplits()">🔧 Compléter les découpages</button>
+      </div>
+
+      <div id="gsim-preview" style="margin-top:12px;"></div>
+    </div>
+    <!-- ===== FIN simulateur GPS ===== -->
+
   </div>
 
   <!-- ========== DISPONIBILITÉ ========== -->
@@ -1982,6 +2079,22 @@
         </table>
       </div>
     </div>
+
+    <!-- ========== SÉANCES DU JOUR (récap + envoi RPE) ========== -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px;">
+        <div>
+          <h2 style="margin:0;">📋 Séances du jour</h2>
+          <p style="color:var(--text-dim); font-size:12px; margin-top:4px; margin-bottom:0;">Récapitulatif des séances existantes pour la date choisie. À la fin de la séance, clique <b>📢 Envoyer RPE</b> : le chrono 4h démarre et les joueurs peuvent noter. Tant que ce n'est pas envoyé, ils voient uniquement le programme du jour.</p>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <label style="font-size:12px; color:var(--text-dim);">Date</label>
+          <input type="date" id="entry-jour-date" onchange="renderEntryJourTable()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:13px;">
+          <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="renderEntryJourTable()">↻</button>
+        </div>
+      </div>
+      <div id="entry-jour-content"></div>
+    </div>
   </div>
 
   <!-- ========== SAISIE RPE ========== -->
@@ -2138,6 +2251,80 @@
     </div>
   </div>
 
+  <!-- ========== SAISIE VIDÉO (recense les séances vidéo + thèmes abordés) ========== -->
+  <div class="view" id="view-video-entry">
+    <div class="card">
+      <h2 style="margin:0;">🎥 Saisie vidéo</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-top:4px;">Recense les séances d'analyse vidéo faites avec les joueurs : date, type d'analyse, thèmes abordés, participants et notes.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 10px;">➕ Nouvelle séance vidéo</h3>
+      <div class="form-row">
+        <div>
+          <label>Date <span style="color:var(--red);">*</span></label>
+          <input type="date" id="ve-date" />
+        </div>
+        <div>
+          <label>Titre <span style="color:var(--red);">*</span></label>
+          <input type="text" id="ve-titre" placeholder="Ex : Analyse défensive vs Rennes" maxlength="120" />
+        </div>
+        <div>
+          <label>Type d'analyse</label>
+          <select id="ve-type">
+            <option value="">—</option>
+            <option value="Collective">🎬 Collective</option>
+            <option value="Individuelle">👤 Individuelle</option>
+            <option value="Adversaire">🕵️ Adversaire</option>
+            <option value="Auto-analyse">🪞 Auto-analyse</option>
+            <option value="Autre">Autre</option>
+          </select>
+        </div>
+        <div>
+          <label>Durée (min)</label>
+          <input type="number" id="ve-duree" min="0" max="240" placeholder="Ex : 30" style="width:100px;" />
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <label>Thèmes abordés <span style="color:var(--text-dim); font-weight:400; font-size:11px;">— choisis dans la bibliothèque (Paramètres → Vignettes) ou ajoute des thèmes libres ci-dessous</span></label>
+        <div id="ve-vign-chips" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0;"></div>
+        <select id="ve-vign-select" onchange="onVeVignSelect()" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:13px;"><option value="">+ Ajouter une vignette…</option></select>
+        <input type="text" id="ve-themes" placeholder="Thèmes libres, séparés par une virgule (ex : Sorties de balle, Bloc médian)" style="width:100%; margin-top:6px;" />
+      </div>
+
+      <div style="margin-top:12px;">
+        <label>Joueurs concernés <span style="color:var(--text-dim); font-weight:400; font-size:11px;">— cliquer pour sélectionner</span></label>
+        <div id="ve-joueurs-wrap" style="display:flex; flex-wrap:wrap; gap:6px; padding:8px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; max-height:180px; overflow:auto;"></div>
+        <div style="margin-top:6px;">
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="veToggleAllJoueurs(true)">Tout cocher</button>
+          <button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="veToggleAllJoueurs(false)">Tout décocher</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <label>Notes (optionnel)</label>
+        <textarea id="ve-notes" rows="3" placeholder="Contexte, extraits utilisés, consignes données…" style="width:100%;"></textarea>
+      </div>
+
+      <div style="margin-top:14px; display:flex; gap:8px;">
+        <button class="btn" onclick="saveVideoSeance()">💾 Enregistrer</button>
+        <button class="btn btn-secondary" onclick="resetVideoForm()">✕ Réinitialiser</button>
+        <span id="ve-editing-note" style="font-size:12px; color:var(--yellow); display:none; align-self:center;">✏️ Édition en cours</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:8px;">
+        <h3 style="margin:0;">📚 Historique</h3>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="text" id="ve-search" placeholder="Recherche (titre, thème, joueur…)" oninput="renderVideoList()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:220px;" />
+          <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="renderVideoList()">↻</button>
+        </div>
+      </div>
+      <div id="ve-list"></div>
+    </div>
+  </div>
+
   <div class="view" id="view-rpe-entry">
     <div class="card">
       <h2>Saisie des RPE déclarés par les joueurs</h2>
@@ -2158,8 +2345,8 @@
         <div>
           <label>Mode d'affichage</label>
           <div style="display:flex; gap:0; border:1px solid var(--border); border-radius:6px; overflow:hidden;">
-            <button id="rpe-mode-table" onclick="setRPEMode('table')" style="flex:1; background:var(--accent); color:white; border:none; padding:8px; cursor:pointer; font-size:13px; font-weight:600;">📋 Tableau</button>
-            <button id="rpe-mode-card" onclick="setRPEMode('card')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:8px; cursor:pointer; font-size:13px; font-weight:600;">🎴 Carte joueur</button>
+            <button id="rpe-mode-table" onclick="setRPEMode('table')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:8px; cursor:pointer; font-size:13px; font-weight:600;">📋 Tableau</button>
+            <button id="rpe-mode-card" onclick="setRPEMode('card')" style="flex:1; background:var(--accent); color:white; border:none; padding:8px; cursor:pointer; font-size:13px; font-weight:600;">🎴 Carte joueur</button>
           </div>
         </div>
       </div>
@@ -2174,7 +2361,7 @@
       <div id="rpe-match-section"></div>
 
       <!-- Vue tableau (existante) -->
-      <div id="rpe-view-table">
+      <div id="rpe-view-table" style="display:none;">
         <div class="table-wrap" style="max-height:600px;">
           <table id="rpe-entry-table">
             <thead><tr><th>Joueur</th><th>Groupe</th><th>Séances → RPE</th></tr></thead>
@@ -2183,8 +2370,8 @@
         </div>
       </div>
 
-      <!-- Vue carte joueur -->
-      <div id="rpe-view-card" style="display:none;">
+      <!-- Vue carte joueur (défaut) -->
+      <div id="rpe-view-card">
         <div id="rpe-card-container"></div>
       </div>
     </div>
@@ -2275,6 +2462,28 @@
         <button class="settings-tab" data-tab="coachs" onclick="switchSettingsTab('coachs')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">🧑‍🏫 Coachs</button>
         <button class="settings-tab" data-tab="ratios" onclick="switchSettingsTab('ratios')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">📐 Ratios de travail</button>
         <button class="settings-tab" data-tab="logos" onclick="switchSettingsTab('logos')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">🖼️ Logos</button>
+        <button class="settings-tab" data-tab="fiches" onclick="switchSettingsTab('fiches')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">📋 Fiches joueurs</button>
+      </div>
+    </div>
+
+    <!-- Onglet FICHES JOUEURS : suivi d'avancement du remplissage -->
+    <div id="settings-fiches" class="settings-pane" style="display:none;">
+      <div class="card">
+        <h2 style="margin:0;">📋 Fiches joueurs — état d'avancement</h2>
+        <p style="color:var(--text-dim); font-size:12px; margin-top:4px; margin-bottom:12px;">
+          Suivi du remplissage des <b>fiches globales numériques</b> (onglet Joueur). Un joueur est « complet » à 100 % quand tous les champs suivants sont renseignés : photo, contrat, ancienneté, sélection, pied fort, qualités, superpouvoir, 3 points forts, 3 axes d'amélioration, 3 plans d'action.
+        </p>
+        <div id="settings-fiches-summary" class="stats-grid" style="margin-bottom:12px;"></div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+          <input type="text" id="fiches-search" placeholder="Recherche joueur…" oninput="renderSettingsFiches()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:200px;" />
+          <select id="fiches-filter" onchange="renderSettingsFiches()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;">
+            <option value="all">Tous les joueurs</option>
+            <option value="incomplete">Incomplètes uniquement</option>
+            <option value="complete">Complètes uniquement</option>
+          </select>
+          <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="renderSettingsFiches()">↻</button>
+        </div>
+        <div id="settings-fiches-content"></div>
       </div>
     </div>
 
@@ -2527,7 +2736,13 @@
       <div id="po-hooper-content"></div>
     </div>
 
-    <!-- 2. RPE à noter -->
+    <!-- 2. Programme du jour (séances affectées, RPE pas encore publiée) -->
+    <div class="card" id="po-programme-card" style="display:none;">
+      <h2 data-en="📋 Today's programme" data-fr="📋 Programme du jour" data-es="📋 Programa del día">📋 Programme du jour</h2>
+      <div id="po-programme-content"></div>
+    </div>
+
+    <!-- 3. RPE à noter (visible uniquement pour les séances dont le staff a publié la RPE) -->
     <div class="card" id="po-rpe-card">
       <h2 data-en="⭐ Sessions to rate" data-fr="⭐ Séances à noter" data-es="⭐ Sesiones por calificar">⭐ Séances à noter</h2>
       <div id="po-rpe-content"></div>
@@ -2538,10 +2753,13 @@
       <div id="po-minijeu-content"></div>
     </div>
 
-    <!-- 4. Séances 7 jours à venir -->
-    <div class="card" id="po-seances-card">
-      <h2 data-en="📋 Upcoming sessions (7 days)" data-fr="📋 Séances à venir (7 jours)" data-es="📋 Próximas sesiones (7 días)">📋 Séances à venir (7 jours)</h2>
-      <div id="po-seances-content"></div>
+    <!-- 4. Créneaux kiné (mes réservations + prochains libres) -->
+    <div class="card" id="po-soins-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
+        <h2 style="margin:0;" data-en="🩺 Physio slots" data-fr="🩺 Créneaux kiné" data-es="🩺 Turnos fisio">🩺 Créneaux kiné</h2>
+        <button class="btn btn-secondary" style="padding:5px 12px; font-size:12px;" onclick="document.querySelector('.nav-btn[data-view=player-soins]').click()" data-en="See all →" data-fr="Voir tous →" data-es="Ver todos →">Voir tous →</button>
+      </div>
+      <div id="po-soins-content"></div>
     </div>
 
   </div>
@@ -3034,9 +3252,36 @@
     </div>
   </div>
 
-  <!-- ========== VUE STAFF : SUIVI HOOPER ========== -->
-  <div class="view" id="view-staff-hooper">
+  <!-- ========== VUE SURVEILLANT : RÉSUMÉ ÉTAT DE FORME + RPE MANQUANTES ========== -->
+  <div class="view" id="view-surveillant-overview">
     <div class="card">
+      <h2 style="margin:0;">👀 Vue d'ensemble surveillant</h2>
+      <p style="color:var(--text-dim); font-size:13px; margin-top:4px;">Résumé rapide de l'état de forme du jour et des RPE manquantes. Sélectionne une date pour changer la référence.</p>
+      <div style="display:flex; gap:10px; align-items:center; margin-top:8px;">
+        <label style="font-size:12px; color:var(--text-dim);">Date</label>
+        <input type="date" id="sv-date" onchange="renderSurveillantOverview()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 10px; font-size:13px;">
+        <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="renderSurveillantOverview()">↻</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px;">💚 État de forme du jour</h2>
+      <div class="stats-grid" id="sv-hooper-stats" style="margin-bottom:12px;"></div>
+      <div id="sv-hooper-list"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin:0 0 8px;">⭐ RPE manquantes du jour</h2>
+      <div id="sv-rpe-content"></div>
+      <p style="font-size:11px; color:var(--text-dim); margin-top:8px;">💡 Seules les séances dont la RPE a été envoyée aux joueurs sont comptées.</p>
+    </div>
+  </div>
+
+  <!-- ========== VUE STAFF : SUIVI HOOPER ========== -->
+  <!-- Vue complète pour staff/admin ; le surveillant voit uniquement les 2 cartes
+       "Évaluations manquantes" + "Toutes les réponses" (JS cache .hooper-full-only). -->
+  <div class="view" id="view-staff-hooper">
+    <div class="card hooper-full-only">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px;">
         <div style="flex:1 1 300px; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:12px;">
           <div>
@@ -3061,19 +3306,19 @@
       </div>
     </div>
 
-    <div class="stats-grid">
+    <div class="stats-grid hooper-full-only">
       <div class="stat"><div class="stat-label">Réponses (7j)</div><div class="stat-value" id="hooper-stat-count">—</div></div>
       <div class="stat"><div class="stat-label">Hooper moyen (équipe)</div><div class="stat-value" id="hooper-stat-avg">—</div></div>
       <div class="stat"><div class="stat-label">Joueurs à surveiller</div><div class="stat-value" id="hooper-stat-alerts">—</div></div>
       <div class="stat"><div class="stat-label">Taux de réponse aujourd'hui</div><div class="stat-value" id="hooper-stat-today">—</div></div>
     </div>
 
-    <div class="card">
+    <div class="card hooper-full-only">
       <h2>Tendance équipe (Hooper moyen / jour)</h2>
       <div class="chart-container tall"><canvas id="chart-staff-hooper-team"></canvas></div>
     </div>
 
-    <div class="card">
+    <div class="card hooper-full-only">
       <h2 id="hooper-alerts-title">Joueurs à surveiller (Hooper élevé ces 3 derniers jours)</h2>
       <div class="table-wrap">
         <table id="hooper-alerts-table">
@@ -3083,7 +3328,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card hooper-full-only">
       <h2>Tableau de bord par joueur</h2>
       <div class="filters">
         <div class="filter-group">
@@ -3109,7 +3354,7 @@
     </div>
 
     <!-- SECONDE LIGUE (D2F) uniquement : bilan motivation & humeur -->
-    <div class="card" id="d2f-bilan-card" style="display:none;">
+    <div class="card hooper-full-only" id="d2f-bilan-card" style="display:none;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:6px;">
         <h2 style="margin:0;">🔥 Bilan motivation &amp; humeur</h2>
         <input type="date" id="d2f-bilan-date" onchange="renderD2FBilan()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;" />
@@ -3157,7 +3402,7 @@
     </div>
 
     <!-- SECONDE LIGUE (D2F) uniquement : joueuses en période de règles -->
-    <div class="card" id="d2f-cycle-card" style="display:none;">
+    <div class="card hooper-full-only" id="d2f-cycle-card" style="display:none;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:6px;">
         <h2 style="margin:0;">🩸 Joueuses en période de règles</h2>
         <input type="date" id="d2f-cycle-date" onchange="renderD2FCycle()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;" />
@@ -3264,6 +3509,36 @@
           <button class="btn" onclick="saveTestResult()">💾 Enregistrer</button>
         </div>
       </div>
+    </div>
+
+    <!-- 2bis) Saisie GROUPÉE par joueur (tableau ligne par ligne) -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+        <div style="flex:1; min-width:0;">
+          <h2 style="margin:0;">🧮 Saisie groupée (tableau)</h2>
+          <p style="color:var(--text-dim); font-size:12px; margin:4px 0 0;">Renseigne le même test pour plusieurs joueurs à la suite. Laisse les champs vides pour ceux que tu ne veux pas enregistrer. Un clic « Enregistrer » sauve toutes les lignes remplies d'un coup.</p>
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:10px;">
+        <div style="flex:1;">
+          <label>Test</label>
+          <select id="bt-type" onchange="renderBulkTestTable()"></select>
+        </div>
+        <div>
+          <label>Date</label>
+          <input type="date" id="bt-date" onchange="renderBulkTestTable()" />
+        </div>
+        <div style="flex:1;">
+          <label>Filtrer par groupe</label>
+          <select id="bt-group" onchange="renderBulkTestTable()"><option value="">Tous les groupes</option></select>
+        </div>
+        <div style="display:flex; align-items:end; gap:8px;">
+          <button class="btn" onclick="saveBulkTestResults()">💾 Enregistrer les valeurs remplies</button>
+          <button class="btn btn-secondary" onclick="renderBulkTestTable()" title="Rafraîchir">↻</button>
+        </div>
+      </div>
+      <div id="bt-hint" style="font-size:11px; color:var(--text-dim); margin-top:6px;"></div>
+      <div id="bt-table-wrap" style="margin-top:10px;"></div>
     </div>
 
     <!-- 3) Résultats enregistrés -->
@@ -3801,6 +4076,16 @@
   </div>
   <!-- ===== FIN VUE SOINS KINÉ ===== -->
 
+  <!-- ===== VUE JOUEUR : RECOVERY (bottes de récup / bain froid, PSG) ===== -->
+  <div class="view" id="view-player-recovery">
+    <div class="card">
+      <h2 data-en="🧊 Recovery slots" data-fr="🧊 Créneaux récupération" data-es="🧊 Franjas de recuperación">🧊 Créneaux récupération</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:12px;" data-en="Pick a free recovery slot: recovery boots OR cold bath. You can book only one recovery slot per day (not both)." data-fr="Choisis un créneau libre : bottes de récupérations OU bain froid. Tu ne peux réserver qu'un seul créneau de récupération par jour (pas les deux)." data-es="Elige una franja libre: botas de recuperación O baño frío. Solo puedes reservar una franja de recuperación al día (no ambas).">Choisis un créneau libre : bottes de récupérations OU bain froid. Tu ne peux réserver qu'un seul créneau de récupération par jour (pas les deux).</p>
+      <div id="player-recovery-list"></div>
+    </div>
+  </div>
+  <!-- ===== FIN VUE RECOVERY JOUEUR ===== -->
+
   <!-- ===== VUE MA FICHE (joueur, lecture seule) ===== -->
   <div class="view" id="view-player-fiche">
     <div class="card">
@@ -4094,6 +4379,64 @@
   <!-- ===== FIN VUE QUESTIONNAIRE ===== -->
 
   <!-- ===== VUE PLANNING SOINS (kiné) ===== -->
+  <!-- ===== VUE STAFF : PLANNING RÉCUPÉRATION (bottes / bain froid, PSG) ===== -->
+  <div class="view" id="view-recovery-planning">
+    <div class="card">
+      <h2>🧊 Planning récupération — PSG</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:14px;">Crée des créneaux de récupération (bottes de récupération / bain froid). Les joueurs PSG réservent un créneau libre depuis leur onglet <b>Recovery</b>. Chaque joueur peut réserver <b>1 créneau par type et par jour</b>.</p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+        <div class="filter-group">
+          <label style="font-size:11px; color:var(--text-dim);">Type</label>
+          <select id="rc-type" style="min-width:180px;">
+            <option value="bottes">🦵 Bottes de récupérations</option>
+            <option value="bain-froid">🧊 Bain froid</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label style="font-size:11px; color:var(--text-dim);">Date</label>
+          <input type="date" id="rc-date" style="min-width:150px;" />
+        </div>
+        <div class="filter-group">
+          <label style="font-size:11px; color:var(--text-dim);">Heure de début</label>
+          <input type="time" id="rc-heure" value="14:00" style="min-width:120px;" />
+        </div>
+        <div class="filter-group">
+          <label style="font-size:11px; color:var(--text-dim);">Durée</label>
+          <select id="rc-duree" style="min-width:110px;">
+            <option value="10">10 min</option>
+            <option value="15" selected>15 min</option>
+            <option value="20">20 min</option>
+            <option value="25">25 min</option>
+            <option value="30">30 min</option>
+            <option value="40">40 min</option>
+            <option value="45">45 min</option>
+            <option value="60">1h</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label style="font-size:11px; color:var(--text-dim);">Places (1-5)</label>
+          <input type="number" id="rc-capacity" value="1" min="1" max="5" style="min-width:80px;" />
+        </div>
+        <div class="filter-group">
+          <label style="font-size:11px; color:var(--text-dim);">Nombre de créneaux</label>
+          <input type="number" id="rc-count" value="1" min="1" max="30" style="min-width:90px;" />
+        </div>
+        <button class="btn" onclick="addRecoveryCreneaux()">➕ Ajouter</button>
+      </div>
+      <p style="color:var(--text-dim); font-size:11px; margin-top:8px;">Plusieurs créneaux = créés à la suite, sans pause (ex. 3 × 15 min dès 14:00 → 14:00, 14:15, 14:30). <b>Places</b> = nombre de joueurs pouvant s'inscrire sur le même créneau (max 5).</p>
+    </div>
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+        <h2 style="margin:0;">🗓️ Créneaux à venir</h2>
+        <label style="font-size:12px; color:var(--text-dim); display:flex; align-items:center; gap:6px; cursor:pointer;">
+          <input type="checkbox" id="rc-show-past" onchange="renderRecoveryPlanning()" /> Afficher les créneaux passés
+        </label>
+      </div>
+      <div id="rc-list"></div>
+    </div>
+  </div>
+  <!-- ===== FIN VUE RÉCUP STAFF ===== -->
+
   <div class="view" id="view-medical-planning">
     <div id="mp-push-banner"></div>
     <div class="card">
@@ -4985,6 +5328,8 @@ function closeMedNoteDetail() {
 
 // Ouvre le détail d'un passage kiné : compte-rendu (ce qui a été réalisé), type, restrictions.
 function openKineDetail(id) {
+  // Direction : confidentialité médicale — aucun détail kiné accessible
+  if (currentRole === 'direction') return;
   const s = (state.bdd_creneaux_medicaux || []).find(x => x.id === id);
   const modal = document.getElementById('kine-detail-modal');
   const titleEl = document.getElementById('kine-detail-title');
@@ -5479,6 +5824,531 @@ async function annulerReservation(id) {
   if (error) { toast(tr('Error: ', 'Erreur : ') + error.message, 'error'); return; }
   toast(tr('Booking cancelled', 'Réservation annulée'), 'success');
   renderPlayerSoins();
+}
+
+// ============================================================================
+// PLANNING RÉCUPÉRATION (creneaux_recuperation) — bottes / bain froid, PSG.
+// Structure calquée sur soins kiné mais table séparée. 1 créneau par TYPE par jour.
+// ============================================================================
+const RECOVERY_TYPES = {
+  'bottes':     { label_fr: 'Bottes de récupérations', label_en: 'Recovery boots', label_es: 'Botas de recuperación', emoji: '🦵' },
+  'bain-froid': { label_fr: 'Bain froid',              label_en: 'Cold bath',      label_es: 'Baño frío',             emoji: '🧊' }
+};
+function _rcLang() { try { return (typeof playerLang === 'function') ? playerLang() : 'fr'; } catch(e) { return 'fr'; } }
+function _rcLabel(t) {
+  const e = RECOVERY_TYPES[t] || {};
+  const l = _rcLang();
+  return e['label_' + l] || e.label_fr || t;
+}
+function _rcEmoji(t)  { return (RECOVERY_TYPES[t] || {}).emoji || '❄️'; }
+function _rcAddMin(hhmm, mins) { return _cmAddMinutes(hhmm, mins); }
+
+// ---- Staff ----
+async function renderRecoveryPlanning() {
+  const list = document.getElementById('rc-list');
+  if (!list) return;
+  const dateInput = document.getElementById('rc-date');
+  if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+  list.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Chargement…</div>';
+  const showPast = !!(document.getElementById('rc-show-past') || {}).checked;
+  const today = new Date().toISOString().slice(0, 10);
+  let q = sb.from('creneaux_recuperation').select('*').eq('org', currentOrg);
+  if (!showPast) q = q.gte('date', today);
+  const { data, error } = await q.order('date').order('heure');
+  if (error) { list.innerHTML = '<div style="color:var(--red);">' + escapeHtml(error.message) + '</div>'; return; }
+  const slots = data || [];
+  if (slots.length === 0) {
+    list.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Aucun créneau ' + (showPast ? '' : 'à venir') + '.</div>';
+    return;
+  }
+  const byDate = {};
+  slots.forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
+  let html = '';
+  Object.keys(byDate).sort().forEach(d => {
+    html += '<div style="margin-bottom:16px;">';
+    html += '<div style="font-weight:700; font-size:13px; margin-bottom:6px; color:var(--accent-light);">' + formatDateFR(d) + '</div>';
+    byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => {
+      const fin      = _rcAddMin(s.heure, s.duree_min || 15);
+      const joueurs  = Array.isArray(s.joueurs) ? s.joueurs : [];
+      const capacity = s.capacity || 1;
+      const taken    = joueurs.length;
+      const free     = taken === 0;
+      const full     = taken >= capacity;
+      const bg   = free ? 'var(--bg-elevated)' : (full ? 'rgba(22,101,52,0.20)' : 'rgba(251,191,36,0.10)');
+      const bord = free ? 'var(--accent)'      : (full ? 'var(--green)'         : 'var(--yellow)');
+      const inscritsHtml = joueurs.length
+        ? ' · <span style="color:var(--green); font-weight:600;">' + joueurs.map(escapeHtml).join(', ') + '</span>'
+        : '';
+      html += '<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; border-radius:8px; padding:9px 12px; margin-bottom:5px; background:' + bg + '; border-left:3px solid ' + bord + ';">' +
+        '<div style="font-size:13px;">' + _rcEmoji(s.type) + ' <b>' + _rcLabel(s.type) + '</b> · ' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + ' <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min · ' + taken + '/' + capacity + ' place' + (capacity > 1 ? 's' : '') + '</span>' + inscritsHtml + '</div>' +
+        '<button class="btn btn-secondary" style="padding:3px 10px; font-size:11px;" onclick="deleteRecoveryCreneau(' + s.id + ')">🗑️</button>' +
+      '</div>';
+    });
+    html += '</div>';
+  });
+  list.innerHTML = html;
+}
+
+async function addRecoveryCreneaux() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const date     = (document.getElementById('rc-date')     || {}).value;
+  const heure    = (document.getElementById('rc-heure')    || {}).value;
+  const duree    = parseInt((document.getElementById('rc-duree')    || {}).value || '15', 10);
+  const count    = Math.max(1, Math.min(30, parseInt((document.getElementById('rc-count') || {}).value || '1', 10)));
+  const capacity = Math.max(1, Math.min(5,  parseInt((document.getElementById('rc-capacity') || {}).value || '1', 10)));
+  const type     = (document.getElementById('rc-type')     || {}).value;
+  if (!date || !heure || !type) { toast('Renseigne date, heure et type', 'error'); return; }
+  const rows = [];
+  let h = heure;
+  for (let i = 0; i < count; i++) {
+    rows.push({ org: currentOrg, date, heure: h, duree_min: duree, type, capacity });
+    h = _rcAddMin(h, duree);
+  }
+  const { data, error } = await sb.from('creneaux_recuperation').insert(rows).select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  toast((data || []).length + ' créneau(x) créé(s)', 'success');
+  renderRecoveryPlanning();
+}
+
+async function deleteRecoveryCreneau(id) {
+  if (!canWrite()) return;
+  if (!confirm('Supprimer ce créneau ?')) return;
+  const { error } = await sb.from('creneaux_recuperation').delete().eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  toast('Créneau supprimé', 'success');
+  renderRecoveryPlanning();
+}
+
+// ---- Joueur ----
+// Blocage réservation récup : le joueur doit être à jour Hooper (du jour)
+// ET RPE (aucune séance/match en attente dans les 14 derniers jours, fenêtre 4h encore ouverte).
+// Retourne { ok, hooperMissing, rpePending: [] }.
+function _recoveryEligibility() {
+  const today = toLocalISO(new Date());
+  const hooperMissing = computeHooperIndex(getHooper(today, currentJoueurNom)) === null;
+  const cutoff = toLocalISO(new Date(Date.now() - 14 * 86400000));
+  const pending = [];
+  (state.bdd_ent || []).forEach(pl => {
+    if (pl.joueur !== currentJoueurNom) return;
+    if (pl.date > today || pl.date < cutoff) return;
+    if ((pl.seances || []).some(s => STATUTS_INDISPO.includes(s))) return;
+    (pl.seances || []).forEach(s => {
+      if (STATUTS_NON_ENT.includes(s)) return;
+      if (!state.bdd_ent2.some(f => f.date === pl.date && f.nom === s)) return;
+      if (getRPEJoueurSeance(pl.date, currentJoueurNom, s) !== null) return;
+      // Ne bloque que si l'affectation est trackée ET la RPE a été publiée par le staff.
+      // Sans publication ("Envoyer RPE"), le joueur ne peut rien noter → ne doit pas être bloqué.
+      const aff = (state.bdd_affectations || []).find(x => x.date === pl.date && x.joueur === currentJoueurNom && x.seance === s);
+      if (!aff || !aff.rpe_published_at) return;
+      pending.push({ date: pl.date, seance: s });
+    });
+  });
+  (state.bdd_matchs || []).forEach(m => {
+    if (!m || !m.date) return;
+    if (m.date > today || m.date < cutoff) return;
+    const compo = (m.composition || []).find(x => x.joueur === currentJoueurNom);
+    if (!compo || (compo.total_min || 0) <= 0) return;
+    const seanceNom = matchSeanceNom(m);
+    if (getRPEJoueurSeance(m.date, currentJoueurNom, seanceNom) !== null) return;
+    // Compter aussi les matchs en retard (fenêtre 4h fermée) pour bloquer la récup
+    pending.push({ date: m.date, seance: seanceNom });
+  });
+  return { ok: !hooperMissing && pending.length === 0, hooperMissing, rpePending: pending };
+}
+
+async function renderPlayerRecovery() {
+  const listEl = document.getElementById('player-recovery-list');
+  if (!listEl || !currentJoueurNom) return;
+  const today = toLocalISO(new Date());
+  const elig = _recoveryEligibility();
+  const { data, error } = await sb.from('creneaux_recuperation').select('*')
+    .gte('date', today).order('date').order('heure');
+  if (error) { listEl.innerHTML = '<div style="color:var(--red);">' + escapeHtml(error.message) + '</div>'; return; }
+  const slots = (data || []).map(s => Object.assign({}, s, { joueurs: Array.isArray(s.joueurs) ? s.joueurs : [] }));
+  // Un joueur peut être dans UN seul créneau par jour, TOUT type confondu (bottes OU bain froid)
+  const bookedDays = new Set(
+    slots.filter(s => s.joueurs.includes(currentJoueurNom)).map(s => s.date)
+  );
+  // Visibles : ceux avec des places libres OU dont je fais partie
+  const visibles = slots.filter(s => s.joueurs.includes(currentJoueurNom) || s.joueurs.length < (s.capacity || 1));
+  if (visibles.length === 0) {
+    listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px 0;">' + tr('No recovery slot available right now.', 'Aucun créneau de récupération disponible pour le moment.') + '</div>';
+    return;
+  }
+  let html = '';
+  // Bandeau bloquant si Hooper du jour ou RPE en attente
+  if (!elig.ok) {
+    const items = [];
+    if (elig.hooperMissing) items.push(tr('today\'s wellness check-in', 'ton check-in bien-être du jour'));
+    if (elig.rpePending.length > 0) items.push(tr(elig.rpePending.length + ' pending RPE rating(s)', elig.rpePending.length + ' note(s) RPE en attente'));
+    html += '<div style="margin-bottom:14px; padding:12px 14px; background:rgba(248,113,113,0.10); border-left:3px solid var(--red); border-radius:6px;">' +
+      '<div style="font-weight:700; color:#fca5a5; font-size:13px; margin-bottom:6px;">🔒 ' + tr('Booking blocked', 'Réservation bloquée') + '</div>' +
+      '<div style="font-size:12px; color:var(--text);">' + tr('Complete the following to book a recovery slot:', 'Complète les éléments suivants pour réserver un créneau récupération :') + '</div>' +
+      '<ul style="margin:6px 0 8px 20px; padding:0; font-size:12px; color:var(--text);">' + items.map(x => '<li>' + x + '</li>').join('') + '</ul>' +
+      '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+        (elig.hooperMissing ? '<button class="btn" style="padding:5px 12px; font-size:12px;" onclick="document.querySelector(\'.nav-btn[data-view=player-hooper]\').click()">💚 ' + tr('Fill wellness', 'Remplir l\'état de forme') + '</button>' : '') +
+        (elig.rpePending.length > 0 ? '<button class="btn" style="padding:5px 12px; font-size:12px;" onclick="document.querySelector(\'.nav-btn[data-view=player-rpe]\').click()">⭐ ' + tr('Rate my sessions', 'Noter mes séances') + '</button>' : '') +
+      '</div>' +
+    '</div>';
+  }
+  Object.keys(RECOVERY_TYPES).forEach(type => {
+    const byType = visibles.filter(s => s.type === type);
+    if (byType.length === 0) return;
+    html += '<div style="margin-top:14px;"><div style="font-weight:700; font-size:13px; color:var(--accent-light); margin-bottom:8px;">' + _rcEmoji(type) + ' ' + _rcLabel(type) + '</div>';
+    const byDate = {};
+    byType.forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
+    Object.keys(byDate).sort().forEach(d => {
+      const [y, m, dd] = d.split('-');
+      const jour = new Date(d + 'T00:00:00').toLocaleDateString(playerLang() === 'fr' ? 'fr-FR' : 'en-GB', { weekday: 'long' });
+      html += '<div style="margin-bottom:10px;">';
+      html += '<div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">' + jour.charAt(0).toUpperCase() + jour.slice(1) + ' ' + dd + '/' + m + '</div>';
+      byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => {
+        const fin      = _rcAddMin(s.heure, s.duree_min || 15);
+        const mine     = s.joueurs.includes(currentJoueurNom);
+        const capacity = s.capacity || 1;
+        const taken    = s.joueurs.length;
+        const full     = taken >= capacity;
+        const locked   = !mine && bookedDays.has(d); // déjà un créneau ce jour, tout type confondu
+        let action, clickFn, bg, bord;
+        if (mine) {
+          action = '✓ ' + tr('Booked — tap to cancel', 'Réservé — clique pour annuler');
+          clickFn = 'annulerReservationRecovery(\'' + s.id + '\')';
+          bg = 'rgba(22,101,52,0.25)'; bord = 'var(--green)';
+        } else if (locked) {
+          action = '<span style="color:var(--text-dim);">' + tr('1 recovery slot per day', '1 créneau récup par jour') + '</span>';
+          clickFn = ''; bg = 'transparent'; bord = 'var(--border)';
+        } else if (full) {
+          action = '<span style="color:var(--text-dim);">' + tr('Full', 'Complet') + '</span>';
+          clickFn = ''; bg = 'transparent'; bord = 'var(--border)';
+        } else if (!elig.ok) {
+          action = '<span style="color:var(--text-dim);">🔒 ' + tr('Complete Hooper/RPE first', 'Complète Hooper/RPE d\'abord') + '</span>';
+          clickFn = ''; bg = 'transparent'; bord = 'var(--border)';
+        } else {
+          action = tr('Book', 'Réserver');
+          clickFn = 'reserverRecovery(\'' + s.id + '\')';
+          bg = 'var(--bg-elevated)'; bord = 'var(--accent)';
+        }
+        const clickable = !!clickFn;
+        const inscrits = s.joueurs.length ? ('<span style="color:var(--text-dim); font-size:11px; margin-left:6px;">· ' + s.joueurs.map(escapeHtml).join(', ') + '</span>') : '';
+        html += '<div ' + (clickable ? 'onclick="' + clickFn + '"' : '') + ' style="' + (clickable ? 'cursor:pointer;' : 'opacity:.55;') + ' display:flex; align-items:center; justify-content:space-between; gap:10px; border-radius:8px; padding:9px 11px; margin-bottom:5px; background:' + bg + '; border-left:3px solid ' + bord + ';">';
+        html += '<div style="font-size:13px;"><b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b> <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min · ' + taken + '/' + capacity + '</span>' + inscrits + '</div>';
+        html += '<span style="font-size:12px; font-weight:600; color:' + (mine ? 'var(--green)' : 'var(--accent-light)') + ';">' + action + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+  listEl.innerHTML = html;
+}
+
+async function reserverRecovery(id) {
+  if (!currentJoueurNom) return;
+  const { error } = await sb.rpc('book_recovery_slot', { slot_id: Number(id) });
+  if (error) {
+    const m = error.message || '';
+    const msg = /Créneau complet/i.test(m) ? tr('Slot full.', 'Créneau complet.')
+      : /par jour/i.test(m) ? tr('Only one recovery slot per day (boots OR cold bath).', 'Un seul créneau de récupération par jour (bottes OU bain froid).')
+      : (tr('Error: ', 'Erreur : ') + m);
+    toast(msg, 'error'); return;
+  }
+  toast(tr('Slot booked ✓', 'Créneau réservé ✓'), 'success');
+  renderPlayerRecovery();
+}
+
+async function annulerReservationRecovery(id) {
+  if (!currentJoueurNom) return;
+  if (!confirm(tr('Cancel this booking?', 'Annuler cette réservation ?'))) return;
+  const { error } = await sb.rpc('cancel_recovery_slot', { slot_id: Number(id) });
+  if (error) { toast(tr('Error: ', 'Erreur : ') + error.message, 'error'); return; }
+  toast(tr('Booking cancelled', 'Réservation annulée'), 'success');
+  renderPlayerRecovery();
+}
+
+// Alerte le staff quand le joueur a des séances passées dont la fenêtre RPE 4h est fermée.
+// Envoie un message ciblé au staff (via RPC player_alert_coach), visible dans leur onglet
+// Messages avec le badge notif habituel.
+async function contactCoachExpiredRPE(pendingCount, btn) {
+  if (!currentJoueurNom) return;
+  const confirmMsg = tr(
+    'Alert the coach so they can enter your rating? A message will be sent to the staff.',
+    'Alerter le coach pour qu\'il saisisse ta note ? Un message sera envoyé au staff.',
+    '¿Alertar al entrenador para que registre tu calificación? Se enviará un mensaje al staff.'
+  );
+  if (!confirm(confirmMsg)) return;
+  if (btn) { btn.disabled = true; btn.style.opacity = '.6'; btn.style.cursor = 'wait'; }
+  const { error } = await sb.rpc('player_alert_coach', { pending_count: pendingCount || null });
+  if (error) {
+    toast(tr('Error: ', 'Erreur : ') + error.message, 'error');
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; }
+    return;
+  }
+  toast(tr('Coach alerted ✓', 'Coach alerté ✓', 'Entrenador alertado ✓'), 'success');
+  if (btn) {
+    btn.innerHTML = '✅ ' + tr('Coach alerted', 'Coach alerté', 'Entrenador alertado');
+    btn.style.opacity = '.75'; btn.style.cursor = 'default';
+  }
+}
+
+// ============================================================================
+// SAISIE VIDÉO — recense les séances d'analyse vidéo (thèmes + participants).
+// Table : seances_video (RLS staff CRUD / direction lit son org / lecteur lit si listé).
+// ============================================================================
+let _veEditingId = null;
+let _veCache = null; // Cache local des vidéos chargées
+
+async function renderVideoEntry() {
+  if (!canWrite()) {
+    document.getElementById('view-video-entry').innerHTML = '<div class="card"><p style="color:var(--text-dim);">Réservé au staff.</p></div>';
+    return;
+  }
+  // Pré-remplir la date par défaut
+  const dt = document.getElementById('ve-date');
+  if (dt && !dt.value) dt.value = new Date().toISOString().slice(0, 10);
+  // Peupler la liste des joueurs
+  const wrap = document.getElementById('ve-joueurs-wrap');
+  if (wrap && wrap.children.length === 0) {
+    const players = getAllPlayers();
+    wrap.innerHTML = players.map(p =>
+      '<label style="display:inline-flex; align-items:center; gap:5px; font-size:12px; padding:4px 8px; background:var(--bg-card); border:1px solid var(--border); border-radius:14px; cursor:pointer;">' +
+        '<input type="checkbox" class="ve-joueur-cb" value="' + escapeHtml(p) + '" style="margin:0;">' +
+        escapeHtml(p) +
+      '</label>'
+    ).join('');
+  }
+  veRefreshVignSelect();
+  await renderVideoList();
+}
+
+function veToggleAllJoueurs(on) {
+  document.querySelectorAll('.ve-joueur-cb').forEach(cb => { cb.checked = !!on; });
+}
+
+// ---- Vignettes vidéo (dropdown groupé par aspect, chips dédupliqués) ----
+const _VE_ASPECT_META = { video:'🎥 Vidéo', physique:'🏃 Physique', technique:'⚽ Technique', tactique:'🧠 Tactique', mental:'💭 Mental' };
+const _VE_ASPECT_COLOR = { video:'#ec4899', physique:'#f97316', technique:'#22d3ee', tactique:'#a78bfa', mental:'#fbbf24' };
+
+function veRefreshVignSelect() {
+  const sel = document.getElementById('ve-vign-select');
+  if (!sel) return;
+  const cont = document.getElementById('ve-vign-chips');
+  const used = cont ? Array.from(cont.querySelectorAll('.ve-vign-chip')).map(c => (c.dataset.val || '').toLowerCase()) : [];
+  const lib  = state.vignettes_lib || [];
+  const groups = {};
+  lib.forEach(v => {
+    if (!v.aspect || !v.nom) return;
+    if (used.includes(v.nom.toLowerCase())) return;
+    (groups[v.aspect] = groups[v.aspect] || []).push(v.nom);
+  });
+  const aspects = Object.keys(groups).sort((a, b) => Object.keys(_VE_ASPECT_META).indexOf(a) - Object.keys(_VE_ASPECT_META).indexOf(b));
+  const placeholder = lib.length === 0
+    ? '<option value="">Aucune vignette — à créer dans Paramètres</option>'
+    : '<option value="">+ Ajouter une vignette…</option>';
+  let html = placeholder;
+  aspects.forEach(a => {
+    const label = _VE_ASPECT_META[a] || a;
+    html += '<optgroup label="' + escapeHtml(label) + '">';
+    groups[a].sort().forEach(nom => {
+      html += '<option value="' + escapeHtml(a) + '::' + escapeHtml(nom) + '">' + escapeHtml(nom) + '</option>';
+    });
+    html += '</optgroup>';
+  });
+  sel.innerHTML = html;
+}
+
+function onVeVignSelect() {
+  const sel = document.getElementById('ve-vign-select');
+  if (!sel || !sel.value) return;
+  const [aspect, nom] = sel.value.split('::');
+  addVeVignChip(nom, aspect);
+  sel.value = '';
+}
+
+function addVeVignChip(nom, aspect) {
+  const v = (nom || '').trim();
+  if (!v) return;
+  const cont = document.getElementById('ve-vign-chips');
+  if (!cont) return;
+  const existing = Array.from(cont.querySelectorAll('.ve-vign-chip')).map(c => (c.dataset.val || '').toLowerCase());
+  if (existing.includes(v.toLowerCase())) return;
+  const col = _VE_ASPECT_COLOR[aspect] || 'var(--accent)';
+  const chip = document.createElement('span');
+  chip.className = 've-vign-chip';
+  chip.dataset.val = v;
+  chip.dataset.aspect = aspect || '';
+  chip.style.cssText = 'display:inline-flex; align-items:center; gap:5px; background:var(--bg-elevated); border:1px solid ' + col + '; border-radius:12px; padding:2px 9px; font-size:11px; color:' + col + ';';
+  chip.innerHTML = escapeHtml(v) + ' <span style="cursor:pointer; color:var(--text-dim); font-weight:700;" onclick="removeVeVignChip(this)">✕</span>';
+  cont.appendChild(chip);
+  veRefreshVignSelect();
+}
+
+function removeVeVignChip(el) {
+  const chip = el.closest('.ve-vign-chip');
+  if (chip) chip.remove();
+  veRefreshVignSelect();
+}
+
+function _veCollectThemes() {
+  const cont = document.getElementById('ve-vign-chips');
+  const chipNames = cont ? Array.from(cont.querySelectorAll('.ve-vign-chip')).map(c => c.dataset.val) : [];
+  const raw = ((document.getElementById('ve-themes') || {}).value || '').trim();
+  const free = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const seen = new Set(); const out = [];
+  chipNames.concat(free).forEach(t => { const k = t.toLowerCase(); if (!seen.has(k)) { seen.add(k); out.push(t); } });
+  return out;
+}
+
+function _veFillThemes(themes) {
+  const cont = document.getElementById('ve-vign-chips');
+  if (cont) cont.innerHTML = '';
+  const libByName = {};
+  (state.vignettes_lib || []).forEach(v => { if (v.nom) libByName[v.nom.toLowerCase()] = v.aspect; });
+  const freeParts = [];
+  (themes || []).forEach(t => {
+    const asp = libByName[(t || '').toLowerCase()];
+    if (asp) addVeVignChip(t, asp);
+    else freeParts.push(t);
+  });
+  const inp = document.getElementById('ve-themes');
+  if (inp) inp.value = freeParts.join(', ');
+  veRefreshVignSelect();
+}
+
+function resetVideoForm() {
+  _veEditingId = null;
+  ['ve-titre','ve-themes','ve-notes','ve-duree'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const dt = document.getElementById('ve-date'); if (dt) dt.value = new Date().toISOString().slice(0, 10);
+  const ty = document.getElementById('ve-type'); if (ty) ty.value = '';
+  document.querySelectorAll('.ve-joueur-cb').forEach(cb => { cb.checked = false; });
+  const chips = document.getElementById('ve-vign-chips'); if (chips) chips.innerHTML = '';
+  veRefreshVignSelect();
+  const note = document.getElementById('ve-editing-note'); if (note) note.style.display = 'none';
+}
+
+async function saveVideoSeance() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const date  = (document.getElementById('ve-date')  || {}).value;
+  const titre = ((document.getElementById('ve-titre') || {}).value || '').trim();
+  if (!date || !titre) { toast('Date et titre requis', 'error'); return; }
+  const type_analyse = (document.getElementById('ve-type') || {}).value || null;
+  const duree = parseInt((document.getElementById('ve-duree') || {}).value || '', 10);
+  const themes = _veCollectThemes(); // vignettes bibliothèque + thèmes libres, dédupliqués
+  const joueurs = Array.from(document.querySelectorAll('.ve-joueur-cb:checked')).map(cb => cb.value);
+  const notes = ((document.getElementById('ve-notes') || {}).value || '').trim() || null;
+  const row = {
+    org: currentOrg, date, titre, type_analyse, duree_min: isNaN(duree) ? null : duree,
+    themes, joueurs, notes,
+    auteur: currentUser ? (currentUser.email || 'Staff') : 'Staff'
+  };
+  let res;
+  if (_veEditingId) {
+    res = await sb.from('seances_video').update(row).eq('id', _veEditingId).select();
+  } else {
+    res = await sb.from('seances_video').insert(row).select();
+  }
+  if (res.error) { toast('Erreur : ' + res.error.message, 'error'); return; }
+  toast(_veEditingId ? 'Séance vidéo mise à jour' : 'Séance vidéo enregistrée', 'success');
+  _veCache = null;
+  resetVideoForm();
+  renderVideoList();
+}
+
+async function renderVideoList() {
+  const list = document.getElementById('ve-list');
+  if (!list) return;
+  if (!_veCache) {
+    list.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Chargement…</div>';
+    const { data, error } = await sb.from('seances_video').select('*')
+      .eq('org', currentOrg).order('date', { ascending: false }).order('created_at', { ascending: false });
+    if (error) { list.innerHTML = '<div style="color:var(--red);">' + escapeHtml(error.message) + '</div>'; return; }
+    _veCache = data || [];
+  }
+  const q = ((document.getElementById('ve-search') || {}).value || '').toLowerCase().trim();
+  let rows = _veCache;
+  if (q) {
+    rows = rows.filter(r =>
+      (r.titre || '').toLowerCase().includes(q) ||
+      (r.type_analyse || '').toLowerCase().includes(q) ||
+      (r.notes || '').toLowerCase().includes(q) ||
+      (r.themes || []).some(t => (t || '').toLowerCase().includes(q)) ||
+      (r.joueurs || []).some(j => (j || '').toLowerCase().includes(q))
+    );
+  }
+  if (rows.length === 0) {
+    list.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:12px;">Aucune séance vidéo enregistrée.</div>';
+    return;
+  }
+  list.innerHTML = rows.map(r => {
+    const themesHtml = (r.themes || []).length
+      ? '<div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:4px;">' + r.themes.map(t => '<span style="background:rgba(0,163,255,0.15); color:var(--accent-light); font-size:11px; padding:2px 8px; border-radius:10px;">' + escapeHtml(t) + '</span>').join('') + '</div>'
+      : '';
+    const joueursHtml = (r.joueurs || []).length
+      ? '<div style="margin-top:4px; font-size:11px; color:var(--text-dim);">👥 ' + (r.joueurs || []).map(escapeHtml).join(', ') + '</div>'
+      : '';
+    return '<div style="padding:10px 12px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; background:var(--bg-elevated);">' +
+      '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">' +
+        '<div style="flex:1; min-width:0;">' +
+          '<div style="font-weight:600; font-size:13px;">' + escapeHtml(r.titre) + (r.type_analyse ? ' <span style="color:var(--text-dim); font-weight:400; font-size:11px;">· ' + escapeHtml(r.type_analyse) + '</span>' : '') + '</div>' +
+          '<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">📅 ' + formatDateFR(r.date) + (r.duree_min ? ' · ' + r.duree_min + ' min' : '') + (r.auteur ? ' · ' + escapeHtml(r.auteur) : '') + '</div>' +
+          themesHtml + joueursHtml +
+          (r.notes ? '<div style="margin-top:6px; font-size:12px; color:var(--text); white-space:pre-wrap;">' + escapeHtml(r.notes) + '</div>' : '') +
+        '</div>' +
+        '<div style="display:flex; gap:5px; flex-shrink:0;">' +
+          '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px;" onclick="editVideoSeance(' + r.id + ')">✏️</button>' +
+          '<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px; color:var(--red);" onclick="deleteVideoSeance(' + r.id + ')">🗑️</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function editVideoSeance(id) {
+  const r = (_veCache || []).find(x => x.id === id);
+  if (!r) return;
+  _veEditingId = id;
+  document.getElementById('ve-date').value = r.date;
+  document.getElementById('ve-titre').value = r.titre || '';
+  document.getElementById('ve-type').value = r.type_analyse || '';
+  document.getElementById('ve-duree').value = r.duree_min || '';
+  _veFillThemes(r.themes || []);
+  document.getElementById('ve-notes').value = r.notes || '';
+  const joueurs = new Set(r.joueurs || []);
+  document.querySelectorAll('.ve-joueur-cb').forEach(cb => { cb.checked = joueurs.has(cb.value); });
+  const note = document.getElementById('ve-editing-note'); if (note) note.style.display = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function deleteVideoSeance(id) {
+  if (!canWrite()) return;
+  if (!confirm('Supprimer cette séance vidéo ?')) return;
+  const { error } = await sb.from('seances_video').delete().eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  toast('Séance vidéo supprimée', 'success');
+  _veCache = null;
+  if (_veEditingId === id) resetVideoForm();
+  renderVideoList();
+}
+
+// Toggle du dropdown joueur "Recovery" (pattern copié de togglePerformanceMenu)
+function togglePlayerRecoveryMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById('nav-player-recovery-menu');
+  const toggle = document.getElementById('nav-player-recovery-toggle');
+  if (!menu) return;
+  const willOpen = !menu.classList.contains('open');
+  menu.classList.toggle('open');
+  if (willOpen && toggle) {
+    const r = toggle.getBoundingClientRect();
+    menu.style.top = (r.bottom + 2) + 'px';
+    let left = r.left;
+    const menuWidth = menu.offsetWidth || 220;
+    if (left + menuWidth > window.innerWidth - 8) left = Math.max(8, window.innerWidth - menuWidth - 8);
+    menu.style.left = left + 'px';
+  }
+}
+function closePlayerRecoveryMenu() {
+  const menu = document.getElementById('nav-player-recovery-menu');
+  if (menu) menu.classList.remove('open');
 }
 
 // ============================================================
@@ -7473,6 +8343,19 @@ function applyRoleRestrictions() {
         document.querySelectorAll('.nav-btn.player-only[data-view="' + v + '"]').forEach(b => b.style.display = 'none');
       });
     }
+    // Nav "Physio / Recovery" : PSG → dropdown avec Physio + Récupération ; autre org → bouton simple Physio
+    const soinsSimpleBtn = document.getElementById('nav-player-soins-btn');
+    const recoveryDD     = document.getElementById('nav-player-recovery-dropdown');
+    if (currentOrg === 'PSG') {
+      if (soinsSimpleBtn) soinsSimpleBtn.style.display = 'none';
+      if (recoveryDD) recoveryDD.style.display = '';
+    } else if (currentOrg === 'individuel') {
+      if (soinsSimpleBtn) soinsSimpleBtn.style.display = 'none';
+      if (recoveryDD) recoveryDD.style.display = 'none';
+    } else {
+      if (soinsSimpleBtn) soinsSimpleBtn.style.display = '';
+      if (recoveryDD) recoveryDD.style.display = 'none';
+    }
     if (gestionDropdown) gestionDropdown.style.display = 'none'; // Cacher le menu Gestion
     if (paramsDropdown) paramsDropdown.style.display = 'none'; // Cacher le menu Paramètres
     const btnExport = document.getElementById('btn-export-json');
@@ -7566,7 +8449,10 @@ function applyRoleRestrictions() {
     // 'direction 1.0' (pierre@tegg.fr) : tous les onglets admin SAUF Paramètres.
     // Exception : le staff PSG a accès aux Paramètres uniquement pour créer des vignettes
     // (renderSettings masque les autres onglets & la zone de réinit pour ce rôle+org).
-    const psgStaffVignettesOnly = staffLimited && currentOrg === 'PSG';
+    // Exceptions : comptes staff PSG débloqués (accès à tous les onglets Paramètres).
+    const FULL_SETTINGS_STAFF_EMAILS = ['elise@psg.fr','israel@psg.fr'];
+    const myEmail = ((currentUser && currentUser.email) || '').toLowerCase();
+    const psgStaffVignettesOnly = staffLimited && currentOrg === 'PSG' && !FULL_SETTINGS_STAFF_EMAILS.includes(myEmail);
     if (settingsBtn) settingsBtn.style.display = ((staffLimited && !psgStaffVignettesOnly) || window.isDirectionPlus) ? 'none' : '';
   }
 
@@ -7576,24 +8462,37 @@ function applyRoleRestrictions() {
   const SURVEILLANT_EMAILS = ['surveillant@psg.fr'];
   const isSurveillant = SURVEILLANT_EMAILS.includes(((currentUser && currentUser.email) || '').toLowerCase());
   if (isSurveillant) {
-    const KEEP_VIEWS = new Set(['staff-hooper', 'rpe-entry']);
+    const KEEP_VIEWS = new Set(['surveillant-overview', 'staff-hooper', 'rpe-entry']);
     document.querySelectorAll('.nav-btn').forEach(btn => {
       const v = btn.dataset.view;
       if (v && !KEEP_VIEWS.has(v)) btn.style.display = 'none';
     });
-    // Masquer aussi les dropdowns dont on ne garde aucun enfant
+    // Masquer tous les dropdowns : le bouton "⭐ Saisie RPE" est sorti du menu Gestion
+    // et hissé au niveau principal de la nav pour être accessible en 1 clic.
     ['nav-gestion-dropdown','nav-params-dropdown','nav-competition-dropdown','nav-performance-dropdown','nav-medical-dropdown']
       .forEach(id => { const d = document.getElementById(id); if (d) d.style.display = 'none'; });
+    // Sortir le bouton rpe-entry du dropdown Gestion et le placer juste après "État de forme"
+    const rpeEntryBtn = document.querySelector('.nav-btn[data-view="rpe-entry"]');
+    const hooperNavBtn = document.querySelector('.nav-btn[data-view="staff-hooper"]');
+    if (rpeEntryBtn && hooperNavBtn && hooperNavBtn.parentNode) {
+      hooperNavBtn.parentNode.insertBefore(rpeEntryBtn, hooperNavBtn.nextSibling);
+      rpeEntryBtn.style.display = '';
+    }
     const btnExport = document.getElementById('btn-export-json');
     if (btnExport) btnExport.style.display = 'none';
+    // Révéler le bouton de la vue surveillant (masqué par défaut)
+    const svBtn = document.getElementById('nav-surveillant-overview-btn');
+    if (svBtn) svBtn.style.display = '';
+    // Épurer la vue "État de forme" : ne garder que Manquantes + Toutes les réponses
+    document.querySelectorAll('.hooper-full-only').forEach(el => { el.style.display = 'none'; });
     // Badge SURVEILLANT à la place de STAFF
     const badge = document.querySelector('#user-info .role-badge');
     if (badge) { badge.textContent = 'SURVEILLANT'; badge.className = 'role-badge role-coach'; }
-    // Vue par défaut : État de forme
+    // Vue par défaut : la nouvelle vue d'ensemble surveillant
     setTimeout(() => {
       const cur = (typeof getCurrentView === 'function') ? getCurrentView() : null;
       if (!cur || !KEEP_VIEWS.has(cur)) {
-        const b = document.querySelector('.nav-btn[data-view="staff-hooper"]');
+        const b = document.querySelector('.nav-btn[data-view="surveillant-overview"]');
         if (b) b.click();
       }
     }, 100);
@@ -7643,19 +8542,32 @@ function getSeancePublishedMs(date, seanceNom, joueur) {
     const ms = new Date(m.created_at).getTime();
     return isNaN(ms) ? null : ms;
   }
-  // Séance normale : fenêtre = affectation au joueur
+  // Séance normale : fenêtre = publication RPE explicite (bouton "Envoyer RPE" côté staff).
+  // Une affectation existante sans rpe_published_at signifie "affecté au programme du jour,
+  // mais RPE pas encore ouvert" → on retourne null (le joueur ne voit rien à noter).
   if (joueur) {
     const a = (state.bdd_affectations || []).find(x => x.date === date && x.joueur === joueur && x.seance === seanceNom);
-    if (a && a.affected_at) {
-      const ms = new Date(a.affected_at).getTime();
-      if (!isNaN(ms)) return ms;
+    if (a) {
+      if (a.rpe_published_at) {
+        const ms = new Date(a.rpe_published_at).getTime();
+        if (!isNaN(ms)) return ms;
+      }
+      return null; // affectation présente mais pas publiée → pas de chrono
     }
   }
-  // Fallback : ancienne référence (création de la fiche séance)
+  // Fallback historique (aucune affectation trouvée) : ancienne référence (création de la fiche séance)
   const s = state.bdd_ent2.find(x => x.date === date && x.nom === seanceNom);
   if (!s || !s.created_at) return null;
   const ms = new Date(s.created_at).getTime();
   return isNaN(ms) ? null : ms;
+}
+
+// Le staff a-t-il publié la RPE de cette séance à ce joueur ?
+// (fallback true pour les séances sans affectation trackée = comportement historique)
+function isRPEPublished(date, seance, joueur) {
+  const a = (state.bdd_affectations || []).find(x => x.date === date && x.joueur === joueur && x.seance === seance);
+  if (!a) return true; // pas d'affectation trackée : historique ou match → laisser la logique existante décider
+  return !!a.rpe_published_at;
 }
 
 // Timestamp (ms) de la première saisie du RPE (figé), ou null si pas encore saisi
@@ -7695,7 +8607,9 @@ function isEditWindowClosed(date, joueur) {
 // 'date' = jour, 'joueur' = nom, 'seanceNom' = nom de la séance concernée
 function isRPELockedForSession(date, joueur, seanceNom) {
   if (currentRole !== 'lecteur') return false;
-  // Fenêtre de séance fermée (4h après affectation au joueur) → verrou total
+  // RPE pas encore publiée par le staff → verrou (le joueur voit le programme, pas la note)
+  if (!isRPEPublished(date, seanceNom, joueur)) return true;
+  // Fenêtre de séance fermée (4h après publication RPE) → verrou total
   if (isSessionWindowClosed(date, seanceNom, joueur)) return true;
   return false;
 }
@@ -7817,7 +8731,9 @@ async function loadState() {
     const { data: affectations } = await sb.from('seance_affectations')
       .select('*').eq('org', currentOrg).gte('affected_at', affCutoff);
     state.bdd_affectations = (affectations || []).map(a => ({
-      date: a.date, joueur: a.joueur, seance: a.seance, affected_at: a.affected_at || null
+      date: a.date, joueur: a.joueur, seance: a.seance,
+      affected_at: a.affected_at || null,
+      rpe_published_at: a.rpe_published_at || null
     }));
 
     setLoad('Chargement des RPE...');
@@ -8280,7 +9196,7 @@ let realtimeChannels = [];
 
 function setupRealtime() {
   if (realtimeChannels.length > 0) return; // déjà configuré
-  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores', 'creneaux_medicaux', 'medical_notes', 'medical_questionnaires', 'prepa_colonnes', 'prepa_items'];
+  const tables = ['seances', 'plannings', 'rpe_declarations', 'joueurs', 'groupes', 'types_seances', 'gps_data', 'hooper_tests', 'messages', 'message_reads', 'seances_planifiees', 'seances_planifiees_faites', 'minijeux_scores', 'creneaux_medicaux', 'creneaux_recuperation', 'medical_notes', 'medical_questionnaires', 'prepa_colonnes', 'prepa_items', 'seance_affectations', 'seances_video'];
 
   tables.forEach(table => {
     const channel = sb.channel('realtime-' + table)
@@ -8317,6 +9233,25 @@ function handleRealtimeChange(table, payload) {
     return;
   }
 
+  // ===== Séances vidéo : invalider cache local et re-render si vue ouverte =====
+  if (table === 'seances_video') {
+    const rowOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (rowOrg && rowOrg !== currentOrg) return;
+    _veCache = null;
+    if (getCurrentView() === 'video-entry' && typeof renderVideoList === 'function') renderVideoList();
+    return;
+  }
+
+  // ===== Créneaux récupération : re-render vues staff/joueur en direct =====
+  if (table === 'creneaux_recuperation') {
+    const rowOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (rowOrg && rowOrg !== currentOrg) return;
+    const v = getCurrentView();
+    if (v === 'recovery-planning') renderRecoveryPlanning();
+    if (v === 'player-recovery')   renderPlayerRecovery();
+    return;
+  }
+
   // ===== Créneaux de soins : alerte kiné quand un joueur réserve =====
   if (table === 'creneaux_medicaux') {
     const isStaff = ['admin', 'staff', 'médical'].includes(currentRole);
@@ -8331,6 +9266,29 @@ function handleRealtimeChange(table, payload) {
       }
     }
     if (getCurrentView() === 'medical-planning') renderMedicalPlanning();
+    return;
+  }
+
+  // ===== Affectations séance : merger dans le state + re-render vues concernées =====
+  if (table === 'seance_affectations') {
+    const rowOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (rowOrg && rowOrg !== currentOrg) return;
+    state.bdd_affectations = state.bdd_affectations || [];
+    if (eventType === 'DELETE') {
+      state.bdd_affectations = state.bdd_affectations.filter(a =>
+        !(a.date === oldRow.date && a.joueur === oldRow.joueur && a.seance === oldRow.seance)
+      );
+    } else {
+      const norm = { date: newRow.date, joueur: newRow.joueur, seance: newRow.seance, affected_at: newRow.affected_at || null, rpe_published_at: newRow.rpe_published_at || null };
+      const idx = state.bdd_affectations.findIndex(a =>
+        a.date === norm.date && a.joueur === norm.joueur && a.seance === norm.seance
+      );
+      if (idx >= 0) state.bdd_affectations[idx] = norm;
+      else state.bdd_affectations.push(norm);
+    }
+    const v = getCurrentView();
+    if (v === 'entry' && typeof renderEntryJourTable === 'function') renderEntryJourTable();
+    if (v === 'player-overview' && typeof renderPlayerOverview === 'function') renderPlayerOverview();
     return;
   }
 
@@ -8427,6 +9385,8 @@ function handleRealtimeChange(table, payload) {
   }
 
   if (table === 'seances') {
+    const evtOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (evtOrg && evtOrg !== currentOrg) return;
     if (eventType === 'DELETE') {
       state.bdd_ent2 = state.bdd_ent2.filter(s => !(s.date === oldRow.date && s.nom === oldRow.nom));
     } else {
@@ -8444,6 +9404,9 @@ function handleRealtimeChange(table, payload) {
       else state.bdd_ent2.push(obj);
     }
   } else if (table === 'plannings') {
+    // Ignorer les événements d'une autre org (comptes multi-club)
+    const evtOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (evtOrg && evtOrg !== currentOrg) return;
     if (eventType === 'DELETE') {
       state.bdd_ent = state.bdd_ent.filter(p => !(p.date === oldRow.date && p.joueur === oldRow.joueur));
     } else {
@@ -8453,6 +9416,8 @@ function handleRealtimeChange(table, payload) {
       else state.bdd_ent.push(obj);
     }
   } else if (table === 'rpe_declarations') {
+    const evtOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (evtOrg && evtOrg !== currentOrg) return;
     if (eventType === 'DELETE') {
       state.bdd_rpe = state.bdd_rpe.filter(r => !(r.date === oldRow.date && r.joueur === oldRow.joueur));
     } else {
@@ -8486,6 +9451,8 @@ function handleRealtimeChange(table, payload) {
     if (eventType === 'DELETE') state.types_seances = state.types_seances.filter(t => t !== oldRow.nom);
     else if (!state.types_seances.includes(newRow.nom)) state.types_seances.push(newRow.nom);
   } else if (table === 'hooper_tests') {
+    const evtOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (evtOrg && evtOrg !== currentOrg) return;
     if (eventType === 'DELETE') {
       hooperData = hooperData.filter(h => h.id !== oldRow.id);
     } else {
@@ -8494,6 +9461,8 @@ function handleRealtimeChange(table, payload) {
       else hooperData.push(newRow);
     }
   } else if (table === 'gps_data') {
+    const evtOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
+    if (evtOrg && evtOrg !== currentOrg) return;
     if (eventType === 'DELETE') {
       state.bdd_gps = state.bdd_gps.filter(g => g.id !== oldRow.id);
     } else {
@@ -8987,7 +9956,7 @@ function formatDateDMY(dateStr) {
 // ============================================================================
 // ===== Menu déroulant Gestion =====
 function closeOtherNavMenus(exceptId) {
-  ['nav-gestion-menu','nav-params-menu','nav-medical-menu','nav-competition-menu','nav-performance-menu']
+  ['nav-gestion-menu','nav-params-menu','nav-medical-menu','nav-competition-menu','nav-performance-menu','nav-player-recovery-menu']
     .filter(id => id !== exceptId)
     .forEach(id => { const m = document.getElementById(id); if (m) m.classList.remove('open'); });
 }
@@ -9122,6 +10091,8 @@ document.addEventListener('click', (e) => {
   if (cd && !cd.contains(e.target)) closeCompetitionMenu();
   const pd = document.getElementById('nav-performance-dropdown');
   if (pd && !pd.contains(e.target)) closePerformanceMenu();
+  const prd = document.getElementById('nav-player-recovery-dropdown');
+  if (prd && !prd.contains(e.target)) closePlayerRecoveryMenu();
 });
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -9136,7 +10107,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (!viewEl) return;
     viewEl.classList.add('active');
     // Gérer l'état visuel du menu déroulant Gestion
-    const gestionViews = ['entry', 'plan', 'prepa-seance', 'planification', 'match-entry', 'injury-entry', 'rpe-entry'];
+    const gestionViews = ['entry', 'plan', 'prepa-seance', 'planification', 'match-entry', 'injury-entry', 'rpe-entry', 'video-entry'];
     const gestionToggle = document.getElementById('nav-gestion-toggle');
     if (gestionToggle) {
       if (gestionViews.includes(view)) gestionToggle.classList.add('has-active');
@@ -9163,21 +10134,32 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
       else competitionToggle.classList.remove('has-active');
     }
     // Gérer l'état visuel du menu déroulant Performance
-    const performanceViews = ['testing', 'reathletisation', 'musculation'];
+    const performanceViews = ['testing', 'reathletisation', 'musculation', 'reco-entrainement', 'recovery-planning'];
     const performanceToggle = document.getElementById('nav-performance-toggle');
     if (performanceToggle) {
       if (performanceViews.includes(view)) performanceToggle.classList.add('has-active');
       else performanceToggle.classList.remove('has-active');
+    }
+    // Gérer l'état visuel du menu déroulant Player Recovery
+    const playerRecoveryViews = ['player-soins', 'player-recovery'];
+    const playerRecoveryToggle = document.getElementById('nav-player-recovery-toggle');
+    if (playerRecoveryToggle) {
+      if (playerRecoveryViews.includes(view)) playerRecoveryToggle.classList.add('has-active');
+      else playerRecoveryToggle.classList.remove('has-active');
     }
     closeGestionMenu();
     closeParamsMenu();
     closeMedicalMenu();
     closeCompetitionMenu();
     closePerformanceMenu();
+    closePlayerRecoveryMenu();
     // Si on est lecteur, ré-appliquer la langue à chaque changement de vue (au cas où la vue contient du nouveau contenu)
     if (currentRole === 'lecteur') setTimeout(applyPlayerLanguage, 0);
     // Render on demand
     if (view === 'overview') renderOverview();
+    else if (view === 'surveillant-overview') renderSurveillantOverview();
+    else if (view === 'recovery-planning') renderRecoveryPlanning();
+    else if (view === 'player-recovery') renderPlayerRecovery();
     else if (view === 'joueur') renderPlayerDashboard();
     else if (view === 'calendar') renderCalendar();
     else if (view === 'rpe') renderRPE();
@@ -9189,6 +10171,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'match-entry') renderMatchEntry();
     else if (view === 'injury-entry') renderInjuryEntry();
     else if (view === 'rpe-entry') renderRPEEntry();
+    else if (view === 'video-entry') renderVideoEntry();
     else if (view === 'history') renderHistory();
     else if (view === 'settings') renderSettings();
     else if (view === 'best-match') renderBestMatch();
@@ -9692,6 +10675,8 @@ function resetOverviewActivityDates() {
 // Graphique des charges quotidiennes selon le filtre + intervalle de dates
 function renderOverviewCharges() {
   const scope = document.getElementById('overview-charge-scope').value;
+  const granEl = document.getElementById('overview-charge-granularity');
+  const gran   = (granEl && granEl.value === 'week') ? 'week' : 'day';
   // Ne pas afficher au-delà d'aujourd'hui (on s'arrête au jour, pas aux séances planifiées)
   let dates = getDatesUpToToday();
 
@@ -9701,39 +10686,95 @@ function renderOverviewCharges() {
   if (fromVal) dates = dates.filter(d => d >= fromVal);
   if (toVal) dates = dates.filter(d => d <= toVal);
 
-  const srpeData = computeSRPE();
-
-  let label, dailyValues;
-
-  if (scope === 'player') {
-    const player = document.getElementById('overview-charge-player').value;
-    label = 'Charge de ' + player;
-    dailyValues = dates.map(d => srpeData.filter(x => x.joueur === player && x.date === d).reduce((s, x) => s + x.sRPE, 0));
-  } else if (scope === 'group') {
-    const group = document.getElementById('overview-charge-group').value;
-    const players = getAllPlayers().filter(p => getJoueurInfo(p).groupe === group);
-    label = 'Charge moyenne — ' + group;
-    dailyValues = dates.map(d => {
-      const dayLoads = players.map(p => srpeData.filter(x => x.joueur === p && x.date === d).reduce((s, x) => s + x.sRPE, 0)).filter(v => v > 0);
-      return dayLoads.length > 0 ? Math.round(dayLoads.reduce((a, b) => a + b, 0) / dayLoads.length) : 0;
-    });
-  } else {
-    label = 'Charge moyenne — tout l\'effectif';
-    dailyValues = dates.map(d => {
-      const dayLoads = getAllPlayers().map(p => srpeData.filter(x => x.joueur === p && x.date === d).reduce((s, x) => s + x.sRPE, 0)).filter(v => v > 0);
-      return dayLoads.length > 0 ? Math.round(dayLoads.reduce((a, b) => a + b, 0) / dayLoads.length) : 0;
-    });
+  // (Re)peupler le sélecteur "Type de séance" à partir de state.types_seances (hors statuts)
+  const typeSel = document.getElementById('overview-charge-type');
+  const typeVal = (typeSel && typeSel.value) || '';
+  if (typeSel) {
+    const availTypes = (state.types_seances || []).filter(t => t && t !== '?' && !STATUTS_NON_ENT.includes(t)).sort();
+    const key = availTypes.join('|');
+    if (typeSel.dataset.key !== key) {
+      const prev = typeSel.value;
+      typeSel.innerHTML = '<option value="">Tous</option>' + availTypes.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
+      typeSel.dataset.key = key;
+      if (prev && availTypes.includes(prev)) typeSel.value = prev;
+    }
   }
+
+  const srpeData = computeSRPEFiltered(typeVal || null);
+  const dayLoadForPlayer = (p, d) => srpeData.filter(x => x.joueur === p && x.date === d).reduce((s, x) => s + x.sRPE, 0);
+
+  let label, values, xLabels;
+
+  if (gran === 'week') {
+    // Regrouper les dates par lundi (semaine ISO). Charge d'un joueur/semaine = SOMME des sRPE de la semaine.
+    // Charge équipe/semaine = MOYENNE des charges hebdo des joueurs ayant travaillé (>0).
+    const weeks = {}; // mondayIso -> { mondayIso, iso, dates: [] }
+    dates.forEach(d => {
+      const monday = toLocalISO(getMondayOf(d));
+      if (!weeks[monday]) {
+        const iso = getISOWeek(d);
+        weeks[monday] = { mondayIso: monday, iso: iso, dates: [] };
+      }
+      weeks[monday].dates.push(d);
+    });
+    const weekList = Object.values(weeks).sort((a, b) => a.mondayIso.localeCompare(b.mondayIso));
+    xLabels = weekList.map(w => 'S' + w.iso.week + ' · ' + formatDateFR(w.mondayIso));
+
+    if (scope === 'player') {
+      const player = document.getElementById('overview-charge-player').value;
+      label = 'Charge hebdo — ' + player;
+      values = weekList.map(w => Math.round(w.dates.reduce((s, d) => s + dayLoadForPlayer(player, d), 0)));
+    } else if (scope === 'group') {
+      const group = document.getElementById('overview-charge-group').value;
+      const players = getAllPlayers().filter(p => getJoueurInfo(p).groupe === group);
+      label = 'Charge hebdo moyenne — ' + group;
+      values = weekList.map(w => {
+        const weekLoads = players.map(p => w.dates.reduce((s, d) => s + dayLoadForPlayer(p, d), 0)).filter(v => v > 0);
+        return weekLoads.length > 0 ? Math.round(weekLoads.reduce((a, b) => a + b, 0) / weekLoads.length) : 0;
+      });
+    } else {
+      label = 'Charge hebdo moyenne — tout l\'effectif';
+      values = weekList.map(w => {
+        const weekLoads = getAllPlayers().map(p => w.dates.reduce((s, d) => s + dayLoadForPlayer(p, d), 0)).filter(v => v > 0);
+        return weekLoads.length > 0 ? Math.round(weekLoads.reduce((a, b) => a + b, 0) / weekLoads.length) : 0;
+      });
+    }
+  } else {
+    xLabels = dates.map(formatDateFR);
+    if (scope === 'player') {
+      const player = document.getElementById('overview-charge-player').value;
+      label = 'Charge de ' + player;
+      values = dates.map(d => dayLoadForPlayer(player, d));
+    } else if (scope === 'group') {
+      const group = document.getElementById('overview-charge-group').value;
+      const players = getAllPlayers().filter(p => getJoueurInfo(p).groupe === group);
+      label = 'Charge moyenne — ' + group;
+      values = dates.map(d => {
+        const dayLoads = players.map(p => dayLoadForPlayer(p, d)).filter(v => v > 0);
+        return dayLoads.length > 0 ? Math.round(dayLoads.reduce((a, b) => a + b, 0) / dayLoads.length) : 0;
+      });
+    } else {
+      label = 'Charge moyenne — tout l\'effectif';
+      values = dates.map(d => {
+        const dayLoads = getAllPlayers().map(p => dayLoadForPlayer(p, d)).filter(v => v > 0);
+        return dayLoads.length > 0 ? Math.round(dayLoads.reduce((a, b) => a + b, 0) / dayLoads.length) : 0;
+      });
+    }
+  }
+
+  // Titre de la carte selon granularité
+  const titleEl = document.getElementById('overview-charge-title');
+  if (titleEl) titleEl.textContent = (gran === 'week') ? 'Charges hebdomadaires (sRPE)' : 'Charges quotidiennes (sRPE)';
 
   destroyChart('chart-overview-charges');
   charts['chart-overview-charges'] = new Chart(document.getElementById('chart-overview-charges'), {
     type: 'bar',
     data: {
-      labels: dates.map(formatDateFR),
+      labels: xLabels,
       datasets: [{
         label: label,
-        data: dailyValues,
-        backgroundColor: dailyValues.map(v => srpeLoadColor(v)),
+        data: values,
+        backgroundColor: values.map(v => srpeLoadColor(gran === 'week' ? v / 7 : v)),
         borderRadius: 4
       }]
     },
@@ -9944,8 +10985,13 @@ function getPlayersMissingRPE(date) {
   state.bdd_ent.filter(e => e.date === date).forEach(e => {
     // Joueur indisponible ce jour (essai/blessé/malade/absent/suspendu) → aucune note RPE attendue
     if (e.seances.some(s => STATUTS_INDISPO.includes(s))) return;
-    // Ne garder que les séances dont la fiche existe encore (ignore les références orphelines après suppression)
-    const trainingSeances = e.seances.filter(s => !STATUTS_NON_ENT.includes(s) && state.bdd_ent2.some(f => f.date === date && f.nom === s));
+    // Ne garder que les séances dont la fiche existe encore ET dont la RPE a été envoyée aux joueurs
+    // (une séance planifiée sans "Envoyer RPE" ne compte pas comme manquante).
+    const trainingSeances = e.seances.filter(s =>
+      !STATUTS_NON_ENT.includes(s) &&
+      state.bdd_ent2.some(f => f.date === date && f.nom === s) &&
+      isRPEPublished(date, s, e.joueur)
+    );
     if (trainingSeances.length === 0) return;
     const incomplete = trainingSeances.some(s => {
       const detail = getRPEDetailJoueurSeance(date, e.joueur, s);
@@ -9978,7 +11024,12 @@ function getPlayersMissingRPE(date) {
       if (!planning) return;
       // Joueur indisponible ce jour → aucune note attendue
       if (planning.seances.some(s => STATUTS_INDISPO.includes(s))) return;
-      const sesSeances = planning.seances.filter(s => !STATUTS_NON_ENT.includes(s) && state.bdd_ent2.some(f => f.date === date && f.nom === s));
+      // Ignorer les séances dont la RPE n'a pas encore été envoyée par le staff
+      const sesSeances = planning.seances.filter(s =>
+        !STATUTS_NON_ENT.includes(s) &&
+        state.bdd_ent2.some(f => f.date === date && f.nom === s) &&
+        isRPEPublished(date, s, joueur)
+      );
       const incomplete = sesSeances.some(s => {
         const detail = getRPEDetailJoueurSeance(date, joueur, s);
         if (!detail) return true;
@@ -10020,6 +11071,63 @@ function goToRPEEntry(date, joueur) {
       const dateInput = document.getElementById('rpe-entry-date');
       if (dateInput) { dateInput.value = date; if (typeof renderRPEEntry === 'function') renderRPEEntry(); }
     }, 100);
+  }
+}
+
+// ============================================================================
+// Vue d'ensemble SURVEILLANT : résumé État de forme (Hooper) + RPE manquantes.
+// Onglet par défaut pour les comptes de la liste SURVEILLANT_EMAILS.
+// ============================================================================
+function renderSurveillantOverview() {
+  const dateInput = document.getElementById('sv-date');
+  if (!dateInput) return;
+  const today = toLocalISO(new Date());
+  if (!dateInput.value) dateInput.value = today;
+  const date = dateInput.value;
+
+  // ── État de forme : uniquement les joueurs qui N'ONT PAS rempli le Hooper ──
+  const statsEl = document.getElementById('sv-hooper-stats');
+  const listEl  = document.getElementById('sv-hooper-list');
+  if (statsEl) statsEl.innerHTML = '';
+  const joueurs = (state.joueurs || []).map(j => j.nom);
+  const missingHooper = joueurs.filter(j => computeHooperIndex(getHooper(date, j)) === null).sort();
+  if (listEl) {
+    if (missingHooper.length === 0) {
+      listEl.innerHTML = '<div style="color:var(--green); font-size:13px; padding:8px 4px;">✅ Tous les joueurs ont rempli le check-in du jour.</div>';
+    } else {
+      const rowStyle = 'display:flex; justify-content:space-between; align-items:center; padding:7px 10px; border-bottom:1px solid var(--border);';
+      let html = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">' + missingHooper.length + ' joueur(s) sans check-in — ' + formatDateFR(date) + '</div>';
+      missingHooper.forEach(j => {
+        const info = getJoueurInfo(j);
+        const je = j.replace(/'/g, "\\'");
+        html += '<div style="' + rowStyle + '">' +
+          '<div><b>' + escapeHtml(j) + '</b> <span style="font-size:11px; color:var(--text-dim);">' + escapeHtml(info.groupe || '') + '</span></div>' +
+          '<button class="btn" style="padding:3px 10px; font-size:11px;" onclick="goToHooperForPlayer(\'' + date + '\', \'' + je + '\')">Remplir</button>' +
+        '</div>';
+      });
+      listEl.innerHTML = html;
+    }
+  }
+
+  // ── RPE manquantes (utilise la logique overview, respecte isRPEPublished) ─
+  const rpeEl = document.getElementById('sv-rpe-content');
+  if (rpeEl) {
+    const missing = getPlayersMissingRPE(date);
+    if (missing.length === 0) {
+      const hasSession = state.bdd_ent.some(e => e.date === date && e.seances.some(s => !STATUTS_NON_ENT.includes(s)));
+      rpeEl.innerHTML = hasSession
+        ? '<div style="color:var(--green); font-size:13px; padding:8px 4px;">✅ Toutes les RPE ouvertes sont saisies pour ' + formatDateFR(date) + '.</div>'
+        : '<div style="color:var(--text-dim); font-size:13px; padding:8px 4px;">Aucune séance d\'entraînement ouverte à noter ce jour.</div>';
+    } else {
+      const rowStyle = 'display:flex; justify-content:space-between; align-items:center; padding:7px 10px; border-bottom:1px solid var(--border);';
+      let html = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">' + missing.length + ' joueur(s) sans RPE — ' + formatDateFR(date) + '</div>';
+      missing.forEach(j => {
+        const info = getJoueurInfo(j);
+        html += '<div style="' + rowStyle + '"><div><b>' + escapeHtml(j) + '</b> <span style="font-size:11px; color:var(--text-dim);">' + escapeHtml(info.groupe || '') + '</span></div>' +
+          '<button class="btn" style="padding:3px 10px; font-size:11px;" onclick="goToRPEEntry(\'' + date + '\', \'' + j.replace(/'/g, "\\'") + '\')">Saisir</button></div>';
+      });
+      rpeEl.innerHTML = html;
+    }
   }
 }
 
@@ -11805,7 +12913,8 @@ function renderCalendar() {
       }).join('');
       // Passage chez le kiné : créneau de soin réservé par ce joueur ce jour-là.
       // Pastille cliquable → détail du compte-rendu (ce qui a été réalisé).
-      const kineContent = getKineCreneaux(d, p).map(s => {
+      // Direction : les créneaux kiné restent invisibles (confidentialité médicale).
+      const kineContent = (currentRole === 'direction') ? '' : getKineCreneaux(d, p).map(s => {
         const done = !!s.realise;
         const heure = s.heure ? (' ' + escapeHtml(s.heure)) : '';
         const title = done ? 'Passage kiné — voir le compte-rendu' : 'Rendez-vous kiné (compte-rendu pas encore saisi)';
@@ -14081,6 +15190,145 @@ async function saveGpsSessionEdit() {
   renderGPS();
 }
 
+// ── Ajuster manuellement le temps de séance d'UN joueur ─────────────────────
+// Cas d'usage : un joueur arrive en retard / part tôt / ne participe qu'à une partie.
+// La distance GPS reste celle mesurée, on ne corrige que la durée de participation
+// (et donc l'intensité m/min, recalculée automatiquement).
+let gpsPlayerAdjustData = null;
+function openGpsPlayerAdjust(joueur, date, seance) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const rows = state.bdd_gps.filter(g =>
+    g.joueur === joueur && g.date === date && (g.seance || g.session_title || '') === seance
+  );
+  if (rows.length === 0) { toast('Données GPS introuvables pour ce joueur', 'error'); return; }
+  const splitsSorted = rows.slice().sort((a, b) => {
+    const sa = (a.split_name || 'all').toLowerCase();
+    const sb = (b.split_name || 'all').toLowerCase();
+    if (sa === 'all') return -1;
+    if (sb === 'all') return 1;
+    return (a.id || 0) - (b.id || 0);
+  });
+  gpsPlayerAdjustData = { joueur, date, seance, rows: splitsSorted };
+
+  let ov = document.getElementById('gps-player-adjust-modal');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'gps-player-adjust-modal';
+    ov.style.cssText = 'display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); align-items:center; justify-content:center; padding:20px;';
+    ov.addEventListener('click', e => { if (e.target === ov) closeGpsPlayerAdjust(); });
+    document.body.appendChild(ov);
+  }
+
+  let inner =
+    '<div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:640px; width:100%; max-height:85vh; overflow-y:auto;">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">' +
+        '<h3 style="margin:0; color:var(--accent-light); font-size:16px;">✏️ Ajuster le temps — ' + escapeHtml(joueur) + '</h3>' +
+        '<button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="closeGpsPlayerAdjust()">✕</button>' +
+      '</div>' +
+      '<div style="font-size:12px; color:var(--text-dim); margin-bottom:14px;">' +
+        formatDateFR(date) + ' · ' + escapeHtml(seance) +
+        ' — corrige le temps réel de participation par découpage. La distance mesurée reste inchangée ; le m/min (intensité) est recalculé automatiquement.' +
+      '</div>' +
+      '<div class="table-wrap"><table style="width:100%; font-size:13px;"><thead><tr style="text-align:left; color:var(--text-dim); font-size:11px;">' +
+        '<th style="padding:4px 8px;">Découpage</th>' +
+        '<th style="padding:4px 8px; text-align:right;">Distance</th>' +
+        '<th style="padding:4px 8px; text-align:center;">Durée actuelle</th>' +
+        '<th style="padding:4px 8px; text-align:center;">m/min actuel</th>' +
+        '<th style="padding:4px 8px; text-align:center;">Nouvelle durée (min)</th>' +
+      '</tr></thead><tbody>';
+
+  splitsSorted.forEach((r, i) => {
+    const split = r.split_name || 'all';
+    const isAll = split.toLowerCase() === 'all';
+    const cur   = (r.duree_min === null || r.duree_min === undefined || r.duree_min === '') ? '' : parseFloat(r.duree_min);
+    const dist  = parseFloat(r.distance_km) || 0;
+    const mmin  = (cur !== '' && cur > 0 && dist > 0) ? Math.round((dist * 1000 / cur) * 10) / 10 : null;
+    inner +=
+      '<tr style="border-top:1px solid var(--border);">' +
+        '<td style="padding:6px 8px; font-weight:600;">' + (isAll ? 'Séance entière' : escapeHtml(split)) + '</td>' +
+        '<td style="padding:6px 8px; text-align:right; color:var(--text-dim);">' + (dist > 0 ? (dist.toFixed(2) + ' km') : '—') + '</td>' +
+        '<td style="padding:6px 8px; text-align:center; color:var(--text-dim);">' + (cur !== '' ? (cur + ' min') : '—') + '</td>' +
+        '<td style="padding:6px 8px; text-align:center; color:var(--text-dim);">' + (mmin !== null ? mmin : '—') + '</td>' +
+        '<td style="padding:6px 8px; text-align:center;">' +
+          '<input type="number" id="gps-pa-dur-' + i + '" data-dist="' + dist + '" min="0.1" step="0.1" value="' + cur + '" ' +
+          'oninput="_gpsPaPreview(' + i + ')" ' +
+          'style="width:90px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:14px; text-align:center;">' +
+          '<div id="gps-pa-mmin-new-' + i + '" style="font-size:10px; color:var(--accent-light); margin-top:2px; min-height:12px;"></div>' +
+        '</td>' +
+      '</tr>';
+  });
+
+  inner +=
+      '</tbody></table></div>' +
+      '<div style="margin-top:16px; padding:10px 12px; background:var(--bg-elevated); border-radius:8px; font-size:11px; color:var(--text-dim);">' +
+        '💡 Laisser un champ vide = durée inchangée. Pour un ajustement uniforme sur toute l\'équipe (pas par joueur), utilise « ✏️ Modifier » dans l\'historique GPS.' +
+      '</div>' +
+      '<div style="margin-top:16px; display:flex; justify-content:flex-end; gap:10px;">' +
+        '<button type="button" class="btn btn-secondary" onclick="closeGpsPlayerAdjust()">Annuler</button>' +
+        '<button type="button" class="btn" onclick="saveGpsPlayerAdjust()">💾 Enregistrer</button>' +
+      '</div>' +
+    '</div>';
+  ov.innerHTML = inner;
+  ov.style.display = 'flex';
+}
+function closeGpsPlayerAdjust() {
+  const ov = document.getElementById('gps-player-adjust-modal');
+  if (ov) ov.style.display = 'none';
+  gpsPlayerAdjustData = null;
+}
+function _gpsPaPreview(i) {
+  const inp = document.getElementById('gps-pa-dur-' + i);
+  const out = document.getElementById('gps-pa-mmin-new-' + i);
+  if (!inp || !out) return;
+  const val  = parseFloat(inp.value);
+  const dist = parseFloat(inp.dataset.dist) || 0;
+  if (!(val > 0) || dist === 0) { out.textContent = ''; return; }
+  const mmin = Math.round((dist * 1000 / val) * 10) / 10;
+  out.textContent = '→ ' + mmin + ' m/min';
+}
+async function saveGpsPlayerAdjust() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  if (!gpsPlayerAdjustData) return;
+  const payloads = [];
+  let invalid = false;
+  gpsPlayerAdjustData.rows.forEach((r, i) => {
+    const inp = document.getElementById('gps-pa-dur-' + i);
+    if (!inp || inp.value === '') return;
+    const val = parseFloat(inp.value);
+    if (!(val > 0)) { invalid = true; return; }
+    const cur = (r.duree_min === null || r.duree_min === undefined || r.duree_min === '') ? null : parseFloat(r.duree_min);
+    if (cur === val) return;
+    const distKm = parseFloat(r.distance_km) || 0;
+    payloads.push({
+      ref: r,
+      patch: {
+        duree_min: val,
+        dist_per_min: distKm > 0 ? Math.round((distKm * 1000 / val) * 10) / 10 : null
+      }
+    });
+  });
+  if (invalid) { toast('Durée invalide (doit être > 0)', 'error'); return; }
+  if (payloads.length === 0) { toast('Aucune modification', 'info'); closeGpsPlayerAdjust(); return; }
+
+  const results = await Promise.all(payloads.map(o =>
+    sb.from('gps_data').update(o.patch).eq('id', o.ref.id)
+  ));
+  let failed = 0;
+  results.forEach((res, idx) => {
+    if (res && res.error) { failed++; return; }
+    Object.assign(payloads[idx].ref, payloads[idx].patch);
+  });
+  if (failed > 0) {
+    toast(failed + ' ligne(s) en erreur sur ' + payloads.length, 'error');
+  } else {
+    const n = payloads.length;
+    toast('Temps ajusté · m/min recalculé (' + n + ' découpage' + (n > 1 ? 's' : '') + ')', 'success');
+  }
+  _writeCache('gps_data', currentOrg, state.bdd_gps);
+  closeGpsPlayerAdjust();
+  renderGPS();
+}
+
 // ── Réattribuer une séance GPS d'un joueur à un autre ──
 // Cas typique : un joueur a porté le GPS d'un autre → toutes ses lignes GPS de la
 // séance (tous les découpages) sont transférées vers le vrai joueur.
@@ -15239,6 +16487,322 @@ async function saveJoueurPhoto(nom, photo) {
   renderPlayerDashboard();
 }
 
+// ============================================================================
+// FICHE GLOBALE JOUEUR — vue d'ensemble éditable en tête du tableau de bord.
+// Table : fiches_globales (RLS staff CRUD / direction lecture / lecteur soi-même)
+// ============================================================================
+const _FG_CACHE = {}; // joueur -> row DB
+let _fgEditMode = false;
+const _FG_ASPECTS = { fs: 'Points forts', ax: 'Axes d\'amélioration', pa: 'Plans d\'action' };
+
+function _fgSaison() {
+  const y = new Date().getFullYear();
+  const m = new Date().getMonth() + 1;
+  // Saison sportive : commence en août
+  return (m >= 8) ? (y + '-' + (y + 1)) : ((y - 1) + '-' + y);
+}
+
+function _fgCompute(joueur) {
+  // Respecte le sélecteur de période (7/30/90 derniers jours ou toute la saison)
+  const periodSel = document.getElementById('joueur-dash-period');
+  const periodDays = (periodSel && periodSel.value && periodSel.value !== 'all') ? parseInt(periodSel.value, 10) : null;
+  const today = toLocalISO(new Date());
+  const cutoff = periodDays ? toLocalISO(new Date(Date.now() - periodDays * 86400000)) : null;
+  const inPeriod = d => !cutoff || (d >= cutoff && d <= today);
+
+  // Agrège les stats depuis le state (GPS + matchs + planning), filtrées par période
+  const gps = (state.bdd_gps || []).filter(g => g.joueur === joueur && inPeriod(g.date));
+  const seances = (state.bdd_ent || []).filter(e => e.joueur === joueur && inPeriod(e.date) && (e.seances || []).some(s => !STATUTS_NON_ENT.includes(s))).length;
+  const matchsFiltres = (state.bdd_matchs || []).filter(m => inPeriod(m.date));
+  const matchsJoues = matchsFiltres.filter(m => (m.composition || []).some(c => c.joueur === joueur && (c.total_min || 0) > 0)).length;
+  let totalMinMatch = 0, buts = 0, passes = 0;
+  matchsFiltres.forEach(m => {
+    (m.composition || []).forEach(c => {
+      if (c.joueur !== joueur) return;
+      totalMinMatch += (c.total_min || 0);
+      buts += (c.buts || 0);
+      passes += (c.passes_dec || 0);
+    });
+  });
+  const num = v => (v === null || v === undefined || isNaN(v)) ? 0 : parseFloat(v);
+  // Stocké en KM (distance_km), converti en m au besoin. HSR et Sprint sont stockés en m.
+  const distKm    = gps.reduce((s, g) => s + num(g.distance_km), 0);
+  const dureeMin  = gps.reduce((s, g) => s + num(g.duree_min), 0);
+  const distMin   = dureeMin > 0 ? (distKm * 1000 / dureeMin) : 0;
+  const hsrKm     = gps.reduce((s, g) => s + num(g.hsr_m || g.hsr), 0) / 1000;
+  const sprintKm  = gps.reduce((s, g) => s + num(g.sprint_dist_m), 0) / 1000;
+  const vmax      = gps.reduce((mx, g) => Math.max(mx, num(g.top_speed)), 0);
+  const accMax    = gps.reduce((mx, g) => Math.max(mx, num(g.max_accel)), 0);
+  // Décélération : magnitude max (valeur souvent négative dans le CSV)
+  const decMax    = gps.reduce((mx, g) => Math.max(mx, Math.abs(num(g.max_decel))), 0);
+  return { seances, matchsJoues, totalMinMatch, buts, passes, distKm, dureeMin, distMin, hsrKm, sprintKm, vmax, accMax, decMax };
+}
+
+async function _fgLoad(joueur) {
+  if (_FG_CACHE[joueur] !== undefined) return _FG_CACHE[joueur];
+  try {
+    const { data } = await sb.from('fiches_globales').select('*').eq('org', currentOrg).eq('joueur', joueur).maybeSingle();
+    _FG_CACHE[joueur] = data || null;
+  } catch (e) { _FG_CACHE[joueur] = null; }
+  return _FG_CACHE[joueur];
+}
+
+async function renderFicheGlobale(joueur) {
+  const host = document.getElementById('joueur-fiche-globale');
+  if (!host) return;
+  host.innerHTML = '<div class="card"><div style="color:var(--text-dim); font-size:13px;">Chargement de la fiche…</div></div>';
+  const row = await _fgLoad(joueur) || {};
+  const info = getJoueurInfo(joueur);
+  const fiche = (state.bdd_fiches || []).find(f => f.joueur === joueur) || {};
+  const stats = _fgCompute(joueur);
+  const isStaff = canWrite();
+
+  // Age depuis fiche médicale date_naissance
+  let ageStr = '—', ddnStr = '';
+  if (fiche.date_naissance) {
+    const dn = new Date(fiche.date_naissance);
+    if (!isNaN(dn)) {
+      const now = new Date();
+      const years = ((now - dn) / (365.25 * 86400000));
+      ageStr = years.toFixed(1) + ' ans';
+      ddnStr = fiche.date_naissance.split('-').reverse().join('.');
+    }
+  }
+  const poids = fiche.poids != null ? fiche.poids + ' Kg' : '—';
+  const taille = fiche.taille != null ? Math.round(fiche.taille) + ' cm' : '—';
+
+  const val = (v) => v ? escapeHtml(v) : '<span style="color:var(--text-dim);">—</span>';
+  const listVal = (arr) => (arr && arr.length) ? arr.map(escapeHtml) : ['—','—','—'];
+  const [pf1, pf2, pf3] = (row.points_forts && row.points_forts.length) ? [row.points_forts[0] || '', row.points_forts[1] || '', row.points_forts[2] || ''] : ['','',''];
+  const [ax1, ax2, ax3] = (row.axes_amelioration && row.axes_amelioration.length) ? [row.axes_amelioration[0] || '', row.axes_amelioration[1] || '', row.axes_amelioration[2] || ''] : ['','',''];
+  const [pa1, pa2, pa3] = (row.plans_action && row.plans_action.length) ? [row.plans_action[0] || '', row.plans_action[1] || '', row.plans_action[2] || ''] : ['','',''];
+
+  if (!_fgEditMode) {
+    // MODE CONSULTATION
+    const photoHtml = info.photo
+      ? '<img src="' + info.photo + '" alt="" style="width:88px; height:88px; border-radius:12px; object-fit:cover; border:2px solid var(--accent); flex-shrink:0;" />'
+      : '<div style="width:88px; height:88px; border-radius:12px; background:var(--bg-elevated); border:2px dashed var(--border); display:flex; align-items:center; justify-content:center; font-size:32px; color:var(--text-dim); flex-shrink:0;">👤</div>';
+    let html = '<div class="card" style="background:linear-gradient(135deg, rgba(0,163,255,0.05), rgba(167,139,250,0.05));">' +
+      '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap;">' +
+        '<div style="display:flex; gap:14px; align-items:center; flex:1; min-width:0;">' +
+          photoHtml +
+          '<div style="flex:1; min-width:0;">' +
+            '<div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:1px;">Fiche globale numérique · Saison ' + escapeHtml(row.saison || _fgSaison()) + '</div>' +
+            '<div style="font-size:28px; font-weight:800; margin-top:4px;">' + escapeHtml(joueur.toUpperCase()) + '</div>' +
+            '<div style="display:flex; flex-wrap:wrap; gap:16px; margin-top:8px; font-size:12px;">' +
+              '<div><span style="color:var(--text-dim);">Groupe entraînement :</span> <b>' + val(info.groupe || row.groupe_entrainement) + '</b></div>' +
+              '<div><span style="color:var(--text-dim);">Ancienneté :</span> <b>' + val(row.anciennete) + '</b></div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        (isStaff ? '<button class="btn" style="padding:6px 14px; font-size:12px;" onclick="editFicheGlobale()">✏️ Éditer</button>' : '') +
+      '</div>' +
+
+      '<div style="display:grid; grid-template-columns:1fr 2fr; gap:16px; margin-top:16px;">' +
+        // Colonne gauche : identité
+        '<div style="background:var(--bg-elevated); border-radius:8px; padding:14px; font-size:13px;">' +
+          '<div style="display:grid; grid-template-columns:22px 1fr; gap:8px 10px; align-items:center;">' +
+            '<span>🎂</span><div>' + ageStr + (ddnStr ? ' · <span style="color:var(--text-dim);">' + ddnStr + '</span>' : '') + '</div>' +
+            '<span>⚽</span><div>Poste : <b>' + val(info.poste) + '</b></div>' +
+            '<span>📏</span><div>' + taille + '</div>' +
+            '<span>⚖️</span><div>' + poids + '</div>' +
+            '<span>👟</span><div>Pied : <b>' + val(row.pied_fort) + '</b></div>' +
+          '</div>' +
+          (row.qualites ? '<div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:12px; color:var(--text-dim); font-style:italic;">🧠 ' + escapeHtml(row.qualites) + '</div>' : '') +
+        '</div>' +
+        // Colonne droite : stats
+        '<div style="background:var(--bg-elevated); border-radius:8px; padding:14px;">' +
+          '<div style="font-size:11px; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:8px;">📊 Cumulatif ' + (function() {
+            const pv = (document.getElementById('joueur-dash-period') || {}).value || 'all';
+            return pv === 'all' ? 'saison' : (pv === '7' ? '7 derniers jours' : (pv === '30' ? '30 derniers jours' : (pv === '90' ? '90 derniers jours' : 'période')));
+          })() + '</div>' +
+          '<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; font-size:12px; margin-bottom:10px;">' +
+            _fgStatTile('Séances', stats.seances) +
+            _fgStatTile('Matchs joués', stats.matchsJoues) +
+            _fgStatTile('Min. match', stats.totalMinMatch) +
+            _fgStatTile('Buts / P.dec.', stats.buts + ' / ' + stats.passes) +
+          '</div>' +
+          '<div style="font-size:11px; text-transform:uppercase; color:var(--text-dim); font-weight:700; margin-bottom:8px;">📡 GPS cumulé</div>' +
+          '<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; font-size:12px;">' +
+            _fgStatTile('D. totale', stats.distKm.toFixed(2) + ' km') +
+            _fgStatTile('m/min', (stats.distMin ? stats.distMin.toFixed(1) : '—')) +
+            _fgStatTile('HSR', stats.hsrKm.toFixed(2) + ' km') +
+            _fgStatTile('Sprint', stats.sprintKm.toFixed(2) + ' km') +
+            _fgStatTile('Vmax', stats.vmax ? stats.vmax.toFixed(1) : '—') +
+            _fgStatTile('Acc max', stats.accMax ? stats.accMax.toFixed(1) : '—') +
+            _fgStatTile('Dec max', stats.decMax ? '-' + stats.decMax.toFixed(1) : '—') +
+            _fgStatTile('Durée GPS', (stats.dureeMin / 60).toFixed(1) + ' h') +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      // Superpouvoir + Points forts / Axes / Plans
+      '<div style="margin-top:16px; padding:12px 14px; background:rgba(236,72,153,0.08); border-left:3px solid #ec4899; border-radius:6px;">' +
+        '<div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:#f472b6; font-weight:700;">🖐 Superpouvoir</div>' +
+        '<div style="font-size:15px; margin-top:4px; font-weight:600;">' + (row.superpouvoir ? escapeHtml(row.superpouvoir) : '<span style="color:var(--text-dim);">Non renseigné</span>') + '</div>' +
+      '</div>' +
+
+      '<div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px;">' +
+        _fgTripletHTML('POINTS FORTS', '#34d399', [pf1, pf2, pf3]) +
+        _fgTripletHTML('AXES D\'AMÉLIORATIONS', '#fbbf24', [ax1, ax2, ax3]) +
+      '</div>' +
+
+      '<div style="margin-top:14px;">' +
+        _fgTripletHTML('PLANS D\'ACTIONS', '#a78bfa', [pa1, pa2, pa3]) +
+      '</div>' +
+
+      '</div>';
+    host.innerHTML = html;
+    return;
+  }
+
+  // MODE ÉDITION
+  const inp = (id, val, w) => '<input type="text" id="fg-' + id + '" value="' + escapeHtml(val || '') + '" style="width:' + (w || '100%') + '; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;" />';
+  const txt = (id, val, ph) => '<input type="text" id="fg-' + id + '" placeholder="' + escapeHtml(ph || '') + '" value="' + escapeHtml(val || '') + '" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;" />';
+  const photoPreview = info.photo
+    ? '<img id="fg-photo-preview" src="' + info.photo + '" style="width:88px; height:88px; border-radius:12px; object-fit:cover; border:2px solid var(--accent);" />'
+    : '<div id="fg-photo-preview" style="width:88px; height:88px; border-radius:12px; background:var(--bg-elevated); border:2px dashed var(--border); display:flex; align-items:center; justify-content:center; font-size:32px; color:var(--text-dim);">👤</div>';
+  const jEsc = joueur.replace(/'/g, "\\'");
+  let html = '<div class="card">' +
+    '<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">' +
+      '<h3 style="margin:0;">✏️ Fiche globale — ' + escapeHtml(joueur) + '</h3>' +
+      '<div style="display:flex; gap:8px;">' +
+        '<button class="btn btn-secondary" onclick="cancelEditFicheGlobale()">Annuler</button>' +
+        '<button class="btn" onclick="saveFicheGlobale(\'' + jEsc + '\')">💾 Enregistrer</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex; gap:14px; align-items:center; margin-bottom:14px; padding:10px; background:var(--bg-elevated); border-radius:8px;">' +
+      photoPreview +
+      '<div style="flex:1;">' +
+        '<label style="font-size:11px; color:var(--text-dim); display:block;">Photo du joueur</label>' +
+        '<input type="file" id="fg-photo-file" accept="image/*" onchange="_fgOnPhotoPick(this, \'' + jEsc + '\')" style="font-size:12px; margin-top:6px;" />' +
+        (info.photo ? '<button class="btn btn-secondary" style="padding:3px 10px; font-size:11px; margin-left:8px;" onclick="_fgClearPhoto(\'' + jEsc + '\')">🗑️ Retirer</button>' : '') +
+        '<div style="font-size:10px; color:var(--text-dim); margin-top:4px;">JPG / PNG · redimensionnée à ~200px, ~40 Ko max.</div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Groupe compétition</label>' + inp('groupe_competition', row.groupe_competition) + '</div>' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Contrat</label>' + inp('contrat', row.contrat) + '</div>' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Ancienneté</label>' + inp('anciennete', row.anciennete) + '</div>' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Sélection</label>' + inp('selection', row.selection) + '</div>' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Pied fort</label>' + inp('pied_fort', row.pied_fort) + '</div>' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Saison</label>' + inp('saison', row.saison || _fgSaison()) + '</div>' +
+    '</div>' +
+    '<div style="margin-top:10px;"><label style="font-size:11px; color:var(--text-dim);">Qualités (texte libre)</label>' + txt('qualites', row.qualites, 'Ex: Technique - Tactique - Motivateur - Compétiteur') + '</div>' +
+    '<div style="margin-top:14px; padding:10px 12px; background:rgba(236,72,153,0.08); border-left:3px solid #ec4899; border-radius:6px;">' +
+      '<label style="font-size:11px; color:#f472b6; font-weight:700; text-transform:uppercase;">🖐 Superpouvoir</label>' +
+      inp('superpouvoir', row.superpouvoir) +
+    '</div>' +
+    _fgTripletEditHTML('POINTS FORTS', '#34d399', 'fs', [pf1, pf2, pf3]) +
+    _fgTripletEditHTML('AXES D\'AMÉLIORATIONS', '#fbbf24', 'ax', [ax1, ax2, ax3]) +
+    _fgTripletEditHTML('PLANS D\'ACTIONS', '#a78bfa', 'pa', [pa1, pa2, pa3]) +
+  '</div>';
+  host.innerHTML = html;
+}
+
+function _fgStatTile(label, value) {
+  return '<div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:6px 8px; text-align:center;">' +
+    '<div style="font-size:10px; color:var(--text-dim); text-transform:uppercase;">' + escapeHtml(label) + '</div>' +
+    '<div style="font-size:14px; font-weight:700; margin-top:2px;">' + escapeHtml(String(value)) + '</div>' +
+  '</div>';
+}
+function _fgTripletHTML(title, color, items) {
+  const rows = items.map((v, i) => '<li style="margin-bottom:4px;"><b style="color:' + color + ';">' + (i + 1) + '</b> ' + (v ? escapeHtml(v) : '<span style="color:var(--text-dim);">—</span>') + '</li>').join('');
+  return '<div style="background:var(--bg-elevated); border-radius:8px; padding:12px 14px;">' +
+    '<div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:' + color + '; font-weight:700; border-bottom:2px solid ' + color + '; padding-bottom:4px; margin-bottom:8px;">' + title + '</div>' +
+    '<ol style="margin:0; padding:0 0 0 4px; list-style:none; font-size:13px;">' + rows + '</ol>' +
+  '</div>';
+}
+function _fgTripletEditHTML(title, color, prefix, items) {
+  const rows = items.map((v, i) => '<div style="display:flex; gap:6px; align-items:center; margin-bottom:5px;">' +
+    '<span style="font-weight:700; color:' + color + '; min-width:16px;">' + (i + 1) + '</span>' +
+    '<input type="text" id="fg-' + prefix + (i + 1) + '" value="' + escapeHtml(v) + '" style="flex:1; background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:13px;" />' +
+  '</div>').join('');
+  return '<div style="margin-top:14px; background:var(--bg-elevated); border-radius:8px; padding:12px 14px;">' +
+    '<div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:' + color + '; font-weight:700; margin-bottom:8px;">' + title + '</div>' +
+    rows +
+  '</div>';
+}
+
+// Navigation joueur précédent/suivant dans le tableau de bord
+function stepPlayerDash(delta) {
+  const sel = document.getElementById('joueur-dash-select');
+  if (!sel) return;
+  const opts = Array.from(sel.options).filter(o => o.value);
+  if (opts.length === 0) return;
+  const values = opts.map(o => o.value);
+  let idx = values.indexOf(sel.value);
+  if (idx < 0) idx = 0;
+  idx = (idx + delta + values.length) % values.length;
+  sel.value = values[idx];
+  _fgEditMode = false;
+  renderPlayerDashboard();
+}
+
+function editFicheGlobale() { _fgEditMode = true; const sel = document.getElementById('joueur-dash-select'); if (sel && sel.value) renderFicheGlobale(sel.value); }
+function cancelEditFicheGlobale() { _fgEditMode = false; const sel = document.getElementById('joueur-dash-select'); if (sel && sel.value) renderFicheGlobale(sel.value); }
+
+// Upload photo joueur : compresse (≤200px, ~40 Ko) puis update joueurs.photo (base64)
+function _fgOnPhotoPick(input, joueur) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = async () => {
+      const maxDim = 200;
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const b64 = canvas.toDataURL('image/jpeg', 0.75);
+      await _fgSavePhoto(joueur, b64);
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+async function _fgClearPhoto(joueur) {
+  if (!confirm('Retirer la photo ?')) return;
+  await _fgSavePhoto(joueur, null);
+}
+async function _fgSavePhoto(joueur, b64) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const { error } = await sb.from('joueurs').update({ photo: b64 }).eq('org', currentOrg).eq('nom', joueur);
+  if (error) { toast('Erreur photo : ' + error.message, 'error'); return; }
+  const j = (state.joueurs || []).find(x => x.nom === joueur);
+  if (j) j.photo = b64;
+  toast(b64 ? 'Photo enregistrée' : 'Photo retirée', 'success');
+  renderFicheGlobale(joueur);
+}
+
+async function saveFicheGlobale(joueur) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const val = id => (document.getElementById('fg-' + id) || {}).value || null;
+  const cleanArr = ids => ids.map(id => val(id)).filter(v => v && v.trim()).map(v => v.trim());
+  const row = {
+    org: currentOrg, joueur: joueur,
+    saison: val('saison'),
+    groupe_competition: val('groupe_competition'),
+    contrat: val('contrat'),
+    anciennete: val('anciennete'),
+    selection: val('selection'),
+    pied_fort: val('pied_fort'),
+    qualites: val('qualites'),
+    superpouvoir: val('superpouvoir'),
+    points_forts: cleanArr(['fs1','fs2','fs3']),
+    axes_amelioration: cleanArr(['ax1','ax2','ax3']),
+    plans_action: cleanArr(['pa1','pa2','pa3'])
+  };
+  const { data, error } = await sb.from('fiches_globales').upsert(row, { onConflict: 'org,joueur' }).select().single();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  _FG_CACHE[joueur] = data;
+  toast('Fiche enregistrée', 'success');
+  _fgEditMode = false;
+  renderFicheGlobale(joueur);
+}
+
 function renderPlayerDashboard() {
   const sel = document.getElementById('joueur-dash-select');
   const kpiEl = document.getElementById('joueur-dash-kpis');
@@ -15255,12 +16819,15 @@ function renderPlayerDashboard() {
   }
 
   const player = sel.value;
+  const ficheEl = document.getElementById('joueur-fiche-globale');
   if (!player) {
     kpiEl.innerHTML = '<div class="card"><div class="empty-state">Sélectionne un joueur pour voir son tableau de bord.</div></div>';
     ['chart-jdash-charge', 'chart-jdash-gps', 'chart-jdash-matchs'].forEach(destroyChart);
     chartsEl.innerHTML = '';
+    if (ficheEl) ficheEl.innerHTML = '';
     return;
   }
+  if (ficheEl) renderFicheGlobale(player);
 
   const periodSel = document.getElementById('joueur-dash-period');
   const periodDays = (periodSel && periodSel.value !== 'all') ? parseInt(periodSel.value, 10) : null;
@@ -15525,6 +17092,281 @@ function gpsAnalysisRows() {
   return f ? all.filter(r => gpsCategorie(r) === f) : all;
 }
 
+// ============================================================================
+// SIMULATEUR GPS : génère des lignes gps_data pour les joueurs qui ont oublié
+// leur GPS, à partir de la moyenne des présents (équipe / groupe / poste) avec
+// un écart aléatoire ±%. Les lignes sont marquées simulated=true.
+// ============================================================================
+const _GSIM_METRICS = [
+  'duree_min','distance_km','sprint_dist_m','energy_kcal','player_load','top_speed',
+  'dist_per_min','hsr','hsr_m','max_decel','max_accel','power_plays','impacts',
+  'work_ratio','hr_max','dist_zone1','dist_zone2','dist_zone3','dist_zone4','dist_zone5','decel_count_high'
+];
+const _GSIM_INT_METRICS = new Set(['power_plays','impacts','hr_max','decel_count_high']);
+
+function _gsimSessionsList() {
+  const map = {};
+  (state.bdd_gps || []).forEach(g => {
+    const title = g.seance || g.session_title || '';
+    const key = g.date + '||' + title;
+    if (!map[key]) map[key] = { date: g.date, title: title, key };
+  });
+  return Object.values(map).sort((a, b) => b.date.localeCompare(a.date) || a.title.localeCompare(b.title));
+}
+
+function populateGpsSimSelectors() {
+  const seSel = document.getElementById('gsim-seances');
+  if (!seSel) return;
+  const sessions = _gsimSessionsList();
+  const key = sessions.map(s => s.key).join('|');
+  if (seSel.dataset.key !== key) {
+    seSel.innerHTML = sessions.map(s => '<option value="' + escapeHtml(s.key) + '">' + escapeHtml(formatDateFR(s.date) + (s.title ? ' — ' + s.title : '')) + '</option>').join('');
+    seSel.dataset.key = key;
+    seSel.onchange = () => refreshGpsSimJoueurs();
+  }
+  refreshGpsSimJoueurs();
+}
+
+function refreshGpsSimJoueurs() {
+  const seSel = document.getElementById('gsim-seances');
+  const jSel  = document.getElementById('gsim-joueurs');
+  const gSel  = document.getElementById('gsim-group-filter');
+  if (!seSel || !jSel) return;
+  const firstKey = seSel.value || (seSel.options[0] && seSel.options[0].value) || '';
+  const [date, title] = firstKey.split('||');
+
+  // Peupler / rafraîchir la liste des groupes une fois
+  if (gSel) {
+    ensureGroupsList();
+    const groups = (state.groupes || []).slice().sort();
+    const key = groups.join('|');
+    if (gSel.dataset.key !== key) {
+      const prev = gSel.value;
+      gSel.innerHTML = '<option value="">Tous les groupes</option>' + groups.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+      gSel.dataset.key = key;
+      if (prev && groups.includes(prev)) gSel.value = prev;
+    }
+  }
+  const groupFilter = (gSel && gSel.value) || '';
+
+  const presents = new Set((state.bdd_gps || []).filter(g => g.date === date && (g.seance || g.session_title || '') === title).map(g => g.joueur));
+
+  // Joueurs AFFECTÉS ce jour-là avec une vraie séance (statut non-ent + indispo exclus)
+  const affectesCeJour = new Set();
+  (state.bdd_ent || []).filter(e => e.date === date).forEach(e => {
+    if (!e.joueur) return;
+    if ((e.seances || []).some(s => STATUTS_INDISPO.includes(s))) return; // absent/blessé/malade/susp./essai
+    const hasTraining = (e.seances || []).some(s => !STATUTS_NON_ENT.includes(s));
+    if (hasTraining) affectesCeJour.add(e.joueur);
+  });
+
+  const info = p => getJoueurInfo(p);
+  const candidates = getAllPlayers().filter(p =>
+    affectesCeJour.has(p)                                       // affecté ce jour à une séance
+    && !presents.has(p)                                         // pas déjà de données GPS
+    && (!groupFilter || info(p).groupe === groupFilter)         // filtre groupe si actif
+  );
+  jSel.innerHTML = candidates.map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + (info(p).poste ? ' · ' + info(p).poste : '') + (info(p).groupe ? ' (' + info(p).groupe + ')' : '') + '</option>').join('');
+  if (candidates.length === 0) {
+    if (affectesCeJour.size === 0) {
+      jSel.innerHTML = '<option value="" disabled>Aucune affectation trouvée pour ' + escapeHtml(date || '?') + '. Vérifie l\'onglet Séance.</option>';
+    } else {
+      jSel.innerHTML = '<option value="" disabled>Tous les joueurs affectés ont déjà des données GPS' + (groupFilter ? ' dans ' + escapeHtml(groupFilter) : '') + '.</option>';
+    }
+  }
+}
+
+function _gsimComputeAverages(rows, base, joueur) {
+  // rows = toutes les lignes GPS d'une (date, seance, split) donné, joueurs présents
+  const info = getJoueurInfo(joueur);
+  let filtered = rows;
+  if (base === 'poste' && info.poste) {
+    const same = rows.filter(r => getJoueurInfo(r.joueur).poste === info.poste);
+    if (same.length > 0) filtered = same;
+  } else if (base === 'groupe' && info.groupe) {
+    const same = rows.filter(r => getJoueurInfo(r.joueur).groupe === info.groupe);
+    if (same.length > 0) filtered = same;
+  }
+  if (filtered.length === 0) return null;
+  const avg = {};
+  _GSIM_METRICS.forEach(k => {
+    const vals = filtered.map(r => (r[k] === null || r[k] === undefined || isNaN(r[k])) ? null : parseFloat(r[k])).filter(v => v !== null);
+    avg[k] = vals.length > 0 ? (vals.reduce((s, v) => s + v, 0) / vals.length) : null;
+  });
+  return { avg, count: filtered.length };
+}
+
+function _gsimJitter(v, ecartPct, isInt) {
+  if (v === null || v === undefined) return null;
+  const jitter = 1 + (Math.random() * 2 - 1) * (ecartPct / 100);
+  let out = v * jitter;
+  if (isInt) return Math.max(0, Math.round(out));
+  return Math.round(out * 100) / 100;
+}
+
+function _gsimBuildRows(base, ecartPct, splitsMode) {
+  const seSel = document.getElementById('gsim-seances');
+  const jSel  = document.getElementById('gsim-joueurs');
+  if (!seSel || !jSel) return { rows: [], warnings: [] };
+  const seKeys = Array.from(seSel.selectedOptions).map(o => o.value);
+  const joueurs = Array.from(jSel.selectedOptions).map(o => o.value).filter(Boolean);
+  const rows = []; const warnings = [];
+  seKeys.forEach(key => {
+    const [date, title] = key.split('||');
+    const sessionRows = (state.bdd_gps || []).filter(g => g.date === date && (g.seance || g.session_title || '') === title);
+    if (sessionRows.length === 0) return;
+    // Ne simuler que sur les splits présents dans la session (ou juste 'all')
+    let splitsToProcess;
+    if (splitsMode === 'all') {
+      splitsToProcess = ['all'];
+    } else {
+      const set = new Set(sessionRows.map(r => (r.split_name || 'all')));
+      splitsToProcess = Array.from(set);
+    }
+    joueurs.forEach(j => {
+      // Skip si le joueur a déjà des données sur cette séance
+      if (sessionRows.some(r => r.joueur === j)) { warnings.push(j + ' a déjà des données sur ' + title + ' — ignoré'); return; }
+      splitsToProcess.forEach(sp => {
+        const presents = sessionRows.filter(r => (r.split_name || 'all') === sp);
+        if (presents.length === 0) return;
+        const stats = _gsimComputeAverages(presents, base, j);
+        if (!stats) return;
+        const row = {
+          org: currentOrg, date, joueur: j,
+          seance: title || null, session_title: title || null, split_name: sp,
+          categorie: presents[0].categorie || 'seance',
+          simulated: true
+        };
+        _GSIM_METRICS.forEach(k => {
+          row[k] = _gsimJitter(stats.avg[k], ecartPct, _GSIM_INT_METRICS.has(k));
+        });
+        // Recalc dist_per_min si duree_min + distance_km connus (cohérence)
+        if (row.duree_min && row.distance_km) row.dist_per_min = Math.round((row.distance_km * 1000 / row.duree_min) * 10) / 10;
+        rows.push({ row, sourceCount: stats.count });
+      });
+    });
+  });
+  return { rows, warnings };
+}
+
+function renderGpsSimPreview() {
+  const previewEl = document.getElementById('gsim-preview');
+  if (!previewEl) return;
+  const base = (document.getElementById('gsim-base') || {}).value || 'all';
+  const ecart = Math.max(0, Math.min(50, parseFloat((document.getElementById('gsim-ecart') || {}).value || '8')));
+  const splitsMode = (document.getElementById('gsim-splits') || {}).value || 'all';
+  const { rows, warnings } = _gsimBuildRows(base, ecart, splitsMode);
+  if (rows.length === 0) {
+    previewEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Sélectionne au moins 1 séance et 1 joueur, puis clique Prévisualiser.</div>';
+    return;
+  }
+  let html = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">Aperçu : ' + rows.length + ' ligne(s) à créer</div>';
+  if (warnings.length) html += '<div style="color:var(--yellow); font-size:11px; margin-bottom:6px;">⚠️ ' + warnings.map(escapeHtml).join(' · ') + '</div>';
+  html += '<div class="table-wrap" style="max-height:280px;"><table style="width:100%; font-size:12px;"><thead><tr>' +
+    '<th style="text-align:left;">Joueur</th><th>Séance</th><th>Split</th><th>Durée</th><th>Dist (km)</th><th>Sprint (m)</th><th>HSR (m)</th><th>Vmax</th><th>Réf.</th>' +
+    '</tr></thead><tbody>';
+  rows.slice(0, 60).forEach(({ row, sourceCount }) => {
+    html += '<tr style="border-top:1px solid var(--border);">' +
+      '<td style="text-align:left; font-weight:600;">' + escapeHtml(row.joueur) + '</td>' +
+      '<td style="color:var(--text-dim);">' + escapeHtml(formatDateFR(row.date) + ' · ' + (row.seance || '')) + '</td>' +
+      '<td>' + escapeHtml(row.split_name) + '</td>' +
+      '<td>' + (row.duree_min || '—') + '</td>' +
+      '<td>' + (row.distance_km !== null ? row.distance_km : '—') + '</td>' +
+      '<td>' + (row.sprint_dist_m !== null ? Math.round(row.sprint_dist_m) : '—') + '</td>' +
+      '<td>' + (row.hsr_m !== null ? Math.round(row.hsr_m) : '—') + '</td>' +
+      '<td>' + (row.top_speed !== null ? row.top_speed : '—') + '</td>' +
+      '<td style="color:var(--text-dim);">n=' + sourceCount + '</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table></div>';
+  if (rows.length > 60) html += '<div style="font-size:11px; color:var(--text-dim); margin-top:4px;">… + ' + (rows.length - 60) + ' autres lignes non affichées.</div>';
+  previewEl.innerHTML = html;
+}
+
+// Compléter les découpages manquants : pour chaque (séance, joueur) sélectionné
+// qui n'a que "all", générer les autres splits (basés sur la moyenne des présents).
+async function completeGpsSimulationSplits() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const base = (document.getElementById('gsim-base') || {}).value || 'all';
+  const ecart = Math.max(0, Math.min(50, parseFloat((document.getElementById('gsim-ecart') || {}).value || '8')));
+  const seSel = document.getElementById('gsim-seances');
+  const jSel  = document.getElementById('gsim-joueurs');
+  if (!seSel) return;
+  const seKeys = Array.from(seSel.selectedOptions).map(o => o.value);
+  if (seKeys.length === 0) { toast('Sélectionne au moins une séance', 'error'); return; }
+  // Joueurs cible : ceux cochés, sinon TOUS les joueurs qui n'ont que "all" sur les séances sélectionnées
+  const jSelected = jSel ? Array.from(jSel.selectedOptions).map(o => o.value).filter(Boolean) : [];
+
+  const rowsToInsert = []; const warnings = []; let cible = 0;
+  seKeys.forEach(key => {
+    const [date, title] = key.split('||');
+    const sessionRows = (state.bdd_gps || []).filter(g => g.date === date && (g.seance || g.session_title || '') === title);
+    const splits = Array.from(new Set(sessionRows.map(r => r.split_name || 'all')));
+    const nonAllSplits = splits.filter(s => s.toLowerCase() !== 'all');
+    if (nonAllSplits.length === 0) { warnings.push('Aucun découpage à copier sur ' + title); return; }
+
+    // Joueurs candidats : n'ont QUE "all" sur cette séance
+    const byPlayer = {};
+    sessionRows.forEach(r => { (byPlayer[r.joueur] = byPlayer[r.joueur] || []).push(r); });
+    const candidates = Object.keys(byPlayer).filter(j => {
+      const own = byPlayer[j].map(r => (r.split_name || 'all').toLowerCase());
+      return own.includes('all') && own.length === 1;
+    });
+    const jList = jSelected.length ? candidates.filter(j => jSelected.includes(j)) : candidates;
+    cible += jList.length;
+
+    jList.forEach(j => {
+      nonAllSplits.forEach(sp => {
+        const presents = sessionRows.filter(r => (r.split_name || 'all') === sp && r.joueur !== j);
+        if (presents.length === 0) return;
+        const stats = _gsimComputeAverages(presents, base, j);
+        if (!stats) return;
+        const row = {
+          org: currentOrg, date, joueur: j,
+          seance: title || null, session_title: title || null, split_name: sp,
+          categorie: presents[0].categorie || 'seance',
+          simulated: true
+        };
+        _GSIM_METRICS.forEach(k => { row[k] = _gsimJitter(stats.avg[k], ecart, _GSIM_INT_METRICS.has(k)); });
+        if (row.duree_min && row.distance_km) row.dist_per_min = Math.round((row.distance_km * 1000 / row.duree_min) * 10) / 10;
+        rowsToInsert.push(row);
+      });
+    });
+  });
+
+  if (rowsToInsert.length === 0) {
+    let msg = 'Aucun découpage à compléter';
+    if (cible === 0) msg += ' — sélectionne des joueurs qui n\'ont que la ligne « all » sur la séance choisie';
+    toast(msg, 'info');
+    if (warnings.length) console.info('completeGpsSimulationSplits:', warnings);
+    return;
+  }
+  if (!confirm('Ajouter ' + rowsToInsert.length + ' découpage(s) simulé(s) pour ' + cible + ' joueur(s) ?')) return;
+  const { data, error } = await sb.from('gps_data').insert(rowsToInsert).select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (data) data.forEach(d => state.bdd_gps.push(d));
+  try { _writeCache('gps_data', currentOrg, state.bdd_gps); } catch(e) {}
+  toast(rowsToInsert.length + ' découpage(s) créé(s) pour ' + cible + ' joueur(s)', 'success');
+  renderGPS();
+}
+
+async function applyGpsSimulation() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const base = (document.getElementById('gsim-base') || {}).value || 'all';
+  const ecart = Math.max(0, Math.min(50, parseFloat((document.getElementById('gsim-ecart') || {}).value || '8')));
+  const splitsMode = (document.getElementById('gsim-splits') || {}).value || 'all';
+  const { rows, warnings } = _gsimBuildRows(base, ecart, splitsMode);
+  if (rows.length === 0) { toast('Aucune ligne à générer', 'info'); return; }
+  if (!confirm('Générer ' + rows.length + ' ligne(s) GPS simulée(s) ?\n\nElles apparaîtront comme des vraies données dans les rapports (staff, direction, joueur). Seul le compte admin verra un badge 🧪 « simulé » pour les identifier.')) return;
+  const payloads = rows.map(r => r.row);
+  const { data, error } = await sb.from('gps_data').insert(payloads).select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (data) data.forEach(d => state.bdd_gps.push(d));
+  try { _writeCache('gps_data', currentOrg, state.bdd_gps); } catch(e) {}
+  toast(payloads.length + ' ligne(s) GPS simulée(s) créée(s)', 'success');
+  renderGPS();
+}
+
 function renderGPS() {
   // Vue direction sportive : masquer les outils de gestion GPS
   if (currentRole === 'direction') {
@@ -15534,6 +17376,7 @@ function renderGPS() {
     const rg = document.querySelector('#gps-report-type')?.closest('.filter-group');
     if (rg) rg.style.display = 'none';
   }
+  populateGpsSimSelectors();
   if (!state.bdd_gps || state.bdd_gps.length === 0) {
     document.getElementById('gps-content').innerHTML = '<div class="card"><div class="empty-state">Aucune donnée GPS disponible.</div></div>';
     return;
@@ -15661,6 +17504,7 @@ function gpsCombineRows(list) {
   list.forEach(r => { if (r.work_ratio !== null && r.work_ratio !== undefined && !isNaN(r.work_ratio) && r.duree_min) { wSum += parseFloat(r.work_ratio) * r.duree_min; wDur += r.duree_min; } });
   base.work_ratio = wDur ? wSum / wDur : null;
   base.split_name = '__cumul__';
+  base.simulated  = list.some(r => r.simulated); // trace admin conservée en mode cumul
   return base;
 }
 
@@ -15922,7 +17766,15 @@ function renderGPSSession() {
     prevPoste = rowPoste;
     const trStyle = (newGroup && idx > 0) ? ' style="border-top:3px solid var(--accent);"' : '';
     const posteTag = newGroup ? '<div style="font-size:9px;font-weight:700;color:var(--accent-light);text-transform:uppercase;letter-spacing:0.4px;">' + escapeHtml(rowPoste) + '</div>' : '';
-    html += '<tr' + trStyle + '><td style="text-align:left;font-weight:600;">' + posteTag + escapeHtml(r.joueur) + '</td>';
+    const canEditRow = !resolved.isCumul && canWrite();
+    const editBtn = canEditRow
+      ? ' <button type="button" onclick="openGpsPlayerAdjust(\'' + r.joueur.replace(/'/g, "\\'") + '\', \'' + r.date + '\', \'' + (r.seance || r.session_title || '').replace(/'/g, "\\'") + '\')" title="Ajuster le temps de séance de ce joueur" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:16px;padding:0;margin-left:6px;background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-dim);cursor:pointer;font-size:10px;line-height:1;vertical-align:-2px;">✎</button>'
+      : '';
+    // Marqueur "simulé" — visible uniquement pour le compte admin (trace privée).
+    const simBadge = (currentRole === 'admin' && r.simulated)
+      ? ' <span title="Données simulées (générées à partir de la moyenne coéquipiers)" style="display:inline-block; background:rgba(236,72,153,0.20); color:#f472b6; font-size:10px; padding:1px 6px; border-radius:8px; margin-left:6px; vertical-align:middle;">🧪 simulé</span>'
+      : '';
+    html += '<tr' + trStyle + '><td style="text-align:left;font-weight:600;">' + posteTag + escapeHtml(r.joueur) + editBtn + simBadge + '</td>';
     if (showBestPct) {
       const vol = getVolumeScore(r.joueur, r);
       const inten = getIntensityScore(r.joueur, r);
@@ -18701,54 +20553,34 @@ function renderMatchCoachNotes() {
     cont.innerHTML = html; return;
   }
   const notes = {};
-  const remarques = {};
-  (state.bdd_match_coach_notes || []).filter(n => n.match_id === currentMatchId && n.coach_id === matchCoachSelected).forEach(n => {
-    notes[n.joueur] = n.note;
-    if (n.commentaire) remarques[n.joueur] = n.commentaire;
-  });
+  (state.bdd_match_coach_notes || []).filter(n => n.match_id === currentMatchId && n.coach_id === matchCoachSelected).forEach(n => notes[n.joueur] = n.note);
 
-  html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Note /10</th><th style="text-align:left;">Remarque</th></tr></thead><tbody>';
+  html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Note /10</th></tr></thead><tbody>';
   compo.forEach(c => {
     const jEsc = c.joueur.replace(/'/g, "\\'");
     const v = notes[c.joueur];
-    const rem = remarques[c.joueur] || '';
     html += '<tr><td style="text-align:left;font-weight:600;">' + escapeHtml(c.joueur) + '</td>';
     html += '<td style="text-align:center;"><input type="number" min="0" max="10" step="0.5" value="' + (v != null ? v : '') + '" ' + (canEdit ? '' : 'disabled') +
       ' onchange="saveCoachNote(\'' + currentMatchId + '\', \'' + jEsc + '\', \'' + matchCoachSelected + '\', this.value)" ' +
-      'style="width:60px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;text-align:center;" /></td>';
-    html += '<td style="text-align:left;"><textarea rows="1" ' + (canEdit ? '' : 'disabled') +
-      ' onblur="saveCoachRemarque(\'' + currentMatchId + '\', \'' + jEsc + '\', \'' + matchCoachSelected + '\', this)" ' +
-      'placeholder="Optionnel — remarque sur ce joueur" ' +
-      'style="min-width:200px;max-width:340px;width:100%;background:var(--bg-elevated);color:var(--text);border:1px solid ' + (rem ? 'var(--green)' : 'var(--border)') + ';border-radius:4px;padding:4px 6px;font-size:12px;resize:vertical;font-family:inherit;">' + escapeHtml(rem) + '</textarea></td></tr>';
+      'style="width:60px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;text-align:center;" /></td></tr>';
   });
   html += '</tbody></table></div>';
   cont.innerHTML = html;
 }
 
-function getCoachNoteRow(matchId, joueur, coachId) {
-  return (state.bdd_match_coach_notes || []).find(n => n.match_id === matchId && n.joueur === joueur && n.coach_id === coachId);
-}
-
-function coachCanEditNotes(matchId, coachId) {
+async function saveCoachNote(matchId, joueur, coachId, value) {
   const coach = (state.bdd_coachs || []).find(c => c.id === coachId);
   if (!coach || !currentUser || coach.account_id !== currentUser.id) {
-    toast('Tu ne peux saisir que les notes de ton propre coach', 'error'); return false;
+    toast('Tu ne peux saisir que les notes de ton propre coach', 'error'); return;
   }
   const mtch = (state.bdd_matchs || []).find(x => x.id === matchId);
   if (mtch && !getMatchPresentCoachIds(mtch).includes(coachId)) {
-    toast('Ce coach n\'est pas marqué présent sur ce match', 'error'); return false;
+    toast('Ce coach n\'est pas marqué présent sur ce match', 'error'); return;
   }
-  return true;
-}
-
-async function saveCoachNote(matchId, joueur, coachId, value) {
-  if (!coachCanEditNotes(matchId, coachId)) return;
   const note = (value === '' || value == null) ? null : parseFloat(value);
   if (note != null && (isNaN(note) || note < 0 || note > 10)) { toast('Note entre 0 et 10', 'error'); return; }
-  const existing = getCoachNoteRow(matchId, joueur, coachId);
-  const existingComment = (existing && existing.commentaire) ? existing.commentaire : null;
   try {
-    if (note == null && !existingComment) {
+    if (note == null) {
       const { error } = await sb.from('match_coach_notes').delete().match({ match_id: matchId, joueur: joueur, coach_id: coachId });
       if (error) { toast('Erreur : ' + error.message, 'error'); return; }
       state.bdd_match_coach_notes = (state.bdd_match_coach_notes || []).filter(n => !(n.match_id === matchId && n.joueur === joueur && n.coach_id === coachId));
@@ -18763,29 +20595,6 @@ async function saveCoachNote(matchId, joueur, coachId, value) {
     }
     await updateCoachAvgInComposition(matchId, joueur);
     toast('Note enregistrée', 'success');
-  } catch (e) { toast('Erreur : ' + e.message, 'error'); }
-}
-
-async function saveCoachRemarque(matchId, joueur, coachId, el) {
-  if (!coachCanEditNotes(matchId, coachId)) return;
-  const commentaire = (el.value || '').trim();
-  const existing = getCoachNoteRow(matchId, joueur, coachId);
-  const existingNote = (existing && existing.note != null) ? existing.note : null;
-  try {
-    if (!commentaire && existingNote == null) {
-      const { error } = await sb.from('match_coach_notes').delete().match({ match_id: matchId, joueur: joueur, coach_id: coachId });
-      if (error) { toast('Erreur : ' + error.message, 'error'); return; }
-      state.bdd_match_coach_notes = (state.bdd_match_coach_notes || []).filter(n => !(n.match_id === matchId && n.joueur === joueur && n.coach_id === coachId));
-    } else {
-      const row = { match_id: matchId, joueur: joueur, coach_id: coachId, commentaire: commentaire || null, org: currentOrg, updated_at: new Date().toISOString() };
-      const { data, error } = await sb.from('match_coach_notes').upsert(row, { onConflict: 'match_id,joueur,coach_id' }).select();
-      if (error) { toast('Erreur : ' + error.message, 'error'); return; }
-      const saved = (data && data[0]) ? data[0] : row;
-      const arr = state.bdd_match_coach_notes || (state.bdd_match_coach_notes = []);
-      const idx = arr.findIndex(n => n.match_id === matchId && n.joueur === joueur && n.coach_id === coachId);
-      if (idx >= 0) arr[idx] = saved; else arr.push(saved);
-    }
-    el.style.borderColor = commentaire ? 'var(--green)' : 'var(--border)';
   } catch (e) { toast('Erreur : ' + e.message, 'error'); }
 }
 
@@ -21217,8 +23026,6 @@ function renderCompetitionPlayer(filters, content, matchs) {
   const myNotes = {};
   (state.bdd_match_notes || []).filter(n => n.joueur === me).forEach(n => myNotes[n.match_id] = n.note);
   const agg = competitionAggregate(mine)[me];
-  // Les joueurs de PSG U18 ne doivent pas voir la note attribuée par les coachs.
-  const hideCoachNote = (getJoueurInfo(me).groupe === 'PSG U18');
 
   let html = '';
   if (agg) {
@@ -21230,7 +23037,7 @@ function renderCompetitionPlayer(filters, content, matchs) {
     html += competitionStatCard(fr ? 'Minutes' : 'Minutes', agg.min);
     html += competitionStatCard(fr ? 'Buts' : 'Goals', agg.buts);
     html += competitionStatCard(fr ? 'Passes déc.' : 'Assists', agg.passes);
-    if (!hideCoachNote) html += competitionStatCard(fr ? 'Note coachs (moy)' : 'Coaches (avg)', ns);
+    html += competitionStatCard(fr ? 'Note coachs (moy)' : 'Coaches (avg)', ns);
     html += competitionStatCard(fr ? 'Ma note (moy)' : 'Self (avg)', np);
     html += '</div>';
   }
@@ -21240,9 +23047,7 @@ function renderCompetitionPlayer(filters, content, matchs) {
     html += '<div style="color:var(--text-dim);font-size:13px;padding:10px;">' + (fr ? 'Tu n\'as pas encore de match enregistré.' : 'No matches recorded yet.') + '</div>';
   } else {
     html += '<div class="table-wrap"><table style="font-size:13px;"><thead><tr>';
-    html += '<th style="text-align:left;">Date</th><th style="text-align:left;">Match</th><th>Min</th><th>⚽</th><th>🅰️</th>' +
-      (hideCoachNote ? '' : '<th>' + (fr ? 'Note coachs' : 'Coaches') + '</th>') +
-      '<th>' + (fr ? 'Ma note /10' : 'My rating /10') + '</th><th style="text-align:left;">' + (fr ? 'Mon commentaire' : 'My comment') + '</th></tr></thead><tbody>';
+    html += '<th style="text-align:left;">Date</th><th style="text-align:left;">Match</th><th>Min</th><th>⚽</th><th>🅰️</th><th>' + (fr ? 'Note coachs' : 'Coaches') + '</th><th>' + (fr ? 'Ma note /10' : 'My rating /10') + '</th><th style="text-align:left;">' + (fr ? 'Mon commentaire' : 'My comment') + '</th></tr></thead><tbody>';
     mine.forEach(m => {
       const c = (m.composition || []).find(x => x.joueur === me) || {};
       const np = myNotes[m.id];
@@ -21253,7 +23058,7 @@ function renderCompetitionPlayer(filters, content, matchs) {
       html += '<td style="text-align:center;">' + (c.total_min || 0) + '</td>';
       html += '<td style="text-align:center;font-weight:700;color:var(--accent-light);">' + (c.buts || 0) + '</td>';
       html += '<td style="text-align:center;">' + (c.passes_dec || 0) + '</td>';
-      if (!hideCoachNote) html += '<td style="text-align:center;">' + (c.note_coachs_avg != null ? c.note_coachs_avg : '—') + '</td>';
+      html += '<td style="text-align:center;">' + (c.note_coachs_avg != null ? c.note_coachs_avg : '—') + '</td>';
       html += '<td style="text-align:center;"><input type="number" min="0" max="10" step="0.5" value="' + (np != null ? np : '') + '" onchange="saveMatchNoteJoueur(\'' + m.id + '\', this.value)" style="width:62px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;text-align:center;" /></td>';
       html += '<td style="text-align:left;"><textarea rows="1" onblur="saveMatchCommentaireJoueur(\'' + m.id + '\', this)" placeholder="' + (fr ? 'Optionnel — décris ta prestation' : 'Optional — describe your match') + '" style="min-width:200px;max-width:320px;width:100%;background:var(--bg-elevated);color:var(--text);border:1px solid ' + (myComment ? 'var(--green)' : 'var(--border)') + ';border-radius:4px;padding:4px 6px;font-size:12px;resize:vertical;font-family:inherit;">' + escapeHtml(myComment) + '</textarea></td>';
       html += '</tr>';
@@ -21462,6 +23267,119 @@ function renderEntry() {
   clearVignettes();
   refreshVignetteSelects();
   renderAffectation();
+
+  // Pré-remplir la date du récap "Séances du jour" avec aujourd'hui et le rendre
+  const jourDate = document.getElementById('entry-jour-date');
+  if (jourDate && !jourDate.value) jourDate.value = new Date().toISOString().slice(0, 10);
+  renderEntryJourTable();
+}
+
+// Récap des séances existantes pour la date choisie : nb joueurs affectés, durée totale,
+// statut RPE (envoyée / en attente), bouton "Envoyer RPE" (démarre le chrono 4h côté joueur).
+async function renderEntryJourTable() {
+  const c = document.getElementById('entry-jour-content');
+  const dt = document.getElementById('entry-jour-date');
+  if (!c || !dt) return;
+  const date = dt.value || new Date().toISOString().slice(0, 10);
+
+  // Refetch ciblé : garantit que les affectations créées hors app ouverte sont visibles
+  try {
+    const { data: fresh } = await sb.from('seance_affectations')
+      .select('*').eq('org', currentOrg).eq('date', date);
+    if (fresh) {
+      const merged = (state.bdd_affectations || []).filter(a => a.date !== date);
+      fresh.forEach(a => merged.push({
+        date: a.date, joueur: a.joueur, seance: a.seance,
+        affected_at: a.affected_at || null,
+        rpe_published_at: a.rpe_published_at || null
+      }));
+      state.bdd_affectations = merged;
+    }
+  } catch (e) {}
+
+  const seances = (state.bdd_ent2 || []).filter(x => x.date === date)
+    .sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+  if (seances.length === 0) {
+    c.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px 4px;">Aucune séance saisie pour ' + formatDateFR(date) + '.</div>';
+    return;
+  }
+
+  const affects = (state.bdd_affectations || []).filter(a => a.date === date);
+  const nowMs   = Date.now();
+
+  let html = '<div class="table-wrap"><table style="width:100%; font-size:13px;"><thead><tr style="text-align:left; color:var(--text-dim); font-size:11px;">' +
+    '<th style="padding:6px 8px;">Séance</th>' +
+    '<th style="padding:6px 8px; text-align:center;">Durée</th>' +
+    '<th style="padding:6px 8px; text-align:center;">Joueurs affectés</th>' +
+    '<th style="padding:6px 8px;">Statut RPE</th>' +
+    '<th style="padding:6px 8px; text-align:right;">Action</th>' +
+    '</tr></thead><tbody>';
+
+  seances.forEach(s => {
+    const affSeance = affects.filter(a => a.seance === s.nom);
+    const nAff = affSeance.length;
+    const nPub = affSeance.filter(a => a.rpe_published_at).length;
+    const nPending = nAff - nPub;
+    let statut, action;
+    if (nAff === 0) {
+      statut = '<span style="color:var(--text-dim);">Aucun joueur affecté</span>';
+      action = '<span style="color:var(--text-dim); font-size:11px;">—</span>';
+    } else if (nPub === 0) {
+      statut = '<span style="color:var(--yellow);">🕐 En attente d\'envoi</span>';
+      action = '<button class="btn" style="padding:5px 12px; font-size:12px; white-space:nowrap;" onclick="publishRPEForSeance(\'' + date + '\', \'' + s.nom.replace(/'/g, "\\'") + '\')">📢 Envoyer RPE</button>';
+    } else if (nPending === 0) {
+      // Tous publiés : afficher l'âge du plus récent envoi
+      const latest = affSeance.reduce((m, a) => Math.max(m, new Date(a.rpe_published_at).getTime()), 0);
+      const ageMin = Math.floor((nowMs - latest) / 60000);
+      const closed = ageMin >= SESSION_WINDOW_HOURS * 60;
+      const remainMin = SESSION_WINDOW_HOURS * 60 - ageMin;
+      statut = closed
+        ? '<span style="color:var(--text-dim);">⛔ Fenêtre 4h fermée</span>'
+        : '<span style="color:var(--green);">✅ Envoyée · ' + Math.floor(remainMin / 60) + 'h' + String(remainMin % 60).padStart(2, '0') + ' restant</span>';
+      action = '<span style="color:var(--text-dim); font-size:11px;">—</span>';
+    } else {
+      statut = '<span style="color:var(--accent-light);">⚠️ Partiel : ' + nPub + '/' + nAff + '</span>';
+      action = '<button class="btn btn-secondary" style="padding:5px 12px; font-size:12px; white-space:nowrap;" onclick="publishRPEForSeance(\'' + date + '\', \'' + s.nom.replace(/'/g, "\\'") + '\')">📢 Envoyer aux ' + nPending + ' restants</button>';
+    }
+    html += '<tr style="border-top:1px solid var(--border);">' +
+      '<td style="padding:8px; font-weight:600;">' + escapeHtml(s.nom) + (s.type_seance ? ' <span style="color:var(--text-dim); font-weight:400; font-size:11px;">· ' + escapeHtml(s.type_seance) + '</span>' : '') + '</td>' +
+      '<td style="padding:8px; text-align:center; color:var(--text-dim);">' + (s.duree_totale ? (s.duree_totale + ' min') : '—') + '</td>' +
+      '<td style="padding:8px; text-align:center; font-weight:600;">' + nAff + '</td>' +
+      '<td style="padding:8px;">' + statut + '</td>' +
+      '<td style="padding:8px; text-align:right;">' + action + '</td>' +
+      '</tr>';
+  });
+  html += '</tbody></table></div>';
+  c.innerHTML = html;
+}
+
+// Publie la RPE pour une séance : démarre le chrono 4h pour tous les joueurs affectés
+// dont la RPE n'est pas encore publiée. Idempotent : ne touche pas ceux déjà publiés.
+async function publishRPEForSeance(date, seance) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const pending = (state.bdd_affectations || []).filter(a =>
+    a.date === date && a.seance === seance && !a.rpe_published_at
+  );
+  if (pending.length === 0) { toast('Aucun joueur en attente pour cette séance', 'info'); return; }
+  if (!confirm('Envoyer la RPE aux ' + pending.length + ' joueur(s) affecté(s) à « ' + seance + ' » ?\nLe chrono 4h démarre immédiatement.')) return;
+
+  const nowIso = new Date().toISOString();
+  const { data, error } = await sb.from('seance_affectations')
+    .update({ rpe_published_at: nowIso })
+    .eq('org', currentOrg).eq('date', date).eq('seance', seance)
+    .is('rpe_published_at', null)
+    .select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  const n = (data || []).length;
+  // Maj état local (les hooks realtime peuvent aussi le rafraîchir, on double-écrit pour instantanéité)
+  (data || []).forEach(row => {
+    const a = (state.bdd_affectations || []).find(x =>
+      x.date === row.date && x.joueur === row.joueur && x.seance === row.seance
+    );
+    if (a) a.rpe_published_at = row.rpe_published_at;
+  });
+  toast('RPE envoyée à ' + n + ' joueur(s) · chrono 4h démarré', 'success');
+  renderEntryJourTable();
 }
 
 // Remplit le sélecteur "Séance / statut à affecter" avec les séances créées pour la date 
@@ -21623,7 +23541,10 @@ const VIGNETTE_ASPECTS = [
   { key: 'physique',  label: 'Physique',  icon: '🏃' },
   { key: 'technique', label: 'Technique', icon: '⚽' },
   { key: 'tactique',  label: 'Tactique',  icon: '🧠' },
-  { key: 'mental',    label: 'Mental',    icon: '💭' }
+  { key: 'mental',    label: 'Mental',    icon: '💭' },
+  // Aspect "Vidéo" : géré dans Paramètres → Vignettes, mais utilisé UNIQUEMENT
+  // dans la Saisie vidéo (la Saisie séance n'a pas de champ HTML pour cet aspect).
+  { key: 'video',     label: 'Vidéo',     icon: '🎥' }
 ];
 
 // Sélection d'une vignette depuis la bibliothèque (menu déroulant) → ajoute la pastille
@@ -22391,7 +24312,7 @@ function bindEntryDirtyTracking() {
   view.addEventListener('change', mark);
 }
 let overviewRPEShowAll = false; // déplier la liste des RPE non remplis // empêche le re-render realtime pendant la saisie
-let rpeMode = 'table';
+let rpeMode = 'card';
 let rpeCardIndex = 0;
 
 function setRPEMode(mode) {
@@ -24387,8 +26308,13 @@ const HOOPER_TREND_THRESHOLD = 3;
 
 function computePlayersToWatch() {
   // Pour chaque joueur, prendre ses 3 dernières saisies complètes et calculer la moyenne
+  // Exclure les archivés (leur nom n'est plus dans state.joueurs)
+  const archived = new Set((state.joueurs_archived || []).map(j => j.nom));
+  const active   = new Set((state.joueurs || []).map(j => j.nom));
   const byPlayer = {};
   hooperData.forEach(h => {
+    if (archived.has(h.joueur)) return;      // archivé PSG → skip
+    if (active.size && !active.has(h.joueur)) return; // pas dans l'effectif actif de l'org courante → skip
     const idx = computeHooperIndex(h);
     if (idx === null) return;
     if (!byPlayer[h.joueur]) byPlayer[h.joueur] = [];
@@ -25016,11 +26942,14 @@ function resetHooperAllFilters() {
   const playerSel = document.getElementById('hooper-all-player');
   const dateEl = document.getElementById('hooper-all-date');
   if (playerSel) playerSel.value = '';
-  if (dateEl) dateEl.value = '';
+  if (dateEl) dateEl.value = toLocalISO(new Date()); // défaut = aujourd'hui
   renderStaffHooperAllTable();
 }
 
 function renderStaffHooperAllTable() {
+  // Défaut : filtrer sur aujourd'hui à la première ouverture
+  const _dateEl = document.getElementById('hooper-all-date');
+  if (_dateEl && !_dateEl.value) _dateEl.value = toLocalISO(new Date());
   const tbody = document.querySelector('#hooper-all-table tbody');
 
   // SECONDE LIGUE : colonnes supplémentaires Motivation / Humeur / Règles
@@ -25328,7 +27257,40 @@ async function renderPlayerOverview() {
     }
   }
 
-  // ── 2. Séances à noter (faites sans RPE, fenêtre encore ouverte) ──────────
+  // ── 2. Programme du jour (séances affectées AUJOURD'HUI dont la RPE n'est pas publiée) ──
+  const progCard = document.getElementById('po-programme-card');
+  const progEl   = document.getElementById('po-programme-content');
+  if (progCard && progEl) {
+    const jourProg = [];
+    (state.bdd_ent || []).forEach(pl => {
+      if (pl.joueur !== currentJoueurNom) return;
+      if (pl.date !== today) return;
+      if ((pl.seances || []).some(s => STATUTS_INDISPO.includes(s))) return; // indispo → rien à montrer
+      (pl.seances || []).forEach(s => {
+        if (STATUTS_NON_ENT.includes(s)) return;
+        const fiche = state.bdd_ent2.find(f => f.date === pl.date && f.nom === s);
+        if (!fiche) return;
+        if (isRPEPublished(pl.date, s, currentJoueurNom)) return; // déjà en mode "à noter", pas dans le programme
+        jourProg.push({ seance: s, duree: fiche.duree_totale || null });
+      });
+    });
+    if (jourProg.length === 0) {
+      progCard.style.display = 'none';
+    } else {
+      progCard.style.display = '';
+      progEl.innerHTML = jourProg.map(it =>
+        '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; margin-bottom:6px;">' +
+          '<div>' +
+            '<div style="font-weight:600; font-size:13px;">' + escapeHtml(it.seance) + (it.duree ? ' <span style="color:var(--text-dim); font-weight:400;">· ' + it.duree + ' min</span>' : '') + '</div>' +
+            '<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">' + (isFR ? '⏳ Séance planifiée, la notation de la séance sera bientôt disponible' : '⏳ Session planned, rating will be available soon') + '</div>' +
+          '</div>' +
+          '<span style="font-size:11px; color:var(--text-dim); font-weight:600; white-space:nowrap;">' + (isFR ? 'À faire' : 'To do') + '</span>' +
+        '</div>'
+      ).join('');
+    }
+  }
+
+  // ── 3. Séances à noter (faites sans RPE, fenêtre encore ouverte) ──────────
   const rpeEl = document.getElementById('po-rpe-content');
   if (rpeEl) {
     // ── Séances planifiées (autonomie) : pas encore notées, fenêtre ouverte ──
@@ -25351,6 +27313,7 @@ async function renderPlayerOverview() {
         if (STATUTS_NON_ENT.includes(s)) return;                                  // statut, pas une séance
         if (!state.bdd_ent2.some(f => f.date === pl.date && f.nom === s)) return;   // fiche supprimée → référence orpheline
         if (getRPEJoueurSeance(pl.date, currentJoueurNom, s) !== null) return;      // déjà notée
+        if (!isRPEPublished(pl.date, s, currentJoueurNom)) return;                 // RPE pas encore ouverte par le staff
         if (isSessionWindowClosed(pl.date, s, currentJoueurNom)) return;           // fenêtre 4 h fermée
         liveANoter.push({ date: pl.date, seance: s });
       });
@@ -25432,46 +27395,68 @@ async function renderPlayerOverview() {
     }
   }
 
-  // ── 3. Séances à venir sur 7 jours ───────────────────────────────────────
-  const seancesEl = document.getElementById('po-seances-content');
-  if (seancesEl) {
-    const jours = [];
-    for (let i = 0; i < 7; i++) {
-      const dt = new Date(); dt.setDate(dt.getDate() + i);
-      jours.push(toLocalISO(dt));
-    }
-    const aVenir = (state.bdd_seances_plan || []).filter(sp =>
-      seancePlanCibleJoueur(sp, currentJoueurNom) && jours.includes(sp.date)
-    ).sort((a, b) => a.date.localeCompare(b.date));
-
-    if (aVenir.length === 0) {
-      seancesEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px;">' + (isFR ? 'Aucune séance planifiée sur les 7 prochains jours.' : 'No sessions planned for the next 7 days.') + '</div>';
+  // ── 3. Créneaux kiné : mes réservations à venir + prochains libres ────────
+  const soinsCard = document.getElementById('po-soins-card');
+  const soinsEl   = document.getElementById('po-soins-content');
+  if (soinsCard && soinsEl) {
+    if (currentOrg === 'individuel') {
+      soinsCard.style.display = 'none';
     } else {
-      seancesEl.innerHTML = aVenir.map(sp => {
-        const faite = seancePlanEstFaite(sp.id, currentJoueurNom);
-        const isToday = (sp.date === today);
-        const routineData = parseRoutineConsignes(sp.consignes);
-        const resume = routineData
-          ? '🏋️ ' + (routineData.groupes || []).reduce((s,g) => s + (g.exercices||[]).length, 0) + ' exercices'
-          : (sp.consignes ? escapeHtml(sp.consignes.slice(0, 60)) + (sp.consignes.length > 60 ? '…' : '') : '');
-        return '<div onclick="openSeancePlanDetail(\'' + sp.id + '\', \'' + currentJoueurNom.replace(/'/g, "\\'") + '\')" ' +
-          'style="display:flex; align-items:center; gap:12px; padding:10px 12px; background:var(--bg-elevated); border:1px solid ' + (isToday ? 'var(--accent)' : 'var(--border)') + '; border-radius:8px; margin-bottom:6px; cursor:pointer;" ' +
-          'onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'' + (isToday ? 'var(--accent)' : 'var(--border)') + '\'">' +
-          '<div style="min-width:42px; text-align:center;">' +
-            '<div style="font-size:16px; font-weight:700; color:' + (isToday ? 'var(--accent-light)' : 'var(--text)') + ';">' + sp.date.split('-')[2] + '</div>' +
-            '<div style="font-size:10px; color:var(--text-dim); text-transform:uppercase;">' + new Date(sp.date + 'T12:00:00').toLocaleDateString(isFR ? 'fr-FR' : 'en-GB', {weekday:'short'}) + '</div>' +
-          '</div>' +
-          '<div style="width:1px; height:32px; background:var(--border);"></div>' +
-          '<div style="flex:1;">' +
-            '<div style="font-weight:600; font-size:13px;">' + escapeHtml(sp.type || (isFR ? 'Séance' : 'Session')) + (sp.duree_min ? ' <span style="color:var(--text-dim); font-weight:400;">· ' + sp.duree_min + ' min</span>' : '') + '</div>' +
-            (resume ? '<div style="font-size:11px; color:var(--text-dim); margin-top:2px;">' + resume + '</div>' : '') +
-          '</div>' +
-          '<span style="font-size:13px;">' + (faite ? '✅' : '⬜') + '</span>' +
-        '</div>';
-      }).join('');
+      soinsCard.style.display = '';
+      // Refetch léger (le kiné a pu créer/supprimer des créneaux hors app ouverte)
+      try {
+        const { data } = await sb.from('creneaux_medicaux').select('*')
+          .gte('date', today).order('date').order('heure');
+        if (data) state.bdd_creneaux_medicaux = data;
+      } catch (e) {}
+      // RLS filtre déjà à l'entité éligible ; ici on garde libres + les miens
+      const visibles = (state.bdd_creneaux_medicaux || [])
+        .filter(s => s.date >= today && (!s.joueur || s.joueur === currentJoueurNom));
+      const mine   = visibles.filter(s => s.joueur === currentJoueurNom).slice(0, 3);
+      const libres = visibles.filter(s => !s.joueur).slice(0, 4);
+      const bookedDates = new Set(visibles.filter(s => s.joueur === currentJoueurNom).map(s => s.date));
+      const rowStyle = 'display:flex; align-items:center; justify-content:space-between; gap:10px; border-radius:8px; padding:9px 11px; margin-bottom:5px;';
+      const fmtSlot = s => {
+        const fin = _cmAddMinutes(s.heure, s.duree_min || 15);
+        const [ , m, dd] = s.date.split('-');
+        const jour = new Date(s.date + 'T12:00:00').toLocaleDateString(isFR ? 'fr-FR' : 'en-GB', {weekday:'short'});
+        return jour.charAt(0).toUpperCase() + jour.slice(1) + ' ' + dd + '/' + m + ' · <b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b>';
+      };
+      let html = '';
+      if (mine.length) {
+        html += '<div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--green); margin-bottom:5px;">' + (isFR ? '✓ Réservé' : '✓ Booked') + '</div>';
+        mine.forEach(s => {
+          html += '<div style="' + rowStyle + ' background:rgba(22,101,52,0.25); border-left:3px solid var(--green);">' +
+            '<div style="font-size:13px;">' + fmtSlot(s) + ' <span style="color:var(--text-dim);">· ' + mpFmtDuree(s.duree_min || 15) + '</span></div>' +
+            '<button onclick="_poCancelSlot(\'' + s.id + '\')" style="background:none; border:1px solid var(--red); color:var(--red); font-size:11px; font-weight:600; cursor:pointer; padding:4px 10px; border-radius:6px;">' + (isFR ? 'Annuler' : 'Cancel') + '</button>' +
+          '</div>';
+        });
+      }
+      if (libres.length) {
+        html += '<div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--accent-light); margin:' + (mine.length ? '10px 0 5px' : '0 0 5px') + ';">' + (isFR ? 'Créneaux libres' : 'Available slots') + '</div>';
+        libres.forEach(s => {
+          const locked = bookedDates.has(s.date);
+          const click  = locked ? '' : ('onclick="_poBookSlot(\'' + s.id + '\')"');
+          const cur    = locked ? 'opacity:.5;' : 'cursor:pointer;';
+          html += '<div ' + click + ' style="' + rowStyle + cur + ' background:var(--bg-elevated); border-left:3px solid var(--accent);">' +
+            '<div style="font-size:13px;">' + fmtSlot(s) + ' <span style="color:var(--text-dim);">· ' + mpFmtDuree(s.duree_min || 15) + '</span></div>' +
+            '<span style="font-size:12px; font-weight:600; color:' + (locked ? 'var(--text-dim)' : 'var(--accent-light)') + ';">' +
+              (locked ? (isFR ? '1/jour max' : '1/day max') : (isFR ? 'Réserver →' : 'Book →')) +
+            '</span>' +
+          '</div>';
+        });
+      }
+      if (!mine.length && !libres.length) {
+        html = '<div style="color:var(--text-dim); font-size:13px;">' + (isFR ? 'Aucun créneau proposé pour le moment.' : 'No slots offered right now.') + '</div>';
+      }
+      soinsEl.innerHTML = html;
     }
   }
 }
+
+// Wrappers vue d'ensemble joueur : réserver / annuler puis re-render la carte
+async function _poBookSlot(id)   { await reserverCreneau(id);    renderPlayerOverview(); }
+async function _poCancelSlot(id) { await annulerReservation(id); renderPlayerOverview(); }
 
 function renderPlayerRPE() {
   const dateInput = document.getElementById('player-rpe-date');
@@ -25695,11 +27680,13 @@ function renderPlayerSeanceNotation(date, joueur, seance) {
 
   // Bandeau de statut verrou / éditable — fenêtre unique de 4h depuis l'affectation
   if (locked) {
+    const alertBtn = ' <button onclick="contactCoachExpiredRPE(1, this)" style="margin-left:8px;background:var(--red);color:white;border:none;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">🧑‍🏫 ' + tr('Alert the coach', 'Alerter le coach', 'Alertar al entrenador') + '</button>';
+    const bannerStyle = 'margin-top:8px;padding:8px 12px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:#fca5a5;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;';
     if (!hasEntry) {
       // 4h dépassées sans aucune saisie → verrou total, contacter Lucas P.
-      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:#fca5a5;">🔒 ' + tr('The 4h window has closed. Please contact Lucas P. to enter your rating.', 'Le délai de 4 h est dépassé. Contacte Lucas P. pour saisir ta note.') + '</div>';
+      html += '<div style="' + bannerStyle + '"><span>🔒 ' + tr('The 4h window has closed. Please contact Lucas P. to enter your rating.', 'Le délai de 4 h est dépassé. Contacte Lucas P. pour saisir ta note.') + '</span>' + alertBtn + '</div>';
     } else {
-      html += '<div style="margin-top:8px;padding:8px 12px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:#fca5a5;">🔒 ' + tr('The 4h window has closed. Your rating can no longer be edited — contact Lucas P.', 'Le délai de 4 h est dépassé. Ta note ne peut plus être modifiée — contacte Lucas P.') + '</div>';
+      html += '<div style="' + bannerStyle + '"><span>🔒 ' + tr('The 4h window has closed. Your rating can no longer be edited — contact Lucas P.', 'Le délai de 4 h est dépassé. Ta note ne peut plus être modifiée — contacte Lucas P.') + '</span>' + alertBtn + '</div>';
     }
   } else if (lockInfo !== null) {
     const hrs = Math.floor(lockInfo.minutes / 60);
@@ -25974,7 +27961,10 @@ function renderSettings() {
   renderResetStats();
   // Staff PSG : accès Paramètres restreint à l'onglet Vignettes uniquement.
   // On masque tous les autres onglets, la zone de réinit, et on force l'onglet actif.
-  const psgStaffVignettesOnly = (currentRole === 'staff') && currentOrg === 'PSG';
+  // Exceptions : comptes staff PSG débloqués (accès à tous les onglets Paramètres).
+  const FULL_SETTINGS_STAFF_EMAILS = ['elise@psg.fr','israel@psg.fr'];
+  const myEmail = ((currentUser && currentUser.email) || '').toLowerCase();
+  const psgStaffVignettesOnly = (currentRole === 'staff') && currentOrg === 'PSG' && !FULL_SETTINGS_STAFF_EMAILS.includes(myEmail);
   // Zone de réinit : action destructive → réservée admin. Cachée pour staff (coach) et tout autre rôle.
   const resetCard = document.getElementById('settings-reset-card');
   if (resetCard) resetCard.style.display = (currentRole === 'admin') ? '' : 'none';
@@ -26422,6 +28412,107 @@ function switchSettingsTab(tab) {
   document.querySelectorAll('.settings-pane').forEach(p => p.style.display = 'none');
   document.getElementById('settings-' + tab).style.display = 'block';
   renderSettings();
+  if (tab === 'fiches') renderSettingsFiches();
+}
+
+// ---- Suivi d'avancement des fiches globales (Paramètres → Fiches joueurs) ----
+const _FICHE_FIELDS = [
+  { key: 'photo',              label: 'Photo',                src: 'joueur' },
+  { key: 'contrat',            label: 'Contrat',              src: 'fiche' },
+  { key: 'anciennete',         label: 'Ancienneté',           src: 'fiche' },
+  { key: 'selection',          label: 'Sélection',            src: 'fiche' },
+  { key: 'pied_fort',          label: 'Pied fort',            src: 'fiche' },
+  { key: 'qualites',           label: 'Qualités',             src: 'fiche' },
+  { key: 'superpouvoir',       label: 'Superpouvoir',         src: 'fiche' },
+  { key: 'points_forts',       label: 'Points forts',         src: 'fiche_arr' },
+  { key: 'axes_amelioration',  label: 'Axes d\'amélioration', src: 'fiche_arr' },
+  { key: 'plans_action',       label: 'Plans d\'action',      src: 'fiche_arr' }
+];
+
+async function renderSettingsFiches() {
+  const summary = document.getElementById('settings-fiches-summary');
+  const cont = document.getElementById('settings-fiches-content');
+  if (!cont) return;
+  cont.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Chargement…</div>';
+  // Fetch toutes les fiches globales de l'org
+  let fiches = [];
+  try {
+    const { data } = await sb.from('fiches_globales').select('*').eq('org', currentOrg);
+    fiches = data || [];
+  } catch (e) {}
+  const byNom = {}; fiches.forEach(f => { byNom[f.joueur] = f; });
+  const players = (state.joueurs || []).filter(j => !j.archived).sort((a, b) => a.nom.localeCompare(b.nom));
+
+  const rows = players.map(j => {
+    const f = byNom[j.nom] || {};
+    const missing = [];
+    _FICHE_FIELDS.forEach(fld => {
+      let filled = false;
+      if (fld.src === 'joueur') filled = !!j[fld.key];
+      else if (fld.src === 'fiche_arr') filled = Array.isArray(f[fld.key]) && f[fld.key].some(v => v && String(v).trim());
+      else filled = !!(f[fld.key] && String(f[fld.key]).trim());
+      if (!filled) missing.push(fld.label);
+    });
+    const total = _FICHE_FIELDS.length;
+    const done  = total - missing.length;
+    const pct   = Math.round((done / total) * 100);
+    return { nom: j.nom, groupe: j.groupe || '', pct, done, total, missing };
+  });
+
+  const nComplete   = rows.filter(r => r.pct === 100).length;
+  const nStarted    = rows.filter(r => r.pct > 0 && r.pct < 100).length;
+  const nEmpty      = rows.filter(r => r.pct === 0).length;
+  const avgPct      = rows.length ? Math.round(rows.reduce((s, r) => s + r.pct, 0) / rows.length) : 0;
+
+  if (summary) {
+    summary.innerHTML =
+      '<div class="stat"><div class="stat-label">Complètes</div><div class="stat-value" style="color:var(--green);">' + nComplete + ' / ' + rows.length + '</div></div>' +
+      '<div class="stat"><div class="stat-label">Partielles</div><div class="stat-value" style="color:var(--yellow);">' + nStarted + '</div></div>' +
+      '<div class="stat"><div class="stat-label">Vides</div><div class="stat-value" style="color:var(--red);">' + nEmpty + '</div></div>' +
+      '<div class="stat"><div class="stat-label">Complétion moyenne</div><div class="stat-value">' + avgPct + '%</div></div>';
+  }
+
+  // Filtres
+  const q = ((document.getElementById('fiches-search') || {}).value || '').toLowerCase().trim();
+  const filter = ((document.getElementById('fiches-filter') || {}).value || 'all');
+  let filtered = rows;
+  if (q) filtered = filtered.filter(r => r.nom.toLowerCase().includes(q) || (r.groupe || '').toLowerCase().includes(q));
+  if (filter === 'complete')  filtered = filtered.filter(r => r.pct === 100);
+  if (filter === 'incomplete') filtered = filtered.filter(r => r.pct < 100);
+  filtered.sort((a, b) => a.pct - b.pct || a.nom.localeCompare(b.nom));
+
+  if (filtered.length === 0) {
+    cont.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:12px;">Aucun joueur ne correspond au filtre.</div>';
+    return;
+  }
+  const rowStyle = 'display:grid; grid-template-columns:200px 120px 120px 1fr 80px; gap:10px; align-items:center; padding:8px 10px; border-bottom:1px solid var(--border); font-size:12px;';
+  let html = '<div style="' + rowStyle + ' background:var(--bg-elevated); font-weight:700; text-transform:uppercase; font-size:10px; color:var(--text-dim);">' +
+    '<div>Joueur</div><div>Groupe</div><div>Complétion</div><div>Champs manquants</div><div style="text-align:right;">Ouvrir</div>' +
+  '</div>';
+  filtered.forEach(r => {
+    const barColor = r.pct === 100 ? 'var(--green)' : (r.pct >= 50 ? 'var(--yellow)' : 'var(--red)');
+    const bar = '<div style="display:flex; align-items:center; gap:6px;"><div style="flex:1; height:6px; background:var(--bg-elevated); border-radius:3px; overflow:hidden;"><div style="width:' + r.pct + '%; height:100%; background:' + barColor + ';"></div></div><span style="font-weight:700; color:' + barColor + '; min-width:32px; text-align:right;">' + r.pct + '%</span></div>';
+    const missingTxt = r.missing.length === 0
+      ? '<span style="color:var(--green);">✅ Tout renseigné</span>'
+      : r.missing.map(m => '<span style="display:inline-block; background:rgba(239,68,68,0.12); color:#fca5a5; font-size:10px; padding:1px 6px; border-radius:8px; margin:1px;">' + escapeHtml(m) + '</span>').join(' ');
+    html += '<div style="' + rowStyle + '">' +
+      '<div><b>' + escapeHtml(r.nom) + '</b></div>' +
+      '<div style="color:var(--text-dim);">' + escapeHtml(r.groupe) + '</div>' +
+      '<div>' + bar + '</div>' +
+      '<div>' + missingTxt + '</div>' +
+      '<div style="text-align:right;"><button class="btn btn-secondary" style="padding:3px 10px; font-size:11px;" onclick="_ficheGoto(\'' + r.nom.replace(/'/g, "\\'") + '\')">→</button></div>' +
+    '</div>';
+  });
+  cont.innerHTML = html;
+}
+
+function _ficheGoto(nom) {
+  const btn = document.querySelector('.nav-btn[data-view="joueur"]');
+  if (btn) btn.click();
+  setTimeout(() => {
+    const sel = document.getElementById('joueur-dash-select');
+    if (sel) { sel.value = nom; renderPlayerDashboard(); sel.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  }, 100);
 }
 
 function ensureGroupsList() {
@@ -27953,6 +30044,10 @@ function _psgPlayerGPSAccessCheck() {
       if (STATUTS_NON_ENT.includes(s)) return;
       if (!state.bdd_ent2.some(f => f.date === pl.date && f.nom === s)) return;
       if (getRPEJoueurSeance(pl.date, me, s) !== null) return;
+      // Ne compte que si l'affectation existe ET la RPE a été publiée par le staff.
+      // Sans publication ("Envoyer RPE"), le joueur n'a rien à noter → ne peut pas être bloqué.
+      const aff = (state.bdd_affectations || []).find(x => x.date === pl.date && x.joueur === me && x.seance === s);
+      if (!aff || !aff.rpe_published_at) return;
       if (isSessionWindowClosed(pl.date, s, me)) pendingClosed++; else pendingOpen++;
     });
   });
@@ -28015,7 +30110,7 @@ function renderPlayerGPS() {
       let btns = '';
       if (!gate.hooperOK) btns += '<button class="btn" onclick="document.querySelector(\'.nav-btn[data-view=player-hooper]\').click()">💚 ' + tr('Fill wellness', 'Remplir l\'état de forme', 'Rellenar bienestar') + '</button> ';
       if (gate.pendingOpen > 0) btns += '<button class="btn" onclick="document.querySelector(\'.nav-btn[data-view=player-rpe]\').click()">⭐ ' + tr('Rate my sessions', 'Noter mes séances', 'Calificar mis sesiones') + '</button>';
-      if (gate.pendingClosed > 0) btns += '<button class="btn btn-secondary" disabled style="opacity:.8;cursor:not-allowed;">🧑‍🏫 ' + tr('Contact a coach', 'Voir un coach', 'Contactar entrenador') + '</button>';
+      if (gate.pendingClosed > 0) btns += '<button class="btn" onclick="contactCoachExpiredRPE(' + gate.pendingClosed + ', this)">🧑‍🏫 ' + tr('Alert the coach', 'Alerter le coach', 'Alertar al entrenador') + '</button>';
       content.innerHTML =
         '<div style="padding:24px; border:1px dashed #f59e0b; background:rgba(245,158,11,0.08); border-radius:10px;">' +
           '<div style="font-size:20px; font-weight:700; color:#fbbf24; margin-bottom:8px;">🔒 ' + lockTitle + '</div>' +
@@ -28289,7 +30384,8 @@ function renderReaBlessureOptions(preselectId) {
   if (preselectId) sel.value = preselectId;
 }
 
-// Quand on choisit une blessure du dossier médical : préremplit libellé + date de blessure.
+// Quand on choisit une blessure du dossier médical : force la date de blessure et la
+// date de retour depuis la fiche (source de vérité). Le libellé n'est écrit que s'il est vide.
 function onReaBlessurePick() {
   const sel = document.getElementById('rea-blessure-id');
   if (!sel || !sel.value) return;
@@ -28298,7 +30394,13 @@ function onReaBlessurePick() {
   const blessInp = document.getElementById('rea-blessure');
   if (blessInp && !blessInp.value.trim()) blessInp.value = reaBlessureLabel(b).split(' · ').slice(0, 2).join(' · ');
   const dateInp = document.getElementById('rea-date-blessure');
-  if (dateInp && !dateInp.value && b.date_blessure) dateInp.value = b.date_blessure;
+  if (dateInp && b.date_blessure) dateInp.value = b.date_blessure; // TOUJOURS écraser
+  // Date de fin/retour depuis la fiche blessure (details.date_fin ou date_retour)
+  const retInp = document.getElementById('rea-date-retour');
+  if (retInp) {
+    const df = (b.details && (b.details.date_fin || b.details.date_retour)) || null;
+    if (df) retInp.value = df;
+  }
 }
 
 // --- Journal jour-par-jour ---------------------------------------------------
@@ -29754,6 +31856,7 @@ function renderTesting() {
   populateTestingSelects();
   renderTestTypesList();
   renderTestResults();
+  renderBulkTestTable(); // tableau de saisie groupée
   switchTestingTab(currentTestingTab); // ré-applique le sous-onglet actif (et rafraîchit la viz si active)
 }
 
@@ -30427,6 +32530,127 @@ async function saveTestResult() {
   renderTestTypesList();
   renderTestResults();
   toast('Résultat enregistré ✓', 'success');
+}
+
+// ============================================================================
+// SAISIE GROUPÉE PAR JOUEUR (tableau ligne par ligne pour prendre tous les résultats)
+// ============================================================================
+function populateBulkTestSelects() {
+  const types = (state.bdd_test_types || []).slice().sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+  const typeSel = document.getElementById('bt-type');
+  if (typeSel) {
+    const prev = typeSel.value;
+    typeSel.innerHTML = types.length
+      ? types.map(t => '<option value="' + t.id + '">' + escapeHtml(t.nom) + (t.unite ? ' (' + escapeHtml(t.unite) + ')' : '') + '</option>').join('')
+      : '<option value="">— Crée d\'abord un test —</option>';
+    if (prev && types.some(t => String(t.id) === prev)) typeSel.value = prev;
+  }
+  const groupSel = document.getElementById('bt-group');
+  if (groupSel) {
+    ensureGroupsList();
+    const prev = groupSel.value;
+    const groups = (state.groupes || []).slice().sort();
+    groupSel.innerHTML = '<option value="">Tous les groupes</option>' + groups.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+    if (prev) groupSel.value = prev;
+  }
+  const dtEl = document.getElementById('bt-date');
+  if (dtEl && !dtEl.value) dtEl.value = new Date().toISOString().slice(0, 10);
+}
+
+function renderBulkTestTable() {
+  populateBulkTestSelects();
+  const wrap = document.getElementById('bt-table-wrap');
+  const hint = document.getElementById('bt-hint');
+  if (!wrap) return;
+  const typeId = (document.getElementById('bt-type') || {}).value || '';
+  const date   = (document.getElementById('bt-date') || {}).value || '';
+  const group  = (document.getElementById('bt-group') || {}).value || '';
+  const t = typeId ? testTypeById(typeId) : null;
+  if (!t || !date) {
+    wrap.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Choisis un test et une date pour afficher le tableau.</div>';
+    if (hint) hint.textContent = '';
+    return;
+  }
+  const isTime = isTimeTest(t.unite);
+  if (hint) hint.textContent = isTime ? 'Format temps mm:ss (ex : 3:45)' : (t.unite ? 'Unité : ' + t.unite : '');
+
+  const players = getAllPlayers().filter(p => !group || getJoueurInfo(p).groupe === group);
+  if (players.length === 0) {
+    wrap.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Aucun joueur dans ce groupe.</div>';
+    return;
+  }
+  const results = (state.bdd_test_results || []).filter(r => r.test_type_id === typeId);
+  const lastForPlayer = {};
+  results.forEach(r => {
+    const prev = lastForPlayer[r.joueur];
+    if (!prev || r.date > prev.date) lastForPlayer[r.joueur] = r;
+  });
+  const onSameDate = {};
+  results.filter(r => r.date === date).forEach(r => { onSameDate[r.joueur] = r; });
+  const formatVal = v => (v === null || v === undefined) ? '—' : (isTime ? _btFmtTime(v) : String(v));
+
+  let html = '<div class="table-wrap"><table style="font-size:13px;"><thead><tr>' +
+    '<th style="text-align:left;">Joueur</th>' +
+    '<th>Groupe</th>' +
+    '<th style="text-align:center;">Dernière valeur</th>' +
+    '<th style="text-align:center;">Déjà noté (' + date.split('-').reverse().join('/') + ')</th>' +
+    '<th>Valeur</th>' +
+    '<th>Notes</th>' +
+    '</tr></thead><tbody>';
+  players.forEach((p, i) => {
+    const info = getJoueurInfo(p);
+    const last = lastForPlayer[p];
+    const same = onSameDate[p];
+    const lastTxt = last ? (formatVal(last.valeur) + '<div style="font-size:10px; color:var(--text-dim);">' + last.date.split('-').reverse().join('/') + '</div>') : '<span style="color:var(--text-dim);">—</span>';
+    const sameTxt = same ? '<span style="color:var(--green); font-weight:600;">✓ ' + formatVal(same.valeur) + '</span>' : '<span style="color:var(--text-dim);">—</span>';
+    html += '<tr style="border-top:1px solid var(--border);">' +
+      '<td style="text-align:left; font-weight:600;">' + escapeHtml(p) + '</td>' +
+      '<td style="color:var(--text-dim);">' + escapeHtml(info.groupe || '') + '</td>' +
+      '<td style="text-align:center;">' + lastTxt + '</td>' +
+      '<td style="text-align:center;">' + sameTxt + '</td>' +
+      '<td><input type="text" class="bt-val" data-joueur="' + escapeHtml(p) + '" placeholder="' + (isTime ? 'mm:ss' : '0') + '" style="width:100px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:13px;" /></td>' +
+      '<td><input type="text" class="bt-notes" data-joueur="' + escapeHtml(p) + '" placeholder="Notes" style="width:100%; min-width:120px; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:5px 8px; font-size:13px;" /></td>' +
+    '</tr>';
+  });
+  html += '</tbody></table></div>';
+  wrap.innerHTML = html;
+}
+
+function _btFmtTime(sec) {
+  if (sec === null || sec === undefined || isNaN(sec)) return '—';
+  const m = Math.floor(sec / 60), s = sec - m * 60;
+  return m + ':' + (s < 10 ? '0' : '') + (Math.round(s * 100) / 100);
+}
+
+async function saveBulkTestResults() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const typeId = (document.getElementById('bt-type') || {}).value || '';
+  const date   = (document.getElementById('bt-date') || {}).value || '';
+  if (!typeId || !date) { toast('Choisis un test et une date', 'error'); return; }
+  const t = testTypeById(typeId);
+  const isTime = t && isTimeTest(t.unite);
+  const valInputs = Array.from(document.querySelectorAll('.bt-val'));
+  const rows = [];
+  let invalid = 0;
+  valInputs.forEach(inp => {
+    const raw = (inp.value || '').trim();
+    if (!raw) return;
+    let v;
+    if (isTime) { v = parseTimeValue(raw); if (v === null) { invalid++; return; } }
+    else { v = parseFloat(raw.replace(',', '.')); if (isNaN(v)) { invalid++; return; } }
+    const joueur = inp.dataset.joueur;
+    const notesEl = document.querySelector('.bt-notes[data-joueur="' + joueur.replace(/"/g, '\\"') + '"]');
+    const notes = notesEl && notesEl.value.trim() ? notesEl.value.trim() : null;
+    rows.push({ org: currentOrg, test_type_id: typeId, joueur, date, valeur: v, notes });
+  });
+  if (invalid > 0) { toast(invalid + ' valeur(s) invalide(s) — corrige avant enregistrement', 'error'); return; }
+  if (rows.length === 0) { toast('Aucune valeur à enregistrer', 'info'); return; }
+  const { data, error } = await sb.from('test_results').insert(rows).select();
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (data) data.forEach(r => state.bdd_test_results.unshift(r));
+  toast(rows.length + ' résultat(s) enregistré(s) ✓', 'success');
+  renderBulkTestTable();
+  renderTestResults();
 }
 
 async function deleteTestResult(id) {
