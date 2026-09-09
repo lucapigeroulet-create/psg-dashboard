@@ -8718,7 +8718,11 @@ async function loadState() {
     }));
 
     setLoad('Chargement des plannings...');
-    const { data: plannings } = await sb.from('plannings').select('*').eq('org', currentOrg).order('date');
+    // Paginé : PostgREST plafonne chaque réponse à 1000 lignes. Sans _fullFetch,
+    // les plannings les plus récents (ex. jour même) étaient tronqués dès que
+    // l'org dépassait 1000 lignes → RPE du jour absentes du tableau ET jamais
+    // marquées manquantes (car les joueurs n'apparaissaient pas dans bdd_ent).
+    const plannings = await _fullFetch('plannings', currentOrg, 'date');
     state.bdd_ent = (plannings || []).map(p => ({
       date: p.date, joueur: p.joueur, seances: p.seances || []
     }));
@@ -8737,7 +8741,9 @@ async function loadState() {
     }));
 
     setLoad('Chargement des RPE...');
-    const { data: rpes } = await sb.from('rpe_declarations').select('*').eq('org', currentOrg).order('date');
+    // Même piège de pagination que plannings : au-delà de 1000 lignes,
+    // les RPE les plus récents étaient perdus sans _fullFetch.
+    const rpes = await _fullFetch('rpe_declarations', currentOrg, 'date');
     state.bdd_rpe = (rpes || []).map(r => ({
       date: r.date, joueur: r.joueur, rpe: r.rpe || [],
       plaisir: (r.plaisir === null || r.plaisir === undefined) ? null : r.plaisir,
@@ -20553,34 +20559,54 @@ function renderMatchCoachNotes() {
     cont.innerHTML = html; return;
   }
   const notes = {};
-  (state.bdd_match_coach_notes || []).filter(n => n.match_id === currentMatchId && n.coach_id === matchCoachSelected).forEach(n => notes[n.joueur] = n.note);
+  const remarques = {};
+  (state.bdd_match_coach_notes || []).filter(n => n.match_id === currentMatchId && n.coach_id === matchCoachSelected).forEach(n => {
+    notes[n.joueur] = n.note;
+    if (n.commentaire) remarques[n.joueur] = n.commentaire;
+  });
 
-  html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Note /10</th></tr></thead><tbody>';
+  html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Note /10</th><th style="text-align:left;">Remarque</th></tr></thead><tbody>';
   compo.forEach(c => {
     const jEsc = c.joueur.replace(/'/g, "\\'");
     const v = notes[c.joueur];
+    const rem = remarques[c.joueur] || '';
     html += '<tr><td style="text-align:left;font-weight:600;">' + escapeHtml(c.joueur) + '</td>';
     html += '<td style="text-align:center;"><input type="number" min="0" max="10" step="0.5" value="' + (v != null ? v : '') + '" ' + (canEdit ? '' : 'disabled') +
       ' onchange="saveCoachNote(\'' + currentMatchId + '\', \'' + jEsc + '\', \'' + matchCoachSelected + '\', this.value)" ' +
-      'style="width:60px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;text-align:center;" /></td></tr>';
+      'style="width:60px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;text-align:center;" /></td>';
+    html += '<td style="text-align:left;"><textarea rows="1" ' + (canEdit ? '' : 'disabled') +
+      ' onblur="saveCoachRemarque(\'' + currentMatchId + '\', \'' + jEsc + '\', \'' + matchCoachSelected + '\', this)" ' +
+      'placeholder="Optionnel — remarque sur ce joueur" ' +
+      'style="min-width:200px;max-width:340px;width:100%;background:var(--bg-elevated);color:var(--text);border:1px solid ' + (rem ? 'var(--green)' : 'var(--border)') + ';border-radius:4px;padding:4px 6px;font-size:12px;resize:vertical;font-family:inherit;">' + escapeHtml(rem) + '</textarea></td></tr>';
   });
   html += '</tbody></table></div>';
   cont.innerHTML = html;
 }
 
-async function saveCoachNote(matchId, joueur, coachId, value) {
+function getCoachNoteRow(matchId, joueur, coachId) {
+  return (state.bdd_match_coach_notes || []).find(n => n.match_id === matchId && n.joueur === joueur && n.coach_id === coachId);
+}
+
+function coachCanEditNotes(matchId, coachId) {
   const coach = (state.bdd_coachs || []).find(c => c.id === coachId);
   if (!coach || !currentUser || coach.account_id !== currentUser.id) {
-    toast('Tu ne peux saisir que les notes de ton propre coach', 'error'); return;
+    toast('Tu ne peux saisir que les notes de ton propre coach', 'error'); return false;
   }
   const mtch = (state.bdd_matchs || []).find(x => x.id === matchId);
   if (mtch && !getMatchPresentCoachIds(mtch).includes(coachId)) {
-    toast('Ce coach n\'est pas marqué présent sur ce match', 'error'); return;
+    toast('Ce coach n\'est pas marqué présent sur ce match', 'error'); return false;
   }
+  return true;
+}
+
+async function saveCoachNote(matchId, joueur, coachId, value) {
+  if (!coachCanEditNotes(matchId, coachId)) return;
   const note = (value === '' || value == null) ? null : parseFloat(value);
   if (note != null && (isNaN(note) || note < 0 || note > 10)) { toast('Note entre 0 et 10', 'error'); return; }
+  const existing = getCoachNoteRow(matchId, joueur, coachId);
+  const existingComment = (existing && existing.commentaire) ? existing.commentaire : null;
   try {
-    if (note == null) {
+    if (note == null && !existingComment) {
       const { error } = await sb.from('match_coach_notes').delete().match({ match_id: matchId, joueur: joueur, coach_id: coachId });
       if (error) { toast('Erreur : ' + error.message, 'error'); return; }
       state.bdd_match_coach_notes = (state.bdd_match_coach_notes || []).filter(n => !(n.match_id === matchId && n.joueur === joueur && n.coach_id === coachId));
@@ -20595,6 +20621,29 @@ async function saveCoachNote(matchId, joueur, coachId, value) {
     }
     await updateCoachAvgInComposition(matchId, joueur);
     toast('Note enregistrée', 'success');
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); }
+}
+
+async function saveCoachRemarque(matchId, joueur, coachId, el) {
+  if (!coachCanEditNotes(matchId, coachId)) return;
+  const commentaire = (el.value || '').trim();
+  const existing = getCoachNoteRow(matchId, joueur, coachId);
+  const existingNote = (existing && existing.note != null) ? existing.note : null;
+  try {
+    if (!commentaire && existingNote == null) {
+      const { error } = await sb.from('match_coach_notes').delete().match({ match_id: matchId, joueur: joueur, coach_id: coachId });
+      if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+      state.bdd_match_coach_notes = (state.bdd_match_coach_notes || []).filter(n => !(n.match_id === matchId && n.joueur === joueur && n.coach_id === coachId));
+    } else {
+      const row = { match_id: matchId, joueur: joueur, coach_id: coachId, commentaire: commentaire || null, org: currentOrg, updated_at: new Date().toISOString() };
+      const { data, error } = await sb.from('match_coach_notes').upsert(row, { onConflict: 'match_id,joueur,coach_id' }).select();
+      if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+      const saved = (data && data[0]) ? data[0] : row;
+      const arr = state.bdd_match_coach_notes || (state.bdd_match_coach_notes = []);
+      const idx = arr.findIndex(n => n.match_id === matchId && n.joueur === joueur && n.coach_id === coachId);
+      if (idx >= 0) arr[idx] = saved; else arr.push(saved);
+    }
+    el.style.borderColor = commentaire ? 'var(--green)' : 'var(--border)';
   } catch (e) { toast('Erreur : ' + e.message, 'error'); }
 }
 
@@ -23026,6 +23075,8 @@ function renderCompetitionPlayer(filters, content, matchs) {
   const myNotes = {};
   (state.bdd_match_notes || []).filter(n => n.joueur === me).forEach(n => myNotes[n.match_id] = n.note);
   const agg = competitionAggregate(mine)[me];
+  // Les joueurs de PSG U18 ne doivent pas voir la note attribuée par les coachs.
+  const hideCoachNote = (getJoueurInfo(me).groupe === 'PSG U18');
 
   let html = '';
   if (agg) {
@@ -23037,7 +23088,7 @@ function renderCompetitionPlayer(filters, content, matchs) {
     html += competitionStatCard(fr ? 'Minutes' : 'Minutes', agg.min);
     html += competitionStatCard(fr ? 'Buts' : 'Goals', agg.buts);
     html += competitionStatCard(fr ? 'Passes déc.' : 'Assists', agg.passes);
-    html += competitionStatCard(fr ? 'Note coachs (moy)' : 'Coaches (avg)', ns);
+    if (!hideCoachNote) html += competitionStatCard(fr ? 'Note coachs (moy)' : 'Coaches (avg)', ns);
     html += competitionStatCard(fr ? 'Ma note (moy)' : 'Self (avg)', np);
     html += '</div>';
   }
@@ -23047,7 +23098,9 @@ function renderCompetitionPlayer(filters, content, matchs) {
     html += '<div style="color:var(--text-dim);font-size:13px;padding:10px;">' + (fr ? 'Tu n\'as pas encore de match enregistré.' : 'No matches recorded yet.') + '</div>';
   } else {
     html += '<div class="table-wrap"><table style="font-size:13px;"><thead><tr>';
-    html += '<th style="text-align:left;">Date</th><th style="text-align:left;">Match</th><th>Min</th><th>⚽</th><th>🅰️</th><th>' + (fr ? 'Note coachs' : 'Coaches') + '</th><th>' + (fr ? 'Ma note /10' : 'My rating /10') + '</th><th style="text-align:left;">' + (fr ? 'Mon commentaire' : 'My comment') + '</th></tr></thead><tbody>';
+    html += '<th style="text-align:left;">Date</th><th style="text-align:left;">Match</th><th>Min</th><th>⚽</th><th>🅰️</th>' +
+      (hideCoachNote ? '' : '<th>' + (fr ? 'Note coachs' : 'Coaches') + '</th>') +
+      '<th>' + (fr ? 'Ma note /10' : 'My rating /10') + '</th><th style="text-align:left;">' + (fr ? 'Mon commentaire' : 'My comment') + '</th></tr></thead><tbody>';
     mine.forEach(m => {
       const c = (m.composition || []).find(x => x.joueur === me) || {};
       const np = myNotes[m.id];
@@ -23058,7 +23111,7 @@ function renderCompetitionPlayer(filters, content, matchs) {
       html += '<td style="text-align:center;">' + (c.total_min || 0) + '</td>';
       html += '<td style="text-align:center;font-weight:700;color:var(--accent-light);">' + (c.buts || 0) + '</td>';
       html += '<td style="text-align:center;">' + (c.passes_dec || 0) + '</td>';
-      html += '<td style="text-align:center;">' + (c.note_coachs_avg != null ? c.note_coachs_avg : '—') + '</td>';
+      if (!hideCoachNote) html += '<td style="text-align:center;">' + (c.note_coachs_avg != null ? c.note_coachs_avg : '—') + '</td>';
       html += '<td style="text-align:center;"><input type="number" min="0" max="10" step="0.5" value="' + (np != null ? np : '') + '" onchange="saveMatchNoteJoueur(\'' + m.id + '\', this.value)" style="width:62px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px;font-size:12px;text-align:center;" /></td>';
       html += '<td style="text-align:left;"><textarea rows="1" onblur="saveMatchCommentaireJoueur(\'' + m.id + '\', this)" placeholder="' + (fr ? 'Optionnel — décris ta prestation' : 'Optional — describe your match') + '" style="min-width:200px;max-width:320px;width:100%;background:var(--bg-elevated);color:var(--text);border:1px solid ' + (myComment ? 'var(--green)' : 'var(--border)') + ';border-radius:4px;padding:4px 6px;font-size:12px;resize:vertical;font-family:inherit;">' + escapeHtml(myComment) + '</textarea></td>';
       html += '</tr>';
