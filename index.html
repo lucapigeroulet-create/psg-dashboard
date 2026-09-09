@@ -7804,11 +7804,7 @@ async function loadState() {
     }));
 
     setLoad('Chargement des plannings...');
-    // Paginé : PostgREST plafonne chaque réponse à 1000 lignes. Sans _fullFetch,
-    // les plannings les plus récents (ex. jour même) étaient tronqués dès que
-    // l'org dépassait 1000 lignes → RPE du jour absentes du tableau ET jamais
-    // marquées manquantes (car les joueurs n'apparaissaient pas dans bdd_ent).
-    const plannings = await _fullFetch('plannings', currentOrg, 'date');
+    const { data: plannings } = await sb.from('plannings').select('*').eq('org', currentOrg).order('date');
     state.bdd_ent = (plannings || []).map(p => ({
       date: p.date, joueur: p.joueur, seances: p.seances || []
     }));
@@ -7825,9 +7821,7 @@ async function loadState() {
     }));
 
     setLoad('Chargement des RPE...');
-    // Même piège de pagination que plannings : au-delà de 1000 lignes,
-    // les RPE les plus récents étaient perdus sans _fullFetch.
-    const rpes = await _fullFetch('rpe_declarations', currentOrg, 'date');
+    const { data: rpes } = await sb.from('rpe_declarations').select('*').eq('org', currentOrg).order('date');
     state.bdd_rpe = (rpes || []).map(r => ({
       date: r.date, joueur: r.joueur, rpe: r.rpe || [],
       plaisir: (r.plaisir === null || r.plaisir === undefined) ? null : r.plaisir,
