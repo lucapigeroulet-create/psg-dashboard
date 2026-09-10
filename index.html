@@ -15060,13 +15060,18 @@ function openGpsSessionEdit(date, seance) {
       '</div>' +
       '<div style="font-size:12px; color:var(--text-dim); margin-bottom:14px;">' +
         formatDateFR(date) + ' · ' + escapeHtml(seance) +
-        ' — renomme un découpage, corrige son type et sa durée : le changement s\'applique à tous les joueurs, et le m/min est recalculé.' +
+        ' — renomme la séance ou un découpage, corrige son type et sa durée : le changement s\'applique à tous les joueurs, et le m/min est recalculé.' +
       '</div>' +
       '<datalist id="gps-split-name-suggestions">' +
         '<option value="Échauffement"></option>' +
         '<option value="1ère MT"></option>' +
         '<option value="2ème MT"></option>' +
       '</datalist>' +
+      '<div style="margin-bottom:14px;">' +
+        '<label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;">Nom de la séance</label>' +
+        '<input type="text" id="gps-se-seance-name" value="' + escapeHtml(seance) + '" ' +
+        'style="width:100%; box-sizing:border-box; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:14px; font-weight:600;">' +
+      '</div>' +
       '<div style="margin-bottom:16px;">' +
         '<label style="display:block; font-size:12px; color:var(--text-dim); margin-bottom:4px;">Type d\'enregistrement</label>' +
         '<select id="gps-se-cat" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:14px;">' +
@@ -15123,6 +15128,23 @@ async function saveGpsSessionEdit() {
   const newCat = (catSel && catSel.value) || 'seance';
   const catChanged = allRows.length > 0 && newCat !== gpsCategorie(allRows[0]);
 
+  // Renommage de la séance (s'applique à toutes les lignes GPS de la séance,
+  // colonnes `seance` et `session_title` mises à jour ensemble pour rester en phase).
+  const seanceInp = document.getElementById('gps-se-seance-name');
+  const newSeanceName = (seanceInp && seanceInp.value || '').trim();
+  const oldSeanceName = gpsSessionEditData.seance;
+  const seanceChanged = newSeanceName && newSeanceName !== oldSeanceName;
+  if (seanceInp && !newSeanceName) { toast('Nom de séance vide', 'error'); return; }
+  if (seanceChanged) {
+    // Refus du renommage si une autre séance porte déjà ce nom à la même date
+    const conflict = (state.bdd_gps || []).some(g =>
+      g.date === gpsSessionEditData.date &&
+      !allRows.some(r => r.id === g.id) &&
+      ((g.seance || g.session_title || '') === newSeanceName)
+    );
+    if (conflict) { toast('Une autre séance porte déjà ce nom à cette date', 'error'); return; }
+  }
+
   // Renommage des découpages : le nouveau nom (split_name) s'applique à toutes les
   // lignes du découpage. « Séance entière » (all) n'est pas renommable.
   const nameChanges = {}; // ancien split_name -> nouveau nom
@@ -15167,6 +15189,14 @@ async function saveGpsSessionEdit() {
     });
   }
 
+  if (seanceChanged) {
+    allRows.forEach(r => {
+      payloads[r.id] = payloads[r.id] || { patch: {}, ref: r };
+      payloads[r.id].patch.seance = newSeanceName;
+      payloads[r.id].patch.session_title = newSeanceName;
+    });
+  }
+
   Object.keys(nameChanges).forEach(oldSplit => {
     const entry = gpsSessionEditData.splits.find(e => e.split === oldSplit);
     if (!entry) return;
@@ -15195,6 +15225,7 @@ async function saveGpsSessionEdit() {
     if (Object.values(payloads).some(o => o.patch.duree_min !== undefined)) bits.push('durée · m/min recalculé');
     if (Object.keys(nameChanges).length) bits.push('nom du découpage');
     if (catChanged) bits.push('type');
+    if (seanceChanged) bits.push('nom de la séance');
     toast('Séance mise à jour (' + bits.join(', ') + ')', 'success');
   }
   _writeCache('gps_data', currentOrg, state.bdd_gps);
