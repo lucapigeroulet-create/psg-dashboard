@@ -16155,6 +16155,9 @@ function getPlayerMaxVmax30d(player, refDate) {
 // CHARGE HEBDO vs CIBLE (TT périodisation) + CROISEMENT INTERNE/EXTERNE (sRPE)
 // ============================================================================
 let gpsWTRatioWeek = 'WEEK1';
+// Référence Vmax du rapport hebdo équipe : 'all' = vitesse max historique du joueur (défaut),
+// '30d' = max glissant sur les 30 jours précédant la fin de la semaine affichée.
+let gpsWTVmaxRef = (function(){ try { return localStorage.getItem('gpsWTVmaxRef') || 'all'; } catch(e){ return 'all'; } })();
 let gpsWTScatterX = 'distance_km';
 let gpsWTScatterY = 'top_speed';
 let gpsWTHistMetrics = ['distance_km', 'hsr', 'sprint_dist_m'];
@@ -16181,10 +16184,14 @@ function chargeStatus(pct) {
 
 // % de la cible hebdo (ligne TT de la semaine de travail) pour un joueur/métrique.
 // agg = cumuls de la semaine du joueur. Vmax : la ligne TT n'est pas cumulable,
-// la cible devient "toucher 95% de sa vmax historique au moins une fois dans la semaine".
-function getWeekTargetPct(player, metricKey, agg, weekVmax, ratioWeek) {
+// la cible devient "toucher 95% de sa vmax de référence au moins une fois dans la semaine".
+// vmaxRef : 'all' (défaut) = Vmax historique du joueur ; '30d' = fenêtre glissante 30j
+// se terminant à `refDate` (typiquement la fin de semaine affichée).
+function getWeekTargetPct(player, metricKey, agg, weekVmax, ratioWeek, vmaxRef, refDate) {
   if (metricKey === 'top_speed') {
-    const maxV = getPlayerMaxVmax(player);
+    const maxV = (vmaxRef === '30d')
+      ? getPlayerMaxVmax30d(player, refDate)
+      : getPlayerMaxVmax(player);
     if (!maxV || !weekVmax) return null;
     return (weekVmax / (maxV * 0.95)) * 100;
   }
@@ -16251,6 +16258,11 @@ function gpsScatterDecorPlugin(medX, medY, quadrants) {
 }
 
 function gpsWTSetRatioWeek() { gpsWTRatioWeek = document.getElementById('gps-wt-ratio-week').value; renderGPSWeekTeam(); }
+function gpsWTSetVmaxRef(v) {
+  gpsWTVmaxRef = (v === '30d') ? '30d' : 'all';
+  try { localStorage.setItem('gpsWTVmaxRef', gpsWTVmaxRef); } catch(e) {}
+  renderGPSWeekTeam();
+}
 function gpsWTSetScatter() { gpsWTScatterX = document.getElementById('gps-wt-sx').value; gpsWTScatterY = document.getElementById('gps-wt-sy').value; renderGPSWeekTeam(); }
 function gpsWTToggleHist(key) { const i = gpsWTHistMetrics.indexOf(key); if (i >= 0) gpsWTHistMetrics.splice(i, 1); else gpsWTHistMetrics.push(key); renderGPSWeekTeam(); }
 function gpsWTSetRadar() { gpsWTRadarPlayer = document.getElementById('gps-wt-radar-player').value; renderGPSWeekTeam(); }
@@ -18308,9 +18320,21 @@ function renderGPSWeekTeam() {
   let html = '<div class="card">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
   html += '<h2 style="margin:0;">Rapport hebdomadaire équipe — Semaine ' + isoInfo.week + ' (' + formatDateRange(monday) + ')' + (group ? ' · ' + escapeHtml(group) : '') + '</h2>';
+  html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+  // Toggle Vmax de référence : historique (all-time) vs 30 derniers jours (glissant)
+  const vmaxBtnBase = 'padding:6px 10px;font-size:11px;border-radius:6px;cursor:pointer;font-weight:600;border:1px solid var(--border);';
+  const vmaxOnStyle = 'background:var(--accent);color:#fff;border-color:var(--accent);';
+  const vmaxOffStyle = 'background:var(--bg-elevated);color:var(--text-dim);';
+  html += '<span style="font-size:11px;color:var(--text-dim);">Vmax réf.</span>' +
+    '<div role="group" style="display:inline-flex;gap:0;border-radius:6px;overflow:hidden;">' +
+    '<button type="button" title="Vitesse max historique du joueur (toutes données GPS)" onclick="gpsWTSetVmaxRef(\'all\')" ' +
+      'style="' + vmaxBtnBase + (gpsWTVmaxRef === 'all' ? vmaxOnStyle : vmaxOffStyle) + 'border-top-right-radius:0;border-bottom-right-radius:0;">Historique</button>' +
+    '<button type="button" title="Vitesse max sur les 30 jours précédant la fin de la semaine affichée" onclick="gpsWTSetVmaxRef(\'30d\')" ' +
+      'style="' + vmaxBtnBase + (gpsWTVmaxRef === '30d' ? vmaxOnStyle : vmaxOffStyle) + 'border-top-left-radius:0;border-bottom-left-radius:0;border-left:none;">30 j</button>' +
+    '</div>';
   html += '<select id="gps-wt-ratio-week" onchange="gpsWTSetRatioWeek()" style="' + selStyle + '">';
   WORK_RATIO_WEEKS.forEach(w => { html += '<option value="' + w + '"' + (gpsWTRatioWeek === w ? ' selected' : '') + '>' + w + ' — ' + WORK_RATIO_PHASE[w] + '</option>'; });
-  html += '</select></div>';
+  html += '</select></div></div>';
   if (players.length === 0) {
     html += '<div class="empty-state">Aucune donnée GPS pour cette semaine.</div></div>';
     document.getElementById('gps-content').innerHTML = html;
@@ -18322,7 +18346,7 @@ function renderGPSWeekTeam() {
   const heat = players.map(p => {
     const weekVmax = Math.max.apply(null, rows.filter(r => r.joueur === p.joueur).map(r => gpsVal(r, 'top_speed')).concat([0]));
     const pcts = {};
-    WORK_RATIO_METRICS.forEach(m => { pcts[m.key] = getWeekTargetPct(p.joueur, m.key, p, weekVmax, gpsWTRatioWeek); });
+    WORK_RATIO_METRICS.forEach(m => { pcts[m.key] = getWeekTargetPct(p.joueur, m.key, p, weekVmax, gpsWTRatioWeek, gpsWTVmaxRef, dates[6]); });
     const avail = Object.values(pcts).filter(v => v !== null);
     const avg = avail.length ? avail.reduce((s, v) => s + v, 0) / avail.length : null;
     return { joueur: p.joueur, agg: p, weekVmax: weekVmax, srpe: srpeWeek[p.joueur] || 0, pcts: pcts, avg: avg, status: chargeStatus(avg) };
@@ -18330,7 +18354,7 @@ function renderGPSWeekTeam() {
 
   // ===== Heatmap état de charge =====
   html += '<h3 style="margin:16px 0 6px;">🔥 État de charge — % de la cible hebdo (' + gpsWTRatioWeek + ' · ' + WORK_RATIO_PHASE[gpsWTRatioWeek] + ')</h3>';
-  html += '<p style="color:var(--text-dim);font-size:11px;margin:0 0 8px;">Cumul de la semaine ÷ cible TT du joueur (basée sur son meilleur match). Vmax : % de sa vitesse record (cible ≥95% touchée au moins une fois). "—" = pas de meilleur match configuré.</p>';
+  html += '<p style="color:var(--text-dim);font-size:11px;margin:0 0 8px;">Cumul de la semaine ÷ cible TT du joueur (basée sur son meilleur match). Vmax : % de sa vitesse record ' + (gpsWTVmaxRef === '30d' ? '<b>sur les 30 derniers jours</b>' : '<b>historique</b>') + ' (cible ≥95% touchée au moins une fois). "—" = pas de meilleur match configuré.</p>';
   html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th>';
   WORK_RATIO_METRICS.forEach(m => { html += '<th>' + m.label + '</th>'; });
   html += '<th>Statut</th></tr></thead><tbody>';
