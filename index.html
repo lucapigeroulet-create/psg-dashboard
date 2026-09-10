@@ -4441,7 +4441,7 @@
     <div id="mp-push-banner"></div>
     <div class="card">
       <h2>📅 Planning soins — <span id="mp-club-label">—</span></h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:14px;">Crée des créneaux individuels (10 à 30 min). Les joueurs/euses réservent un créneau libre depuis leur compte. Un créneau <b>partagé</b> proposé à plusieurs entités est <b>bloqué automatiquement</b> sur les autres dès qu'une personne le réserve — pratique pour 2 kinés couvrant PSG / National 2 / Seconde Ligue. Chaque joueur ne peut réserver qu'<b>un créneau par jour</b>.</p>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:14px;">Crée des créneaux individuels (10 à 30 min). Les joueurs/euses réservent un créneau libre depuis leur compte. Un créneau <b>partagé</b> proposé à plusieurs entités est <b>bloqué automatiquement</b> sur les autres dès qu'une personne le réserve — pratique pour 2 kinés couvrant PSG / National 2 / Seconde Ligue. Chaque joueur peut réserver jusqu'à <b>2 créneaux par jour</b>.</p>
       <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
         <div class="filter-group" id="mp-entities-wrap" style="display:none;">
           <label style="font-size:11px; color:var(--text-dim);">Proposer aux entités</label>
@@ -5752,31 +5752,38 @@ async function renderPlayerSoins() {
     listEl.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px 0;">' + tr('No slot available right now.', 'Aucun créneau disponible pour le moment.') + '</div>';
     return;
   }
-  // Limite 1 créneau/jour : dates où le joueur a déjà une réservation
-  const myBookedDates = new Set(slots.filter(s => s.joueur === currentJoueurNom).map(s => s.date));
+  // Limite 2 créneaux/jour : on compte les réservations du joueur par date
+  const myBookedByDate = {};
+  slots.filter(s => s.joueur === currentJoueurNom).forEach(s => {
+    myBookedByDate[s.date] = (myBookedByDate[s.date] || 0) + 1;
+  });
   const byDate = {};
   visibles.forEach(s => { (byDate[s.date] = byDate[s.date] || []).push(s); });
   const joursFr = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
   const joursEn = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const jours = (playerLang() === 'fr') ? joursFr : joursEn;
+  const KINE_MAX_PER_DAY = 2;
   let html = '';
   Object.keys(byDate).sort().forEach(d => {
     const [y, m, dd] = d.split('-');
     const jour = jours[new Date(d + 'T00:00:00').getDay()];
-    const hasMine = myBookedDates.has(d);
+    const nMine = myBookedByDate[d] || 0;
+    const hasMine = nMine > 0;
+    const dayLimitReached = nMine >= KINE_MAX_PER_DAY;
+    const bookedTag = hasMine ? (nMine + ' ' + tr('booked', 'réservé') + (nMine > 1 ? 's' : '')) : '';
     html += '<div style="margin-bottom:14px;">';
-    html += '<div style="font-weight:700; font-size:13px; margin-bottom:6px; color:var(--accent-light);">' + jour + ' ' + dd + '/' + m + (hasMine ? ' <span style="font-weight:400; color:var(--text-dim);">· ' + tr('booked', 'réservé') + '</span>' : '') + '</div>';
+    html += '<div style="font-weight:700; font-size:13px; margin-bottom:6px; color:var(--accent-light);">' + jour + ' ' + dd + '/' + m + (hasMine ? ' <span style="font-weight:400; color:var(--text-dim);">· ' + bookedTag + '</span>' : '') + '</div>';
     byDate[d].sort((a, b) => (a.heure || '').localeCompare(b.heure || '')).forEach(s => {
       const fin = _cmAddMinutes(s.heure, s.duree_min || 15);
       const mine = (s.joueur === currentJoueurNom);
-      // Créneau libre un jour où le joueur a déjà réservé → non réservable (1/jour max)
-      const locked = !mine && hasMine;
+      // Créneau libre un jour où le joueur a déjà atteint 2 réservations → non réservable
+      const locked = !mine && dayLimitReached;
       const clickFn = mine ? ('annulerReservation(\'' + s.id + '\')') : (locked ? '' : ('reserverCreneau(\'' + s.id + '\')'));
       const bg = mine ? 'rgba(22,101,52,0.25)' : (locked ? 'transparent' : 'var(--bg-elevated)');
       const bord = mine ? 'var(--green)' : (locked ? 'var(--border)' : 'var(--accent)');
       html += '<div ' + (clickFn ? 'onclick="' + clickFn + '"' : '') + ' style="' + (clickFn ? 'cursor:pointer;' : 'opacity:.5;') + ' display:flex; align-items:center; justify-content:space-between; gap:10px; border-radius:8px; padding:9px 11px; margin-bottom:5px; background:' + bg + '; border-left:3px solid ' + bord + ';">';
       html += '<div style="font-size:13px;"><b>' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + '</b> <span style="color:var(--text-dim);">· ' + mpFmtDuree(s.duree_min || 15) + '</span></div>';
-      html += '<span style="font-size:12px; font-weight:600; color:' + (mine ? 'var(--green)' : 'var(--accent-light)') + ';">' + (mine ? ('✓ ' + tr('Booked — tap to cancel', 'Réservé — clique pour annuler')) : (locked ? '<span style="color:var(--text-dim);">' + tr('1 slot/day max', '1 créneau/jour max') + '</span>' : tr('Book', 'Réserver'))) + '</span>';
+      html += '<span style="font-size:12px; font-weight:600; color:' + (mine ? 'var(--green)' : 'var(--accent-light)') + ';">' + (mine ? ('✓ ' + tr('Booked — tap to cancel', 'Réservé — clique pour annuler')) : (locked ? '<span style="color:var(--text-dim);">' + tr('2 slots/day max', '2 créneaux/jour max') + '</span>' : tr('Book', 'Réserver'))) + '</span>';
       html += '</div>';
     });
     html += '</div>';
@@ -5787,11 +5794,11 @@ async function renderPlayerSoins() {
 async function reserverCreneau(id) {
   if (!currentJoueurNom) return;
   const slot = (state.bdd_creneaux_medicaux || []).find(s => s.id === id);
-  // Limite 1 créneau/jour (vérif appli ; le trigger DB reste le garde-fou)
+  // Limite 2 créneaux/jour (vérif appli ; le trigger DB reste le garde-fou)
   if (slot) {
-    const already = (state.bdd_creneaux_medicaux || []).some(s => s.id !== id && s.joueur === currentJoueurNom && s.date === slot.date);
-    if (already) {
-      toast(tr('You already booked a slot that day (1/day max).', 'Tu as déjà réservé un créneau ce jour-là (1 max).'), 'error');
+    const nBooked = (state.bdd_creneaux_medicaux || []).filter(s => s.id !== id && s.joueur === currentJoueurNom && s.date === slot.date).length;
+    if (nBooked >= 2) {
+      toast(tr('You already booked 2 slots that day (2/day max).', 'Tu as déjà réservé 2 créneaux ce jour-là (2 max).'), 'error');
       return;
     }
   }
@@ -27512,7 +27519,11 @@ async function renderPlayerOverview() {
         .filter(s => s.date >= today && (!s.joueur || s.joueur === currentJoueurNom));
       const mine   = visibles.filter(s => s.joueur === currentJoueurNom).slice(0, 3);
       const libres = visibles.filter(s => !s.joueur).slice(0, 4);
-      const bookedDates = new Set(visibles.filter(s => s.joueur === currentJoueurNom).map(s => s.date));
+      // Limite 2 créneaux/jour : on marque les dates où le joueur a déjà atteint la limite
+      const bookedCountByDate = {};
+      visibles.filter(s => s.joueur === currentJoueurNom).forEach(s => {
+        bookedCountByDate[s.date] = (bookedCountByDate[s.date] || 0) + 1;
+      });
       const rowStyle = 'display:flex; align-items:center; justify-content:space-between; gap:10px; border-radius:8px; padding:9px 11px; margin-bottom:5px;';
       const fmtSlot = s => {
         const fin = _cmAddMinutes(s.heure, s.duree_min || 15);
@@ -27533,13 +27544,13 @@ async function renderPlayerOverview() {
       if (libres.length) {
         html += '<div style="font-size:11px; font-weight:700; text-transform:uppercase; color:var(--accent-light); margin:' + (mine.length ? '10px 0 5px' : '0 0 5px') + ';">' + (isFR ? 'Créneaux libres' : 'Available slots') + '</div>';
         libres.forEach(s => {
-          const locked = bookedDates.has(s.date);
+          const locked = (bookedCountByDate[s.date] || 0) >= 2;
           const click  = locked ? '' : ('onclick="_poBookSlot(\'' + s.id + '\')"');
           const cur    = locked ? 'opacity:.5;' : 'cursor:pointer;';
           html += '<div ' + click + ' style="' + rowStyle + cur + ' background:var(--bg-elevated); border-left:3px solid var(--accent);">' +
             '<div style="font-size:13px;">' + fmtSlot(s) + ' <span style="color:var(--text-dim);">· ' + mpFmtDuree(s.duree_min || 15) + '</span></div>' +
             '<span style="font-size:12px; font-weight:600; color:' + (locked ? 'var(--text-dim)' : 'var(--accent-light)') + ';">' +
-              (locked ? (isFR ? '1/jour max' : '1/day max') : (isFR ? 'Réserver →' : 'Book →')) +
+              (locked ? (isFR ? '2/jour max' : '2/day max') : (isFR ? 'Réserver →' : 'Book →')) +
             '</span>' +
           '</div>';
         });
