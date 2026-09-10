@@ -15777,10 +15777,11 @@ function getWorkRatioTarget(week, day, metricKey) {
   return (v === undefined || v === null || v === 0) ? null : v;
 }
 // Ratio réel du joueur pour cette séance = valeur totale de la séance / valeur totale du meilleur match (pas de normalisation par minute, cohérent avec le tableau de périodisation)
-// Exception Vmax : base = vitesse max sur l'ensemble des données GPS du joueur, pas celle du meilleur match.
+// Exception Vmax : base = vitesse max sur les 30 jours PRÉCÉDANT la séance (fenêtre glissante),
+// pas celle du meilleur match. Reflète mieux le potentiel actuel du joueur qu'une valeur all-time.
 function getWorkRatioActual(player, metricKey, currentRow) {
   if (metricKey === 'top_speed') {
-    const maxVmax = getPlayerMaxVmax(player);
+    const maxVmax = getPlayerMaxVmax30d(player, currentRow.date);
     if (!maxVmax) return null;
     return gpsVal(currentRow, metricKey) / maxVmax;
   }
@@ -16129,6 +16130,25 @@ function _sumHalvesRow(halves) {
 function getPlayerMaxVmax(player) {
   const rows = (state.bdd_gps || []).filter(r => r.joueur === player);
   return rows.reduce((max, r) => Math.max(max, gpsVal(r, 'top_speed')), 0);
+}
+
+// Vmax de référence sur les 30 jours PRÉCÉDANT refDate (fenêtre glissante).
+// Utilisée dans le rapport de séance : la Vmax historique évolue au fil de la saison
+// (blessure, préparation, forme), une fenêtre récente reflète mieux le potentiel actuel.
+// Fallback sur getPlayerMaxVmax si aucune donnée dans la fenêtre.
+function getPlayerMaxVmax30d(player, refDate) {
+  if (!refDate) return getPlayerMaxVmax(player);
+  const to = new Date(refDate);
+  if (isNaN(to)) return getPlayerMaxVmax(player);
+  const from = new Date(to);
+  from.setDate(from.getDate() - 30);
+  const fromIso = toLocalISO(from);
+  const max = (state.bdd_gps || []).reduce((mx, r) => {
+    if (r.joueur !== player) return mx;
+    if (!r.date || r.date < fromIso || r.date > refDate) return mx;
+    return Math.max(mx, gpsVal(r, 'top_speed'));
+  }, 0);
+  return max || getPlayerMaxVmax(player);
 }
 
 // ============================================================================
@@ -17058,9 +17078,10 @@ function renderBestMatch() {
 
 function getBestMatchRatio(player, metricKey, currentRow) {
   const curVal = gpsVal(currentRow, metricKey);
-  // Vmax : base = vitesse max sur l'ensemble des données GPS du joueur, pas celle du meilleur match.
+  // Vmax : base = vitesse max sur les 30 jours PRÉCÉDANT la séance (fenêtre glissante),
+  // pas celle du meilleur match ni la valeur all-time.
   if (metricKey === 'top_speed') {
-    const maxVmax = getPlayerMaxVmax(player);
+    const maxVmax = getPlayerMaxVmax30d(player, currentRow.date);
     if (!maxVmax) return null;
     return curVal / maxVmax;
   }
