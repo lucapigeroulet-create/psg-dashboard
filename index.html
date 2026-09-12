@@ -23587,7 +23587,33 @@ async function publishRPEForSeance(date, seance) {
     if (a) a.rpe_published_at = row.rpe_published_at;
   });
   toast('RPE envoyée à ' + n + ' joueur(s) · chrono 4h démarré', 'success');
+  // Notification push aux joueurs concernés (best-effort — n'échoue jamais la publication)
+  const joueurs = (data || []).map(r => r.joueur).filter(Boolean);
+  sendPushForRPEPublication(joueurs, 'seance', seance);
   renderEntryJourTable();
+}
+
+// Envoie une notification push aux joueurs quand le staff publie une RPE (séance ou match).
+// Best-effort : silencieux en cas d'échec pour ne pas polluer l'UI (la publication elle-même
+// a déjà réussi côté base). Réutilise l'Edge Function send-push existante.
+async function sendPushForRPEPublication(joueurs, kind, label) {
+  if (!joueurs || joueurs.length === 0) return;
+  const isMatch = kind === 'match';
+  const title = isMatch ? '⚽ Note ton match' : '📝 Note ta séance';
+  const body = isMatch
+    ? 'RPE + note de performance à saisir pour « ' + label + ' » — 4h pour répondre.'
+    : 'RPE à saisir pour « ' + label + ' » — 4h pour répondre.';
+  try {
+    const { data, error } = await sb.functions.invoke('send-push', {
+      body: { org: currentOrg, joueurs, title, body }
+    });
+    if (error) { console.warn('Push RPE échoué :', error.message); return; }
+    if (data && typeof data.sent === 'number' && data.sent > 0) {
+      toast('🔔 Notification envoyée à ' + data.sent + '/' + data.total + ' joueur(s) abonné(s)', 'success');
+    }
+  } catch (e) {
+    console.warn('Push RPE échoué :', e.message);
+  }
 }
 
 // Publie la RPE + note de performance pour un match : démarre le chrono 4h pour tous les
@@ -23604,13 +23630,20 @@ async function publishMatchRPE(matchId) {
   if (!confirm('Envoyer la RPE + note de performance aux ' + pending.length + ' joueur(s) de « ' + label + ' » ?\nLe chrono 4h démarre immédiatement.')) return;
 
   const nowIso = new Date().toISOString();
+  const justPublished = [];
   compo.forEach(c => {
-    if (c && c.joueur && (c.total_min || 0) > 0 && !c.rpe_published_at) c.rpe_published_at = nowIso;
+    if (c && c.joueur && (c.total_min || 0) > 0 && !c.rpe_published_at) {
+      c.rpe_published_at = nowIso;
+      justPublished.push(c.joueur);
+    }
   });
   const { error } = await sb.from('matchs').update({ composition: compo }).eq('id', matchId);
   if (error) { toast('Erreur : ' + error.message, 'error'); return; }
   m.composition = compo;
   toast('RPE envoyée à ' + pending.length + ' joueur(s) · chrono 4h démarré', 'success');
+  // Notification push (best-effort). Libellé = adversaire ou "Opposition interne".
+  const pushLabel = (m.type_match === 'interne') ? 'Opposition interne' : (m.adversaire || 'Match');
+  sendPushForRPEPublication(justPublished, 'match', pushLabel);
   renderEntryJourTable();
 }
 
