@@ -2085,7 +2085,7 @@
       <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px;">
         <div>
           <h2 style="margin:0;">📋 Séances du jour</h2>
-          <p style="color:var(--text-dim); font-size:12px; margin-top:4px; margin-bottom:0;">Récapitulatif des séances existantes pour la date choisie. À la fin de la séance, clique <b>📢 Envoyer RPE</b> : le chrono 4h démarre et les joueurs peuvent noter. Tant que ce n'est pas envoyé, ils voient uniquement le programme du jour.</p>
+          <p style="color:var(--text-dim); font-size:12px; margin-top:4px; margin-bottom:0;">Récapitulatif des séances <b>et matchs</b> existants pour la date choisie. À la fin d'une séance (ou d'un match), clique <b>📢 Envoyer RPE</b> : le chrono 4h démarre et les joueurs peuvent noter (RPE + note de performance pour les matchs). Tant que ce n'est pas envoyé, ils voient uniquement le programme du jour.</p>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
           <label style="font-size:12px; color:var(--text-dim);">Date</label>
@@ -5957,6 +5957,9 @@ function _recoveryEligibility() {
     if (!compo || (compo.total_min || 0) <= 0) return;
     const seanceNom = matchSeanceNom(m);
     if (getRPEJoueurSeance(m.date, currentJoueurNom, seanceNom) !== null) return;
+    // Ne bloque que si le staff a publié la RPE du match pour ce joueur.
+    // Sans publication (nouveau bouton "Envoyer RPE + perf"), le joueur n'a rien à noter.
+    if (!isMatchRPEPublishedForPlayer(m, currentJoueurNom)) return;
     // Compter aussi les matchs en retard (fenêtre 4h fermée) pour bloquer la récup
     pending.push({ date: m.date, seance: seanceNom });
   });
@@ -8530,19 +8533,33 @@ const SESSION_WINDOW_HOURS = 4; // fenêtre unique de saisie/modif après public
 
 // Timestamp (ms) de début de la fenêtre 4h, ou null si inconnu.
 // Séance normale : moment où elle a été AFFECTÉE à ce joueur (seance_affectations).
-// Match : priorité au timestamp par joueur (composition[i].assigned_at). Fallback = created_at du match.
-// → Un joueur ajouté à la composition plus tard a SA propre fenêtre 4h depuis son affectation.
+// Match : priorité au timestamp par joueur (composition[i].rpe_published_at, bouton
+// "Envoyer RPE" côté staff — même logique que pour les séances). Fallback historique :
+// composition[i].assigned_at, puis created_at du match (matchs saisis avant le déploiement
+// du bouton "Envoyer RPE" — jamais publiés explicitement → on garde l'ancien comportement).
 function getSeancePublishedMs(date, seanceNom, joueur) {
   // Cas match : la "séance virtuelle" commence par '⚽ MATCH'
   if (seanceNom && seanceNom.indexOf('⚽ MATCH') === 0) {
     const m = (state.bdd_matchs || []).find(x => x.date === date && matchSeanceNom(x) === seanceNom);
     if (!m) return null;
-    // Priorité : timestamp d'affectation du joueur dans la composition
-    if (joueur && Array.isArray(m.composition)) {
-      const entry = m.composition.find(c => c && c.joueur === joueur);
-      if (entry && entry.assigned_at) {
-        const msP = new Date(entry.assigned_at).getTime();
-        if (!isNaN(msP)) return msP;
+    const compo = Array.isArray(m.composition) ? m.composition : [];
+    if (joueur) {
+      const entry = compo.find(c => c && c.joueur === joueur);
+      if (entry) {
+        // 1) Nouveau régime : le staff a explicitement publié la RPE pour ce joueur
+        if (entry.rpe_published_at) {
+          const ms = new Date(entry.rpe_published_at).getTime();
+          if (!isNaN(ms)) return ms;
+        }
+        // 2) Backward compat : si AUCUN joueur du match n'a de rpe_published_at,
+        //    on considère que c'est un match "legacy" (avant le bouton) et on
+        //    retombe sur l'ancien comportement (assigned_at / created_at).
+        const anyPublished = compo.some(c => c && c.rpe_published_at);
+        if (anyPublished) return null; // Match "nouveau régime" mais pas publié pour lui
+        if (entry.assigned_at) {
+          const msA = new Date(entry.assigned_at).getTime();
+          if (!isNaN(msA)) return msA;
+        }
       }
     }
     if (!m.created_at) return null;
@@ -8575,6 +8592,17 @@ function isRPEPublished(date, seance, joueur) {
   const a = (state.bdd_affectations || []).find(x => x.date === date && x.joueur === joueur && x.seance === seance);
   if (!a) return true; // pas d'affectation trackée : historique ou match → laisser la logique existante décider
   return !!a.rpe_published_at;
+}
+
+// Le staff a-t-il publié la RPE + note de perf du match à ce joueur ?
+// Backward compat : un match dont AUCUNE entrée composition n'a rpe_published_at est
+// considéré "legacy" (saisi avant le bouton "Envoyer RPE" pour les matchs) → publié auto.
+function isMatchRPEPublishedForPlayer(m, joueur) {
+  if (!m || !Array.isArray(m.composition)) return true;
+  const anyPublished = m.composition.some(c => c && c.rpe_published_at);
+  if (!anyPublished) return true; // match legacy → ancien comportement
+  const entry = m.composition.find(c => c && c.joueur === joueur);
+  return !!(entry && entry.rpe_published_at);
 }
 
 // Timestamp (ms) de la première saisie du RPE (figé), ou null si pas encore saisi
@@ -23435,8 +23463,9 @@ async function renderEntryJourTable() {
 
   const seances = (state.bdd_ent2 || []).filter(x => x.date === date)
     .sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
-  if (seances.length === 0) {
-    c.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px 4px;">Aucune séance saisie pour ' + formatDateFR(date) + '.</div>';
+  const matchsDuJour = (state.bdd_matchs || []).filter(x => x.date === date);
+  if (seances.length === 0 && matchsDuJour.length === 0) {
+    c.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px 4px;">Aucune séance ni match saisi pour ' + formatDateFR(date) + '.</div>';
     return;
   }
 
@@ -23485,6 +23514,49 @@ async function renderEntryJourTable() {
       '<td style="padding:8px; text-align:right;">' + action + '</td>' +
       '</tr>';
   });
+
+  // Lignes MATCHS du jour : même colonnes, bouton "Envoyer RPE + note de perf"
+  matchsDuJour
+    .slice()
+    .sort((a, b) => (a.adversaire || '').localeCompare(b.adversaire || ''))
+    .forEach(m => {
+      const compo = Array.isArray(m.composition) ? m.composition : [];
+      const played = compo.filter(c => c && c.joueur && (c.total_min || 0) > 0);
+      const nAff = played.length;
+      const nPub = played.filter(c => c.rpe_published_at).length;
+      const nPending = nAff - nPub;
+      const dureeTot = played.reduce((s, c) => s + (c.total_min || 0), 0);
+      let statut, action;
+      const matchIdEsc = String(m.id).replace(/'/g, "\\'");
+      if (nAff === 0) {
+        statut = '<span style="color:var(--text-dim);">Aucun joueur avec temps de jeu</span>';
+        action = '<span style="color:var(--text-dim); font-size:11px;">—</span>';
+      } else if (nPub === 0) {
+        statut = '<span style="color:var(--yellow);">🕐 En attente d\'envoi</span>';
+        action = '<button class="btn" style="padding:5px 12px; font-size:12px; white-space:nowrap;" onclick="publishMatchRPE(\'' + matchIdEsc + '\')">📢 Envoyer RPE + perf</button>';
+      } else if (nPending === 0) {
+        const latest = played.reduce((mx, c) => Math.max(mx, new Date(c.rpe_published_at).getTime()), 0);
+        const ageMin = Math.floor((nowMs - latest) / 60000);
+        const closed = ageMin >= SESSION_WINDOW_HOURS * 60;
+        const remainMin = SESSION_WINDOW_HOURS * 60 - ageMin;
+        statut = closed
+          ? '<span style="color:var(--text-dim);">⛔ Fenêtre 4h fermée</span>'
+          : '<span style="color:var(--green);">✅ Envoyée · ' + Math.floor(remainMin / 60) + 'h' + String(remainMin % 60).padStart(2, '0') + ' restant</span>';
+        action = '<span style="color:var(--text-dim); font-size:11px;">—</span>';
+      } else {
+        statut = '<span style="color:var(--accent-light);">⚠️ Partiel : ' + nPub + '/' + nAff + '</span>';
+        action = '<button class="btn btn-secondary" style="padding:5px 12px; font-size:12px; white-space:nowrap;" onclick="publishMatchRPE(\'' + matchIdEsc + '\')">📢 Envoyer aux ' + nPending + ' restants</button>';
+      }
+      const label = (m.type_match === 'interne') ? '🔁 Opposition interne' : ('⚽ Match vs ' + escapeHtml(m.adversaire || ''));
+      html += '<tr style="border-top:1px solid var(--border); background:rgba(251,191,36,0.04);">' +
+        '<td style="padding:8px; font-weight:600;">' + label + (m.groupe ? ' <span style="color:var(--text-dim); font-weight:400; font-size:11px;">· ' + escapeHtml(m.groupe) + '</span>' : '') + '</td>' +
+        '<td style="padding:8px; text-align:center; color:var(--text-dim);">' + (dureeTot ? (dureeTot + ' min cumul') : '—') + '</td>' +
+        '<td style="padding:8px; text-align:center; font-weight:600;">' + nAff + '</td>' +
+        '<td style="padding:8px;">' + statut + '</td>' +
+        '<td style="padding:8px; text-align:right;">' + action + '</td>' +
+        '</tr>';
+    });
+
   html += '</tbody></table></div>';
   c.innerHTML = html;
 }
@@ -23518,7 +23590,31 @@ async function publishRPEForSeance(date, seance) {
   renderEntryJourTable();
 }
 
-// Remplit le sélecteur "Séance / statut à affecter" avec les séances créées pour la date 
+// Publie la RPE + note de performance pour un match : démarre le chrono 4h pour tous les
+// joueurs de la composition ayant du temps de jeu (> 0) et pas encore publiés. Idempotent.
+// Ce stockage est fait dans le JSON composition[i].rpe_published_at (aucune migration SQL).
+async function publishMatchRPE(matchId) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const m = (state.bdd_matchs || []).find(x => x.id === matchId);
+  if (!m) { toast('Match introuvable', 'error'); return; }
+  const compo = Array.isArray(m.composition) ? m.composition.slice() : [];
+  const pending = compo.filter(c => c && c.joueur && (c.total_min || 0) > 0 && !c.rpe_published_at);
+  if (pending.length === 0) { toast('Aucun joueur en attente pour ce match', 'info'); return; }
+  const label = (m.type_match === 'interne') ? '🔁 Opposition interne' : ('⚽ Match vs ' + (m.adversaire || ''));
+  if (!confirm('Envoyer la RPE + note de performance aux ' + pending.length + ' joueur(s) de « ' + label + ' » ?\nLe chrono 4h démarre immédiatement.')) return;
+
+  const nowIso = new Date().toISOString();
+  compo.forEach(c => {
+    if (c && c.joueur && (c.total_min || 0) > 0 && !c.rpe_published_at) c.rpe_published_at = nowIso;
+  });
+  const { error } = await sb.from('matchs').update({ composition: compo }).eq('id', matchId);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  m.composition = compo;
+  toast('RPE envoyée à ' + pending.length + ' joueur(s) · chrono 4h démarré', 'success');
+  renderEntryJourTable();
+}
+
+// Remplit le sélecteur "Séance / statut à affecter" avec les séances créées pour la date
 // sélectionnée (par leur nom), suivies des statuts.
 function renderAffectSeanceSelect() {
   const mode = (document.getElementById('affect-mode') || {}).value || 'single';
@@ -27618,9 +27714,12 @@ function renderPlayerRPE() {
     : [];
   const statuts = planning ? planning.seances.filter(s => STATUTS_NON_ENT.includes(s)) : [];
 
-  // Matchs de ce jour où le joueur a du temps de jeu
+  // Matchs de ce jour où le joueur a du temps de jeu ET pour lesquels le staff a
+  // publié la RPE (bouton "Envoyer RPE + perf"). Sans publication → rien à noter.
   const matchsDuJour = (state.bdd_matchs || []).filter(m =>
-    m.date === date && (m.composition || []).some(c => c.joueur === currentJoueurNom && (c.total_min || 0) > 0)
+    m.date === date
+    && (m.composition || []).some(c => c.joueur === currentJoueurNom && (c.total_min || 0) > 0)
+    && isMatchRPEPublishedForPlayer(m, currentJoueurNom)
   );
 
   if (!planning && matchsDuJour.length === 0) {
