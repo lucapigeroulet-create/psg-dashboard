@@ -4449,9 +4449,15 @@
           <label style="font-size:11px; color:var(--text-dim);">Nombre de créneaux</label>
           <input type="number" id="rc-count" value="1" min="1" max="30" style="min-width:90px;" />
         </div>
+        <div class="filter-group" id="rc-groupe-wrap">
+          <label style="font-size:11px; color:var(--text-dim);">Équipe (optionnel)</label>
+          <select id="rc-groupe" style="min-width:140px;">
+            <option value="">— Toutes —</option>
+          </select>
+        </div>
         <button class="btn" onclick="addRecoveryCreneaux()">➕ Ajouter</button>
       </div>
-      <p style="color:var(--text-dim); font-size:11px; margin-top:8px;">Plusieurs créneaux = créés à la suite, sans pause (ex. 3 × 15 min dès 14:00 → 14:00, 14:15, 14:30). <b>Places</b> = nombre de joueurs pouvant s'inscrire sur le même créneau (max 5).</p>
+      <p style="color:var(--text-dim); font-size:11px; margin-top:8px;">Plusieurs créneaux = créés à la suite, sans pause (ex. 3 × 15 min dès 14:00 → 14:00, 14:15, 14:30). <b>Places</b> = nombre de joueurs pouvant s'inscrire sur le même créneau (max 5). <b>Équipe</b> = restreint la réservation aux joueurs de ce groupe (PSG U15/U18…). Laisser vide = ouvert à tous.</p>
     </div>
     <div class="card">
       <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
@@ -5879,12 +5885,24 @@ function _rcLabel(t) {
 function _rcEmoji(t)  { return (RECOVERY_TYPES[t] || {}).emoji || '❄️'; }
 function _rcAddMin(hhmm, mins) { return _cmAddMinutes(hhmm, mins); }
 
+// Remplit le sélecteur d'équipe avec les groupes de l'org active
+function _rcRefreshGroupeSelect() {
+  const sel = document.getElementById('rc-groupe');
+  if (!sel) return;
+  const groups = (typeof getAllGroups === 'function') ? getAllGroups() : [];
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Toutes —</option>' +
+    groups.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+  if (cur && groups.indexOf(cur) >= 0) sel.value = cur;
+}
+
 // ---- Staff ----
 async function renderRecoveryPlanning() {
   const list = document.getElementById('rc-list');
   if (!list) return;
   const dateInput = document.getElementById('rc-date');
   if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().slice(0, 10);
+  _rcRefreshGroupeSelect();
   list.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:8px;">Chargement…</div>';
   const showPast = !!(document.getElementById('rc-show-past') || {}).checked;
   const today = new Date().toISOString().slice(0, 10);
@@ -5915,8 +5933,11 @@ async function renderRecoveryPlanning() {
       const inscritsHtml = joueurs.length
         ? ' · <span style="color:var(--green); font-weight:600;">' + joueurs.map(escapeHtml).join(', ') + '</span>'
         : '';
+      const groupeBadge = s.groupe
+        ? ' <span style="display:inline-block; padding:1px 6px; margin-left:6px; background:rgba(0,163,255,0.15); color:var(--accent-light); border:1px solid var(--accent); border-radius:10px; font-size:10px; font-weight:600;">👥 ' + escapeHtml(s.groupe) + '</span>'
+        : '';
       html += '<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; border-radius:8px; padding:9px 12px; margin-bottom:5px; background:' + bg + '; border-left:3px solid ' + bord + ';">' +
-        '<div style="font-size:13px;">' + _rcEmoji(s.type) + ' <b>' + _rcLabel(s.type) + '</b> · ' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + ' <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min · ' + taken + '/' + capacity + ' place' + (capacity > 1 ? 's' : '') + '</span>' + inscritsHtml + '</div>' +
+        '<div style="font-size:13px;">' + _rcEmoji(s.type) + ' <b>' + _rcLabel(s.type) + '</b>' + groupeBadge + ' · ' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + ' <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min · ' + taken + '/' + capacity + ' place' + (capacity > 1 ? 's' : '') + '</span>' + inscritsHtml + '</div>' +
         '<button class="btn btn-secondary" style="padding:3px 10px; font-size:11px;" onclick="deleteRecoveryCreneau(' + s.id + ')">🗑️</button>' +
       '</div>';
     });
@@ -5933,11 +5954,12 @@ async function addRecoveryCreneaux() {
   const count    = Math.max(1, Math.min(30, parseInt((document.getElementById('rc-count') || {}).value || '1', 10)));
   const capacity = Math.max(1, Math.min(5,  parseInt((document.getElementById('rc-capacity') || {}).value || '1', 10)));
   const type     = (document.getElementById('rc-type')     || {}).value;
+  const groupe   = ((document.getElementById('rc-groupe')  || {}).value || '').trim() || null;
   if (!date || !heure || !type) { toast('Renseigne date, heure et type', 'error'); return; }
   const rows = [];
   let h = heure;
   for (let i = 0; i < count; i++) {
-    rows.push({ org: currentOrg, date, heure: h, duree_min: duree, type, capacity });
+    rows.push({ org: currentOrg, date, heure: h, duree_min: duree, type, capacity, groupe });
     h = _rcAddMin(h, duree);
   }
   const { data, error } = await sb.from('creneaux_recuperation').insert(rows).select();
@@ -6003,7 +6025,11 @@ async function renderPlayerRecovery() {
   const { data, error } = await sb.from('creneaux_recuperation').select('*')
     .gte('date', today).order('date').order('heure');
   if (error) { listEl.innerHTML = '<div style="color:var(--red);">' + escapeHtml(error.message) + '</div>'; return; }
-  const slots = (data || []).map(s => Object.assign({}, s, { joueurs: Array.isArray(s.joueurs) ? s.joueurs : [] }));
+  const rawSlots = (data || []).map(s => Object.assign({}, s, { joueurs: Array.isArray(s.joueurs) ? s.joueurs : [] }));
+  // Filtre équipe : si un créneau cible un groupe précis, seuls les joueurs
+  // de ce groupe le voient (les déjà-inscrits gardent l'accès pour se dés-inscrire).
+  const monGroupe = (typeof getJoueurInfo === 'function') ? (getJoueurInfo(currentJoueurNom).groupe || '') : '';
+  const slots = rawSlots.filter(s => !s.groupe || s.groupe === monGroupe || s.joueurs.includes(currentJoueurNom));
   // Un joueur peut être dans UN seul créneau par jour, TOUT type confondu (bottes OU bain froid)
   const bookedDays = new Set(
     slots.filter(s => s.joueurs.includes(currentJoueurNom)).map(s => s.date)
