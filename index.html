@@ -5732,9 +5732,12 @@ async function renderPlayerFiche() {
     const { data } = await sb.from('fiches_medicales').select('*').eq('org', currentOrg).eq('joueur', currentJoueurNom).maybeSingle();
     if (data) fiche = data;
   } catch (e) {}
+  const info = getJoueurInfo(currentJoueurNom) || {};
   const poids = mfLatestTest(currentJoueurNom, 'POIDS');
   const taille = mfLatestTest(currentJoueurNom, 'TAILLE');
-  const age = mfComputeAge(fiche.date_naissance);
+  const ddnSrc = info.date_naissance || fiche.date_naissance || null;
+  const age = mfComputeAge(ddnSrc);
+  const tailleFromInfo = (info.taille_cm != null) ? info.taille_cm : null;
   const fmtDate = d => d ? String(d).split('-').reverse().join('/') : '';
   const textBlock = (label, txt) => txt ? '<div class="card"><h2 style="font-size:15px; margin-bottom:6px;">' + label + '</h2><div style="font-size:13px; white-space:pre-wrap;">' + escapeHtml(txt) + '</div></div>' : '';
   const listBlock = (label, txt) => {
@@ -5746,9 +5749,16 @@ async function renderPlayerFiche() {
   let html = '';
   const chips = [];
   if (age !== null && age >= 0) chips.push(tr('Age', 'Âge') + ' : <b>' + age + ' ' + tr('yrs', 'ans') + '</b>');
-  if (fiche.date_naissance) chips.push(tr('Born', 'Naissance') + ' : <b>' + fmtDate(fiche.date_naissance) + '</b>');
+  if (ddnSrc) chips.push(tr('Born', 'Naissance') + ' : <b>' + fmtDate(ddnSrc) + '</b>');
+  if (info.poste) chips.push(tr('Position', 'Poste') + ' : <b>' + escapeHtml(info.poste) + '</b>');
+  if (info.numero) chips.push(tr('Number', 'N°') + ' : <b>' + info.numero + '</b>');
+  if (info.pied_fort) chips.push(tr('Foot', 'Pied') + ' : <b>' + escapeHtml(info.pied_fort) + '</b>');
   if (poids) chips.push(tr('Weight', 'Poids') + ' : <b>' + poids.valeur + ' kg</b>');
+  if (info.poids_forme != null && info.poids_forme !== '') chips.push(tr('Target weight', 'Poids de forme') + ' : <b>' + Number(info.poids_forme) + ' kg</b>');
   if (taille) chips.push(tr('Height', 'Taille') + ' : <b>' + taille.valeur + ' cm</b>');
+  else if (tailleFromInfo != null) chips.push(tr('Height', 'Taille') + ' : <b>' + tailleFromInfo + ' cm</b>');
+  if (info.nationalite) chips.push(tr('Nationality', 'Nationalité') + ' : <b>' + escapeHtml(info.nationalite) + '</b>');
+  if (info.lieu_naissance) chips.push(tr('Birthplace', 'Lieu de naissance') + ' : <b>' + escapeHtml(info.lieu_naissance) + '</b>');
   if (chips.length) html += '<div class="card"><div style="display:flex; flex-wrap:wrap; gap:16px; font-size:13px;">' + chips.map(c => '<span>' + c + '</span>').join('') + '</div></div>';
   html += textBlock(tr('Medical & sport context', 'Contexte médical et sportif'), fiche.contexte);
   html += textBlock(tr('Other', 'Autre'), fiche.autre);
@@ -17042,7 +17052,9 @@ async function renderFicheGlobale(joueur) {
       ddnStr = String(ddnSrc).split('-').reverse().join('.');
     }
   }
-  const poids = fiche.poids != null ? fiche.poids + ' Kg' : '—';
+  const poidsMesure = fiche.poids != null ? fiche.poids + ' Kg' : null;
+  const poidsForme = (info.poids_forme != null && info.poids_forme !== '') ? Number(info.poids_forme) + ' kg (forme)' : null;
+  const poids = poidsMesure || poidsForme || '—';
   const tailleSrc = (info.taille_cm != null) ? info.taille_cm : (fiche.taille != null ? Math.round(fiche.taille) : null);
   const taille = tailleSrc != null ? tailleSrc + ' cm' : '—';
   const piedFort = info.pied_fort || row.pied_fort || '';
@@ -17079,9 +17091,9 @@ async function renderFicheGlobale(joueur) {
         '<div style="background:var(--bg-elevated); border-radius:8px; padding:14px; font-size:13px;">' +
           '<div style="display:grid; grid-template-columns:22px 1fr; gap:8px 10px; align-items:center;">' +
             '<span>🎂</span><div>' + ageStr + (ddnStr ? ' · <span style="color:var(--text-dim);">' + ddnStr + '</span>' : '') + '</div>' +
-            '<span>⚽</span><div>Poste : <b>' + val(info.poste) + '</b></div>' +
+            '<span>⚽</span><div>Poste : <b>' + val(info.poste) + '</b>' + (info.numero ? ' · <span style="color:var(--text-dim);">n°</span> <b>' + info.numero + '</b>' : '') + '</div>' +
             '<span>📏</span><div>' + taille + '</div>' +
-            '<span>⚖️</span><div>' + poids + '</div>' +
+            '<span>⚖️</span><div>' + poids + (poidsMesure && poidsForme ? ' <span style="color:var(--text-dim); font-size:11px;">· forme : ' + Number(info.poids_forme) + ' kg</span>' : '') + '</div>' +
             '<span>👟</span><div>Pied : <b>' + val(piedFort) + '</b></div>' +
             ((info.nationalite || info.lieu_naissance) ? '<span>🌍</span><div>' + escapeHtml(info.nationalite || '') + (info.nationalite && info.lieu_naissance ? ' · ' : '') + (info.lieu_naissance ? '<span style="color:var(--text-dim);">' + escapeHtml(info.lieu_naissance) + '</span>' : '') + '</div>' : '') +
           '</div>' +
