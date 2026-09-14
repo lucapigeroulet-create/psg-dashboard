@@ -15779,45 +15779,46 @@ const WORK_RATIO_METRICS = [
   { key: 'hsr', label: 'HSR', shortLabel: 'HSR %' },
   { key: 'sprint_dist_m', label: 'Sprint', shortLabel: 'Sprint %' },
   { key: 'top_speed', label: 'Vmax', shortLabel: 'Vmax %' },
+  { key: 'acc_count_high', label: 'Accél', shortLabel: 'Acc %' },
   { key: 'decel_count_high', label: 'Décél', shortLabel: 'Déc %' },
   { key: 'power_plays', label: 'Power Plays', shortLabel: 'PP %' }
 ];
 let WORK_RATIOS = {
   WEEK1: {
-    'J+2/J+1': { distance_km: 0.2, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.7, decel_count_high: 0.2, power_plays: 0.2 },
-    'J-4':     { distance_km: 0.6, hsr: 0.5, sprint_dist_m: 0.4, top_speed: 0.8, decel_count_high: 0.4, power_plays: 0.4 },
-    'J-3':     { distance_km: 0.5, hsr: 0.4, sprint_dist_m: 0.2, top_speed: 0.95, decel_count_high: 0.5, power_plays: 0.5 },
-    'J-2':     { distance_km: 0.4, hsr: 0.3, sprint_dist_m: 0.3, top_speed: 0.95, decel_count_high: 0.2, power_plays: 0.2 },
-    'J-1':     { distance_km: 0.3, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.8, decel_count_high: 0.2, power_plays: 0.2 },
-    'MATCH':   { distance_km: 1, hsr: 1, sprint_dist_m: 1, top_speed: 1, decel_count_high: 1, power_plays: 1 },
-    'TT':      { distance_km: 3, hsr: 2.4, sprint_dist_m: 2.1, top_speed: 5.2, decel_count_high: 2.5, power_plays: 2.5 }
+    'J+2/J+1': { distance_km: 0.2, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.7, acc_count_high: 0.2, decel_count_high: 0.2, power_plays: 0.2 },
+    'J-4':     { distance_km: 0.6, hsr: 0.5, sprint_dist_m: 0.4, top_speed: 0.8, acc_count_high: 0.4, decel_count_high: 0.4, power_plays: 0.4 },
+    'J-3':     { distance_km: 0.5, hsr: 0.4, sprint_dist_m: 0.2, top_speed: 0.95, acc_count_high: 0.5, decel_count_high: 0.5, power_plays: 0.5 },
+    'J-2':     { distance_km: 0.4, hsr: 0.3, sprint_dist_m: 0.3, top_speed: 0.95, acc_count_high: 0.2, decel_count_high: 0.2, power_plays: 0.2 },
+    'J-1':     { distance_km: 0.3, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.8, acc_count_high: 0.2, decel_count_high: 0.2, power_plays: 0.2 },
+    'MATCH':   { distance_km: 1, hsr: 1, sprint_dist_m: 1, top_speed: 1, acc_count_high: 1, decel_count_high: 1, power_plays: 1 },
+    'TT':      { distance_km: 3, hsr: 2.4, sprint_dist_m: 2.1, top_speed: 5.2, acc_count_high: 2.5, decel_count_high: 2.5, power_plays: 2.5 }
   },
   WEEK2: {
-    'J+2/J+1': { distance_km: 0.3, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.7, decel_count_high: 0.2, power_plays: 0.2 },
-    'J-4':     { distance_km: 0.7, hsr: 0.6, sprint_dist_m: 0.5, top_speed: 0.8, decel_count_high: 0.4, power_plays: 0.4 },
-    'J-3':     { distance_km: 0.6, hsr: 0.4, sprint_dist_m: 0.3, top_speed: 0.95, decel_count_high: 0.5, power_plays: 0.5 },
-    'J-2':     { distance_km: 0.4, hsr: 0.3, sprint_dist_m: 0.4, top_speed: 0.95, decel_count_high: 0.3, power_plays: 0.3 },
-    'J-1':     { distance_km: 0.3, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.8, decel_count_high: 0.2, power_plays: 0.2 },
-    'MATCH':   { distance_km: 1, hsr: 1, sprint_dist_m: 1, top_speed: 1, decel_count_high: 1, power_plays: 1 },
-    'TT':      { distance_km: 3.3, hsr: 2.5, sprint_dist_m: 2.4, top_speed: 5.2, decel_count_high: 2.6, power_plays: 2.6 }
+    'J+2/J+1': { distance_km: 0.3, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.7, acc_count_high: 0.2, decel_count_high: 0.2, power_plays: 0.2 },
+    'J-4':     { distance_km: 0.7, hsr: 0.6, sprint_dist_m: 0.5, top_speed: 0.8, acc_count_high: 0.4, decel_count_high: 0.4, power_plays: 0.4 },
+    'J-3':     { distance_km: 0.6, hsr: 0.4, sprint_dist_m: 0.3, top_speed: 0.95, acc_count_high: 0.5, decel_count_high: 0.5, power_plays: 0.5 },
+    'J-2':     { distance_km: 0.4, hsr: 0.3, sprint_dist_m: 0.4, top_speed: 0.95, acc_count_high: 0.3, decel_count_high: 0.3, power_plays: 0.3 },
+    'J-1':     { distance_km: 0.3, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.8, acc_count_high: 0.2, decel_count_high: 0.2, power_plays: 0.2 },
+    'MATCH':   { distance_km: 1, hsr: 1, sprint_dist_m: 1, top_speed: 1, acc_count_high: 1, decel_count_high: 1, power_plays: 1 },
+    'TT':      { distance_km: 3.3, hsr: 2.5, sprint_dist_m: 2.4, top_speed: 5.2, acc_count_high: 2.6, decel_count_high: 2.6, power_plays: 2.6 }
   },
   WEEK3: {
-    'J+2/J+1': { distance_km: 0.3, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.7, decel_count_high: 0.2, power_plays: 0.2 },
-    'J-4':     { distance_km: 0.8, hsr: 0.6, sprint_dist_m: 0.5, top_speed: 0.8, decel_count_high: 0.5, power_plays: 0.5 },
-    'J-3':     { distance_km: 0.7, hsr: 0.4, sprint_dist_m: 0.3, top_speed: 0.95, decel_count_high: 0.6, power_plays: 0.6 },
-    'J-2':     { distance_km: 0.5, hsr: 0.3, sprint_dist_m: 0.4, top_speed: 0.95, decel_count_high: 0.3, power_plays: 0.3 },
-    'J-1':     { distance_km: 0.4, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.8, decel_count_high: 0.2, power_plays: 0.2 },
-    'MATCH':   { distance_km: 1, hsr: 1, sprint_dist_m: 1, top_speed: 1, decel_count_high: 1, power_plays: 1 },
-    'TT':      { distance_km: 3.7, hsr: 2.5, sprint_dist_m: 2.4, top_speed: 5.2, decel_count_high: 2.8, power_plays: 2.8 }
+    'J+2/J+1': { distance_km: 0.3, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.7, acc_count_high: 0.2, decel_count_high: 0.2, power_plays: 0.2 },
+    'J-4':     { distance_km: 0.8, hsr: 0.6, sprint_dist_m: 0.5, top_speed: 0.8, acc_count_high: 0.5, decel_count_high: 0.5, power_plays: 0.5 },
+    'J-3':     { distance_km: 0.7, hsr: 0.4, sprint_dist_m: 0.3, top_speed: 0.95, acc_count_high: 0.6, decel_count_high: 0.6, power_plays: 0.6 },
+    'J-2':     { distance_km: 0.5, hsr: 0.3, sprint_dist_m: 0.4, top_speed: 0.95, acc_count_high: 0.3, decel_count_high: 0.3, power_plays: 0.3 },
+    'J-1':     { distance_km: 0.4, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.8, acc_count_high: 0.2, decel_count_high: 0.2, power_plays: 0.2 },
+    'MATCH':   { distance_km: 1, hsr: 1, sprint_dist_m: 1, top_speed: 1, acc_count_high: 1, decel_count_high: 1, power_plays: 1 },
+    'TT':      { distance_km: 3.7, hsr: 2.5, sprint_dist_m: 2.4, top_speed: 5.2, acc_count_high: 2.8, decel_count_high: 2.8, power_plays: 2.8 }
   },
   WEEK4: {
-    'J+2/J+1': { distance_km: 0.2, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.7, decel_count_high: 0.1, power_plays: 0.1 },
-    'J-4':     { distance_km: 0.6, hsr: 0.5, sprint_dist_m: 0.3, top_speed: 0.8, decel_count_high: 0.4, power_plays: 0.4 },
-    'J-3':     { distance_km: 0.5, hsr: 0.3, sprint_dist_m: 0.2, top_speed: 0.95, decel_count_high: 0.4, power_plays: 0.4 },
-    'J-2':     { distance_km: 0.3, hsr: 0.2, sprint_dist_m: 0.3, top_speed: 0.95, decel_count_high: 0.2, power_plays: 0.2 },
-    'J-1':     { distance_km: 0.3, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.8, decel_count_high: 0.1, power_plays: 0.1 },
-    'MATCH':   { distance_km: 1, hsr: 1, sprint_dist_m: 1, top_speed: 1, decel_count_high: 1, power_plays: 1 },
-    'TT':      { distance_km: 2.7, hsr: 2, sprint_dist_m: 1.6, top_speed: 0, decel_count_high: 2.1, power_plays: 2.1 }
+    'J+2/J+1': { distance_km: 0.2, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.7, acc_count_high: 0.1, decel_count_high: 0.1, power_plays: 0.1 },
+    'J-4':     { distance_km: 0.6, hsr: 0.5, sprint_dist_m: 0.3, top_speed: 0.8, acc_count_high: 0.4, decel_count_high: 0.4, power_plays: 0.4 },
+    'J-3':     { distance_km: 0.5, hsr: 0.3, sprint_dist_m: 0.2, top_speed: 0.95, acc_count_high: 0.4, decel_count_high: 0.4, power_plays: 0.4 },
+    'J-2':     { distance_km: 0.3, hsr: 0.2, sprint_dist_m: 0.3, top_speed: 0.95, acc_count_high: 0.2, decel_count_high: 0.2, power_plays: 0.2 },
+    'J-1':     { distance_km: 0.3, hsr: 0.1, sprint_dist_m: 0.1, top_speed: 0.8, acc_count_high: 0.1, decel_count_high: 0.1, power_plays: 0.1 },
+    'MATCH':   { distance_km: 1, hsr: 1, sprint_dist_m: 1, top_speed: 1, acc_count_high: 1, decel_count_high: 1, power_plays: 1 },
+    'TT':      { distance_km: 2.7, hsr: 2, sprint_dist_m: 1.6, top_speed: 0, acc_count_high: 2.1, decel_count_high: 2.1, power_plays: 2.1 }
   }
 };
 // Instantané des valeurs par défaut (pour le bouton "Réinitialiser")
@@ -15834,6 +15835,18 @@ function applyWorkRatiosConfig(cfg) {
   WORK_RATIO_WEEKS = src.weeks.slice();
   WORK_RATIO_PHASE = JSON.parse(JSON.stringify(src.phases));
   WORK_RATIOS = JSON.parse(JSON.stringify(src.ratios));
+  // Rétro-compat : les configs sauvées avant l'ajout d'Accél n'ont pas la clé
+  // acc_count_high — on l'initialise depuis decel_count_high (accels et décels
+  // évoluent en parallèle) pour éviter des colonnes vides après upgrade.
+  WORK_RATIO_WEEKS.forEach(w => {
+    if (!WORK_RATIOS[w]) return;
+    WORK_RATIO_DAYS.forEach(d => {
+      const cell = WORK_RATIOS[w][d];
+      if (cell && (cell.acc_count_high === undefined || cell.acc_count_high === null) && cell.decel_count_high !== undefined) {
+        cell.acc_count_high = cell.decel_count_high;
+      }
+    });
+  });
   if (WORK_RATIO_WEEKS.indexOf(gpsWTRatioWeek) === -1) gpsWTRatioWeek = WORK_RATIO_WEEKS[0];
   if (WORK_RATIO_WEEKS.indexOf(gpsWIRatioWeek) === -1) gpsWIRatioWeek = WORK_RATIO_WEEKS[0];
   if (gpsSessionRatioWeek && WORK_RATIO_WEEKS.indexOf(gpsSessionRatioWeek) === -1) gpsSessionRatioWeek = '';
