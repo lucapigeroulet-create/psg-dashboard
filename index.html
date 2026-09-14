@@ -9401,8 +9401,10 @@ async function saveJoueurToSupabase(joueur, oldNom) {
   };
   // N'inclure `photo` que lors d'un renommage (sinon on écraserait la photo existante par null)
   if (photoAConserver) payload.photo = photoAConserver;
-  const { error } = await sb.from('joueurs').upsert(payload, { onConflict: 'nom' });
-  if (error) { toast('Erreur joueur : ' + error.message, 'error'); return false; }
+  console.log('[saveJoueurToSupabase] payload upsert :', payload);
+  const { data, error } = await sb.from('joueurs').upsert(payload, { onConflict: 'nom' }).select();
+  if (error) { console.error('[saveJoueurToSupabase] erreur Supabase :', error); toast('Erreur joueur : ' + error.message, 'error'); return false; }
+  console.log('[saveJoueurToSupabase] retour DB :', data);
   return true;
 }
 
@@ -30195,33 +30197,37 @@ async function peClearPhoto() {
 }
 
 async function saveEditPlayer() {
-  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
-  const oldName = document.getElementById('pe-old-name').value;
-  const j = state.joueurs.find(x => x.nom === oldName);
-  if (!j) { toast('Joueur introuvable', 'error'); return; }
-  const trimmed = (document.getElementById('pe-name').value || '').trim();
-  if (!trimmed) { toast('Nom vide', 'error'); return; }
-  if (trimmed !== oldName && state.joueurs.some(x => x.nom === trimmed)) {
-    toast('Un joueur "' + trimmed + '" existe déjà', 'error');
-    return;
-  }
-  const taille = document.getElementById('pe-taille').value;
-  const poids = document.getElementById('pe-poids').value;
-  const updated = {
-    nom: trimmed,
-    groupe: (document.getElementById('pe-groupe').value || '').trim() || null,
-    poste: (document.getElementById('pe-poste').value || '').trim() || null,
-    numero: document.getElementById('pe-num').value ? parseInt(document.getElementById('pe-num').value, 10) : null,
-    poids_forme: (String(poids).trim() !== '' ? Number(String(poids).replace(',', '.')) : null),
-    date_naissance: document.getElementById('pe-ddn').value || null,
-    pied_fort: document.getElementById('pe-pied').value || null,
-    taille_cm: taille ? parseInt(taille, 10) : null,
-    nationalite: (document.getElementById('pe-natio').value || '').trim() || null,
-    lieu_naissance: (document.getElementById('pe-lieu').value || '').trim() || null,
-    positions_terrain: pePositions.slice(0, 2)
-  };
-  const ok = await saveJoueurToSupabase(updated, oldName);
-  if (!ok) return;
+  const btn = document.querySelector('#player-edit-modal .btn:not(.btn-secondary)');
+  try {
+    if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+    const oldName = document.getElementById('pe-old-name').value;
+    const j = state.joueurs.find(x => x.nom === oldName);
+    if (!j) { toast('Joueur introuvable', 'error'); return; }
+    const trimmed = (document.getElementById('pe-name').value || '').trim();
+    if (!trimmed) { toast('Nom vide', 'error'); return; }
+    if (trimmed !== oldName && state.joueurs.some(x => x.nom === trimmed)) {
+      toast('Un joueur "' + trimmed + '" existe déjà', 'error');
+      return;
+    }
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Enregistrement…'; }
+    const taille = document.getElementById('pe-taille').value;
+    const poids = document.getElementById('pe-poids').value;
+    const updated = {
+      nom: trimmed,
+      groupe: (document.getElementById('pe-groupe').value || '').trim() || null,
+      poste: (document.getElementById('pe-poste').value || '').trim() || null,
+      numero: document.getElementById('pe-num').value ? parseInt(document.getElementById('pe-num').value, 10) : null,
+      poids_forme: (String(poids).trim() !== '' ? Number(String(poids).replace(',', '.')) : null),
+      date_naissance: document.getElementById('pe-ddn').value || null,
+      pied_fort: document.getElementById('pe-pied').value || null,
+      taille_cm: taille ? parseInt(taille, 10) : null,
+      nationalite: (document.getElementById('pe-natio').value || '').trim() || null,
+      lieu_naissance: (document.getElementById('pe-lieu').value || '').trim() || null,
+      positions_terrain: pePositions.slice(0, 2)
+    };
+    console.log('[saveEditPlayer] payload envoyé :', updated, ' oldName=', oldName);
+    const ok = await saveJoueurToSupabase(updated, oldName);
+    if (!ok) { if (btn) { btn.disabled = false; btn.textContent = '💾 Enregistrer'; } return; }
 
   if (trimmed !== oldName) {
     const planningsAffectes = state.bdd_ent.filter(e => e.joueur === oldName);
@@ -30255,10 +30261,16 @@ async function saveEditPlayer() {
     }
   }
 
-  closeEditPlayer();
-  renderPlayersSettings();
-  refreshAllSelectors();
-  toast('Joueur modifié', 'success');
+    closeEditPlayer();
+    renderPlayersSettings();
+    refreshAllSelectors();
+    toast('Joueur modifié ✓', 'success');
+  } catch (err) {
+    console.error('[saveEditPlayer] erreur :', err);
+    toast('Erreur : ' + (err && err.message ? err.message : err), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Enregistrer'; }
+  }
 }
 
 async function archivePlayer(nom) {
