@@ -1980,6 +1980,18 @@
           </select>
         </div>
       </div>
+      <div class="form-row" style="align-items:flex-end;">
+        <div style="flex:2;">
+          <label>📋 Séance type à charger <span style="font-weight:normal;color:var(--text-dim);font-size:11px;">(modèle réutilisable)</span></label>
+          <select id="entry-template" onchange="onLoadSeanceTemplate()">
+            <option value="">— Aucun modèle —</option>
+          </select>
+        </div>
+        <div style="flex:1;display:flex;gap:6px;">
+          <button type="button" class="btn btn-secondary" onclick="saveAsSeanceTemplate()" title="Enregistre la séance actuelle comme modèle réutilisable" style="padding:6px 10px;font-size:12px;">💾 En faire un type</button>
+          <button type="button" class="btn btn-secondary" onclick="deleteSeanceTemplate()" title="Supprime le modèle sélectionné" style="padding:6px 10px;font-size:12px;color:var(--red);">🗑</button>
+        </div>
+      </div>
 
       <h3 style="margin-top:16px;">Procédés (jusqu'à 8)</h3>
       <div id="procedes-container"></div>
@@ -8755,6 +8767,18 @@ async function loadState() {
       vignettes: s.vignettes || null,
       created_at: s.created_at || null
     }));
+
+    // Bibliothèque de séances types (modèles réutilisables — pas rattachés à une date)
+    try {
+      const { data: tpl } = await sb.from('seance_templates').select('*').eq('org', currentOrg).order('nom');
+      state.bdd_seance_templates = (tpl || []).map(t => ({
+        id: t.id, nom: t.nom, seance: t.type_seance,
+        duree_totale: parseFloat(t.duree_totale) || 0,
+        procedes: t.procedes || [],
+        notes: t.notes || null,
+        vignettes: t.vignettes || null
+      }));
+    } catch (e) { state.bdd_seance_templates = []; }
 
     setLoad('Chargement des plannings...');
     // Paginé : PostgREST plafonne chaque réponse à 1000 lignes. Sans _fullFetch,
@@ -23723,6 +23747,7 @@ function renderEntry() {
   fillSelect('affect-group', getAllGroups(), true);
 
   renderEntryExistingSelect();
+  renderSeanceTemplateSelect();
   renderAffectSeanceSelect();
   renderProcedes();
   // Réinitialiser les notes de séance, remarques individuelles et vignettes (cohérent avec les procédés)
@@ -24025,6 +24050,122 @@ function renderProcedes() {
     html += '</div>';
   }
   container.innerHTML = html;
+}
+
+// ── Séances types (modèles réutilisables) ───────────────────────────────────
+function renderSeanceTemplateSelect() {
+  const sel = document.getElementById('entry-template');
+  if (!sel) return;
+  const tpls = (state.bdd_seance_templates || []).slice()
+    .sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+  const cur = sel.value;
+  let html = '<option value="">— Aucun modèle —</option>';
+  tpls.forEach(t => {
+    const cat = t.seance ? ' · ' + t.seance : '';
+    html += '<option value="' + escapeHtml(String(t.id)) + '">' + escapeHtml(t.nom) + escapeHtml(cat) + '</option>';
+  });
+  sel.innerHTML = html;
+  if (cur && tpls.some(t => String(t.id) === cur)) sel.value = cur;
+}
+
+// Charge un modèle dans le formulaire (garde la date, remplit tout le reste).
+function onLoadSeanceTemplate() {
+  const sel = document.getElementById('entry-template');
+  if (!sel || !sel.value) return;
+  const tpl = (state.bdd_seance_templates || []).find(t => String(t.id) === sel.value);
+  if (!tpl) return;
+  // Repartir sur une nouvelle séance (pas d'écrasement d'une fiche existante)
+  const existingSel = document.getElementById('entry-existing');
+  if (existingSel) existingSel.value = '';
+  // Nom : suggéré depuis le modèle, à ajuster par l'utilisateur si besoin
+  document.getElementById('entry-nom').value = tpl.nom || '';
+  // Type de séance : si absent du sélecteur (org différente), on l'ignore
+  const seanceSel = document.getElementById('entry-seance');
+  if (seanceSel && tpl.seance) {
+    for (const o of seanceSel.options) if (o.value === tpl.seance) { seanceSel.value = tpl.seance; break; }
+  }
+  document.getElementById('entry-duree').value = tpl.duree_totale || 0;
+  // Procédés : reconstruire les inputs
+  renderProcedes();
+  const procs = Array.isArray(tpl.procedes) ? tpl.procedes : [];
+  for (let i = 0; i < 8; i++) {
+    const p = procs[i] || {};
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v === null || v === undefined) ? '' : v; };
+    set('proc-temps-' + i, p.temps);
+    set('proc-type-'  + i, p.type);
+    set('proc-zone-'  + i, p.zone);
+    set('proc-rpe-'   + i, p.rpe);
+  }
+  // Notes + vignettes (remarques individuelles restent vides — spécifiques à chaque séance)
+  fillSeanceNotes(tpl.notes || {});
+  fillVignettes(tpl.vignettes || null);
+  clearSeanceRemarques();
+  entryDirty = true;
+  toast('Modèle « ' + tpl.nom + ' » chargé — ajuste le nom et enregistre.', 'success');
+}
+
+async function saveAsSeanceTemplate() {
+  if (typeof canWrite === 'function' && !canWrite()) { toast('Droits admin/staff requis', 'error'); return; }
+  const defaultName = (document.getElementById('entry-nom').value || '').trim() || 'Modèle sans nom';
+  const nom = (prompt('Nom du modèle de séance :', defaultName) || '').trim();
+  if (!nom) return;
+  const existing = (state.bdd_seance_templates || []).find(t => t.nom === nom);
+  if (existing && !confirm('Un modèle « ' + nom + ' » existe déjà. L\'écraser ?')) return;
+  // Collecte les procédés depuis le formulaire (même logique que saveSeance)
+  const procedes = [];
+  for (let i = 0; i < 8; i++) {
+    const t = document.getElementById('proc-temps-' + i).value;
+    const ty = document.getElementById('proc-type-' + i).value;
+    const z = document.getElementById('proc-zone-' + i).value;
+    const r = document.getElementById('proc-rpe-' + i).value;
+    if (t || ty || z || r) procedes.push({
+      temps: t ? parseFloat(t) : null,
+      type: ty || null, zone: z || null,
+      rpe: r ? parseFloat(r) : null
+    });
+  }
+  const row = {
+    org: currentOrg, nom,
+    type_seance: document.getElementById('entry-seance').value || null,
+    duree_totale: parseFloat(document.getElementById('entry-duree').value) || 0,
+    procedes,
+    notes: collectSeanceNotes(),
+    vignettes: collectVignettes(),
+    updated_at: new Date().toISOString()
+  };
+  try {
+    const { data, error } = await sb.from('seance_templates')
+      .upsert(row, { onConflict: 'org,nom' }).select().single();
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+    // Rafraîchir le cache local
+    state.bdd_seance_templates = state.bdd_seance_templates || [];
+    const idx = state.bdd_seance_templates.findIndex(t => t.nom === nom);
+    const tpl = {
+      id: data.id, nom: data.nom, seance: data.type_seance,
+      duree_totale: parseFloat(data.duree_totale) || 0,
+      procedes: data.procedes || [], notes: data.notes || null, vignettes: data.vignettes || null
+    };
+    if (idx >= 0) state.bdd_seance_templates[idx] = tpl;
+    else state.bdd_seance_templates.push(tpl);
+    renderSeanceTemplateSelect();
+    document.getElementById('entry-template').value = String(tpl.id);
+    toast('Modèle « ' + nom + ' » enregistré', 'success');
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); }
+}
+
+async function deleteSeanceTemplate() {
+  const sel = document.getElementById('entry-template');
+  if (!sel || !sel.value) { toast('Sélectionne un modèle à supprimer', 'error'); return; }
+  const tpl = (state.bdd_seance_templates || []).find(t => String(t.id) === sel.value);
+  if (!tpl) return;
+  if (!confirm('Supprimer définitivement le modèle « ' + tpl.nom + ' » ?')) return;
+  try {
+    const { error } = await sb.from('seance_templates').delete().eq('id', tpl.id);
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+    state.bdd_seance_templates = state.bdd_seance_templates.filter(t => t.id !== tpl.id);
+    renderSeanceTemplateSelect();
+    toast('Modèle « ' + tpl.nom + ' » supprimé', 'success');
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); }
 }
 
 // Remplir la liste déroulante des séances existantes pour la date sélectionnée
