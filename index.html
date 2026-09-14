@@ -1522,8 +1522,12 @@
       <div id="gps-import-summary"></div>
       <div id="gps-import-mapping"></div>
       <div id="gps-import-preview"></div>
-      <div style="margin-top:12px;">
+      <div style="margin-top:12px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
         <button class="btn" id="gps-import-btn" onclick="doGPSImport()" disabled>▶ Importer dans le dashboard</button>
+        <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); cursor:pointer;">
+          <input type="checkbox" id="gps-import-notify" checked style="margin:0;">
+          🔔 Notifier les joueurs (push)
+        </label>
       </div>
       <div id="gps-import-log" style="margin-top:12px;"></div>
     </div>
@@ -14968,6 +14972,14 @@ async function doGPSImport() {
       players: uniqueSorted(gpsImportRows.map(r => r.joueur)).length
     });
 
+    // Notification push aux joueurs (best-effort, avant de vider gpsImportRows)
+    const notifyEl = document.getElementById('gps-import-notify');
+    if (notifyEl && notifyEl.checked && gpsImportRows && gpsImportRows.length > 0) {
+      const joueursImport = uniqueSorted(gpsImportRows.map(r => r.joueur).filter(Boolean));
+      const dateStr = uniqueSorted(gpsImportRows.map(r => r.date))[0];
+      sendPushForGPSImport(joueursImport, dateStr, seanceLink || (gpsImportRows[0] && gpsImportRows[0].session_title));
+    }
+
     // Recharger les données GPS (paginé → gère les orgs > 1000 relevés)
     state.bdd_gps = await _fullFetch('gps_data', currentOrg, 'date');
     _writeCache('gps_data', currentOrg, state.bdd_gps);
@@ -23930,6 +23942,27 @@ async function publishRPEForSeance(date, seance) {
 // Envoie une notification push aux joueurs quand le staff publie une RPE (séance ou match).
 // Best-effort : silencieux en cas d'échec pour ne pas polluer l'UI (la publication elle-même
 // a déjà réussi côté base). Réutilise l'Edge Function send-push existante.
+// Notif push aux joueurs après import GPS. Sujet générique : ils sauront
+// que leurs données sont disponibles et pourront aller les consulter.
+async function sendPushForGPSImport(joueurs, dateIso, seanceTitre) {
+  if (!joueurs || joueurs.length === 0) return;
+  const titre = '📊 Nouvelles données GPS';
+  const dateLbl = dateIso ? formatDateFR(dateIso) : '';
+  const cible = seanceTitre ? ('« ' + seanceTitre + ' »') : ('du ' + (dateLbl || 'jour'));
+  const body = 'Tes chiffres de la séance ' + cible + ' sont dispos — ouvre ta fiche joueur pour voir.';
+  try {
+    const { data, error } = await sb.functions.invoke('send-push', {
+      body: { org: currentOrg, joueurs, title: titre, body }
+    });
+    if (error) { console.warn('Push GPS échoué :', error.message); return; }
+    if (data && typeof data.sent === 'number' && data.sent > 0) {
+      toast('🔔 Notif GPS envoyée à ' + data.sent + '/' + data.total + ' joueur(s) abonné(s)', 'success');
+    }
+  } catch (e) {
+    console.warn('Push GPS échoué :', e.message);
+  }
+}
+
 async function sendPushForRPEPublication(joueurs, kind, label) {
   if (!joueurs || joueurs.length === 0) return;
   const isMatch = kind === 'match';
