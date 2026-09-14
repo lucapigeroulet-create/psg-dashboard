@@ -23235,6 +23235,21 @@ function renderCompetition() {
   else renderCompetitionStaff(filters, content, matchs);
 }
 
+// Passe au joueur suivant/précédent dans la vue individuelle (wrap circulaire).
+function competitionIndivStep(delta) {
+  const matchs = (state.bdd_matchs || []);
+  const joueursSet = new Set();
+  matchs.forEach(m => (m.composition || []).forEach(c => {
+    if (c && c.joueur && c.statut && c.statut !== 'absent') joueursSet.add(c.joueur);
+  }));
+  const joueurs = Array.from(joueursSet).sort((a, b) => a.localeCompare(b));
+  if (!joueurs.length) return;
+  const cur = Math.max(0, joueurs.indexOf(competitionIndivJoueur));
+  const next = (cur + delta + joueurs.length) % joueurs.length;
+  competitionIndivJoueur = joueurs[next];
+  renderCompetition();
+}
+
 // ── Vue individuelle : un joueur, tous ses matchs, notes perso + coachs + remarques
 function renderCompetitionIndividuel() {
   const filters = document.getElementById('competition-individuel-filters');
@@ -23251,10 +23266,18 @@ function renderCompetitionIndividuel() {
   if (currentRole === 'lecteur' && currentJoueurNom) competitionIndivJoueur = currentJoueurNom;
   else if (!competitionIndivJoueur && joueurs.length) competitionIndivJoueur = joueurs[0];
 
+  const curIdx = Math.max(0, joueurs.indexOf(competitionIndivJoueur));
+  const posLbl = joueurs.length ? (curIdx + 1) + ' / ' + joueurs.length : '';
+  const navBtn = 'background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer;line-height:1;';
   filters.innerHTML = '<div class="filter-group"><label>Joueur</label>' +
-    '<select onchange="competitionIndivJoueur=this.value;renderCompetition();">' +
-    joueurs.map(j => '<option value="' + escapeHtml(j) + '"' + (j === competitionIndivJoueur ? ' selected' : '') + '>' + escapeHtml(j) + '</option>').join('') +
-    '</select></div>';
+    '<div style="display:flex;gap:6px;align-items:center;">' +
+      '<button type="button" title="Joueur précédent" onclick="competitionIndivStep(-1)" style="' + navBtn + '">◀</button>' +
+      '<select onchange="competitionIndivJoueur=this.value;renderCompetition();" style="min-width:180px;">' +
+        joueurs.map(j => '<option value="' + escapeHtml(j) + '"' + (j === competitionIndivJoueur ? ' selected' : '') + '>' + escapeHtml(j) + '</option>').join('') +
+      '</select>' +
+      '<button type="button" title="Joueur suivant" onclick="competitionIndivStep(1)" style="' + navBtn + '">▶</button>' +
+      '<span style="font-size:11px;color:var(--text-dim);margin-left:2px;">' + posLbl + '</span>' +
+    '</div></div>';
 
   if (!competitionIndivJoueur) {
     content.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:10px;">Aucun joueur avec participation à un match.</div>';
