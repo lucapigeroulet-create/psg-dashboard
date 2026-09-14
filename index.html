@@ -23462,10 +23462,23 @@ function renderCompetitionStaff(filters, content, matchs) {
   filters.innerHTML = fh;
 
   const filtered = (competitionTeamFilter ? matchs.filter(m => m.groupe === competitionTeamFilter) : matchs);
+  let html = '';
+
+  // Quand un match précis est sélectionné, on masque le cumul par joueur (bilan)
+  // pour ne laisser que le détail du match choisi — évite d'avoir les deux tableaux
+  // superposés à faire défiler.
+  if (competitionDetailMatch) {
+    const m = matchs.find(x => x.id === competitionDetailMatch);
+    if (m) html += renderCompetitionMatchDetail(m);
+    else html += '<div style="color:var(--text-dim);font-size:13px;padding:10px;">Match introuvable.</div>';
+    content.innerHTML = html;
+    return;
+  }
+
   const agg = competitionAggregate(filtered);
   const players = Object.keys(agg).sort((a, b) => agg[b].min - agg[a].min);
 
-  let html = '<h3 style="margin-top:4px;">Cumul par joueur' + (competitionTeamFilter ? ' — ' + escapeHtml(competitionTeamFilter) : '') +
+  html += '<h3 style="margin-top:4px;">Cumul par joueur' + (competitionTeamFilter ? ' — ' + escapeHtml(competitionTeamFilter) : '') +
     ' <span style="font-weight:normal;font-size:12px;color:var(--text-dim);">(' + filtered.length + ' match' + (filtered.length > 1 ? 's' : '') + ')</span></h3>';
   if (players.length === 0) {
     html += '<div style="color:var(--text-dim);font-size:13px;padding:10px;">Aucune donnée joueur sur ces matchs.</div>';
@@ -23493,10 +23506,6 @@ function renderCompetitionStaff(filters, content, matchs) {
     html += '</tbody></table></div>';
   }
 
-  if (competitionDetailMatch) {
-    const m = matchs.find(x => x.id === competitionDetailMatch);
-    if (m) html += renderCompetitionMatchDetail(m);
-  }
   content.innerHTML = html;
 }
 
