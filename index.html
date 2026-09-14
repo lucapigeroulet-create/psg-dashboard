@@ -23235,18 +23235,37 @@ function renderCompetition() {
   else renderCompetitionStaff(filters, content, matchs);
 }
 
+let competitionIndivGroupe = '';
+
+// Retourne les joueurs (ordre alphabétique) ayant joué au moins un match,
+// filtrés par équipe si competitionIndivGroupe est défini.
+function competitionIndivJoueursList() {
+  const set = new Set();
+  (state.bdd_matchs || []).forEach(m => (m.composition || []).forEach(c => {
+    if (c && c.joueur && c.statut && c.statut !== 'absent') set.add(c.joueur);
+  }));
+  let arr = Array.from(set);
+  if (competitionIndivGroupe) {
+    arr = arr.filter(j => (typeof getJoueurInfo === 'function') && getJoueurInfo(j).groupe === competitionIndivGroupe);
+  }
+  return arr.sort((a, b) => a.localeCompare(b));
+}
+
 // Passe au joueur suivant/précédent dans la vue individuelle (wrap circulaire).
 function competitionIndivStep(delta) {
-  const matchs = (state.bdd_matchs || []);
-  const joueursSet = new Set();
-  matchs.forEach(m => (m.composition || []).forEach(c => {
-    if (c && c.joueur && c.statut && c.statut !== 'absent') joueursSet.add(c.joueur);
-  }));
-  const joueurs = Array.from(joueursSet).sort((a, b) => a.localeCompare(b));
+  const joueurs = competitionIndivJoueursList();
   if (!joueurs.length) return;
   const cur = Math.max(0, joueurs.indexOf(competitionIndivJoueur));
   const next = (cur + delta + joueurs.length) % joueurs.length;
   competitionIndivJoueur = joueurs[next];
+  renderCompetition();
+}
+
+function competitionIndivSetGroupe(g) {
+  competitionIndivGroupe = g || '';
+  // Si le joueur courant ne fait pas partie du groupe filtré, prendre le premier du groupe
+  const list = competitionIndivJoueursList();
+  if (!list.includes(competitionIndivJoueur)) competitionIndivJoueur = list[0] || '';
   renderCompetition();
 }
 
@@ -23256,20 +23275,40 @@ function renderCompetitionIndividuel() {
   const content = document.getElementById('competition-individuel-content');
   if (!filters || !content) return;
   const matchs = (state.bdd_matchs || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
-  // Liste des joueurs ayant au moins une participation (composition non-absent)
-  const joueursSet = new Set();
-  matchs.forEach(m => (m.composition || []).forEach(c => {
-    if (c && c.joueur && c.statut && c.statut !== 'absent') joueursSet.add(c.joueur);
-  }));
-  const joueurs = Array.from(joueursSet).sort((a, b) => a.localeCompare(b));
-  // Auto-sélection : joueur courant si lecteur, sinon premier joueur
+  // Auto-sélection : joueur courant si lecteur
   if (currentRole === 'lecteur' && currentJoueurNom) competitionIndivJoueur = currentJoueurNom;
-  else if (!competitionIndivJoueur && joueurs.length) competitionIndivJoueur = joueurs[0];
+  const joueurs = competitionIndivJoueursList();
+  if (!competitionIndivJoueur && joueurs.length) competitionIndivJoueur = joueurs[0];
+  if (competitionIndivJoueur && !joueurs.includes(competitionIndivJoueur) && joueurs.length) {
+    competitionIndivJoueur = joueurs[0];
+  }
+
+  // Groupes disponibles (uniques, tirés des joueurs ayant joué)
+  const allWithoutGroupFilter = (function() {
+    const s = new Set();
+    (state.bdd_matchs || []).forEach(m => (m.composition || []).forEach(c => {
+      if (c && c.joueur && c.statut && c.statut !== 'absent') s.add(c.joueur);
+    }));
+    return Array.from(s);
+  })();
+  const groupes = Array.from(new Set(allWithoutGroupFilter
+    .map(j => (typeof getJoueurInfo === 'function') ? getJoueurInfo(j).groupe : '')
+    .filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b));
 
   const curIdx = Math.max(0, joueurs.indexOf(competitionIndivJoueur));
   const posLbl = joueurs.length ? (curIdx + 1) + ' / ' + joueurs.length : '';
   const navBtn = 'background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;cursor:pointer;line-height:1;';
-  filters.innerHTML = '<div class="filter-group"><label>Joueur</label>' +
+
+  let fh = '';
+  if (groupes.length > 0) {
+    fh += '<div class="filter-group"><label>Équipe</label>' +
+      '<select onchange="competitionIndivSetGroupe(this.value)" style="min-width:130px;">' +
+        '<option value="">Toutes</option>' +
+        groupes.map(g => '<option value="' + escapeHtml(g) + '"' + (g === competitionIndivGroupe ? ' selected' : '') + '>' + escapeHtml(g) + '</option>').join('') +
+      '</select></div>';
+  }
+  fh += '<div class="filter-group"><label>Joueur</label>' +
     '<div style="display:flex;gap:6px;align-items:center;">' +
       '<button type="button" title="Joueur précédent" onclick="competitionIndivStep(-1)" style="' + navBtn + '">◀</button>' +
       '<select onchange="competitionIndivJoueur=this.value;renderCompetition();" style="min-width:180px;">' +
@@ -23278,6 +23317,7 @@ function renderCompetitionIndividuel() {
       '<button type="button" title="Joueur suivant" onclick="competitionIndivStep(1)" style="' + navBtn + '">▶</button>' +
       '<span style="font-size:11px;color:var(--text-dim);margin-left:2px;">' + posLbl + '</span>' +
     '</div></div>';
+  filters.innerHTML = fh;
 
   if (!competitionIndivJoueur) {
     content.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:10px;">Aucun joueur avec participation à un match.</div>';
