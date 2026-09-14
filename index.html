@@ -20681,13 +20681,27 @@ function onMatchTypeChange() {
   }
 }
 
-function renderMatchEntry() {
-  // Adapter les labels selon l'organisation active
-  const orgLabel = orgLabelText(currentOrg || 'PSG');
+// Un match "prêté à TEGG" : PSG sélectionne une équipe préfixée TEGG.
+// Dans ce cas les labels équipe/score prennent le nom TEGG.
+function isMatchLoanedToTegg() {
+  if (currentOrg !== 'PSG') return false;
+  const sel = document.getElementById('match-groupe');
+  const val = sel ? (sel.value || '') : '';
+  return /^TEGG\b/i.test(val);
+}
+
+// Recalcule les labels équipe/score selon l'org active et l'équipe sélectionnée.
+function refreshMatchLabels() {
+  const displayOrg = isMatchLoanedToTegg() ? 'TEGG' : (currentOrg || 'PSG');
+  const orgLabel = orgLabelText(displayOrg);
   const lblEquipe = document.getElementById('match-label-equipe');
   const lblScore = document.getElementById('match-label-score');
   if (lblEquipe) lblEquipe.textContent = 'Équipe ' + orgLabel;
   if (lblScore) lblScore.textContent = 'Score ' + orgLabel;
+}
+
+function renderMatchEntry() {
+  refreshMatchLabels();
 
   // Remplir le sélecteur d'équipe selon l'organisation
   //   PSG  : on liste les groupes de l'organisation (U18, U15...) — ils filtrent aussi les joueurs disponibles
@@ -20757,6 +20771,7 @@ let matchCompositionState = {}; // { joueur: { statut, temps: [p1, p2...] } }
 function onMatchGroupeChange() {
   // Réinitialiser la composition pour repartir sur les joueurs du nouveau groupe
   // (on conserve les saisies existantes par joueur, mais on régénère la liste affichée)
+  refreshMatchLabels();
   renderMatchComposition();
 }
 
@@ -20767,11 +20782,13 @@ function renderMatchComposition() {
   const groupe = document.getElementById('match-groupe').value;
 
   // Joueurs concernés
-  //  - PSG : on filtre par groupe d'âge sélectionné (U18 ≠ U15)
-  //  - TEGG : tous les joueurs de l'organisation sont concernés, peu importe l'équipe N3/Réserve choisie
+  //  - PSG (équipe PSG U15/U18…) : on filtre par groupe d'âge sélectionné
+  //  - PSG (équipe TEGG U13/…/R2) : match prêté au TEGG, on montre tous les joueurs PSG
+  //          (l'utilisateur choisira ceux qui participent au match TEGG)
+  //  - TEGG : tous les joueurs de l'organisation sont concernés, peu importe l'équipe N3/Réserve
   //          (un joueur peut jouer dans plusieurs équipes selon les besoins)
   let players = getAllPlayers();
-  if (groupe && currentOrg !== 'TEGG') {
+  if (groupe && currentOrg !== 'TEGG' && !isMatchLoanedToTegg()) {
     players = players.filter(p => getJoueurInfo(p).groupe === groupe);
   }
 
