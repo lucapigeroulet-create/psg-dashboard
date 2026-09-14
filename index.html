@@ -17237,7 +17237,7 @@ async function renderFicheGlobale(joueur) {
                 '<span style="font-size:18px;">🎂</span><div>' + ageStr + (ddnStr ? ' · <span style="color:var(--text-dim);">' + ddnStr + '</span>' : '') + '</div>' +
                 '<span style="font-size:18px;">⚽</span><div>Poste : <b>' + val(info.poste) + '</b>' + (info.numero ? ' · <span style="color:var(--text-dim);">n°</span> <b>' + info.numero + '</b>' : '') + '</div>' +
                 '<span style="font-size:18px;">📏</span><div>' + taille + '</div>' +
-                '<span style="font-size:18px;">⚖️</span><div>' + poids + (poidsDate ? ' <span style="color:var(--text-dim); font-size:11px;">· pesé le ' + poidsDate + '</span>' : '') + (poidsForme != null ? ' <span style="color:var(--text-dim); font-size:12px;">· forme : ' + poidsForme + ' kg</span>' : '') + '</div>' +
+                '<span style="font-size:18px;">⚖️</span><div>' + poids + (poidsForme != null ? ' <span style="color:var(--text-dim); font-size:12px;">· forme : ' + poidsForme + ' kg</span>' : '') + '</div>' +
                 '<span style="font-size:18px;">👟</span><div>Pied : <b>' + val(piedFort) + '</b></div>' +
                 ((info.nationalite || info.lieu_naissance) ? '<span style="font-size:18px;">' + (nationaliteFlag(info.nationalite) || '🌍') + '</span><div>' + escapeHtml(info.nationalite || '') + (info.nationalite && info.lieu_naissance ? ' · ' : '') + (info.lieu_naissance ? '<span style="color:var(--text-dim);">' + escapeHtml(info.lieu_naissance) + '</span>' : '') + '</div>' : '') +
               '</div>' +
