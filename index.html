@@ -2714,6 +2714,17 @@
               <div><label>Lieu de naissance</label><input type="text" id="pe-lieu" maxlength="60" placeholder="Ville" autocomplete="off" /></div>
             </div>
 
+            <!-- Section : Positions préférentielles (1 ou 2) -->
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); font-weight:700; margin:16px 0 8px;">Positions préférentielles <span style="text-transform:none; color:var(--text-dim); font-weight:400;">— clique 1 ou 2 postes</span></div>
+            <div style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;">
+              <div id="pe-pitch-wrap" style="flex-shrink:0;"></div>
+              <div style="flex:1; min-width:180px;">
+                <div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">Sélection :</div>
+                <div id="pe-pitch-chips" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+                <div id="pe-pitch-hint" style="font-size:11px; color:var(--text-dim); margin-top:8px;">Maximum 2 positions. Reclique un poste pour le retirer.</div>
+              </div>
+            </div>
+
             <div style="margin-top:14px; font-size:11px; color:var(--text-dim);">Raccourcis : <b>Échap</b> pour fermer · <b>⌘/Ctrl + Entrée</b> pour enregistrer.</div>
           </div>
         </div>
@@ -8898,7 +8909,7 @@ async function loadState() {
   try {
     setLoad('Chargement des joueurs...');
     const { data: joueurs } = await sb.from('joueurs').select('*').eq('org', currentOrg).order('nom');
-    const allJoueurs = (joueurs || []).map(j => ({ nom: j.nom, groupe: j.groupe, poste: j.poste, numero: j.numero, photo: j.photo || null, archived: !!j.archived, poids_forme: (j.poids_forme != null ? Number(j.poids_forme) : null), date_naissance: j.date_naissance || null, pied_fort: j.pied_fort || null, taille_cm: (j.taille_cm != null ? Number(j.taille_cm) : null), nationalite: j.nationalite || null, lieu_naissance: j.lieu_naissance || null }));
+    const allJoueurs = (joueurs || []).map(j => ({ nom: j.nom, groupe: j.groupe, poste: j.poste, numero: j.numero, photo: j.photo || null, archived: !!j.archived, poids_forme: (j.poids_forme != null ? Number(j.poids_forme) : null), date_naissance: j.date_naissance || null, pied_fort: j.pied_fort || null, taille_cm: (j.taille_cm != null ? Number(j.taille_cm) : null), nationalite: j.nationalite || null, lieu_naissance: j.lieu_naissance || null, positions_terrain: Array.isArray(j.positions_terrain) ? j.positions_terrain : null }));
     // L'effectif actif (state.joueurs) exclut les joueurs archivés → ils disparaissent
     // automatiquement des sélecteurs, compositions, Hooper, etc. Données conservées en base.
     state.joueurs = allJoueurs.filter(j => !j.archived);
@@ -9385,6 +9396,7 @@ async function saveJoueurToSupabase(joueur, oldNom) {
     taille_cm: (joueur.taille_cm != null && joueur.taille_cm !== '' ? parseInt(joueur.taille_cm, 10) : null),
     nationalite: joueur.nationalite || null,
     lieu_naissance: joueur.lieu_naissance || null,
+    positions_terrain: Array.isArray(joueur.positions_terrain) && joueur.positions_terrain.length ? joueur.positions_terrain : null,
     org: currentOrg
   };
   // N'inclure `photo` que lors d'un renommage (sinon on écraserait la photo existante par null)
@@ -10117,12 +10129,78 @@ const _NATIO_FLAGS = {
   'japonaise':'🇯🇵','japon':'🇯🇵','japan':'🇯🇵',
   'coreenne':'🇰🇷','coréenne':'🇰🇷','coree':'🇰🇷','corée':'🇰🇷','south korea':'🇰🇷','korea':'🇰🇷',
   'chinoise':'🇨🇳','chine':'🇨🇳','china':'🇨🇳',
-  'australienne':'🇦🇺','australie':'🇦🇺','australia':'🇦🇺'
+  'australienne':'🇦🇺','australie':'🇦🇺','australia':'🇦🇺',
+  'saoudienne':'🇸🇦','saoudien':'🇸🇦','arabie saoudite':'🇸🇦','saudi':'🇸🇦','saudi arabia':'🇸🇦',
+  'qatarienne':'🇶🇦','qatar':'🇶🇦',
+  'emiratie':'🇦🇪','émiratie':'🇦🇪','emirats':'🇦🇪','emirats arabes unis':'🇦🇪','uae':'🇦🇪',
+  'iranienne':'🇮🇷','iran':'🇮🇷',
+  'irakienne':'🇮🇶','irak':'🇮🇶','iraq':'🇮🇶',
+  'syrienne':'🇸🇾','syrie':'🇸🇾','syria':'🇸🇾',
+  'libanaise':'🇱🇧','liban':'🇱🇧','lebanon':'🇱🇧',
+  'jordanienne':'🇯🇴','jordanie':'🇯🇴','jordan':'🇯🇴',
+  'israelienne':'🇮🇱','israélienne':'🇮🇱','israel':'🇮🇱','israël':'🇮🇱',
+  'palestinienne':'🇵🇸','palestine':'🇵🇸'
 };
 function nationaliteFlag(natio) {
   if (!natio) return '';
   const k = String(natio).toLowerCase().trim();
   return _NATIO_FLAGS[k] || '';
+}
+
+// Positions terrain : 12 postes sur un demi-terrain (attaque vers le haut)
+const POSITIONS_TERRAIN = [
+  { code:'ST',  label:'ST',  x:50, y:14 },
+  { code:'LW',  label:'LW',  x:18, y:24 },
+  { code:'RW',  label:'RW',  x:82, y:24 },
+  { code:'CAM', label:'CAM', x:50, y:36 },
+  { code:'LCM', label:'LCM', x:28, y:50 },
+  { code:'RCM', label:'RCM', x:72, y:50 },
+  { code:'DM',  label:'DM',  x:50, y:62 },
+  { code:'LB',  label:'LB',  x:12, y:76 },
+  { code:'RB',  label:'RB',  x:88, y:76 },
+  { code:'LCB', label:'LCB', x:35, y:84 },
+  { code:'RCB', label:'RCB', x:65, y:84 },
+  { code:'GK',  label:'GK',  x:50, y:94 }
+];
+
+// Trait de terrain (SVG). viewBox 100x100 (proportions demi-terrain).
+function _pitchOutline() {
+  return '' +
+    // Fond
+    '<rect x="0" y="0" width="100" height="100" fill="rgba(52,211,153,0.06)" stroke="rgba(148,163,184,0.35)" stroke-width="0.4"/>' +
+    // Ligne médiane (haut = ligne de but adverse pour un attaquant ; on trace la ligne du milieu en bas)
+    '<line x1="0" y1="0" x2="100" y2="0" stroke="rgba(148,163,184,0.4)" stroke-width="0.4"/>' +
+    // Rond central (moitié, ancré en haut)
+    '<path d="M 40,0 A 10,10 0 0 0 60,0" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="0.4"/>' +
+    // Surface de réparation (bas)
+    '<rect x="22" y="82" width="56" height="16" fill="none" stroke="rgba(148,163,184,0.4)" stroke-width="0.4"/>' +
+    // 6 mètres
+    '<rect x="36" y="91" width="28" height="7" fill="none" stroke="rgba(148,163,184,0.4)" stroke-width="0.4"/>' +
+    // Point de penalty
+    '<circle cx="50" cy="88" r="0.6" fill="rgba(148,163,184,0.5)"/>';
+}
+
+// Rend un mini-terrain SVG. `selected` = liste de codes. Si `editable`, expose data-code + curseur.
+function renderPitchSVG(selected, opts) {
+  opts = opts || {};
+  const editable = !!opts.editable;
+  const width = opts.width || 160;
+  const sel = new Set((selected || []).filter(Boolean));
+  const dots = POSITIONS_TERRAIN.map(p => {
+    const on = sel.has(p.code);
+    const fill = on ? '#00a3ff' : 'rgba(148,163,184,0.25)';
+    const stroke = on ? '#ffffff' : 'rgba(148,163,184,0.6)';
+    const textCol = on ? '#ffffff' : 'rgba(226,232,240,0.85)';
+    const cursor = editable ? 'cursor:pointer;' : '';
+    const attrs = editable ? ' data-code="' + p.code + '" onclick="pePitchToggle(\'' + p.code + '\')"' : '';
+    return '<g' + attrs + ' style="' + cursor + '">' +
+      '<circle cx="' + p.x + '" cy="' + p.y + '" r="4.8" fill="' + fill + '" stroke="' + stroke + '" stroke-width="0.6"/>' +
+      '<text x="' + p.x + '" y="' + (p.y + 1.6) + '" text-anchor="middle" font-size="3.2" font-weight="700" fill="' + textCol + '" style="pointer-events:none;">' + p.label + '</text>' +
+      '</g>';
+  }).join('');
+  return '<svg viewBox="0 0 100 100" width="' + width + '" height="' + Math.round(width * 1.4) + '" style="display:block; background:linear-gradient(180deg, rgba(52,211,153,0.05), rgba(52,211,153,0.02));">' +
+    _pitchOutline() + dots +
+    '</svg>';
 }
 
 function getAllDates() {
@@ -17141,15 +17219,24 @@ async function renderFicheGlobale(joueur) {
       '</div>' +
 
       '<div style="display:grid; grid-template-columns:1fr 2fr; gap:16px; margin-top:16px;">' +
-        // Colonne gauche : identité
+        // Colonne gauche : identité + mini-terrain
         '<div style="background:var(--bg-elevated); border-radius:8px; padding:16px; font-size:14.5px; line-height:1.5;">' +
-          '<div style="display:grid; grid-template-columns:24px 1fr; gap:10px 12px; align-items:center;">' +
-            '<span style="font-size:18px;">🎂</span><div>' + ageStr + (ddnStr ? ' · <span style="color:var(--text-dim);">' + ddnStr + '</span>' : '') + '</div>' +
-            '<span style="font-size:18px;">⚽</span><div>Poste : <b>' + val(info.poste) + '</b>' + (info.numero ? ' · <span style="color:var(--text-dim);">n°</span> <b>' + info.numero + '</b>' : '') + '</div>' +
-            '<span style="font-size:18px;">📏</span><div>' + taille + '</div>' +
-            '<span style="font-size:18px;">⚖️</span><div>' + poids + (poidsMesure && poidsForme ? ' <span style="color:var(--text-dim); font-size:12px;">· forme : ' + Number(info.poids_forme) + ' kg</span>' : '') + '</div>' +
-            '<span style="font-size:18px;">👟</span><div>Pied : <b>' + val(piedFort) + '</b></div>' +
-            ((info.nationalite || info.lieu_naissance) ? '<span style="font-size:18px;">' + (nationaliteFlag(info.nationalite) || '🌍') + '</span><div>' + escapeHtml(info.nationalite || '') + (info.nationalite && info.lieu_naissance ? ' · ' : '') + (info.lieu_naissance ? '<span style="color:var(--text-dim);">' + escapeHtml(info.lieu_naissance) + '</span>' : '') + '</div>' : '') +
+          '<div style="display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap;">' +
+            '<div style="flex:1; min-width:150px;">' +
+              '<div style="display:grid; grid-template-columns:24px 1fr; gap:10px 12px; align-items:center;">' +
+                '<span style="font-size:18px;">🎂</span><div>' + ageStr + (ddnStr ? ' · <span style="color:var(--text-dim);">' + ddnStr + '</span>' : '') + '</div>' +
+                '<span style="font-size:18px;">⚽</span><div>Poste : <b>' + val(info.poste) + '</b>' + (info.numero ? ' · <span style="color:var(--text-dim);">n°</span> <b>' + info.numero + '</b>' : '') + '</div>' +
+                '<span style="font-size:18px;">📏</span><div>' + taille + '</div>' +
+                '<span style="font-size:18px;">⚖️</span><div>' + poids + (poidsMesure && poidsForme ? ' <span style="color:var(--text-dim); font-size:12px;">· forme : ' + Number(info.poids_forme) + ' kg</span>' : '') + '</div>' +
+                '<span style="font-size:18px;">👟</span><div>Pied : <b>' + val(piedFort) + '</b></div>' +
+                ((info.nationalite || info.lieu_naissance) ? '<span style="font-size:18px;">' + (nationaliteFlag(info.nationalite) || '🌍') + '</span><div>' + escapeHtml(info.nationalite || '') + (info.nationalite && info.lieu_naissance ? ' · ' : '') + (info.lieu_naissance ? '<span style="color:var(--text-dim);">' + escapeHtml(info.lieu_naissance) + '</span>' : '') + '</div>' : '') +
+              '</div>' +
+            '</div>' +
+            // Mini-terrain (positions préférentielles)
+            '<div style="flex-shrink:0;">' +
+              '<div style="font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); font-weight:700; margin-bottom:4px; text-align:center;">Positions</div>' +
+              renderPitchSVG(info.positions_terrain, { width:130 }) +
+            '</div>' +
           '</div>' +
           (row.qualites ? '<div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:12px; color:var(--text-dim); font-style:italic;">🧠 ' + escapeHtml(row.qualites) + '</div>' : '') +
         '</div>' +
@@ -29961,6 +30048,7 @@ async function addPlayer() {
   toast('Joueur "' + nom + '" ajouté', 'success');
 }
 
+let pePositions = [];
 function openEditPlayer(oldName) {
   if (!canWrite()) { toast('Lecture seule', 'error'); return; }
   const j = state.joueurs.find(x => x.nom === oldName);
@@ -29981,6 +30069,9 @@ function openEditPlayer(oldName) {
   document.getElementById('pe-natio').value = j.nationalite || '';
   document.getElementById('pe-lieu').value = j.lieu_naissance || '';
   document.getElementById('pe-title-name').textContent = j.nom || '—';
+  // Positions préférentielles (max 2)
+  pePositions = Array.isArray(j.positions_terrain) ? j.positions_terrain.slice(0, 2) : [];
+  pePitchRefresh();
   // Avatar en-tête + preview grande
   peUpdatePhotoUI(j.photo || null);
   // Efface le champ file pour permettre de re-choisir le même fichier
@@ -29990,6 +30081,30 @@ function openEditPlayer(oldName) {
   document.addEventListener('keydown', peKeyHandler);
   // Focus sur le nom pour édition immédiate
   setTimeout(() => { const n = document.getElementById('pe-name'); if (n) { n.focus(); n.select(); } }, 30);
+}
+
+function pePitchRefresh() {
+  const wrap = document.getElementById('pe-pitch-wrap');
+  if (wrap) wrap.innerHTML = renderPitchSVG(pePositions, { editable:true, width:170 });
+  const chips = document.getElementById('pe-pitch-chips');
+  if (chips) {
+    chips.innerHTML = pePositions.length
+      ? pePositions.map(c => '<span style="display:inline-flex; align-items:center; gap:5px; background:var(--bg-elevated); border:1px solid var(--accent); border-radius:12px; padding:3px 10px; font-size:12px;">' + c + ' <span style="cursor:pointer; color:var(--text-dim);" onclick="pePitchToggle(\'' + c + '\')">✕</span></span>').join('')
+      : '<span style="color:var(--text-dim); font-size:12px;">Aucune position sélectionnée.</span>';
+  }
+}
+function pePitchToggle(code) {
+  const idx = pePositions.indexOf(code);
+  if (idx >= 0) {
+    pePositions.splice(idx, 1);
+  } else {
+    if (pePositions.length >= 2) {
+      // Retire la plus ancienne pour respecter la limite de 2
+      pePositions.shift();
+    }
+    pePositions.push(code);
+  }
+  pePitchRefresh();
 }
 
 function closeEditPlayer() {
@@ -30082,7 +30197,8 @@ async function saveEditPlayer() {
     pied_fort: document.getElementById('pe-pied').value || null,
     taille_cm: taille ? parseInt(taille, 10) : null,
     nationalite: (document.getElementById('pe-natio').value || '').trim() || null,
-    lieu_naissance: (document.getElementById('pe-lieu').value || '').trim() || null
+    lieu_naissance: (document.getElementById('pe-lieu').value || '').trim() || null,
+    positions_terrain: pePositions.slice(0, 2)
   };
   const ok = await saveJoueurToSupabase(updated, oldName);
   if (!ok) return;
