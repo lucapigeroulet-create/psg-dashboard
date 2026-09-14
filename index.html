@@ -16422,7 +16422,7 @@ function gpsScatterGroupChipsHTML() {
     const bg = on ? col.fill : 'transparent';
     const bd = on ? col.stroke : 'var(--border)';
     const fg = on ? 'var(--text)' : 'var(--text-dim)';
-    return '<button type="button" data-gps-group-chip="' + escapeHtml(g) + '" onclick="gpsToggleScatterGroup(' + JSON.stringify(g) + ')" title="Entourer ' + escapeHtml(g) + '" style="background:' + bg + ';border:1px solid ' + bd + ';color:' + fg + ';padding:3px 9px;border-radius:12px;cursor:pointer;font-size:11px;font-weight:600;">' + escapeHtml(g) + '</button>';
+    return '<button type="button" data-gps-group-chip="' + escapeHtml(g) + '" onclick="gpsToggleScatterGroup(' + escapeHtml(JSON.stringify(g)) + ')" title="Entourer ' + escapeHtml(g) + '" style="background:' + bg + ';border:1px solid ' + bd + ';color:' + fg + ';padding:3px 9px;border-radius:12px;cursor:pointer;font-size:11px;font-weight:600;">' + escapeHtml(g) + '</button>';
   }).join('');
   return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--text-dim);margin-top:6px;">' +
     '<span>Entourer un groupe :</span>' + chips + '</div>';
