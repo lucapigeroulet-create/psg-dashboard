@@ -2641,42 +2641,80 @@
 
       <!-- Modale édition joueur -->
       <div id="player-edit-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9000; align-items:center; justify-content:center; padding:20px;" onclick="if(event.target===this) closeEditPlayer()">
-        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:20px; max-width:640px; width:100%; max-height:90vh; overflow-y:auto;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-            <h3 style="margin:0;">✏️ Modifier le joueur</h3>
-            <button class="btn btn-secondary" onclick="closeEditPlayer()" style="padding:4px 10px;">✕</button>
-          </div>
-          <input type="hidden" id="pe-old-name" />
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-            <div><label>Nom</label><input type="text" id="pe-name" maxlength="50" /></div>
-            <div><label>Groupe</label><input type="text" id="pe-groupe" placeholder="—" /></div>
-            <div><label>Poste</label>
-              <select id="pe-poste">
-                <option value="">—</option>
-                <option value="Gardien">Gardien</option>
-                <option value="Défenseur">Défenseur</option>
-                <option value="Milieu">Milieu</option>
-                <option value="Attaquant">Attaquant</option>
-              </select>
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; width:100%; max-width:720px; max-height:92vh; overflow:hidden; display:flex; flex-direction:column;">
+          <!-- Barre supérieure sticky -->
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--border); background:var(--bg-elevated);">
+            <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+              <div id="pe-avatar" style="width:36px; height:36px; border-radius:50%; background:var(--bg-card); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:16px; overflow:hidden; flex-shrink:0;">👤</div>
+              <div style="min-width:0;">
+                <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px;">Modifier le joueur</div>
+                <div id="pe-title-name" style="font-weight:700; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">—</div>
+              </div>
             </div>
-            <div><label>Numéro</label><input type="number" id="pe-num" min="1" max="99" /></div>
-            <div><label>Date de naissance</label><input type="date" id="pe-ddn" /></div>
-            <div><label>Pied fort</label>
-              <select id="pe-pied">
-                <option value="">—</option>
-                <option value="Droit">Droit</option>
-                <option value="Gauche">Gauche</option>
-                <option value="Ambidextre">Ambidextre</option>
-              </select>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-secondary" onclick="closeEditPlayer()" style="padding:6px 12px; font-size:12px;">Annuler</button>
+              <button class="btn" onclick="saveEditPlayer()" style="padding:6px 14px;">💾 Enregistrer</button>
             </div>
-            <div><label>Taille (cm)</label><input type="number" id="pe-taille" min="120" max="220" step="1" /></div>
-            <div><label>Poids de forme (kg)</label><input type="number" id="pe-poids" min="30" max="150" step="0.1" /></div>
-            <div><label>Nationalité</label><input type="text" id="pe-natio" maxlength="40" /></div>
-            <div><label>Lieu de naissance</label><input type="text" id="pe-lieu" maxlength="60" /></div>
           </div>
-          <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
-            <button class="btn btn-secondary" onclick="closeEditPlayer()">Annuler</button>
-            <button class="btn" onclick="saveEditPlayer()">💾 Enregistrer</button>
+
+          <!-- Corps scrollable -->
+          <div style="padding:18px; overflow-y:auto;" onkeydown="pePreventEnterSubmit(event)">
+            <input type="hidden" id="pe-old-name" />
+
+            <!-- Photo -->
+            <div style="display:flex; gap:14px; align-items:center; padding:12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; margin-bottom:16px;">
+              <div id="pe-photo-preview" style="width:80px; height:80px; border-radius:12px; background:var(--bg-card); border:2px dashed var(--border); display:flex; align-items:center; justify-content:center; font-size:30px; color:var(--text-dim); flex-shrink:0; overflow:hidden;">👤</div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">Photo du joueur</div>
+                <input type="file" id="pe-photo-file" accept="image/*" onchange="pePickPhoto(this)" style="font-size:12px;" />
+                <button id="pe-photo-clear" class="btn btn-secondary" style="padding:3px 10px; font-size:11px; margin-left:6px; display:none;" onclick="peClearPhoto()">🗑️ Retirer</button>
+                <div style="font-size:10px; color:var(--text-dim); margin-top:4px;">JPG / PNG · redimensionnée à ~200 px, ≤ 40 Ko.</div>
+              </div>
+            </div>
+
+            <!-- Section : Identité -->
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); font-weight:700; margin:6px 0 8px;">Identité</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-bottom:16px;">
+              <div><label>Nom</label><input type="text" id="pe-name" maxlength="50" autocomplete="off" /></div>
+              <div><label>Groupe</label>
+                <select id="pe-groupe"><option value="">—</option></select>
+              </div>
+              <div><label>Poste</label>
+                <select id="pe-poste">
+                  <option value="">—</option>
+                  <option value="Gardien">Gardien</option>
+                  <option value="Défenseur">Défenseur</option>
+                  <option value="Milieu">Milieu</option>
+                  <option value="Attaquant">Attaquant</option>
+                </select>
+              </div>
+              <div><label>Numéro</label><input type="number" id="pe-num" min="1" max="99" /></div>
+            </div>
+
+            <!-- Section : Corps & pied -->
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); font-weight:700; margin:6px 0 8px;">Corps & pied</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-bottom:16px;">
+              <div><label>Date de naissance</label><input type="date" id="pe-ddn" /></div>
+              <div><label>Pied fort</label>
+                <select id="pe-pied">
+                  <option value="">—</option>
+                  <option value="Droit">Droit</option>
+                  <option value="Gauche">Gauche</option>
+                  <option value="Ambidextre">Ambidextre</option>
+                </select>
+              </div>
+              <div><label>Taille (cm)</label><input type="number" id="pe-taille" min="120" max="220" step="1" /></div>
+              <div><label>Poids de forme (kg)</label><input type="number" id="pe-poids" min="30" max="150" step="0.1" /></div>
+            </div>
+
+            <!-- Section : Origine -->
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); font-weight:700; margin:6px 0 8px;">Origine</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px;">
+              <div><label>Nationalité</label><input type="text" id="pe-natio" maxlength="40" placeholder="Ex : Française" autocomplete="off" /></div>
+              <div><label>Lieu de naissance</label><input type="text" id="pe-lieu" maxlength="60" placeholder="Ville" autocomplete="off" /></div>
+            </div>
+
+            <div style="margin-top:14px; font-size:11px; color:var(--text-dim);">Raccourcis : <b>Échap</b> pour fermer · <b>⌘/Ctrl + Entrée</b> pour enregistrer.</div>
           </div>
         </div>
       </div>
@@ -29765,12 +29803,15 @@ function renderPlayersSettings() {
 
   const dim = '<span style="color:var(--text-dim);">—</span>';
   const fmtDDN = (d) => d ? String(d).split('-').reverse().join('/') : dim;
+  const avatar = (photo) => photo
+    ? '<img src="' + photo + '" style="width:26px; height:26px; border-radius:50%; object-fit:cover; vertical-align:middle; margin-right:8px;" />'
+    : '<span style="display:inline-flex; width:26px; height:26px; border-radius:50%; background:var(--bg-elevated); border:1px solid var(--border); align-items:center; justify-content:center; font-size:12px; color:var(--text-dim); vertical-align:middle; margin-right:8px;">👤</span>';
 
   tbody.innerHTML = joueurs.map(j => {
     const nbSeances = state.bdd_ent.filter(e => e.joueur === j.nom).length;
     const nomEsc = j.nom.replace(/'/g, "\\'");
-    return '<tr>' +
-      '<td><b>' + escapeHtml(j.nom) + '</b></td>' +
+    return '<tr style="cursor:pointer;" onclick="openEditPlayer(\'' + nomEsc + '\')" title="Cliquer pour modifier">' +
+      '<td>' + avatar(j.photo) + '<b>' + escapeHtml(j.nom) + '</b></td>' +
       '<td>' + escapeHtml(j.groupe || '') + '</td>' +
       '<td>' + escapeHtml(j.poste || '') + '</td>' +
       '<td>' + (j.numero || '') + '</td>' +
@@ -29779,7 +29820,7 @@ function renderPlayersSettings() {
       '<td>' + (j.taille_cm != null ? j.taille_cm + ' cm' : dim) + '</td>' +
       '<td>' + (j.poids_forme != null ? j.poids_forme + ' kg' : dim) + '</td>' +
       '<td>' + nbSeances + ' jour(s)</td>' +
-      '<td style="white-space:nowrap;">' +
+      '<td style="white-space:nowrap;" onclick="event.stopPropagation()">' +
         '<button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;" onclick="openEditPlayer(\'' + nomEsc + '\')">✏️ Modifier</button> ' +
         '<button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;" onclick="archivePlayer(\'' + nomEsc + '\')" title="Conserve les données, retire le joueur de l\'effectif actif">📦 Archiver</button>' +
       '</td></tr>';
@@ -29858,9 +29899,13 @@ function openEditPlayer(oldName) {
   if (!canWrite()) { toast('Lecture seule', 'error'); return; }
   const j = state.joueurs.find(x => x.nom === oldName);
   if (!j) return;
+  ensureGroupsList();
+  // Groupe : select alimenté par l'org
+  const gSel = document.getElementById('pe-groupe');
+  gSel.innerHTML = '<option value="">—</option>' + (state.groupes || []).map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
   document.getElementById('pe-old-name').value = oldName;
   document.getElementById('pe-name').value = j.nom || '';
-  document.getElementById('pe-groupe').value = j.groupe || '';
+  gSel.value = j.groupe || '';
   document.getElementById('pe-poste').value = j.poste || '';
   document.getElementById('pe-num').value = j.numero || '';
   document.getElementById('pe-ddn').value = j.date_naissance || '';
@@ -29869,13 +29914,83 @@ function openEditPlayer(oldName) {
   document.getElementById('pe-poids').value = j.poids_forme != null ? j.poids_forme : '';
   document.getElementById('pe-natio').value = j.nationalite || '';
   document.getElementById('pe-lieu').value = j.lieu_naissance || '';
+  document.getElementById('pe-title-name').textContent = j.nom || '—';
+  // Avatar en-tête + preview grande
+  peUpdatePhotoUI(j.photo || null);
+  // Efface le champ file pour permettre de re-choisir le même fichier
+  const f = document.getElementById('pe-photo-file'); if (f) f.value = '';
   const m = document.getElementById('player-edit-modal');
   m.style.display = 'flex';
+  document.addEventListener('keydown', peKeyHandler);
+  // Focus sur le nom pour édition immédiate
+  setTimeout(() => { const n = document.getElementById('pe-name'); if (n) { n.focus(); n.select(); } }, 30);
 }
 
 function closeEditPlayer() {
   const m = document.getElementById('player-edit-modal');
   if (m) m.style.display = 'none';
+  document.removeEventListener('keydown', peKeyHandler);
+}
+
+function peKeyHandler(ev) {
+  if (ev.key === 'Escape') { ev.preventDefault(); closeEditPlayer(); }
+  else if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') { ev.preventDefault(); saveEditPlayer(); }
+}
+function pePreventEnterSubmit(ev) {
+  if (ev.key === 'Enter' && !ev.metaKey && !ev.ctrlKey && ev.target.tagName === 'INPUT' && ev.target.type !== 'textarea') {
+    ev.preventDefault();
+    saveEditPlayer();
+  }
+}
+function peUpdatePhotoUI(photoB64) {
+  const av = document.getElementById('pe-avatar');
+  const pv = document.getElementById('pe-photo-preview');
+  const clr = document.getElementById('pe-photo-clear');
+  if (photoB64) {
+    av.innerHTML = '<img src="' + photoB64 + '" style="width:100%; height:100%; object-fit:cover;" />';
+    pv.innerHTML = '<img src="' + photoB64 + '" style="width:100%; height:100%; object-fit:cover;" />';
+    pv.style.border = '2px solid var(--accent)';
+    if (clr) clr.style.display = '';
+  } else {
+    av.innerHTML = '👤';
+    pv.innerHTML = '👤';
+    pv.style.border = '2px dashed var(--border)';
+    if (clr) clr.style.display = 'none';
+  }
+}
+function pePickPhoto(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const joueur = document.getElementById('pe-old-name').value;
+  if (!joueur) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = async () => {
+      const maxDim = 200;
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const b64 = canvas.toDataURL('image/jpeg', 0.75);
+      await _fgSavePhoto(joueur, b64);
+      peUpdatePhotoUI(b64);
+      renderPlayersSettings();
+      refreshAllSelectors();
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+async function peClearPhoto() {
+  const joueur = document.getElementById('pe-old-name').value;
+  if (!joueur) return;
+  if (!confirm('Retirer la photo ?')) return;
+  await _fgSavePhoto(joueur, null);
+  peUpdatePhotoUI(null);
+  renderPlayersSettings();
+  refreshAllSelectors();
 }
 
 async function saveEditPlayer() {
