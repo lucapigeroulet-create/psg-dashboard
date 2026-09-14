@@ -21307,7 +21307,10 @@ function matchResult(m) {
 }
 function matchLabelStr(m) {
   if (m.type_match === 'interne') return '🔁 Opposition interne';
-  const org = m.org || currentOrg || 'PSG';
+  // Match prêté au TEGG (équipe TEGG U13/U14/U15/U18/U20/R2 sélectionnée
+  // depuis l'org PSG) : afficher TEGG au lieu du nom d'org.
+  const isLoanedToTegg = m.groupe && /^TEGG\b/i.test(m.groupe);
+  const org = isLoanedToTegg ? 'TEGG' : (m.org || currentOrg || 'PSG');
   return m.domicile === false
     ? escapeHtml(m.adversaire) + ' vs ' + org
     : org + ' vs ' + escapeHtml(m.adversaire);
