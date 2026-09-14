@@ -15543,7 +15543,7 @@ function gpsToggleSortByPoste() { gpsSortByPoste = !gpsSortByPoste; renderGPSSes
 const GPS_TRIAGE_METRICS = [
   { key: 'distance_km', label: 'Distance', unit: 'm', dec: 0, mult: 1000 },
   { key: 'hsr', label: 'HSR', unit: 'm', dec: 0, mult: 1 },
-  { key: 'sprint_dist_m', label: 'Sprint', unit: 'm', dec: 0, mult: 1 },
+  { key: 'sprint_dist_m', label: 'HIR', unit: 'm', dec: 0, mult: 1 },
   { key: 'top_speed', label: 'Vmax', unit: 'km/h', dec: 1, mult: 1 },
   { key: 'decel_count_high', label: 'Décél', unit: 'nb', dec: 0, mult: 1 },
   { key: 'power_plays', label: 'Power Plays', unit: 'nb', dec: 0, mult: 1 }
@@ -15753,9 +15753,9 @@ const GPS_METRICS = [
   { key: 'distance_km', label: 'Distance', unit: 'm', dec: 0, mult: 1000 },
   { key: 'dist_per_min', label: 'm/min', unit: 'm/min', dec: 1, mult: 1 },
   { key: 'hsr', label: 'HSR', unit: 'm', dec: 0, mult: 1 },
-  { key: 'sprint_dist_m', label: 'Sprint', unit: 'm', dec: 0, mult: 1 },
+  { key: 'sprint_dist_m', label: 'HIR', unit: 'm', dec: 0, mult: 1 },
   { key: 'top_speed', label: 'Vmax', unit: 'km/h', dec: 1, mult: 1 },
-  { key: 'dist_zone5', label: 'Zone 5', unit: 'm', dec: 0, mult: 1000 },
+  { key: 'dist_zone5', label: 'Sprint', unit: 'm', dec: 0, mult: 1000 },
   { key: 'acc_count_high', label: 'Accél >4', unit: 'nb', dec: 0, mult: 1 },
   { key: 'decel_count_high', label: 'Décél >4', unit: 'nb', dec: 0, mult: 1 },
   { key: 'power_plays', label: 'Power Plays', unit: 'nb', dec: 0, mult: 1 },
@@ -15767,7 +15767,7 @@ const GPS_ZONES = [
   { key: 'dist_zone2', label: 'Zone 2', color: '#10b981', mult: 1000 },
   { key: 'dist_zone3', label: 'Zone 3', color: '#eab308', mult: 1000 },
   { key: 'dist_zone4', label: 'Zone 4', color: '#f97316', mult: 1000 },
-  { key: 'dist_zone5', label: 'Zone 5', color: '#ef4444', mult: 1000 }
+  { key: 'dist_zone5', label: 'Sprint', color: '#ef4444', mult: 1000 }
 ];
 
 // ============================================================================
@@ -15784,7 +15784,7 @@ const WORK_RATIO_DAYS = ['J+2/J+1', 'J-4', 'J-3', 'J-2', 'J-1', 'MATCH', 'TT'];
 const WORK_RATIO_METRICS = [
   { key: 'distance_km', label: 'Distance', shortLabel: 'Dist %' },
   { key: 'hsr', label: 'HSR', shortLabel: 'HSR %' },
-  { key: 'sprint_dist_m', label: 'Sprint', shortLabel: 'Sprint %' },
+  { key: 'sprint_dist_m', label: 'HIR', shortLabel: 'HIR %' },
   { key: 'top_speed', label: 'Vmax', shortLabel: 'Vmax %' },
   { key: 'acc_count_high', label: 'Accél', shortLabel: 'Acc %' },
   { key: 'decel_count_high', label: 'Décél', shortLabel: 'Déc %' },
@@ -16897,7 +16897,7 @@ async function renderFicheGlobale(joueur) {
             _fgStatTile('D. totale', stats.distKm.toFixed(2) + ' km') +
             _fgStatTile('m/min', (stats.distMin ? stats.distMin.toFixed(1) : '—')) +
             _fgStatTile('HSR', stats.hsrKm.toFixed(2) + ' km') +
-            _fgStatTile('Sprint', stats.sprintKm.toFixed(2) + ' km') +
+            _fgStatTile('HIR', stats.sprintKm.toFixed(2) + ' km') +
             _fgStatTile('Vmax', stats.vmax ? stats.vmax.toFixed(1) : '—') +
             _fgStatTile('Acc max', stats.accMax ? stats.accMax.toFixed(1) : '—') +
             _fgStatTile('Dec max', stats.decMax ? '-' + stats.decMax.toFixed(1) : '—') +
@@ -17227,7 +17227,7 @@ function renderBestMatch() {
     { key: 'duree_min',        label: 'Min',      dec: 0, mult: 1,    isMax: false },
     { key: 'distance_km',      label: 'Dist (m)', dec: 0, mult: 1000, isMax: false },
     { key: 'hsr',              label: 'HSR (m)',  dec: 0, mult: 1,    isMax: false },
-    { key: 'sprint_dist_m',    label: 'Sprint',   dec: 0, mult: 1,    isMax: false },
+    { key: 'sprint_dist_m',    label: 'HIR',      dec: 0, mult: 1,    isMax: false },
     { key: 'top_speed',        label: 'Vmax',     dec: 1, mult: 1,    isMax: true  },
     { key: 'acc_count_high',   label: 'Acc >4',   dec: 0, mult: 1,    isMax: false },
     { key: 'decel_count_high', label: 'Déc >4',   dec: 0, mult: 1,    isMax: false },
@@ -17534,7 +17534,7 @@ function renderGpsSimPreview() {
   let html = '<div style="font-size:12px; color:var(--text-dim); margin-bottom:6px;">Aperçu : ' + rows.length + ' ligne(s) à créer</div>';
   if (warnings.length) html += '<div style="color:var(--yellow); font-size:11px; margin-bottom:6px;">⚠️ ' + warnings.map(escapeHtml).join(' · ') + '</div>';
   html += '<div class="table-wrap" style="max-height:280px;"><table style="width:100%; font-size:12px;"><thead><tr>' +
-    '<th style="text-align:left;">Joueur</th><th>Séance</th><th>Split</th><th>Durée</th><th>Dist (km)</th><th>Sprint (m)</th><th>HSR (m)</th><th>Vmax</th><th>Réf.</th>' +
+    '<th style="text-align:left;">Joueur</th><th>Séance</th><th>Split</th><th>Durée</th><th>Dist (km)</th><th>HIR (m)</th><th>HSR (m)</th><th>Vmax</th><th>Réf.</th>' +
     '</tr></thead><tbody>';
   rows.slice(0, 60).forEach(({ row, sourceCount }) => {
     html += '<tr style="border-top:1px solid var(--border);">' +
@@ -19785,7 +19785,7 @@ async function gpsRenderDistHsrChart(points) {
       },
       scales: {
         x: { type: 'linear', title: { display: true, text: 'Distance (m)' + axisSuffix, color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
-        y: { type: 'linear', title: { display: true, text: 'Sprint (m)' + axisSuffix, color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
+        y: { type: 'linear', title: { display: true, text: 'HIR (m)' + axisSuffix, color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
       }
     }
   });
@@ -30563,7 +30563,8 @@ function pgpsWholeRows(rows) {
 function gpsDataDefinitions() {
   return [
     ['HSR', tr('distance covered above 15 km/h.', 'distance parcourue à plus de 15 km/h.')],
-    ['Sprint', tr('distance covered above 20 km/h.', 'distance parcourue à plus de 20 km/h.')],
+    ['HIR', tr('distance covered above 20 km/h (high intensity run).', 'distance parcourue à plus de 20 km/h (course haute intensité).')],
+    ['Sprint', tr('distance covered above 25 km/h.', 'distance parcourue à plus de 25 km/h.')],
     [tr('Metres per minute', 'Mètres par minute'), tr('intensity = total distance ÷ duration.', 'intensité = distance totale ÷ durée.')],
     [tr('Hard decelerations', 'Décélérations fortes'), tr('braking harder than 4 m/s².', 'freinages de plus de 4 m/s².')],
     ['Power plays', tr('number of intense actions (repeated accelerations/decelerations).', "nombre d'actions intensives (accélérations/décélérations enchaînées).")],
@@ -30577,7 +30578,7 @@ function playerGpsCards() {
     { key: 'distance', icon: '📏', label: tr('Total distance', 'Distance totale'), fmt: v => pgpsInt(v) + ' m' },
     { key: 'dpm', icon: '📐', label: tr('Metres per minute', 'Mètres par minute'), fmt: v => (Number(v) || 0).toFixed(1) + ' m/min' },
     { key: 'hsr', icon: '🏃', label: 'HSR', sub: '(> 15 km/h)', fmt: v => pgpsInt(v) + ' m' },
-    { key: 'sprint', icon: '⚡', label: 'Sprint', sub: '(> 20 km/h)', fmt: v => pgpsInt(v) + ' m' },
+    { key: 'sprint', icon: '⚡', label: 'HIR', sub: '(> 20 km/h)', fmt: v => pgpsInt(v) + ' m' },
     { key: 'vmax', icon: '🚀', label: tr('Top speed', 'Vitesse maximale'), fmt: v => (Number(v) || 0).toFixed(1) + ' km/h' },
     { key: 'decel', icon: '🛑', label: tr('Hard decelerations', 'Décélérations fortes'), sub: '(> 4 m/s²)', fmt: v => pgpsInt(v) },
     { key: 'power', icon: '💥', label: 'Power plays', sub: tr('(intense actions)', '(actions intensives)'), fmt: v => pgpsInt(v) },
