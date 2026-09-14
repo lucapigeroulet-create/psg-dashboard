@@ -16286,6 +16286,148 @@ function medianOf(arr) {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
+// Palette pour les fonds légers qui entourent les groupes d'entraînement sur les nuages
+// de points (fill = fond transparent, stroke = liseré assorti pour le contour).
+const GPS_GROUP_HULL_COLORS = [
+  { fill: 'rgba(96,165,250,.16)',  stroke: 'rgba(96,165,250,.55)'  }, // bleu
+  { fill: 'rgba(251,191,36,.16)',  stroke: 'rgba(251,191,36,.55)'  }, // ambre
+  { fill: 'rgba(52,211,153,.16)',  stroke: 'rgba(52,211,153,.55)'  }, // vert
+  { fill: 'rgba(244,114,182,.16)', stroke: 'rgba(244,114,182,.55)' }, // rose
+  { fill: 'rgba(167,139,250,.16)', stroke: 'rgba(167,139,250,.55)' }, // violet
+  { fill: 'rgba(249,115,22,.16)',  stroke: 'rgba(249,115,22,.55)'  }  // orange
+];
+
+// Groupes d'entraînement à entourer sur les nuages de points (persisté).
+let gpsScatterGroupHighlights = (function(){ try { return new Set(JSON.parse(localStorage.getItem('gpsScatterGroupHighlights') || '[]')); } catch(e){ return new Set(); } })();
+
+function gpsToggleScatterGroup(name) {
+  if (gpsScatterGroupHighlights.has(name)) gpsScatterGroupHighlights.delete(name);
+  else gpsScatterGroupHighlights.add(name);
+  try { localStorage.setItem('gpsScatterGroupHighlights', JSON.stringify([...gpsScatterGroupHighlights])); } catch(e){}
+  // Redessine les nuages ouverts sans re-render complet quand c'est possible
+  ['gps-wt-scatter', 'gps-wt-ie', 'gps-session-ie'].forEach(id => { if (charts[id]) charts[id].update('none'); });
+  // Met à jour l'état visuel des chips
+  document.querySelectorAll('[data-gps-group-chip]').forEach(el => {
+    const g = el.getAttribute('data-gps-group-chip');
+    const on = gpsScatterGroupHighlights.has(g);
+    const i = getAllGroups().indexOf(g);
+    const col = GPS_GROUP_HULL_COLORS[(i >= 0 ? i : 0) % GPS_GROUP_HULL_COLORS.length];
+    el.style.background = on ? col.fill : 'transparent';
+    el.style.borderColor = on ? col.stroke : 'var(--border)';
+    el.style.color = on ? 'var(--text)' : 'var(--text-dim)';
+  });
+}
+
+// Contour convexe (Andrew monotone chain). Retourne le polygone ordonné.
+function gpsConvexHull(pts) {
+  const p = pts.slice().sort((a,b) => a.x - b.x || a.y - b.y);
+  if (p.length < 3) return p.slice();
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower = [];
+  for (const pt of p) {
+    while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], pt) <= 0) lower.pop();
+    lower.push(pt);
+  }
+  const upper = [];
+  for (let i = p.length - 1; i >= 0; i--) {
+    const pt = p[i];
+    while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], pt) <= 0) upper.pop();
+    upper.push(pt);
+  }
+  lower.pop(); upper.pop();
+  return lower.concat(upper);
+}
+
+// Plugin : dessine, en fond, un polygone transparent autour des joueurs de chaque groupe
+// sélectionné. Rendu AVANT les points (beforeDatasetsDraw) pour rester derrière.
+function gpsScatterGroupHullPlugin() {
+  return {
+    id: 'gpsScatterGroupHull',
+    beforeDatasetsDraw(chart) {
+      if (!gpsScatterGroupHighlights.size) return;
+      const ctx = chart.ctx, xS = chart.scales.x, yS = chart.scales.y;
+      if (!xS || !yS) return;
+      const area = chart.chartArea;
+      // On récupère tous les points nommés (label = nom du joueur)
+      const labeledPoints = [];
+      (chart.data.datasets || []).forEach(ds => (ds.data || []).forEach(d => {
+        if (d && d.label) labeledPoints.push(d);
+      }));
+      const allGroups = getAllGroups();
+      const PAD = 30, R_SINGLE = 34;
+      ctx.save();
+      // Clip dans la zone de traçage pour ne pas déborder sur les axes
+      ctx.beginPath();
+      ctx.rect(area.left, area.top, area.right - area.left, area.bottom - area.top);
+      ctx.clip();
+      [...gpsScatterGroupHighlights].forEach(groupName => {
+        const idx = allGroups.indexOf(groupName);
+        const col = GPS_GROUP_HULL_COLORS[(idx >= 0 ? idx : 0) % GPS_GROUP_HULL_COLORS.length];
+        const groupPts = labeledPoints
+          .filter(p => (getJoueurInfo(p.label).groupe || '') === groupName)
+          .map(p => ({ x: xS.getPixelForValue(p.x), y: yS.getPixelForValue(p.y) }));
+        if (!groupPts.length) return;
+        ctx.fillStyle = col.fill;
+        ctx.strokeStyle = col.stroke;
+        ctx.lineWidth = 1.2;
+        if (groupPts.length === 1) {
+          const p = groupPts[0];
+          ctx.beginPath(); ctx.arc(p.x, p.y, R_SINGLE, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        } else if (groupPts.length === 2) {
+          const [a, b] = groupPts;
+          const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+          const nx = -dy/len, ny = dx/len, r = 28;
+          const ang = Math.atan2(ny, nx);
+          ctx.beginPath();
+          ctx.moveTo(a.x + nx*r, a.y + ny*r);
+          ctx.lineTo(b.x + nx*r, b.y + ny*r);
+          ctx.arc(b.x, b.y, r, ang, ang + Math.PI);
+          ctx.lineTo(a.x - nx*r, a.y - ny*r);
+          ctx.arc(a.x, a.y, r, ang + Math.PI, ang + Math.PI*2);
+          ctx.closePath();
+          ctx.fill(); ctx.stroke();
+        } else {
+          const hull = gpsConvexHull(groupPts);
+          const cx = hull.reduce((s,p) => s + p.x, 0) / hull.length;
+          const cy = hull.reduce((s,p) => s + p.y, 0) / hull.length;
+          const expanded = hull.map(p => {
+            const dx = p.x - cx, dy = p.y - cy, len = Math.hypot(dx, dy) || 1;
+            return { x: p.x + (dx/len) * PAD, y: p.y + (dy/len) * PAD };
+          });
+          ctx.beginPath();
+          expanded.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+          ctx.closePath();
+          ctx.fill(); ctx.stroke();
+        }
+        // Étiquette : nom du groupe au-dessus du point le plus haut
+        const top = groupPts.reduce((best, p) => p.y < best.y ? p : best, groupPts[0]);
+        ctx.fillStyle = col.stroke;
+        ctx.font = '600 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(groupName, top.x, Math.max(area.top + 12, top.y - (groupPts.length === 1 ? R_SINGLE : PAD) - 4));
+      });
+      ctx.restore();
+    }
+  };
+}
+
+// Rend la barre de chips « entourer un groupe » à insérer dans un en-tête de nuage de points.
+function gpsScatterGroupChipsHTML() {
+  const groups = getAllGroups();
+  if (!groups.length) return '';
+  const chips = groups.map(g => {
+    const i = groups.indexOf(g);
+    const col = GPS_GROUP_HULL_COLORS[i % GPS_GROUP_HULL_COLORS.length];
+    const on = gpsScatterGroupHighlights.has(g);
+    const bg = on ? col.fill : 'transparent';
+    const bd = on ? col.stroke : 'var(--border)';
+    const fg = on ? 'var(--text)' : 'var(--text-dim)';
+    return '<button type="button" data-gps-group-chip="' + escapeHtml(g) + '" onclick="gpsToggleScatterGroup(' + JSON.stringify(g) + ')" title="Entourer ' + escapeHtml(g) + '" style="background:' + bg + ';border:1px solid ' + bd + ';color:' + fg + ';padding:3px 9px;border-radius:12px;cursor:pointer;font-size:11px;font-weight:600;">' + escapeHtml(g) + '</button>';
+  }).join('');
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--text-dim);margin-top:6px;">' +
+    '<span>Entourer un groupe :</span>' + chips + '</div>';
+}
+
 // Plugin scatter : lignes de médiane en pointillé + nom du joueur au-dessus de chaque
 // point + libellés de quadrants (mode interne/externe uniquement)
 function gpsScatterDecorPlugin(medX, medY, quadrants) {
@@ -18049,7 +18191,7 @@ function renderGPSSession() {
           x: { title: { display: true, text: ext.label, color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
           y: { title: { display: true, text: 'sRPE (UA)', color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
         } },
-      plugins: [gpsScatterDecorPlugin(medX, medY, true)]
+      plugins: [gpsScatterGroupHullPlugin(), gpsScatterDecorPlugin(medX, medY, true)]
     });
   })();
 }
@@ -18470,8 +18612,9 @@ function renderGPSWeekTeam() {
   html += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
   html += '<h2 style="margin:0;">Nuage de points — cumuls de la semaine</h2>';
   html += '<div style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--text-dim);">X ' + axisSelect('gps-wt-sx', gpsWTScatterX) + ' Y ' + axisSelect('gps-wt-sy', gpsWTScatterY) + '</div></div>';
-  html += '<p style="color:var(--text-dim);font-size:11px;margin:0 0 8px;">Un point par joueur, couleur = état de charge. Pointillés = médianes de l\'équipe.</p>';
-  html += '<div class="chart-container tall"><canvas id="gps-wt-scatter"></canvas></div></div>';
+  html += '<p style="color:var(--text-dim);font-size:11px;margin:0 0 4px;">Un point par joueur, couleur = état de charge. Pointillés = médianes de l\'équipe.</p>';
+  html += gpsScatterGroupChipsHTML();
+  html += '<div class="chart-container tall" style="margin-top:8px;"><canvas id="gps-wt-scatter"></canvas></div></div>';
 
   // ===== Histogramme % de la cible =====
   html += '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
@@ -18544,7 +18687,7 @@ function renderGPSWeekTeam() {
           x: { title: { display: true, text: axisLabel(gpsWTScatterX), color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
           y: { title: { display: true, text: axisLabel(gpsWTScatterY), color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
         } },
-      plugins: [gpsScatterDecorPlugin(medX, medY, false)]
+      plugins: [gpsScatterGroupHullPlugin(), gpsScatterDecorPlugin(medX, medY, false)]
     });
   })();
 
@@ -18612,7 +18755,7 @@ function renderGPSWeekTeam() {
           x: { title: { display: true, text: ext.label, color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } },
           y: { title: { display: true, text: 'sRPE (UA)', color: '#8ba3c1' }, ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }
         } },
-      plugins: [gpsScatterDecorPlugin(medX, medY, true)]
+      plugins: [gpsScatterGroupHullPlugin(), gpsScatterDecorPlugin(medX, medY, true)]
     });
   })();
 }
