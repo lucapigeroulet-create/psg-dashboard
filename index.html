@@ -10180,13 +10180,20 @@ function _pitchOutline() {
     '<circle cx="50" cy="88" r="0.6" fill="rgba(148,163,184,0.5)"/>';
 }
 
-// Rend un mini-terrain SVG. `selected` = liste de codes. Si `editable`, expose data-code + curseur.
+// Rend un mini-terrain SVG.
+// `selected` = liste de codes.
+// opts.editable → tous les postes affichés + cliquables.
+// opts.onlySelected → seuls les postes sélectionnés apparaissent (mode lecture fiche).
 function renderPitchSVG(selected, opts) {
   opts = opts || {};
   const editable = !!opts.editable;
+  const onlySelected = !editable && (opts.onlySelected !== false); // par défaut oui en lecture
   const width = opts.width || 160;
   const sel = new Set((selected || []).filter(Boolean));
-  const dots = POSITIONS_TERRAIN.map(p => {
+  const shown = onlySelected
+    ? POSITIONS_TERRAIN.filter(p => sel.has(p.code))
+    : POSITIONS_TERRAIN;
+  const dots = shown.map(p => {
     const on = sel.has(p.code);
     const fill = on ? '#00a3ff' : 'rgba(148,163,184,0.25)';
     const stroke = on ? '#ffffff' : 'rgba(148,163,184,0.6)';
