@@ -30264,6 +30264,14 @@ async function saveEditPlayer() {
     closeEditPlayer();
     renderPlayersSettings();
     refreshAllSelectors();
+    // Rafraîchit la fiche joueur si elle affiche le joueur qui vient d'être modifié
+    try {
+      const jsel = document.getElementById('joueur-dash-select');
+      if (jsel && (jsel.value === trimmed || jsel.value === oldName)) {
+        if (trimmed !== oldName) jsel.value = trimmed;
+        if (typeof renderFicheGlobale === 'function') await renderFicheGlobale(jsel.value);
+      }
+    } catch (_) {}
     toast('Joueur modifié ✓', 'success');
   } catch (err) {
     console.error('[saveEditPlayer] erreur :', err);
