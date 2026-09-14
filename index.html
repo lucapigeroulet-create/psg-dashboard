@@ -1199,6 +1199,7 @@
           <select id="themes-aspect" onchange="renderThemesGrid()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px;">
             <option value="physique">🏃 Physique</option>
             <option value="technique">⚽ Technique</option>
+            <option value="technique_gb">🧤 Technique GB</option>
             <option value="tactique">🧠 Tactique</option>
             <option value="mental">💭 Mental</option>
           </select>
@@ -2012,7 +2013,7 @@
 
       <h3 style="margin-top:18px;">📝 Notes & vignettes de séance (staff)</h3>
       <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Notes internes + vignettes (thèmes travaillés) sur le contenu de la séance — non visibles par les joueurs. Choisis les vignettes dans la liste déroulante (elles se gèrent dans <b>Paramètres → Vignettes</b>) ; pas de saisie libre, pour éviter les doublons dans le comptage.</p>
-      <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
         <div>
           <label>🏃 Physique / Athlétique</label>
           <textarea id="entry-note-athletique" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Charge, intensité, préparation physique..."></textarea>
@@ -2024,6 +2025,12 @@
           <textarea id="entry-note-technique" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Gestes, conduite, passes, finition..."></textarea>
           <div id="vign-chips-technique" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 4px;"></div>
           <select id="vign-select-technique" onchange="onVignSelect('technique')" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:13px;"><option value="">+ Ajouter une vignette…</option></select>
+        </div>
+        <div>
+          <label>🧤 Technique GB</label>
+          <textarea id="entry-note-technique-gb" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Prises, plongeons, jeu au pied, sortie..."></textarea>
+          <div id="vign-chips-technique_gb" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 4px;"></div>
+          <select id="vign-select-technique_gb" onchange="onVignSelect('technique_gb')" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:13px;"><option value="">+ Ajouter une vignette…</option></select>
         </div>
         <div>
           <label>🧠 Tactique</label>
@@ -6268,8 +6275,8 @@ function veToggleAllJoueurs(on) {
 }
 
 // ---- Vignettes vidéo (dropdown groupé par aspect, chips dédupliqués) ----
-const _VE_ASPECT_META = { video:'🎥 Vidéo', physique:'🏃 Physique', technique:'⚽ Technique', tactique:'🧠 Tactique', mental:'💭 Mental' };
-const _VE_ASPECT_COLOR = { video:'#ec4899', physique:'#f97316', technique:'#22d3ee', tactique:'#a78bfa', mental:'#fbbf24' };
+const _VE_ASPECT_META = { video:'🎥 Vidéo', physique:'🏃 Physique', technique:'⚽ Technique', technique_gb:'🧤 Technique GB', tactique:'🧠 Tactique', mental:'💭 Mental' };
+const _VE_ASPECT_COLOR = { video:'#ec4899', physique:'#f97316', technique:'#22d3ee', technique_gb:'#38bdf8', tactique:'#a78bfa', mental:'#fbbf24' };
 
 function veRefreshVignSelect() {
   const sel = document.getElementById('ve-vign-select');
@@ -13143,7 +13150,7 @@ function renderThemesGrid() {
   if (!gridEl) return;
   const aspSel = document.getElementById('themes-aspect');
   const aspectKey = aspSel ? aspSel.value : 'physique';
-  const noteKeyFor = { physique: 'athletique', technique: 'technique', tactique: 'tactique', mental: 'mental' };
+  const noteKeyFor = { physique: 'athletique', technique: 'technique', technique_gb: 'technique_gb', tactique: 'tactique', mental: 'mental' };
   const noteKey = noteKeyFor[aspectKey] || aspectKey;
 
   // Sélecteur de semaine : reconstruit au changement d'org / nb de semaines
@@ -24539,10 +24546,11 @@ function renderEntryExistingSelect() {
 function collectSeanceNotes() {
   const get = id => ((document.getElementById(id) || {}).value || '').trim();
   return {
-    athletique: get('entry-note-athletique'),
-    technique:  get('entry-note-technique'),
-    tactique:   get('entry-note-tactique'),
-    mental:     get('entry-note-mental')
+    athletique:   get('entry-note-athletique'),
+    technique:    get('entry-note-technique'),
+    technique_gb: get('entry-note-technique-gb'),
+    tactique:     get('entry-note-tactique'),
+    mental:       get('entry-note-mental')
   };
 }
 function fillSeanceNotes(notes) {
@@ -24550,6 +24558,7 @@ function fillSeanceNotes(notes) {
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ''; };
   set('entry-note-athletique', notes.athletique);
   set('entry-note-technique', notes.technique);
+  set('entry-note-technique-gb', notes.technique_gb);
   set('entry-note-tactique', notes.tactique);
   set('entry-note-mental', notes.mental);
 }
@@ -24594,13 +24603,14 @@ function collectSeanceRemarques() {
 
 // ── Vignettes (thèmes travaillés) par aspect ────────────────────────────────
 const VIGNETTE_ASPECTS = [
-  { key: 'physique',  label: 'Physique',  icon: '🏃' },
-  { key: 'technique', label: 'Technique', icon: '⚽' },
-  { key: 'tactique',  label: 'Tactique',  icon: '🧠' },
-  { key: 'mental',    label: 'Mental',    icon: '💭' },
+  { key: 'physique',     label: 'Physique',     icon: '🏃' },
+  { key: 'technique',    label: 'Technique',    icon: '⚽' },
+  { key: 'technique_gb', label: 'Technique GB', icon: '🧤' },
+  { key: 'tactique',     label: 'Tactique',     icon: '🧠' },
+  { key: 'mental',       label: 'Mental',       icon: '💭' },
   // Aspect "Vidéo" : géré dans Paramètres → Vignettes, mais utilisé UNIQUEMENT
   // dans la Saisie vidéo (la Saisie séance n'a pas de champ HTML pour cet aspect).
-  { key: 'video',     label: 'Vidéo',     icon: '🎥' }
+  { key: 'video',        label: 'Vidéo',        icon: '🎥' }
 ];
 
 // Sélection d'une vignette depuis la bibliothèque (menu déroulant) → ajoute la pastille
@@ -24822,10 +24832,11 @@ function resetVignStatsPeriod() {
 // ── Détail des annotations d'une séance (notes / vignettes / remarques) ──────
 // Correspondance entre clé de note et clé de vignette (l'aspect "physique" = note "athletique")
 const SEANCE_ANNOT_ASPECTS = [
-  { noteKey: 'athletique', vignKey: 'physique',  label: '🏃 Physique / Athlétique' },
-  { noteKey: 'technique',  vignKey: 'technique', label: '⚽ Technique' },
-  { noteKey: 'tactique',   vignKey: 'tactique',  label: '🧠 Tactique' },
-  { noteKey: 'mental',     vignKey: 'mental',    label: '💭 Mental' }
+  { noteKey: 'athletique',   vignKey: 'physique',     label: '🏃 Physique / Athlétique' },
+  { noteKey: 'technique',    vignKey: 'technique',    label: '⚽ Technique' },
+  { noteKey: 'technique_gb', vignKey: 'technique_gb', label: '🧤 Technique GB' },
+  { noteKey: 'tactique',     vignKey: 'tactique',     label: '🧠 Tactique' },
+  { noteKey: 'mental',       vignKey: 'mental',       label: '💭 Mental' }
 ];
 function seanceHasAnnotations(info) {
   if (!info) return false;
