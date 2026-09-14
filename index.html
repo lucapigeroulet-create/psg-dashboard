@@ -16226,6 +16226,8 @@ let gpsWTRatioWeek = 'WEEK1';
 let gpsWTVmaxRef = (function(){ try { return localStorage.getItem('gpsWTVmaxRef') || 'all'; } catch(e){ return 'all'; } })();
 let gpsWTScatterX = 'distance_km';
 let gpsWTScatterY = 'top_speed';
+// Semaine de comparaison (lundi ISO). Vide = pas de comparaison.
+let gpsWTCompareWeek = '';
 let gpsWTHistMetrics = ['distance_km', 'hsr', 'sprint_dist_m'];
 let gpsWTRadarPlayer = '';
 let gpsWTExtMetric = 'distance_km';
@@ -16472,6 +16474,7 @@ function gpsWTSetVmaxRef(v) {
   renderGPSWeekTeam();
 }
 function gpsWTSetScatter() { gpsWTScatterX = document.getElementById('gps-wt-sx').value; gpsWTScatterY = document.getElementById('gps-wt-sy').value; renderGPSWeekTeam(); }
+function gpsWTSetCompareWeek() { gpsWTCompareWeek = document.getElementById('gps-wt-compare').value; renderGPSWeekTeam(); }
 function gpsWTToggleHist(key) { const i = gpsWTHistMetrics.indexOf(key); if (i >= 0) gpsWTHistMetrics.splice(i, 1); else gpsWTHistMetrics.push(key); renderGPSWeekTeam(); }
 function gpsWTSetRadar() { gpsWTRadarPlayer = document.getElementById('gps-wt-radar-player').value; renderGPSWeekTeam(); }
 function gpsWTSetExt() { gpsWTExtMetric = document.getElementById('gps-wt-ext').value; renderGPSWeekTeam(); }
@@ -18497,23 +18500,16 @@ function exportGPSSessionPDF() {
 }
 
 // ===== RAPPORT HEBDO ÉQUIPE =====
-function renderGPSWeekTeam() {
-  const mondayIso = document.getElementById('gps-week-select').value;
-  if (!mondayIso) { document.getElementById('gps-content').innerHTML = ''; return; }
+// Agrège les cumuls d'une semaine (indexée par joueur) — utilisé pour la semaine principale
+// et pour la comparaison. Retourne { rows, byPlayer, srpe, dates }.
+function gpsWeekTeamAggregate(mondayIso, group) {
   const monday = getMondayOf(mondayIso);
   const dates = weekDates(monday);
-  const group = document.getElementById('gps-group-select').value;
-  const isoInfo = getISOWeek(mondayIso);
-
-  // IMPORTANT : ne garder que l'enregistrement complet ("all") de chaque séance,
-  // sinon les splits (procédés) seraient additionnés en double avec la séance entière.
   let rows = gpsAnalysisRows().filter(x => dates.includes(x.date) && (x.split_name || 'all').toLowerCase() === 'all');
   if (group) {
     const players = getAllPlayers().filter(p => getJoueurInfo(p).groupe === group);
     rows = rows.filter(x => players.includes(x.joueur));
   }
-
-  // Agréger par joueur sur la semaine
   const byPlayer = {};
   rows.forEach(r => {
     if (!byPlayer[r.joueur]) byPlayer[r.joueur] = { joueur: r.joueur, sessions: 0 };
@@ -18521,14 +18517,40 @@ function renderGPSWeekTeam() {
     GPS_METRICS.forEach(m => { byPlayer[r.joueur][m.key] = (byPlayer[r.joueur][m.key] || 0) + gpsVal(r, m.key); });
     GPS_ZONES.forEach(z => { byPlayer[r.joueur][z.key] = (byPlayer[r.joueur][z.key] || 0) + gpsVal(r, z.key); });
   });
-  const players = Object.values(byPlayer).sort((a, b) => (b.distance_km || 0) - (a.distance_km || 0));
+  return { monday, dates, rows, byPlayer, srpe: srpeByPlayerForDates(dates) };
+}
+
+function renderGPSWeekTeam() {
+  const mondayIso = document.getElementById('gps-week-select').value;
+  if (!mondayIso) { document.getElementById('gps-content').innerHTML = ''; return; }
+  const group = document.getElementById('gps-group-select').value;
+  const isoInfo = getISOWeek(mondayIso);
+
+  // Semaine principale
+  const A = gpsWeekTeamAggregate(mondayIso, group);
+  const monday = A.monday, dates = A.dates, rows = A.rows;
+
+  // Semaine de comparaison (si sélectionnée et différente)
+  const compareIso = (gpsWTCompareWeek && gpsWTCompareWeek !== mondayIso) ? gpsWTCompareWeek : '';
+  const B = compareIso ? gpsWeekTeamAggregate(compareIso, group) : null;
+  const compareInfo = compareIso ? getISOWeek(compareIso) : null;
+
+  const players = Object.values(A.byPlayer).sort((a, b) => (b.distance_km || 0) - (a.distance_km || 0));
 
   const selStyle = 'background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;';
 
   let html = '<div class="card">';
   html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
-  html += '<h2 style="margin:0;">Rapport hebdomadaire équipe — Semaine ' + isoInfo.week + ' (' + formatDateRange(monday) + ')' + (group ? ' · ' + escapeHtml(group) : '') + '</h2>';
+  const titleSuffix = B ? ' <span style="color:var(--accent-light);font-weight:normal;">vs Semaine ' + compareInfo.week + ' (' + formatDateRange(B.monday) + ')</span>' : '';
+  html += '<h2 style="margin:0;">Rapport hebdomadaire équipe — Semaine ' + isoInfo.week + ' (' + formatDateRange(monday) + ')' + titleSuffix + (group ? ' · ' + escapeHtml(group) : '') + '</h2>';
   html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+  // Sélecteur de comparaison (liste des semaines GPS ; on masque la semaine principale)
+  const compareOpts = getGPSWeeks().filter(w => w.mondayIso !== mondayIso);
+  html += '<span style="font-size:11px;color:var(--text-dim);">Comparer avec</span>' +
+    '<select id="gps-wt-compare" onchange="gpsWTSetCompareWeek()" style="' + selStyle + '">' +
+    '<option value="">— aucune —</option>' +
+    compareOpts.map(w => '<option value="' + w.mondayIso + '"' + (w.mondayIso === gpsWTCompareWeek ? ' selected' : '') + '>Sem ' + w.week + ' (' + w.year + ') — ' + formatDateRange(w.monday) + '</option>').join('') +
+    '</select>';
   // Toggle Vmax de référence : historique (all-time) vs 30 derniers jours (glissant)
   const vmaxBtnBase = 'padding:6px 10px;font-size:11px;border-radius:6px;cursor:pointer;font-weight:600;border:1px solid var(--border);';
   const vmaxOnStyle = 'background:var(--accent);color:#fff;border-color:var(--accent);';
@@ -18605,6 +18627,64 @@ function renderGPSWeekTeam() {
   });
   html += '</tbody></table></div></div>';
 
+  // ===== Résumé comparatif entre deux semaines =====
+  if (B) {
+    const teamTotals = agg => {
+      const ps = Object.values(agg.byPlayer);
+      const totals = {
+        sessions: ps.reduce((s, p) => s + (p.sessions || 0), 0),
+        distance_m: ps.reduce((s, p) => s + (p.distance_km || 0) * 1000, 0),
+        hsr: ps.reduce((s, p) => s + (p.hsr || 0), 0),
+        sprint: ps.reduce((s, p) => s + (p.sprint_dist_m || 0), 0),
+        srpe: Object.values(agg.srpe || {}).reduce((s, v) => s + v, 0),
+        joueurs: ps.length
+      };
+      // Vmax moyen équipe = moyenne des max par joueur sur les rows de la semaine
+      const vmaxPerPlayer = ps.map(p => {
+        return Math.max.apply(null, agg.rows.filter(r => r.joueur === p.joueur).map(r => gpsVal(r, 'top_speed')).concat([0]));
+      }).filter(v => v > 0);
+      totals.vmax_moy = vmaxPerPlayer.length ? vmaxPerPlayer.reduce((s, v) => s + v, 0) / vmaxPerPlayer.length : 0;
+      return totals;
+    };
+    const tA = teamTotals(A), tB = teamTotals(B);
+    const deltaCell = (a, b, unit, dec) => {
+      const d = a - b;
+      const pct = b > 0 ? (d / b) * 100 : null;
+      const sign = d > 0 ? '+' : '';
+      const color = d > 0 ? '#34d399' : (d < 0 ? '#f87171' : 'var(--text-dim)');
+      const val = (dec === 0 ? Math.round(d) : d.toFixed(dec));
+      return '<td style="text-align:right;color:' + color + ';font-weight:600;">' + sign + val + (unit ? ' ' + unit : '') +
+        (pct !== null ? '<div style="font-size:10px;font-weight:normal;">' + sign + pct.toFixed(1) + '%</div>' : '') + '</td>';
+    };
+    const numCell = (v, unit, dec) => '<td style="text-align:right;">' + (dec === 0 ? Math.round(v).toLocaleString('fr-FR') : v.toFixed(dec)) + (unit ? ' ' + unit : '') + '</td>';
+    html += '<div class="card">';
+    html += '<h2 style="margin:0 0 6px;">📊 Résumé comparatif équipe</h2>';
+    html += '<p style="color:var(--text-dim);font-size:11px;margin:0 0 10px;">Cumuls d\'équipe : semaine principale vs semaine comparée. Δ = variation absolue et relative.</p>';
+    html += '<div class="table-wrap"><table style="font-size:12px;width:100%;"><thead><tr>';
+    html += '<th style="text-align:left;">Métrique</th>';
+    html += '<th style="text-align:right;">Sem ' + isoInfo.week + '</th>';
+    html += '<th style="text-align:right;">Sem ' + compareInfo.week + '</th>';
+    html += '<th style="text-align:right;">Δ</th>';
+    html += '</tr></thead><tbody>';
+    const rowsDef = [
+      { label: 'Joueurs actifs',      a: tA.joueurs,    b: tB.joueurs,    unit: '',    dec: 0 },
+      { label: 'Séances cumulées',    a: tA.sessions,   b: tB.sessions,   unit: '',    dec: 0 },
+      { label: 'Distance totale',     a: tA.distance_m, b: tB.distance_m, unit: 'm',   dec: 0 },
+      { label: 'HSR totale',          a: tA.hsr,        b: tB.hsr,        unit: 'm',   dec: 0 },
+      { label: 'Sprint total',        a: tA.sprint,     b: tB.sprint,     unit: 'm',   dec: 0 },
+      { label: 'sRPE cumulé',         a: tA.srpe,       b: tB.srpe,       unit: 'UA',  dec: 0 },
+      { label: 'Vmax équipe (moy.)',  a: tA.vmax_moy,   b: tB.vmax_moy,   unit: 'km/h', dec: 1 }
+    ];
+    rowsDef.forEach(r => {
+      html += '<tr><td style="text-align:left;font-weight:600;">' + r.label + '</td>';
+      html += numCell(r.a, r.unit, r.dec);
+      html += numCell(r.b, r.unit, r.dec);
+      html += deltaCell(r.a, r.b, r.unit, r.dec);
+      html += '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+
   // ===== Nuage de points (2 variables au choix) =====
   const scatterAxisOpts = GPS_METRICS.map(m => ({ key: m.key, label: m.label + (m.unit ? ' (' + m.unit + ')' : '') })).concat([{ key: 'srpe', label: 'sRPE (UA)' }]);
   const axisSelect = (id, cur) => '<select id="' + id + '" onchange="gpsWTSetScatter()" style="' + selStyle + '">' +
@@ -18645,22 +18725,54 @@ function renderGPSWeekTeam() {
   html += '</div>';
 
   // Graphiques
-  html += '<div class="card"><h2>Distance hebdomadaire par joueur</h2><div class="chart-container tall"><canvas id="gps-week-dist"></canvas></div></div>';
-  html += '<div class="card"><h2>HSR hebdomadaire par joueur</h2><div class="chart-container tall"><canvas id="gps-week-hsr"></canvas></div></div>';
+  const compareSuffix = B ? ' <span style="font-size:12px;color:var(--text-dim);font-weight:normal;">— Sem ' + isoInfo.week + ' vs Sem ' + compareInfo.week + '</span>' : '';
+  html += '<div class="card"><h2>Distance hebdomadaire par joueur' + compareSuffix + '</h2><div class="chart-container tall"><canvas id="gps-week-dist"></canvas></div></div>';
+  html += '<div class="card"><h2>HSR hebdomadaire par joueur' + compareSuffix + '</h2><div class="chart-container tall"><canvas id="gps-week-hsr"></canvas></div></div>';
 
   document.getElementById('gps-content').innerHTML = html;
+
+  // Union ordonnée des joueurs (semaine A puis joueurs supplémentaires de B) pour comparer
+  // même quand la composition change d'une semaine à l'autre.
+  const barLabels = (function() {
+    const seen = new Set();
+    const out = [];
+    players.forEach(p => { if (!seen.has(p.joueur)) { seen.add(p.joueur); out.push(p.joueur); } });
+    if (B) Object.values(B.byPlayer).forEach(p => { if (!seen.has(p.joueur)) { seen.add(p.joueur); out.push(p.joueur); } });
+    return out;
+  })();
+  const distA = barLabels.map(j => Math.round(((A.byPlayer[j] || {}).distance_km || 0) * 1000));
+  const hsrA  = barLabels.map(j => Math.round((A.byPlayer[j] || {}).hsr || 0));
+  const distB = B ? barLabels.map(j => Math.round(((B.byPlayer[j] || {}).distance_km || 0) * 1000)) : null;
+  const hsrB  = B ? barLabels.map(j => Math.round((B.byPlayer[j] || {}).hsr || 0)) : null;
+  const legendOn = { display: !!B, labels: { color: '#e8eef6' } };
 
   destroyChart('gps-week-dist');
   charts['gps-week-dist'] = new Chart(document.getElementById('gps-week-dist'), {
     type: 'bar',
-    data: { labels: players.map(p => p.joueur), datasets: [{ label: 'Distance (m)', data: players.map(p => Math.round((p.distance_km || 0) * 1000)), backgroundColor: '#00a3ff', borderRadius: 4 }] },
-    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }, y: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } } } }
+    data: {
+      labels: barLabels,
+      datasets: B
+        ? [
+            { label: 'Sem ' + isoInfo.week,     data: distA, backgroundColor: '#00a3ff', borderRadius: 4 },
+            { label: 'Sem ' + compareInfo.week, data: distB, backgroundColor: '#8ba3c1', borderRadius: 4 }
+          ]
+        : [{ label: 'Distance (m)', data: distA, backgroundColor: '#00a3ff', borderRadius: 4 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: legendOn }, scales: { x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }, y: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } } } }
   });
   destroyChart('gps-week-hsr');
   charts['gps-week-hsr'] = new Chart(document.getElementById('gps-week-hsr'), {
     type: 'bar',
-    data: { labels: players.map(p => p.joueur), datasets: [{ label: 'HSR (m)', data: players.map(p => Math.round(p.hsr || 0)), backgroundColor: '#f97316', borderRadius: 4 }] },
-    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }, y: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } } } }
+    data: {
+      labels: barLabels,
+      datasets: B
+        ? [
+            { label: 'Sem ' + isoInfo.week,     data: hsrA, backgroundColor: '#f97316', borderRadius: 4 },
+            { label: 'Sem ' + compareInfo.week, data: hsrB, backgroundColor: '#8ba3c1', borderRadius: 4 }
+          ]
+        : [{ label: 'HSR (m)', data: hsrA, backgroundColor: '#f97316', borderRadius: 4 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: legendOn }, scales: { x: { ticks: { color: '#8ba3c1' }, grid: { color: '#1f3a5f' } }, y: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } } } }
   });
 
   // Valeur hebdo d'un joueur pour un axe du nuage de points
