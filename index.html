@@ -2582,6 +2582,31 @@
             <label>Poids de forme (kg)</label>
             <input type="number" id="new-player-poids" min="30" max="150" step="0.1" placeholder="kg" />
           </div>
+          <div>
+            <label>Date de naissance</label>
+            <input type="date" id="new-player-ddn" />
+          </div>
+          <div>
+            <label>Pied fort</label>
+            <select id="new-player-pied">
+              <option value="">—</option>
+              <option value="Droit">Droit</option>
+              <option value="Gauche">Gauche</option>
+              <option value="Ambidextre">Ambidextre</option>
+            </select>
+          </div>
+          <div>
+            <label>Taille (cm)</label>
+            <input type="number" id="new-player-taille" min="120" max="220" step="1" placeholder="cm" />
+          </div>
+          <div>
+            <label>Nationalité</label>
+            <input type="text" id="new-player-natio" placeholder="Ex : Française" maxlength="40" />
+          </div>
+          <div>
+            <label>Lieu de naissance</label>
+            <input type="text" id="new-player-lieu" placeholder="Ville" maxlength="60" />
+          </div>
           <div style="display:flex; align-items:end;">
             <button class="btn" onclick="addPlayer()">+ Ajouter</button>
           </div>
@@ -2600,12 +2625,54 @@
         </div>
         <div class="table-wrap" style="max-height:600px;">
           <table id="players-table">
-            <thead><tr><th>Nom</th><th>Groupe</th><th>Poste</th><th>N°</th><th>Poids forme</th><th>Activité</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Nom</th><th>Groupe</th><th>Poste</th><th>N°</th><th>DDN</th><th>Pied</th><th>Taille</th><th>Poids forme</th><th>Activité</th><th>Actions</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
       </div>
       <div id="players-archived-section"></div>
+
+      <!-- Modale édition joueur -->
+      <div id="player-edit-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9000; align-items:center; justify-content:center; padding:20px;" onclick="if(event.target===this) closeEditPlayer()">
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:20px; max-width:640px; width:100%; max-height:90vh; overflow-y:auto;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <h3 style="margin:0;">✏️ Modifier le joueur</h3>
+            <button class="btn btn-secondary" onclick="closeEditPlayer()" style="padding:4px 10px;">✕</button>
+          </div>
+          <input type="hidden" id="pe-old-name" />
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div><label>Nom</label><input type="text" id="pe-name" maxlength="50" /></div>
+            <div><label>Groupe</label><input type="text" id="pe-groupe" placeholder="—" /></div>
+            <div><label>Poste</label>
+              <select id="pe-poste">
+                <option value="">—</option>
+                <option value="Gardien">Gardien</option>
+                <option value="Défenseur">Défenseur</option>
+                <option value="Milieu">Milieu</option>
+                <option value="Attaquant">Attaquant</option>
+              </select>
+            </div>
+            <div><label>Numéro</label><input type="number" id="pe-num" min="1" max="99" /></div>
+            <div><label>Date de naissance</label><input type="date" id="pe-ddn" /></div>
+            <div><label>Pied fort</label>
+              <select id="pe-pied">
+                <option value="">—</option>
+                <option value="Droit">Droit</option>
+                <option value="Gauche">Gauche</option>
+                <option value="Ambidextre">Ambidextre</option>
+              </select>
+            </div>
+            <div><label>Taille (cm)</label><input type="number" id="pe-taille" min="120" max="220" step="1" /></div>
+            <div><label>Poids de forme (kg)</label><input type="number" id="pe-poids" min="30" max="150" step="0.1" /></div>
+            <div><label>Nationalité</label><input type="text" id="pe-natio" maxlength="40" /></div>
+            <div><label>Lieu de naissance</label><input type="text" id="pe-lieu" maxlength="60" /></div>
+          </div>
+          <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+            <button class="btn btn-secondary" onclick="closeEditPlayer()">Annuler</button>
+            <button class="btn" onclick="saveEditPlayer()">💾 Enregistrer</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ZONE DE DANGER : visible en permanence -->
@@ -8776,7 +8843,7 @@ async function loadState() {
   try {
     setLoad('Chargement des joueurs...');
     const { data: joueurs } = await sb.from('joueurs').select('*').eq('org', currentOrg).order('nom');
-    const allJoueurs = (joueurs || []).map(j => ({ nom: j.nom, groupe: j.groupe, poste: j.poste, numero: j.numero, photo: j.photo || null, archived: !!j.archived, poids_forme: (j.poids_forme != null ? Number(j.poids_forme) : null) }));
+    const allJoueurs = (joueurs || []).map(j => ({ nom: j.nom, groupe: j.groupe, poste: j.poste, numero: j.numero, photo: j.photo || null, archived: !!j.archived, poids_forme: (j.poids_forme != null ? Number(j.poids_forme) : null), date_naissance: j.date_naissance || null, pied_fort: j.pied_fort || null, taille_cm: (j.taille_cm != null ? Number(j.taille_cm) : null), nationalite: j.nationalite || null, lieu_naissance: j.lieu_naissance || null }));
     // L'effectif actif (state.joueurs) exclut les joueurs archivés → ils disparaissent
     // automatiquement des sélecteurs, compositions, Hooper, etc. Données conservées en base.
     state.joueurs = allJoueurs.filter(j => !j.archived);
@@ -9258,6 +9325,11 @@ async function saveJoueurToSupabase(joueur, oldNom) {
     nom: joueur.nom, groupe: joueur.groupe || null,
     poste: joueur.poste || null, numero: joueur.numero || null,
     poids_forme: (joueur.poids_forme != null && joueur.poids_forme !== '' ? Number(joueur.poids_forme) : null),
+    date_naissance: joueur.date_naissance || null,
+    pied_fort: joueur.pied_fort || null,
+    taille_cm: (joueur.taille_cm != null && joueur.taille_cm !== '' ? parseInt(joueur.taille_cm, 10) : null),
+    nationalite: joueur.nationalite || null,
+    lieu_naissance: joueur.lieu_naissance || null,
     org: currentOrg
   };
   // N'inclure `photo` que lors d'un renommage (sinon on écraserait la photo existante par null)
@@ -16913,19 +16985,22 @@ async function renderFicheGlobale(joueur) {
   const stats = _fgCompute(joueur);
   const isStaff = canWrite();
 
-  // Age depuis fiche médicale date_naissance
+  // Priorité : joueurs.date_naissance (paramètres joueurs) puis fiche médicale
+  const ddnSrc = info.date_naissance || fiche.date_naissance || null;
   let ageStr = '—', ddnStr = '';
-  if (fiche.date_naissance) {
-    const dn = new Date(fiche.date_naissance);
+  if (ddnSrc) {
+    const dn = new Date(ddnSrc);
     if (!isNaN(dn)) {
       const now = new Date();
       const years = ((now - dn) / (365.25 * 86400000));
       ageStr = years.toFixed(1) + ' ans';
-      ddnStr = fiche.date_naissance.split('-').reverse().join('.');
+      ddnStr = String(ddnSrc).split('-').reverse().join('.');
     }
   }
   const poids = fiche.poids != null ? fiche.poids + ' Kg' : '—';
-  const taille = fiche.taille != null ? Math.round(fiche.taille) + ' cm' : '—';
+  const tailleSrc = (info.taille_cm != null) ? info.taille_cm : (fiche.taille != null ? Math.round(fiche.taille) : null);
+  const taille = tailleSrc != null ? tailleSrc + ' cm' : '—';
+  const piedFort = info.pied_fort || row.pied_fort || '';
 
   const val = (v) => v ? escapeHtml(v) : '<span style="color:var(--text-dim);">—</span>';
   const listVal = (arr) => (arr && arr.length) ? arr.map(escapeHtml) : ['—','—','—'];
@@ -16962,7 +17037,8 @@ async function renderFicheGlobale(joueur) {
             '<span>⚽</span><div>Poste : <b>' + val(info.poste) + '</b></div>' +
             '<span>📏</span><div>' + taille + '</div>' +
             '<span>⚖️</span><div>' + poids + '</div>' +
-            '<span>👟</span><div>Pied : <b>' + val(row.pied_fort) + '</b></div>' +
+            '<span>👟</span><div>Pied : <b>' + val(piedFort) + '</b></div>' +
+            ((info.nationalite || info.lieu_naissance) ? '<span>🌍</span><div>' + escapeHtml(info.nationalite || '') + (info.nationalite && info.lieu_naissance ? ' · ' : '') + (info.lieu_naissance ? '<span style="color:var(--text-dim);">' + escapeHtml(info.lieu_naissance) + '</span>' : '') + '</div>' : '') +
           '</div>' +
           (row.qualites ? '<div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:12px; color:var(--text-dim); font-style:italic;">🧠 ' + escapeHtml(row.qualites) + '</div>' : '') +
         '</div>' +
@@ -29672,9 +29748,12 @@ function renderPlayersSettings() {
 
   const tbody = document.querySelector('#players-table tbody');
   if (joueurs.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:20px;">Aucun joueur.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:20px;">Aucun joueur.</td></tr>';
     return;
   }
+
+  const dim = '<span style="color:var(--text-dim);">—</span>';
+  const fmtDDN = (d) => d ? String(d).split('-').reverse().join('/') : dim;
 
   tbody.innerHTML = joueurs.map(j => {
     const nbSeances = state.bdd_ent.filter(e => e.joueur === j.nom).length;
@@ -29684,10 +29763,13 @@ function renderPlayersSettings() {
       '<td>' + escapeHtml(j.groupe || '') + '</td>' +
       '<td>' + escapeHtml(j.poste || '') + '</td>' +
       '<td>' + (j.numero || '') + '</td>' +
-      '<td>' + (j.poids_forme != null ? j.poids_forme + ' kg' : '<span style="color:var(--text-dim);">—</span>') + '</td>' +
+      '<td>' + fmtDDN(j.date_naissance) + '</td>' +
+      '<td>' + (j.pied_fort ? escapeHtml(j.pied_fort) : dim) + '</td>' +
+      '<td>' + (j.taille_cm != null ? j.taille_cm + ' cm' : dim) + '</td>' +
+      '<td>' + (j.poids_forme != null ? j.poids_forme + ' kg' : dim) + '</td>' +
       '<td>' + nbSeances + ' jour(s)</td>' +
       '<td style="white-space:nowrap;">' +
-        '<button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;" onclick="editPlayer(\'' + nomEsc + '\')">✏️ Modifier</button> ' +
+        '<button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;" onclick="openEditPlayer(\'' + nomEsc + '\')">✏️ Modifier</button> ' +
         '<button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;" onclick="archivePlayer(\'' + nomEsc + '\')" title="Conserve les données, retire le joueur de l\'effectif actif">📦 Archiver</button>' +
       '</td></tr>';
   }).join('');
@@ -29731,6 +29813,11 @@ async function addPlayer() {
   const poste = document.getElementById('new-player-poste').value;
   const numero = document.getElementById('new-player-num').value;
   const poidsForme = document.getElementById('new-player-poids').value;
+  const ddn = document.getElementById('new-player-ddn').value;
+  const pied = document.getElementById('new-player-pied').value;
+  const taille = document.getElementById('new-player-taille').value;
+  const natio = (document.getElementById('new-player-natio').value || '').trim();
+  const lieu = (document.getElementById('new-player-lieu').value || '').trim();
   if (!nom) { toast('Nom requis', 'error'); return; }
   if (state.joueurs.some(j => j.nom === nom)) { toast('Joueur déjà existant', 'error'); return; }
   if ((state.joueurs_archived || []).some(j => j.nom === nom)) { toast('Un joueur archivé porte ce nom — restaure-le depuis « Joueurs archivés »', 'error'); return; }
@@ -29739,54 +29826,76 @@ async function addPlayer() {
     groupe: groupe || null,
     poste: poste || null,
     numero: numero ? parseInt(numero) : null,
-    poids_forme: poidsForme ? Number(poidsForme) : null
+    poids_forme: poidsForme ? Number(poidsForme) : null,
+    date_naissance: ddn || null,
+    pied_fort: pied || null,
+    taille_cm: taille ? parseInt(taille, 10) : null,
+    nationalite: natio || null,
+    lieu_naissance: lieu || null
   };
   const ok = await saveJoueurToSupabase(joueur);
   if (!ok) return;
   state.joueurs.push(joueur);
-  document.getElementById('new-player-name').value = '';
-  document.getElementById('new-player-num').value = '';
-  document.getElementById('new-player-poids').value = '';
+  ['new-player-name','new-player-num','new-player-poids','new-player-ddn','new-player-pied','new-player-taille','new-player-natio','new-player-lieu']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   renderPlayersSettings();
   refreshAllSelectors();
   toast('Joueur "' + nom + '" ajouté', 'success');
 }
 
-async function editPlayer(oldName) {
+function openEditPlayer(oldName) {
   if (!canWrite()) { toast('Lecture seule', 'error'); return; }
   const j = state.joueurs.find(x => x.nom === oldName);
   if (!j) return;
-  const newName = prompt('Nom du joueur :', j.nom);
-  if (newName === null) return;
-  const trimmed = (newName || '').trim();
+  document.getElementById('pe-old-name').value = oldName;
+  document.getElementById('pe-name').value = j.nom || '';
+  document.getElementById('pe-groupe').value = j.groupe || '';
+  document.getElementById('pe-poste').value = j.poste || '';
+  document.getElementById('pe-num').value = j.numero || '';
+  document.getElementById('pe-ddn').value = j.date_naissance || '';
+  document.getElementById('pe-pied').value = j.pied_fort || '';
+  document.getElementById('pe-taille').value = j.taille_cm || '';
+  document.getElementById('pe-poids').value = j.poids_forme != null ? j.poids_forme : '';
+  document.getElementById('pe-natio').value = j.nationalite || '';
+  document.getElementById('pe-lieu').value = j.lieu_naissance || '';
+  const m = document.getElementById('player-edit-modal');
+  m.style.display = 'flex';
+}
+
+function closeEditPlayer() {
+  const m = document.getElementById('player-edit-modal');
+  if (m) m.style.display = 'none';
+}
+
+async function saveEditPlayer() {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const oldName = document.getElementById('pe-old-name').value;
+  const j = state.joueurs.find(x => x.nom === oldName);
+  if (!j) { toast('Joueur introuvable', 'error'); return; }
+  const trimmed = (document.getElementById('pe-name').value || '').trim();
   if (!trimmed) { toast('Nom vide', 'error'); return; }
   if (trimmed !== oldName && state.joueurs.some(x => x.nom === trimmed)) {
     toast('Un joueur "' + trimmed + '" existe déjà', 'error');
     return;
   }
-  const newGroupe = prompt('Groupe (laisser vide pour aucun) :', j.groupe || '');
-  if (newGroupe === null) return;
-  const newPoste = prompt('Poste :', j.poste || '');
-  if (newPoste === null) return;
-  const newNum = prompt('Numéro :', j.numero || '');
-  if (newNum === null) return;
-  const newPoids = prompt('Poids de forme en kg (laisser vide pour aucun) :', j.poids_forme != null ? j.poids_forme : '');
-  if (newPoids === null) return;
-
+  const taille = document.getElementById('pe-taille').value;
+  const poids = document.getElementById('pe-poids').value;
   const updated = {
     nom: trimmed,
-    groupe: (newGroupe || '').trim() || null,
-    poste: (newPoste || '').trim() || null,
-    numero: newNum ? parseInt(newNum) : null,
-    poids_forme: (String(newPoids).trim() !== '' ? Number(String(newPoids).replace(',', '.')) : null)
+    groupe: (document.getElementById('pe-groupe').value || '').trim() || null,
+    poste: (document.getElementById('pe-poste').value || '').trim() || null,
+    numero: document.getElementById('pe-num').value ? parseInt(document.getElementById('pe-num').value, 10) : null,
+    poids_forme: (String(poids).trim() !== '' ? Number(String(poids).replace(',', '.')) : null),
+    date_naissance: document.getElementById('pe-ddn').value || null,
+    pied_fort: document.getElementById('pe-pied').value || null,
+    taille_cm: taille ? parseInt(taille, 10) : null,
+    nationalite: (document.getElementById('pe-natio').value || '').trim() || null,
+    lieu_naissance: (document.getElementById('pe-lieu').value || '').trim() || null
   };
-  // Persister sur Supabase
   const ok = await saveJoueurToSupabase(updated, oldName);
   if (!ok) return;
 
-  // Si le nom change, mettre à jour planning/rpe/gps Supabase
   if (trimmed !== oldName) {
-    // Mettre à jour les plannings
     const planningsAffectes = state.bdd_ent.filter(e => e.joueur === oldName);
     for (const e of planningsAffectes) {
       await sb.from('plannings').delete().match({ date: e.date, joueur: oldName });
@@ -29795,7 +29904,6 @@ async function editPlayer(oldName) {
       }
       e.joueur = trimmed;
     }
-    // Mettre à jour les RPE
     const rpesAffectes = state.bdd_rpe.filter(r => r.joueur === oldName);
     for (const r of rpesAffectes) {
       await sb.from('rpe_declarations').delete().match({ date: r.date, joueur: oldName });
@@ -29804,7 +29912,6 @@ async function editPlayer(oldName) {
       }
       r.joueur = trimmed;
     }
-    // GPS
     state.bdd_gps.forEach(g => { if (g.joueur === oldName) g.joueur = trimmed; });
     await sb.from('gps_data').update({ joueur: trimmed }).eq('joueur', oldName);
     _writeCache('gps_data', currentOrg, state.bdd_gps);
@@ -29820,6 +29927,7 @@ async function editPlayer(oldName) {
     }
   }
 
+  closeEditPlayer();
   renderPlayersSettings();
   refreshAllSelectors();
   toast('Joueur modifié', 'success');
