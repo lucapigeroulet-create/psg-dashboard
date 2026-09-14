@@ -20698,14 +20698,18 @@ function renderMatchEntry() {
     ensureGroupsList();
     const opts = [];
     if (currentOrg === 'TEGG') {
-      // Liste fixe pour TEGG (peut être étendue facilement)
-      const teggEquipes = ['TEGG U13', 'TEGG U14', 'TEGG U15', 'TEGG U18', 'TEGG U20', 'TEGG R2', 'N3', 'Réserve R2', 'Autre'];
+      // National 2 : uniquement les 2 équipes seniors
+      const teggEquipes = ['N3', 'Réserve R2'];
       opts.push('<option value="">— Équipe —</option>');
       teggEquipes.forEach(e => opts.push('<option value="' + e + '">' + e + '</option>'));
     } else {
-      // PSG : groupes existants (filtre les joueurs disponibles)
+      // PSG Académie : groupes de joueurs existants + catégories d'âge TEGG
+      // (les groupes filtrent les joueurs disponibles ; les entrées TEGG U…
+      // servent quand la PSG affronte / prête à un collectif TEGG académie).
+      const teggCategories = ['TEGG U13', 'TEGG U14', 'TEGG U15', 'TEGG U18', 'TEGG U20', 'TEGG R2'];
       opts.push('<option value="">— Équipe —</option>');
       state.groupes.filter(g => g !== 'TEGG').forEach(g => opts.push('<option value="' + g + '">' + g + '</option>'));
+      teggCategories.forEach(e => opts.push('<option value="' + e + '">' + e + '</option>'));
     }
     // Préserver la sélection si elle existe encore
     const current = groupeSel.value;
