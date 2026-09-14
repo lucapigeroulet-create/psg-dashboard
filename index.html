@@ -10165,19 +10165,21 @@ const POSITIONS_TERRAIN = [
 
 // Trait de terrain (SVG). viewBox 100x100 (proportions demi-terrain).
 function _pitchOutline() {
+  const line = 'rgba(255,255,255,0.75)';
+  const thin = 'rgba(255,255,255,0.55)';
   return '' +
-    // Fond
-    '<rect x="0" y="0" width="100" height="100" fill="rgba(52,211,153,0.06)" stroke="rgba(148,163,184,0.35)" stroke-width="0.4"/>' +
-    // Ligne médiane (haut = ligne de but adverse pour un attaquant ; on trace la ligne du milieu en bas)
-    '<line x1="0" y1="0" x2="100" y2="0" stroke="rgba(148,163,184,0.4)" stroke-width="0.4"/>' +
+    // Fond vert clair
+    '<rect x="0" y="0" width="100" height="100" fill="rgba(74,222,128,0.18)" stroke="' + line + '" stroke-width="0.7"/>' +
+    // Ligne médiane (haut)
+    '<line x1="0" y1="0" x2="100" y2="0" stroke="' + line + '" stroke-width="0.7"/>' +
     // Rond central (moitié, ancré en haut)
-    '<path d="M 40,0 A 10,10 0 0 0 60,0" fill="none" stroke="rgba(148,163,184,0.35)" stroke-width="0.4"/>' +
+    '<path d="M 40,0 A 10,10 0 0 0 60,0" fill="none" stroke="' + line + '" stroke-width="0.6"/>' +
     // Surface de réparation (bas)
-    '<rect x="22" y="82" width="56" height="16" fill="none" stroke="rgba(148,163,184,0.4)" stroke-width="0.4"/>' +
+    '<rect x="22" y="82" width="56" height="16" fill="none" stroke="' + line + '" stroke-width="0.7"/>' +
     // 6 mètres
-    '<rect x="36" y="91" width="28" height="7" fill="none" stroke="rgba(148,163,184,0.4)" stroke-width="0.4"/>' +
+    '<rect x="36" y="91" width="28" height="7" fill="none" stroke="' + thin + '" stroke-width="0.6"/>' +
     // Point de penalty
-    '<circle cx="50" cy="88" r="0.6" fill="rgba(148,163,184,0.5)"/>';
+    '<circle cx="50" cy="88" r="0.7" fill="' + line + '"/>';
 }
 
 // Rend un mini-terrain SVG.
@@ -10188,25 +10190,33 @@ function renderPitchSVG(selected, opts) {
   opts = opts || {};
   const editable = !!opts.editable;
   const onlySelected = !editable && (opts.onlySelected !== false); // par défaut oui en lecture
-  const width = opts.width || 160;
+  const width = opts.width || 180;
   const sel = new Set((selected || []).filter(Boolean));
   const shown = onlySelected
     ? POSITIONS_TERRAIN.filter(p => sel.has(p.code))
     : POSITIONS_TERRAIN;
+  const dotRadius = editable ? 5.2 : 6.5;
+  const labelSize = editable ? 3.4 : 3.6;
   const dots = shown.map(p => {
     const on = sel.has(p.code);
-    const fill = on ? '#00a3ff' : 'rgba(148,163,184,0.25)';
-    const stroke = on ? '#ffffff' : 'rgba(148,163,184,0.6)';
-    const textCol = on ? '#ffffff' : 'rgba(226,232,240,0.85)';
+    const fill = on ? '#38bdf8' : 'rgba(255,255,255,0.25)';
+    const stroke = on ? '#ffffff' : 'rgba(255,255,255,0.7)';
+    const textCol = on ? '#ffffff' : 'rgba(255,255,255,0.9)';
     const cursor = editable ? 'cursor:pointer;' : '';
     const attrs = editable ? ' data-code="' + p.code + '" onclick="pePitchToggle(\'' + p.code + '\')"' : '';
+    // En lecture on n'affiche que le point (pas de label) ; en édition on garde le label pour repérage.
+    const label = editable ? '<text x="' + p.x + '" y="' + (p.y + 1.6) + '" text-anchor="middle" font-size="' + labelSize + '" font-weight="700" fill="' + textCol + '" style="pointer-events:none;">' + p.label + '</text>' : '';
     return '<g' + attrs + ' style="' + cursor + '">' +
-      '<circle cx="' + p.x + '" cy="' + p.y + '" r="4.8" fill="' + fill + '" stroke="' + stroke + '" stroke-width="0.6"/>' +
-      '<text x="' + p.x + '" y="' + (p.y + 1.6) + '" text-anchor="middle" font-size="3.2" font-weight="700" fill="' + textCol + '" style="pointer-events:none;">' + p.label + '</text>' +
+      '<circle cx="' + p.x + '" cy="' + p.y + '" r="' + dotRadius + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="0.8"/>' +
+      label +
       '</g>';
   }).join('');
-  return '<svg viewBox="0 0 100 100" width="' + width + '" height="' + Math.round(width * 1.4) + '" style="display:block; background:linear-gradient(180deg, rgba(52,211,153,0.05), rgba(52,211,153,0.02));">' +
-    _pitchOutline() + dots +
+  // En lecture, un petit label sous chaque point sélectionné (identifiant du poste)
+  const readLabels = (!editable) ? shown.map(p => {
+    return '<text x="' + p.x + '" y="' + (p.y + 12) + '" text-anchor="middle" font-size="4" font-weight="700" fill="rgba(255,255,255,0.95)">' + p.label + '</text>';
+  }).join('') : '';
+  return '<svg viewBox="0 0 100 100" width="' + width + '" height="' + Math.round(width * 1.4) + '" preserveAspectRatio="xMidYMid meet" style="display:block; border-radius:8px; background:linear-gradient(180deg, #2f7a4f, #1f5033);">' +
+    _pitchOutline() + dots + readLabels +
     '</svg>';
 }
 
@@ -17245,7 +17255,7 @@ async function renderFicheGlobale(joueur) {
             // Mini-terrain (positions préférentielles)
             '<div style="flex-shrink:0;">' +
               '<div style="font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); font-weight:700; margin-bottom:4px; text-align:center;">Positions</div>' +
-              renderPitchSVG(info.positions_terrain, { width:130 }) +
+              renderPitchSVG(info.positions_terrain, { width:165 }) +
             '</div>' +
           '</div>' +
           (row.qualites ? '<div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:12px; color:var(--text-dim); font-style:italic;">🧠 ' + escapeHtml(row.qualites) + '</div>' : '') +
