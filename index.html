@@ -371,7 +371,7 @@
   .cal-cell.sick { background: #78350f88; border-left: 3px solid #f59e0b; }
   .cal-cell.absent { background: #71341288; border-left: 3px solid #ea580c; }
   .cal-cell.trial { background: #134e4a88; border-left: 3px solid #14b8a6; }
-  .cal-cell.unavailable { background: #33415588; border-left: 3px solid #94a3b8; }
+  .cal-cell.unavailable { background: #83184388; border-left: 3px solid #f472b6; }
   .cal-cell.suspended { background: #4a1d7088; border-left: 3px solid #a78bfa; }
   /* Encadré autour de chaque séance / état du joueur dans la cellule (lecture plus claire).
      (Les séances planifiées .cal-planned ont déjà leur propre encadré, on ne les double pas.
@@ -10319,7 +10319,7 @@ function renderOverview() {
   });
 
   const cats = ['MATCH', 'Entraîné', 'Séance planifiée', 'REST', 'INJURY', 'SICK', 'ABSENT', 'TRIAL', 'UNAVAILABLE'];
-  const colors = ['#eab308', '#22c55e', '#ec4899', '#64748b', '#ef4444', '#a855f7', '#f97316', '#14b8a6', '#94a3b8'];
+  const colors = ['#eab308', '#22c55e', '#ec4899', '#64748b', '#ef4444', '#a855f7', '#f97316', '#14b8a6', '#f472b6'];
   destroyChart('chart-status-stacked');
   charts['chart-status-stacked'] = new Chart(document.getElementById('chart-status-stacked'), {
     type: 'bar',
@@ -19796,7 +19796,7 @@ async function gpsRenderDistHsrChart(points) {
 // DISPONIBILITÉ
 // ============================================================================
 // Couleurs associées à chaque type d'indisponibilité (graphes + tableau)
-const STATUT_COLORS = { INJURY: '#f87171', SICK: '#fb923c', ABSENT: '#fbbf24', SUSPENDED: '#a78bfa', TRIAL: '#2dd4bf', UNAVAILABLE: '#94a3b8' };
+const STATUT_COLORS = { INJURY: '#f87171', SICK: '#fb923c', ABSENT: '#fbbf24', SUSPENDED: '#a78bfa', TRIAL: '#2dd4bf', UNAVAILABLE: '#f472b6' };
 
 // Lit l'état courant des filtres de l'onglet Disponibilité
 function getInjuryFilters() {
