@@ -6074,15 +6074,26 @@ async function renderRecoveryPlanning() {
       const full     = taken >= capacity;
       const bg   = free ? 'var(--bg-elevated)' : (full ? 'rgba(22,101,52,0.20)' : 'rgba(251,191,36,0.10)');
       const bord = free ? 'var(--accent)'      : (full ? 'var(--green)'         : 'var(--yellow)');
-      const inscritsHtml = joueurs.length
-        ? ' · <span style="color:var(--green); font-weight:600;">' + joueurs.map(escapeHtml).join(', ') + '</span>'
+      const chipsHtml = joueurs.length
+        ? joueurs.map(j => '<span style="display:inline-flex; align-items:center; gap:5px; background:rgba(34,197,94,0.14); color:var(--green); border:1px solid var(--green); border-radius:12px; padding:2px 8px; font-size:11px; font-weight:600;">' +
+            escapeHtml(j) +
+            '<span title="Retirer" style="cursor:pointer; color:var(--text-dim);" onclick="rcRemovePlayer(' + s.id + ', \'' + j.replace(/'/g, "\\'") + '\')">✕</span>' +
+          '</span>').join(' ')
+        : '<span style="color:var(--text-dim); font-size:11px;">Aucun joueur inscrit</span>';
+      const addSelect = (!full)
+        ? '<select onchange="rcAddPlayer(' + s.id + ', this)" style="background:var(--bg-card); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:2px 6px; font-size:11px;"><option value="">+ Ajouter…</option>' +
+            getAllPlayers().filter(p => !joueurs.includes(p) && (!s.groupe || (getJoueurInfo(p).groupe === s.groupe))).map(p => '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>').join('') +
+          '</select>'
         : '';
       const groupeBadge = s.groupe
         ? ' <span style="display:inline-block; padding:1px 6px; margin-left:6px; background:rgba(0,163,255,0.15); color:var(--accent-light); border:1px solid var(--accent); border-radius:10px; font-size:10px; font-weight:600;">👥 ' + escapeHtml(s.groupe) + '</span>'
         : '';
-      html += '<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; border-radius:8px; padding:9px 12px; margin-bottom:5px; background:' + bg + '; border-left:3px solid ' + bord + ';">' +
-        '<div style="font-size:13px;">' + _rcEmoji(s.type) + ' <b>' + _rcLabel(s.type) + '</b>' + groupeBadge + ' · ' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + ' <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min · ' + taken + '/' + capacity + ' place' + (capacity > 1 ? 's' : '') + '</span>' + inscritsHtml + '</div>' +
-        '<button class="btn btn-secondary" style="padding:3px 10px; font-size:11px;" onclick="deleteRecoveryCreneau(' + s.id + ')">🗑️</button>' +
+      html += '<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; border-radius:8px; padding:9px 12px; margin-bottom:5px; background:' + bg + '; border-left:3px solid ' + bord + '; flex-wrap:wrap;">' +
+        '<div style="font-size:13px; flex:1; min-width:220px;">' +
+          _rcEmoji(s.type) + ' <b>' + _rcLabel(s.type) + '</b>' + groupeBadge + ' · ' + escapeHtml(s.heure) + '–' + escapeHtml(fin) + ' <span style="color:var(--text-dim);">· ' + (s.duree_min || 15) + ' min · ' + taken + '/' + capacity + ' place' + (capacity > 1 ? 's' : '') + '</span>' +
+          '<div style="margin-top:6px; display:flex; gap:5px; flex-wrap:wrap; align-items:center;">' + chipsHtml + ' ' + addSelect + '</div>' +
+        '</div>' +
+        '<button class="btn btn-secondary" style="padding:3px 10px; font-size:11px;" onclick="deleteRecoveryCreneau(' + s.id + ')" title="Supprimer le créneau">🗑️</button>' +
       '</div>';
     });
     html += '</div>';
@@ -6118,6 +6129,38 @@ async function deleteRecoveryCreneau(id) {
   const { error } = await sb.from('creneaux_recuperation').delete().eq('id', id);
   if (error) { toast('Erreur : ' + error.message, 'error'); return; }
   toast('Créneau supprimé', 'success');
+  renderRecoveryPlanning();
+}
+
+// --- Édition des inscriptions d'un créneau (staff) ---
+async function rcRemovePlayer(id, joueur) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const { data: cur, error: e1 } = await sb.from('creneaux_recuperation').select('joueurs').eq('id', id).maybeSingle();
+  if (e1 || !cur) { toast('Créneau introuvable', 'error'); return; }
+  const arr = Array.isArray(cur.joueurs) ? cur.joueurs.filter(j => j !== joueur) : [];
+  const upd = { joueurs: arr };
+  if (arr.length === 0) upd.booked_at = null;
+  const { error } = await sb.from('creneaux_recuperation').update(upd).eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  toast(joueur + ' retiré du créneau', 'success');
+  renderRecoveryPlanning();
+}
+
+async function rcAddPlayer(id, selectEl) {
+  if (!canWrite()) { toast('Lecture seule', 'error'); return; }
+  const joueur = selectEl && selectEl.value;
+  if (!joueur) return;
+  selectEl.value = '';
+  const { data: cur, error: e1 } = await sb.from('creneaux_recuperation').select('joueurs, capacity').eq('id', id).maybeSingle();
+  if (e1 || !cur) { toast('Créneau introuvable', 'error'); return; }
+  const arr = Array.isArray(cur.joueurs) ? cur.joueurs.slice() : [];
+  if (arr.includes(joueur)) { toast(joueur + ' est déjà inscrit', 'error'); return; }
+  const cap = cur.capacity || 1;
+  if (arr.length >= cap) { toast('Créneau plein', 'error'); return; }
+  arr.push(joueur);
+  const { error } = await sb.from('creneaux_recuperation').update({ joueurs: arr, booked_at: new Date().toISOString() }).eq('id', id);
+  if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  toast(joueur + ' ajouté au créneau', 'success');
   renderRecoveryPlanning();
 }
 
