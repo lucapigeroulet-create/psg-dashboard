@@ -8543,7 +8543,10 @@ async function switchOrg(org) {
 function updateOrgSwitcherUI() {
   const switcher = document.getElementById('org-switcher');
   if (!switcher) return;
-  const allowedOrgs = window.currentAllowedOrgs || (currentRole === 'admin' ? ORGS : []);
+  let allowedOrgs = window.currentAllowedOrgs || (currentRole === 'admin' ? ORGS : []);
+  // Vue "Individuel" : réservée au staff/coach/admin.
+  // Un joueur (rôle lecteur) ne doit pas voir l'entité individuelle dans le sélecteur.
+  if (currentRole === 'lecteur') allowedOrgs = allowedOrgs.filter(o => o !== 'individuel');
   // Multi-club : le sélecteur s'affiche dès qu'un compte a plusieurs orgs autorisées,
   // quel que soit le rôle (utile pour les comptes staff-sur-une-org / joueur-sur-une-autre,
   // ex. Melvin : staff PSG + lecteur TEGG). Admin voit toujours le sélecteur.
