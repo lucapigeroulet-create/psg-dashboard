@@ -8704,8 +8704,12 @@ function applyRoleRestrictions() {
     // Exceptions : comptes staff PSG débloqués (accès à tous les onglets Paramètres).
     const FULL_SETTINGS_STAFF_EMAILS = ['elise@psg.fr','israel@psg.fr'];
     const myEmail = ((currentUser && currentUser.email) || '').toLowerCase();
-    const psgStaffVignettesOnly = staffLimited && currentOrg === 'PSG' && !FULL_SETTINGS_STAFF_EMAILS.includes(myEmail);
-    if (settingsBtn) settingsBtn.style.display = ((staffLimited && !psgStaffVignettesOnly) || window.isDirectionPlus) ? 'none' : '';
+    const isFullSettingsStaff = FULL_SETTINGS_STAFF_EMAILS.includes(myEmail);
+    // PSG staff standard : accès Paramètres restreint à Vignettes (contrôlé dans renderSettings).
+    // Staff PSG débloqué (elise/israel) : accès complet dans toutes leurs entités.
+    const psgStaffVignettesOnly = staffLimited && currentOrg === 'PSG' && !isFullSettingsStaff;
+    const hideSettings = window.isDirectionPlus || (staffLimited && !psgStaffVignettesOnly && !isFullSettingsStaff);
+    if (settingsBtn) settingsBtn.style.display = hideSettings ? 'none' : '';
   }
 
   // Comptes "Surveillant" : vue staff limitée aux 2 onglets suivi wellness/charge.
