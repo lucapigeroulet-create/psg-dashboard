@@ -26434,19 +26434,27 @@ function renderHistory() {
   }
 
   // Enrichir avec stats (nb joueurs, RPE moy)
+  // Les plannings et les RPE déclarés référencent la séance par son NOM (r.nom),
+  // pas par son type (r.seance) → on utilise r.nom || r.seance pour rétrocompat.
   rows = rows.map(r => {
-    const nbJoueurs = state.bdd_ent.filter(e => e.date === r.date && e.seances.includes(r.seance)).length;
+    const seanceKey = r.nom || r.seance;
+    const nbJoueurs = state.bdd_ent.filter(e => e.date === r.date && Array.isArray(e.seances) && e.seances.includes(seanceKey)).length;
     const rpeValues = [];
     state.bdd_rpe.forEach(rp => {
-      if (rp.date === r.date && rp.rpe) {
+      if (rp.date === r.date && Array.isArray(rp.rpe)) {
         rp.rpe.forEach(item => {
-          if (item.seance === r.seance) {
+          if (item && item.seance === seanceKey) {
             const v = item.rpe;
-            if (typeof v === 'number') rpeValues.push(v);
-            else if (typeof v === 'string') {
+            let mean = null;
+            if (typeof v === 'number' && !isNaN(v)) mean = v;
+            else if (Array.isArray(v)) {
+              const nums = v.map(Number).filter(x => !isNaN(x));
+              if (nums.length) mean = nums.reduce((a,b)=>a+b,0)/nums.length;
+            } else if (typeof v === 'string') {
               const parts = v.split(/[,;]/).map(s => parseFloat(s.trim())).filter(x => !isNaN(x));
-              if (parts.length) rpeValues.push(parts.reduce((a,b)=>a+b,0)/parts.length);
+              if (parts.length) mean = parts.reduce((a,b)=>a+b,0)/parts.length;
             }
+            if (mean !== null) rpeValues.push(mean);
           }
         });
       }
