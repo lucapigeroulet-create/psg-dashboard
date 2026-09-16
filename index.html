@@ -21449,7 +21449,7 @@ function renderMatchComposition() {
   // Compteurs
   const nbTit = players.filter(j => (matchCompositionState[j] || {}).statut === 'titulaire').length;
   const nbRemp = players.filter(j => (matchCompositionState[j] || {}).statut === 'remplacant').length;
-  html += '<div style="margin-top:8px;font-size:12px;color:var(--text-dim);">Titulaires : <b style="color:var(--green);">' + nbTit + '</b> · Remplaçants : <b style="color:#fbbf24;">' + nbRemp + '</b></div>';
+  html += '<div data-role="match-statut-counters" style="margin-top:8px;font-size:12px;color:var(--text-dim);">Titulaires : <b style="color:var(--green);">' + nbTit + '</b> · Remplaçants : <b style="color:#fbbf24;">' + nbRemp + '</b></div>';
 
   container.innerHTML = html;
 }
@@ -21457,9 +21457,38 @@ function renderMatchComposition() {
 function setMatchStatut(joueur, statut) {
   if (!matchCompositionState[joueur]) matchCompositionState[joueur] = { statut: 'absent', temps: [] };
   matchCompositionState[joueur].statut = statut;
-  // Si passe à absent, vider les temps
-  if (statut === 'absent') matchCompositionState[joueur].temps = [];
-  renderMatchComposition();
+  // Si passe à absent, vider les temps (temps + buts + passes ne comptent plus)
+  if (statut === 'absent') {
+    matchCompositionState[joueur].temps = [];
+  }
+  // Mise à jour DOM en place — évite le re-render complet qui repositionne le scroll en haut.
+  const totalCell = document.querySelector('#match-composition-container td.match-total[data-joueur="' + CSS.escape(joueur) + '"]');
+  const tr = totalCell ? totalCell.closest('tr') : null;
+  if (!tr) { renderMatchComposition(); return; }
+  // Fond de ligne
+  const rowBg = statut === 'titulaire' ? 'rgba(74,222,128,0.08)' : (statut === 'remplacant' ? 'rgba(251,191,36,0.08)' : '');
+  tr.style.background = rowBg;
+  // Activer/désactiver les inputs numériques (temps + buts + passes) selon le nouveau statut
+  const inputs = tr.querySelectorAll('input[type="number"]');
+  inputs.forEach(inp => {
+    inp.disabled = (statut === 'absent');
+    if (statut === 'absent') inp.value = '';
+  });
+  // Recompter le total temps (0 si absent, sinon somme des cellules)
+  updateMatchTotal(joueur);
+  // Recalculer les compteurs titulaires/remplaçants sans reconstruire le tableau
+  refreshMatchStatutCounters();
+}
+
+function refreshMatchStatutCounters() {
+  const container = document.getElementById('match-composition-container');
+  if (!container) return;
+  const counterEl = container.querySelector('div[data-role="match-statut-counters"]');
+  const states = Object.values(matchCompositionState || {});
+  const nbTit  = states.filter(s => (s || {}).statut === 'titulaire').length;
+  const nbRemp = states.filter(s => (s || {}).statut === 'remplacant').length;
+  const html = 'Titulaires : <b style="color:var(--green);">' + nbTit + '</b> · Remplaçants : <b style="color:#fbbf24;">' + nbRemp + '</b>';
+  if (counterEl) counterEl.innerHTML = html;
 }
 
 function setMatchTemps(joueur, periodeIdx, value) {
