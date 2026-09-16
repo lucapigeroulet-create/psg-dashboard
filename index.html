@@ -1395,6 +1395,16 @@
       <div class="chart-container tall"><canvas id="chart-rpe-total"></canvas></div>
     </div>
 
+    <!-- Nombre d'oublis RPE (fenêtre 4 h dépassée sans note du joueur) -->
+    <div class="card">
+      <h2>Oublis RPE hebdomadaires par joueur</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-top:-4px; margin-bottom:12px;">
+        Nombre de séances de la semaine où le joueur n'a pas répondu dans les 4 h suivant l'envoi de la RPE. Le compteur reste figé une fois la fenêtre passée, même si le staff renseigne la note plus tard.
+      </p>
+      <div id="rpe-oublis-summary" style="color:var(--text-dim); font-size:12px; margin-bottom:8px;"></div>
+      <div class="chart-container tall"><canvas id="chart-rpe-oublis"></canvas></div>
+    </div>
+
     <!-- ===================== BILAN INDIVIDUEL ===================== -->
     <div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">
       <h2 style="color:var(--accent-light);">👤 Bilan individuel</h2>
@@ -9027,7 +9037,9 @@ async function loadState() {
     // On ne charge que les affectations récentes : seule la fenêtre de 4h est pertinente
     // (au-delà, getSeancePublishedMs retombe sur seances.created_at, déjà verrouillé).
     // Borne aussi la réponse sous le plafond PostgREST de 1000 lignes et limite l'egress.
-    const affCutoff = new Date(Date.now() - 3 * 86400000).toISOString();
+    // Fenêtre élargie à 21 j : nécessaire pour calculer les oublis RPE par semaine
+    // (chart "oublis RPE hebdo") au-delà du strict verrou 4h du live.
+    const affCutoff = new Date(Date.now() - 21 * 86400000).toISOString();
     const { data: affectations } = await sb.from('seance_affectations')
       .select('*').eq('org', currentOrg).gte('affected_at', affCutoff);
     state.bdd_affectations = (affectations || []).map(a => ({
@@ -14199,6 +14211,9 @@ function renderRPE() {
     });
   }
 
+  // ===== Nombre d'oublis RPE dans la semaine (fenêtre 4h dépassée sans saisie joueur) =====
+  renderRPEOublisChart(players, dates);
+
   // Visuel note de plaisir (SECONDE LIGUE)
   renderRPEPlaisirChart(dates, players);
 
@@ -14210,6 +14225,82 @@ function renderRPE() {
 
   // Détail des charges d'une journée, procédé par procédé
   renderRPEProcedeJour();
+}
+
+// Compte le nombre d'oublis RPE (fenêtre 4 h dépassée sans note du joueur)
+// pour un joueur sur une plage de dates. On considère chaque affectation où :
+//   - rpe_published_at est renseigné (le staff a "envoyé" la RPE)
+//   - la fenêtre de 4 h est expirée
+//   - AUCUNE ligne rpe_declarations pour ce joueur/jour n'a été créée dans la fenêtre
+// La comparaison utilise created_at de la ligne RPE ; toute saisie tardive (staff
+// remplaçant a posteriori) laisse le compteur inchangé — la valeur reste figée.
+const RPE_WINDOW_HOURS = 4;
+function countRPEOublisForPlayer(joueur, dates) {
+  const now = Date.now();
+  const windowMs = RPE_WINDOW_HOURS * 3600000;
+  const dateSet = new Set(dates);
+  const affs = (state.bdd_affectations || []).filter(a =>
+    a.joueur === joueur && dateSet.has(a.date) && a.rpe_published_at
+  );
+  let n = 0;
+  for (const a of affs) {
+    const pubMs = new Date(a.rpe_published_at).getTime();
+    if (!isFinite(pubMs)) continue;
+    if (pubMs + windowMs > now) continue; // fenêtre encore ouverte : pas encore un oubli
+    const rpeRow = (state.bdd_rpe || []).find(r => r.date === a.date && r.joueur === joueur);
+    let submittedInTime = false;
+    if (rpeRow && rpeRow.created_at) {
+      const createdMs = new Date(rpeRow.created_at).getTime();
+      if (isFinite(createdMs) && createdMs <= pubMs + windowMs) {
+        const items = Array.isArray(rpeRow.rpe) ? rpeRow.rpe : [];
+        if (items.some(it => it && it.seance === a.seance)) submittedInTime = true;
+      }
+    }
+    if (!submittedInTime) n++;
+  }
+  return n;
+}
+
+function renderRPEOublisChart(players, dates) {
+  const summaryEl = document.getElementById('rpe-oublis-summary');
+  destroyChart('chart-rpe-oublis');
+  if (!Array.isArray(players) || players.length === 0 || !Array.isArray(dates) || dates.length === 0) {
+    if (summaryEl) summaryEl.textContent = 'Aucun joueur à afficher.';
+    return;
+  }
+  const rows = players.map(joueur => ({ joueur, nb: countRPEOublisForPlayer(joueur, dates) }))
+    .filter(r => r.nb > 0)
+    .sort((a, b) => b.nb - a.nb);
+  const totalOublis = rows.reduce((s, r) => s + r.nb, 0);
+  if (summaryEl) {
+    summaryEl.textContent = rows.length === 0
+      ? '✅ Aucun oubli RPE sur la semaine — tous les joueurs ont noté dans les 4 h.'
+      : (totalOublis + ' oubli(s) sur ' + rows.length + ' joueur(s) cette semaine.');
+  }
+  if (rows.length === 0) return;
+  const canvas = document.getElementById('chart-rpe-oublis');
+  if (!canvas) return;
+  const colorFor = (n) => n >= 5 ? '#dc2626' : (n >= 3 ? '#f97316' : (n >= 1 ? '#fbbf24' : '#16a34a'));
+  charts['chart-rpe-oublis'] = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => r.joueur),
+      datasets: [{
+        label: 'Oublis RPE (fenêtre 4 h dépassée)',
+        data: rows.map(r => r.nb),
+        backgroundColor: rows.map(r => colorFor(r.nb)),
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.x + ' oubli(s)' } } },
+      scales: {
+        x: { beginAtZero: true, ticks: { color: '#8ba3c1', precision: 0, stepSize: 1 }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'Nombre de séances non notées à temps', color: '#8ba3c1' } },
+        y: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } }
+      }
+    }
+  });
 }
 
 // Libellé de date lisible : 'Jeu 14/08/2026'
