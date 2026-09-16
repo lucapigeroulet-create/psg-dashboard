@@ -14260,7 +14260,8 @@ function countRPEOublisForPlayer(joueur, dates) {
   const affs = (state.bdd_affectations || []).filter(a =>
     a.joueur === joueur && dateSet.has(a.date) && a.rpe_published_at
   );
-  let n = 0;
+  // Compte 1 jour dès qu'au moins une séance de ce jour est en oubli (fenêtre 4h dépassée sans note joueur).
+  const daysWithOubli = new Set();
   for (const a of affs) {
     const pubMs = new Date(a.rpe_published_at).getTime();
     if (!isFinite(pubMs)) continue;
@@ -14274,9 +14275,9 @@ function countRPEOublisForPlayer(joueur, dates) {
         if (items.some(it => it && it.seance === a.seance)) submittedInTime = true;
       }
     }
-    if (!submittedInTime) n++;
+    if (!submittedInTime) daysWithOubli.add(a.date);
   }
-  return n;
+  return daysWithOubli.size;
 }
 
 // Bascule des champs selon la période choisie pour les oublis RPE
@@ -14349,7 +14350,7 @@ function renderRPEOublisChart(players, defaultDates) {
   if (summaryEl) {
     summaryEl.textContent = rows.length === 0
       ? '✅ Aucun oubli RPE ' + label + ' — tous les joueurs ont noté dans les 4 h.'
-      : (totalOublis + ' oubli(s) sur ' + rows.length + ' joueur(s) — période : ' + label + '.');
+      : (totalOublis + ' jour(s) manqué(s) sur ' + rows.length + ' joueur(s) — période : ' + label + '.');
   }
   if (rows.length === 0) return;
   const canvas = document.getElementById('chart-rpe-oublis');
@@ -14368,9 +14369,9 @@ function renderRPEOublisChart(players, defaultDates) {
     },
     options: {
       responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.x + ' oubli(s)' } } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.x + ' jour(s) manqué(s)' } } },
       scales: {
-        x: { beginAtZero: true, ticks: { color: '#8ba3c1', precision: 0, stepSize: 1 }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'Nombre de séances non notées à temps', color: '#8ba3c1' } },
+        x: { beginAtZero: true, ticks: { color: '#8ba3c1', precision: 0, stepSize: 1 }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'Nombre de jours avec au moins une RPE non notée à temps', color: '#8ba3c1' } },
         y: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } }
       }
     }
