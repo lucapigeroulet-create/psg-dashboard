@@ -23838,8 +23838,11 @@ function renderCompetitionIndividuel() {
 
   // Index rapide des notes perso (bdd_match_notes) et remarques coachs (bdd_match_coach_notes)
   const persoByMatch = {};
+  const persoCommentByMatch = {};
   (state.bdd_match_notes || []).forEach(n => {
-    if (n.joueur === competitionIndivJoueur) persoByMatch[n.match_id] = n.note;
+    if (n.joueur !== competitionIndivJoueur) return;
+    persoByMatch[n.match_id] = n.note;
+    if (n.commentaire && n.commentaire.trim()) persoCommentByMatch[n.match_id] = n.commentaire.trim();
   });
   const coachsByMatch = {};
   (state.bdd_match_coach_notes || []).forEach(n => {
@@ -23871,6 +23874,7 @@ function renderCompetitionIndividuel() {
   html += '<th style="text-align:center;">⚽</th>';
   html += '<th style="text-align:center;">🅰️</th>';
   html += '<th style="text-align:center;">Note perso</th>';
+  html += '<th style="text-align:left;">Remarque joueur</th>';
   html += '<th style="text-align:center;">Note coach</th>';
   html += '<th style="text-align:left;">Remarque coach</th>';
   html += '</tr></thead><tbody>';
@@ -23894,7 +23898,9 @@ function renderCompetitionIndividuel() {
     html += '<td style="text-align:center;">' + (c.total_min || 0) + '</td>';
     html += '<td style="text-align:center;font-weight:700;color:var(--accent-light);">' + (c.buts || 0) + '</td>';
     html += '<td style="text-align:center;">' + (c.passes_dec || 0) + '</td>';
+    const remarqueJoueur = persoCommentByMatch[m.id] || '';
     html += '<td style="text-align:center;">' + (notePerso != null ? Number(notePerso).toFixed(1) : '—') + '</td>';
+    html += '<td style="text-align:left;font-size:11px;line-height:1.4;">' + (remarqueJoueur ? escapeHtml(remarqueJoueur) : '<span style="color:var(--text-dim);">—</span>') + '</td>';
     html += '<td style="text-align:center;">' + (noteCoachAvg != null ? noteCoachAvg.toFixed(1) : '—') + '</td>';
     html += '<td style="text-align:left;font-size:11px;line-height:1.4;">' + (remarques || '<span style="color:var(--text-dim);">—</span>') + '</td>';
     html += '</tr>';
