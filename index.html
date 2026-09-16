@@ -1397,10 +1397,28 @@
 
     <!-- Nombre d'oublis RPE (fenêtre 4 h dépassée sans note du joueur) -->
     <div class="card">
-      <h2>Oublis RPE hebdomadaires par joueur</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-top:-4px; margin-bottom:12px;">
-        Nombre de séances de la semaine où le joueur n'a pas répondu dans les 4 h suivant l'envoi de la RPE. Le compteur reste figé une fois la fenêtre passée, même si le staff renseigne la note plus tard.
+      <h2>Oublis RPE par joueur</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-top:-4px; margin-bottom:10px;">
+        Nombre de séances où le joueur n'a pas répondu dans les 4 h suivant l'envoi de la RPE. Le compteur reste figé une fois la fenêtre passée, même si le staff renseigne la note plus tard.
       </p>
+      <div class="filters" style="margin-bottom:10px; gap:12px; flex-wrap:wrap;">
+        <div class="filter-group">
+          <label>Période</label>
+          <select id="rpe-oublis-mode" onchange="onRPEOublisModeChange()" style="font-size:12px;">
+            <option value="week">Semaine sélectionnée</option>
+            <option value="range">Depuis une date</option>
+            <option value="pickweek">Semaine précise</option>
+          </select>
+        </div>
+        <div class="filter-group" id="rpe-oublis-from-wrap" style="display:none;">
+          <label>Depuis le</label>
+          <input type="date" id="rpe-oublis-from" onchange="renderRPE()" style="font-size:12px;" />
+        </div>
+        <div class="filter-group" id="rpe-oublis-week-wrap" style="display:none;">
+          <label>Semaine</label>
+          <select id="rpe-oublis-week" onchange="renderRPE()" style="font-size:12px;"></select>
+        </div>
+      </div>
       <div id="rpe-oublis-summary" style="color:var(--text-dim); font-size:12px; margin-bottom:8px;"></div>
       <div class="chart-container tall"><canvas id="chart-rpe-oublis"></canvas></div>
     </div>
@@ -14261,9 +14279,65 @@ function countRPEOublisForPlayer(joueur, dates) {
   return n;
 }
 
-function renderRPEOublisChart(players, dates) {
+// Bascule des champs selon la période choisie pour les oublis RPE
+function onRPEOublisModeChange() {
+  const mode = (document.getElementById('rpe-oublis-mode') || {}).value || 'week';
+  const fromWrap = document.getElementById('rpe-oublis-from-wrap');
+  const weekWrap = document.getElementById('rpe-oublis-week-wrap');
+  if (fromWrap) fromWrap.style.display = (mode === 'range') ? '' : 'none';
+  if (weekWrap) weekWrap.style.display = (mode === 'pickweek') ? '' : 'none';
+  if (mode === 'range') {
+    const fromEl = document.getElementById('rpe-oublis-from');
+    if (fromEl && !fromEl.value) {
+      // Défaut : lundi de la semaine courante
+      const monday = getMondayOf(toLocalISO(new Date()));
+      fromEl.value = toLocalISO(monday);
+    }
+  }
+  if (mode === 'pickweek') {
+    const wsel = document.getElementById('rpe-oublis-week');
+    if (wsel) {
+      const weeks = (typeof getAvailableWeeks === 'function') ? getAvailableWeeks() : [];
+      if (wsel.dataset.count !== String(weeks.length) || wsel.dataset.org !== currentOrg) {
+        const cur = wsel.value;
+        wsel.innerHTML = weeks.map(w => '<option value="' + w.mondayIso + '">S' + w.week + ' (' + w.year + ') — ' + formatDateRange(w.monday) + '</option>').join('');
+        if (cur && weeks.some(w => w.mondayIso === cur)) wsel.value = cur;
+        wsel.dataset.count = String(weeks.length);
+        wsel.dataset.org = currentOrg;
+      }
+    }
+  }
+  renderRPE();
+}
+
+// Résout la plage de dates ISO en fonction du mode et retourne { dates, label }
+function resolveRPEOublisRange(defaultWeekDates) {
+  const mode = (document.getElementById('rpe-oublis-mode') || {}).value || 'week';
+  const todayIso = toLocalISO(new Date());
+  if (mode === 'range') {
+    const from = (document.getElementById('rpe-oublis-from') || {}).value;
+    if (!from) return { dates: defaultWeekDates || [], label: 'semaine sélectionnée' };
+    const out = [];
+    const start = new Date(from + 'T00:00:00');
+    const end = new Date(todayIso + 'T00:00:00');
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) out.push(toLocalISO(d));
+    return { dates: out, label: 'depuis le ' + String(from).split('-').reverse().join('/') };
+  }
+  if (mode === 'pickweek') {
+    const monISO = (document.getElementById('rpe-oublis-week') || {}).value;
+    if (!monISO) return { dates: defaultWeekDates || [], label: 'semaine sélectionnée' };
+    const monday = getMondayOf(monISO);
+    const wd = weekDates(monday);
+    const info = getISOWeek(monISO);
+    return { dates: wd, label: 'Semaine ' + info.week + ' (' + info.year + ')' };
+  }
+  return { dates: defaultWeekDates || [], label: 'semaine sélectionnée' };
+}
+
+function renderRPEOublisChart(players, defaultDates) {
   const summaryEl = document.getElementById('rpe-oublis-summary');
   destroyChart('chart-rpe-oublis');
+  const { dates, label } = resolveRPEOublisRange(defaultDates);
   if (!Array.isArray(players) || players.length === 0 || !Array.isArray(dates) || dates.length === 0) {
     if (summaryEl) summaryEl.textContent = 'Aucun joueur à afficher.';
     return;
@@ -14274,8 +14348,8 @@ function renderRPEOublisChart(players, dates) {
   const totalOublis = rows.reduce((s, r) => s + r.nb, 0);
   if (summaryEl) {
     summaryEl.textContent = rows.length === 0
-      ? '✅ Aucun oubli RPE sur la semaine — tous les joueurs ont noté dans les 4 h.'
-      : (totalOublis + ' oubli(s) sur ' + rows.length + ' joueur(s) cette semaine.');
+      ? '✅ Aucun oubli RPE ' + label + ' — tous les joueurs ont noté dans les 4 h.'
+      : (totalOublis + ' oubli(s) sur ' + rows.length + ' joueur(s) — période : ' + label + '.');
   }
   if (rows.length === 0) return;
   const canvas = document.getElementById('chart-rpe-oublis');
