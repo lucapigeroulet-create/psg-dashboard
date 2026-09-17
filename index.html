@@ -9476,7 +9476,7 @@ async function saveJoueurToSupabase(joueur, oldNom) {
   if (oldNom && oldNom !== joueur.nom) {
     const old = state.joueurs.find(x => x.nom === oldNom) || (state.joueurs_archived || []).find(x => x.nom === oldNom);
     photoAConserver = joueur.photo ?? (old && old.photo) ?? null;
-    const { error: e1 } = await sb.from('joueurs').delete().eq('nom', oldNom);
+    const { error: e1 } = await sb.from('joueurs').delete().eq('nom', oldNom).eq('org', currentOrg);
     if (e1) { toast('Erreur : ' + e1.message, 'error'); return false; }
   }
   const payload = {
@@ -9494,7 +9494,7 @@ async function saveJoueurToSupabase(joueur, oldNom) {
   // N'inclure `photo` que lors d'un renommage (sinon on écraserait la photo existante par null)
   if (photoAConserver) payload.photo = photoAConserver;
   console.log('[saveJoueurToSupabase] payload upsert :', payload);
-  const { data, error } = await sb.from('joueurs').upsert(payload, { onConflict: 'nom' }).select();
+  const { data, error } = await sb.from('joueurs').upsert(payload, { onConflict: 'nom,org' }).select();
   if (error) { console.error('[saveJoueurToSupabase] erreur Supabase :', error); toast('Erreur joueur : ' + error.message, 'error'); return false; }
   console.log('[saveJoueurToSupabase] retour DB :', data);
   return true;
@@ -9502,7 +9502,7 @@ async function saveJoueurToSupabase(joueur, oldNom) {
 
 async function deleteJoueurFromSupabase(nom) {
   if (!canWrite()) { toast('Lecture seule', 'error'); return false; }
-  const { error } = await sb.from('joueurs').delete().eq('nom', nom);
+  const { error } = await sb.from('joueurs').delete().eq('nom', nom).eq('org', currentOrg);
   if (error) { toast('Erreur : ' + error.message, 'error'); return false; }
   return true;
 }
