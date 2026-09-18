@@ -25712,6 +25712,12 @@ async function saveSeance() {
         }
         // Migration de la clé RPE (valeurs intactes) + persistance
         await migrateRPESeanceKey(date, editingOriginal, date, nom);
+        // Renommer les affectations pour ne pas casser le lien staff/joueur
+        try { await sb.from('seance_affectations').update({ seance: nom }).eq('org', currentOrg).eq('date', date).eq('seance', editingOriginal); } catch (err) {}
+        // Etat local des affectations
+        for (const a of (state.bdd_affectations || [])) {
+          if (a.date === date && a.seance === editingOriginal) a.seance = nom;
+        }
       }
     } else {
       state.bdd_ent2.push(obj);
@@ -25720,8 +25726,13 @@ async function saveSeance() {
     state.bdd_ent2.push(obj);
   }
 
-  // Persistance Supabase
+  // Persistance Supabase : upsert la nouvelle puis supprimer l'ancienne ligne si renommage
   await saveSeanceToSupabase(obj);
+  if (editingOriginal && editingOriginal !== nom) {
+    await deleteSeanceFromSupabase(date, editingOriginal);
+    // Etat local : purger l'ancien nom (l'index a déjà été écrasé, mais un éventuel doublon subsisterait)
+    state.bdd_ent2 = state.bdd_ent2.filter(x => !(x.date === date && x.nom === editingOriginal));
+  }
   toast('Séance enregistrée : ' + nom, 'success');
   // Rafraîchir tous les sélecteurs et la vue active
   renderEntryExistingSelect();
