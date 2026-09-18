@@ -25745,6 +25745,9 @@ async function saveSeance() {
   renderAffectSeanceSelect();
   renderAffectation();
   refreshAllSelectors();
+  // Rafraîchir le récap "Séances du jour" : sinon un renommage laisse le bouton
+  // "📢 Envoyer RPE" affiché pour l'ancien nom alors que rpe_published_at a été préservé
+  try { await renderEntryJourTable(); } catch (e) {}
   // Repositionner sur la séance fraîchement créée
   document.getElementById('entry-existing').value = nom;
 }
