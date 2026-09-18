@@ -25712,8 +25712,14 @@ async function saveSeance() {
         }
         // Migration de la clé RPE (valeurs intactes) + persistance
         await migrateRPESeanceKey(date, editingOriginal, date, nom);
-        // Renommer les affectations pour ne pas casser le lien staff/joueur
-        try { await sb.from('seance_affectations').update({ seance: nom }).eq('org', currentOrg).eq('date', date).eq('seance', editingOriginal); } catch (err) {}
+        // Renommer les affectations pour préserver rpe_published_at, chrono 4h, RPE déjà saisis
+        const affRename = await sb.from('seance_affectations')
+          .update({ seance: nom })
+          .eq('org', currentOrg).eq('date', date).eq('seance', editingOriginal);
+        if (affRename.error) {
+          toast('Renommage affectations impossible : ' + affRename.error.message + ' — ancienne séance conservée', 'error');
+          return; // NE PAS supprimer l'ancienne : les RPE/affectations y sont encore rattachées
+        }
         // Etat local des affectations
         for (const a of (state.bdd_affectations || [])) {
           if (a.date === date && a.seance === editingOriginal) a.seance = nom;
