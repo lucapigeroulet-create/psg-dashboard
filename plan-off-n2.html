@@ -204,7 +204,9 @@ footer{margin-top:36px;padding-top:20px;border-top:1px solid var(--border);font-
       <div class="gen-meta" id="gen-meta"></div>
     </div>
     <div class="filter" id="filter-block">
-      <label for="jump">🔎 Vue individuelle</label>
+      <label for="team">🏷️ Équipe</label>
+      <select id="team"><option value="__all__">👥 Toutes les équipes</option></select>
+      <label for="jump" style="margin-top:8px;">🔎 Vue individuelle</label>
       <select id="jump"><option value="__all__">👥 Toute l'équipe</option></select>
       <div class="pager" id="pager">
         <button type="button" class="prev" id="pager-prev" onclick="stepPlayer(-1)" title="Joueur précédent">← Préc.</button>
@@ -274,6 +276,8 @@ function safeChipKind(v){ return ['ok','warn','danger','watch','neutral','aero',
 function safeTone(v){ return ['ok','warn','danger','dim',''].includes(String(v)) ? v : ''; }
 
 const PLAYERS_ORDER = [];
+const ROSTER_MAP = new Map(); // joueur -> groupe (fourni par le parent StatField)
+let currentTeamFilter = '__all__';
 
 function renderTrame(collective){
   const c = document.getElementById('trame-container');
@@ -305,10 +309,11 @@ function renderCard(card, sectionVariant, layout){
   const reco = (card.reco) ? `<div class="reco"><span>${md(card.reco)}</span></div>` : '';
   const foot = (card.foot_left || card.foot_right) ? `<div class="card-foot"><span>${esc(card.foot_left || '')}</span><b>${esc(card.foot_right || '')}</b></div>` : '';
   const miniClass = (layout === 'compact') ? ' mini' : '';
+  const groupe = ROSTER_MAP.get(card.joueur || '') || '';
   return `
-    <div class="card ${variant}${miniClass}" data-joueur="${esc(card.joueur || '')}">
+    <div class="card ${variant}${miniClass}" data-joueur="${esc(card.joueur || '')}" data-groupe="${esc(groupe)}">
       <div class="card-head">
-        <div class="name-block"><div class="name">${esc(card.joueur || '')}</div>${card.poste ? `<span class="poste">${esc(card.poste)}</span>` : ''}</div>
+        <div class="name-block"><div class="name">${esc(card.joueur || '')}</div>${card.poste ? `<span class="poste">${esc(card.poste)}</span>` : ''}${groupe ? `<span class="poste" style="background:var(--accent-soft); color:var(--accent-light); margin-left:6px;">${esc(groupe)}</span>` : ''}</div>
         ${chips ? `<div class="chips">${chips}</div>` : ''}
       </div>
       ${stats}
@@ -336,18 +341,35 @@ function renderSections(sections){
         <span class="count">${esc(sec.subtitle || (count + ' joueur' + (count > 1 ? 's' : '')))}</span>
       </div>
       <div class="grid ${layout === 'compact' ? 'compact' : ''}" data-section="${esc(id)}">
-        ${(sec.cards || []).map(card => { if (card.joueur) PLAYERS_ORDER.push({ nom: card.joueur, poste: card.poste || '', section: sec.title || '' }); return renderCard(card, variant, layout); }).join('')}
+        ${(sec.cards || []).map(card => { if (card.joueur) PLAYERS_ORDER.push({ nom: card.joueur, poste: card.poste || '', section: sec.title || '', groupe: ROSTER_MAP.get(card.joueur) || '' }); return renderCard(card, variant, layout); }).join('')}
       </div>`);
   });
   c.innerHTML = parts.join('');
+  rebuildTeamSelect();
   rebuildJumpSelect();
+}
+
+function rebuildTeamSelect(){
+  const sel = document.getElementById('team');
+  if (!sel) return;
+  const groupes = Array.from(new Set(PLAYERS_ORDER.map(p => p.groupe).filter(Boolean))).sort();
+  const counts = {};
+  PLAYERS_ORDER.forEach(p => { if (p.groupe) counts[p.groupe] = (counts[p.groupe] || 0) + 1; });
+  const opts = ['<option value="__all__">👥 Toutes les équipes (' + PLAYERS_ORDER.length + ')</option>'];
+  groupes.forEach(g => opts.push('<option value="' + esc(g) + '">' + esc(g) + ' (' + counts[g] + ')</option>'));
+  const prev = currentTeamFilter;
+  sel.innerHTML = opts.join('');
+  sel.value = groupes.includes(prev) ? prev : '__all__';
+  currentTeamFilter = sel.value;
 }
 
 function rebuildJumpSelect(){
   const sel = document.getElementById('jump');
+  const filtered = PLAYERS_ORDER.filter(p => currentTeamFilter === '__all__' || p.groupe === currentTeamFilter);
   const bySection = {};
-  PLAYERS_ORDER.forEach(p => { (bySection[p.section] ||= []).push(p); });
-  const opts = ['<option value="__all__">👥 Toute l\'équipe (' + PLAYERS_ORDER.length + ')</option>'];
+  filtered.forEach(p => { (bySection[p.section] ||= []).push(p); });
+  const label = currentTeamFilter === '__all__' ? 'Toute l\'équipe' : currentTeamFilter;
+  const opts = ['<option value="__all__">👥 ' + esc(label) + ' (' + filtered.length + ')</option>'];
   Object.entries(bySection).forEach(([sec, list]) => {
     opts.push(`<optgroup label="${esc(sec + ' (' + list.length + ')')}">${list.map(p => `<option value="${esc(p.nom)}">${esc(p.nom + (p.poste ? ' · ' + p.poste : ''))}</option>`).join('')}</optgroup>`);
   });
@@ -393,13 +415,17 @@ function setGenMeta(plan, meta){
 /* ============================================================
  * Sélecteur / pager
  * ============================================================ */
+function currentPlayersList(){
+  return PLAYERS_ORDER.filter(p => currentTeamFilter === '__all__' || p.groupe === currentTeamFilter).map(p => p.nom);
+}
+
 function updatePager(v){
   const sel = document.getElementById('jump');
   const prev = document.getElementById('pager-prev');
   const next = document.getElementById('pager-next');
   const nm = document.getElementById('pager-name');
   const pos = document.getElementById('pager-pos');
-  const list = PLAYERS_ORDER.map(p => p.nom);
+  const list = currentPlayersList();
   if (v === '__all__' || !v){
     nm.textContent = 'Toute l\'équipe';
     pos.textContent = list.length ? ('· 0 / ' + list.length) : '';
@@ -415,16 +441,21 @@ function updatePager(v){
 }
 
 function applyFilter(v){
-  const all = (v === '__all__' || !v);
-  document.getElementById('filter-block').classList.toggle('filtered', !all);
+  const soloJoueur = !(v === '__all__' || !v);
+  const teamAll = (currentTeamFilter === '__all__');
+  const anyFilterActive = soloJoueur || !teamAll;
+  document.getElementById('filter-block').classList.toggle('filtered', anyFilterActive);
   const trame = document.getElementById('trame-container');
-  if (trame) trame.style.display = all ? '' : 'none';
+  // Trame collective : visible seulement si aucun filtre actif
+  if (trame) trame.style.display = anyFilterActive ? 'none' : '';
   const cards = document.querySelectorAll('.card[data-joueur]');
   let matched = 0;
   cards.forEach(c => {
-    const m = all || c.dataset.joueur === v;
+    const matchTeam = teamAll || c.dataset.groupe === currentTeamFilter;
+    const matchJoueur = !soloJoueur || c.dataset.joueur === v;
+    const m = matchTeam && matchJoueur;
     c.style.display = m ? '' : 'none';
-    c.classList.toggle('solo', !all && m);
+    c.classList.toggle('solo', soloJoueur && m);
     if (m) matched++;
   });
   document.querySelectorAll('.grid[data-section]').forEach(g => {
@@ -437,7 +468,7 @@ function applyFilter(v){
     d.style.display = (grid && grid.style.display !== 'none') ? '' : 'none';
   });
   updatePager(v);
-  if (!all) {
+  if (soloJoueur) {
     const el = document.querySelector('.card[data-joueur="' + v + '"]');
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } else {
@@ -445,10 +476,23 @@ function applyFilter(v){
   }
 }
 
+function applyTeamFilter(v){
+  currentTeamFilter = v || '__all__';
+  rebuildJumpSelect();
+  applyFilter('__all__');
+}
+
 document.getElementById('jump').addEventListener('change', e => applyFilter(e.target.value));
-window.clearFilter = function(){ const s = document.getElementById('jump'); s.value = '__all__'; applyFilter('__all__'); };
+document.getElementById('team').addEventListener('change', e => applyTeamFilter(e.target.value));
+window.clearFilter = function(){
+  const t = document.getElementById('team'); if (t) t.value = '__all__';
+  const s = document.getElementById('jump'); s.value = '__all__';
+  currentTeamFilter = '__all__';
+  rebuildJumpSelect();
+  applyFilter('__all__');
+};
 window.stepPlayer = function(delta){
-  const list = PLAYERS_ORDER.map(p => p.nom);
+  const list = currentPlayersList();
   if (list.length === 0) return;
   const s = document.getElementById('jump');
   const cur = s.value;
@@ -574,11 +618,13 @@ document.addEventListener('keydown', e => {
     } else if (m.type === 'reco:save-error') {
       setMeta('error', 'Erreur : ' + (m.error || 'inconnue'));
     } else if (m.type === 'reco:plan' && m.date === currentDate) {
+      if (Array.isArray(m.roster)) { ROSTER_MAP.clear(); m.roster.forEach(r => { if (r && r.joueur) ROSTER_MAP.set(r.joueur, r.groupe || ''); }); }
       if (m.plan) { renderPlan(m.plan); setGenMeta(m.plan, { generated_at: m.generated_at, generated_by: m.generated_by, model: m.model }); }
       else showEmpty();
     } else if (m.type === 'reco:generated' && m.date === currentDate) {
       overlay.classList.remove('show');
       genBtn.disabled = false;
+      if (Array.isArray(m.roster)) { ROSTER_MAP.clear(); m.roster.forEach(r => { if (r && r.joueur) ROSTER_MAP.set(r.joueur, r.groupe || ''); }); }
       if (m.plan) {
         renderPlan(m.plan);
         setGenMeta(m.plan, { generated_at: m.generated_at, generated_by: m.generated_by, model: m.model });

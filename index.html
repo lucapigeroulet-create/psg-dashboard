@@ -27731,6 +27731,13 @@ function renderRecoEntrainement() {
   }
 }
 
+// Roster envoyé à l'iframe reco pour permettre le filtre par équipe (U15 / U19 / …)
+function buildRecoRoster() {
+  return (state.joueurs || [])
+    .filter(j => j && j.nom && !j.archived)
+    .map(j => ({ joueur: j.nom, groupe: j.groupe || null, poste: j.poste || null }));
+}
+
 // Pont postMessage iframe → parent pour le "contexte du jour"
 window.addEventListener('message', async (e) => {
   const msg = e.data;
@@ -27781,6 +27788,7 @@ window.addEventListener('message', async (e) => {
       status: (data && data.status) || (data && data.plan ? 'ready' : null),
       error_message: data ? data.error_message : null,
       job_started_at: data ? data.job_started_at : null,
+      roster: buildRecoRoster(),
     });
   } else if (msg.type === 'reco:generate-plan') {
     const date = String(msg.date || '').slice(0, 10);
@@ -27834,6 +27842,7 @@ window.addEventListener('message', async (e) => {
             generated_by: row.generated_by,
             model: row.model,
             ms: Date.now() - jobStart,
+            roster: buildRecoRoster(),
           });
           return;
         }
