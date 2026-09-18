@@ -7527,9 +7527,12 @@ async function toggleSeancePlanFaite(spId, faire) {
   }
   if (faire) {
     const row = { seance_id: spId, joueur: joueur, org: currentOrg };
-    const { data, error } = await sb.from('seances_planifiees_faites').insert(row).select();
+    const { data, error } = await sb.from('seances_planifiees_faites').upsert(row, { onConflict: 'seance_id,joueur' }).select();
     if (error) { toast('Erreur : ' + error.message, 'error'); return; }
-    if (data && data[0]) state.bdd_seances_plan_faites.push(data[0]);
+    if (data && data[0]) {
+      state.bdd_seances_plan_faites = (state.bdd_seances_plan_faites || []).filter(f => !(f.seance_id === spId && f.joueur === joueur));
+      state.bdd_seances_plan_faites.push(data[0]);
+    }
   } else {
     const { error } = await sb.from('seances_planifiees_faites').delete().eq('seance_id', spId).eq('joueur', joueur);
     if (error) { toast('Erreur : ' + error.message, 'error'); return; }
@@ -7565,12 +7568,14 @@ async function validateSeanceWithRPE(spId, valeur) {
       }
     }
   }
-  // Anti double-validation
-  if (seancePlanEstFaite(spId, joueur)) { renderSeancePlanModal(spId, joueur); return; }
+  // Anti double-validation (côté DB : upsert, donc re-valider = MAJ du RPE)
   const row = { seance_id: spId, joueur: joueur, org: currentOrg, rpe: v };
-  const { data, error } = await sb.from('seances_planifiees_faites').insert(row).select();
+  const { data, error } = await sb.from('seances_planifiees_faites').upsert(row, { onConflict: 'seance_id,joueur' }).select();
   if (error) { toast('Erreur : ' + error.message, 'error'); return; }
-  if (data && data[0]) state.bdd_seances_plan_faites.push(data[0]);
+  if (data && data[0]) {
+    state.bdd_seances_plan_faites = (state.bdd_seances_plan_faites || []).filter(f => !(f.seance_id === spId && f.joueur === joueur));
+    state.bdd_seances_plan_faites.push(data[0]);
+  }
   renderSeancePlanModal(spId, joueur);
   if (getCurrentView() === 'calendar') renderCalendar();
   if (getCurrentView() === 'player-seances') renderPlayerSeances();
@@ -7606,9 +7611,12 @@ async function adminToggleSeancePlanFaite(spId, joueur, faire) {
   if (currentRole !== 'admin' && currentRole !== 'staff') { toast('Action non autorisée', 'error'); return; }
   if (faire) {
     const row = { seance_id: spId, joueur: joueur, org: currentOrg };
-    const { data, error } = await sb.from('seances_planifiees_faites').insert(row).select();
+    const { data, error } = await sb.from('seances_planifiees_faites').upsert(row, { onConflict: 'seance_id,joueur' }).select();
     if (error) { toast('Erreur : ' + error.message, 'error'); return; }
-    if (data && data[0]) state.bdd_seances_plan_faites.push(data[0]);
+    if (data && data[0]) {
+      state.bdd_seances_plan_faites = (state.bdd_seances_plan_faites || []).filter(f => !(f.seance_id === spId && f.joueur === joueur));
+      state.bdd_seances_plan_faites.push(data[0]);
+    }
     toast(joueur + ' : séance marquée comme faite', 'success');
   } else {
     const { error } = await sb.from('seances_planifiees_faites').delete().eq('seance_id', spId).eq('joueur', joueur);
