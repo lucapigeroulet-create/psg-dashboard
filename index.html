@@ -21869,6 +21869,48 @@ function loadExistingMatch() {
   toast('Match chargé', 'success');
 }
 
+// Chrono 4h RPE d'un match : renvoie un objet { status, label } pour affichage direct.
+// status ∈ 'none' (rien à envoyer), 'pending', 'partial', 'live' (en cours), 'closed'.
+function matchChronoInfo(m) {
+  const compo = (m && Array.isArray(m.composition)) ? m.composition : [];
+  const played = compo.filter(c => c && c.joueur && (c.total_min || 0) > 0);
+  const nAff = played.length;
+  const nPub = played.filter(c => c.rpe_published_at).length;
+  const nPending = nAff - nPub;
+  if (nAff === 0) return { status: 'none', label: 'Aucun joueur' };
+  if (nPub === 0) return { status: 'pending', label: '🕐 En attente d\'envoi' };
+  const latest = played.reduce((mx, c) => Math.max(mx, c.rpe_published_at ? new Date(c.rpe_published_at).getTime() : 0), 0);
+  const totalMin = SESSION_WINDOW_HOURS * 60;
+  const ageMin = Math.max(0, Math.floor((Date.now() - latest) / 60000));
+  const remainMin = totalMin - ageMin;
+  const closed = remainMin <= 0;
+  if (nPending === 0) {
+    if (closed) return { status: 'closed', label: '⛔ Fenêtre 4h fermée' };
+    return { status: 'live', label: '✅ Envoyée · ' + Math.floor(remainMin / 60) + 'h' + String(remainMin % 60).padStart(2, '0') + ' restant' };
+  }
+  return { status: 'partial', label: '⚠️ Partiel : ' + nPub + '/' + nAff + (closed ? ' · ⛔ fenêtre fermée' : ' · ' + Math.floor(remainMin / 60) + 'h' + String(remainMin % 60).padStart(2, '0') + ' restant') };
+}
+
+function matchChronoHtml(m) {
+  const info = matchChronoInfo(m);
+  const color = { none: 'var(--text-dim)', pending: 'var(--yellow)', partial: 'var(--accent-light)', live: 'var(--green)', closed: 'var(--text-dim)' }[info.status] || 'var(--text-dim)';
+  return '<span style="color:' + color + ';font-size:11px;font-weight:600;">' + info.label + '</span>';
+}
+
+// Auto-refresh du chrono affiché (liste matchs + badge match-entry) toutes les 30 s
+let __matchChronoTimer = null;
+function ensureMatchChronoTimer() {
+  if (__matchChronoTimer) return;
+  __matchChronoTimer = setInterval(() => {
+    // Ne rafraîchir que si l'onglet match est visible pour éviter le travail inutile
+    const view = document.querySelector('.view[style*="display: block"], .view.active');
+    const list = document.getElementById('match-list');
+    if (list && list.offsetParent !== null) renderMatchList();
+    const stEl = document.getElementById('match-publish-rpe-status');
+    if (stEl && stEl.offsetParent !== null) refreshMatchPublishRPEUI();
+  }, 30000);
+}
+
 // Met à jour le bouton "Envoyer RPE + perf" + son texte de statut selon l'état du match
 function refreshMatchPublishRPEUI() {
   const btn = document.getElementById('match-publish-rpe-btn');
@@ -21902,11 +21944,12 @@ function refreshMatchPublishRPEUI() {
     btn.textContent = '✅ RPE déjà envoyée à tous';
     btn.disabled = true;
     btn.style.opacity = '0.5';
-    stEl.innerHTML = '<span style="color:var(--green);">✓ Envoyée aux ' + nAff + ' joueur(s)</span> — chrono 4h en cours.';
+    stEl.innerHTML = '<span style="color:var(--green);">✓ Envoyée aux ' + nAff + ' joueur(s)</span> — ' + matchChronoHtml(m);
   } else {
     btn.textContent = '📢 Envoyer aux ' + nPending + ' restants';
-    stEl.innerHTML = '<span style="color:var(--accent-light);">⚠️ Partiel : ' + nPub + '/' + nAff + ' déjà notifié(s)</span>';
+    stEl.innerHTML = matchChronoHtml(m);
   }
+  ensureMatchChronoTimer();
 }
 
 async function publishCurrentMatchRPE() {
@@ -21959,7 +22002,7 @@ function renderMatchList() {
     container.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:10px;">Aucun match enregistré.</div>';
     return;
   }
-  let html = '<div class="table-wrap"><table style="font-size:13px;"><thead><tr><th style="text-align:left;">Date</th><th style="text-align:left;">Match</th><th>Score</th><th>Joueurs</th><th></th></tr></thead><tbody>';
+  let html = '<div class="table-wrap"><table style="font-size:13px;"><thead><tr><th style="text-align:left;">Date</th><th style="text-align:left;">Match</th><th>Score</th><th>Joueurs</th><th>Chrono RPE</th><th></th></tr></thead><tbody>';
   matchs.forEach(m => {
     const compo = m.composition || [];
     const nbJoueurs = compo.length;
@@ -21972,11 +22015,13 @@ function renderMatchList() {
     html += '<td style="text-align:left;">' + matchLabel + (m.groupe ? ' <span style="font-size:11px;color:var(--text-dim);">(' + escapeHtml(m.groupe) + ')</span>' : '') + '</td>';
     html += '<td style="text-align:center;font-weight:700;">' + scoreStr + '</td>';
     html += '<td style="text-align:center;">' + nbJoueurs + '</td>';
+    html += '<td style="text-align:center;">' + matchChronoHtml(m) + '</td>';
     html += '<td style="text-align:center;"><button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;" onclick="editMatchFromList(\'' + m.id + '\')">Éditer</button></td>';
     html += '</tr>';
   });
   html += '</tbody></table></div>';
   container.innerHTML = html;
+  ensureMatchChronoTimer();
 }
 
 function editMatchFromList(id) {
