@@ -12078,7 +12078,7 @@ function planifMicroCard() {
         '<button class="pf-navbtn" id="pf-micro-prev" title="Semaine précédente" type="button">‹</button>' +
         '<select id="pf-micro-week" class="pf-weeksel">' + opts + '</select>' +
         '<button class="pf-navbtn" id="pf-micro-next" title="Semaine suivante" type="button">›</button>' +
-        '<button class="pf-btn" id="pf-micro-copy" title="Copier le microcycle d\'une semaine d\'une autre catégorie" type="button" onclick="planifOpenMicroCopy()">📋 Copier</button>' +
+        '<button class="pf-btn" id="pf-micro-copy" title="Copier une semaine de microcycle (même catégorie ou autre)" type="button" onclick="planifOpenMicroCopy()">📋 Copier</button>' +
         '<button class="pf-btn" id="pf-micro-pdf" title="Exporter le microcycle en PDF (A4 paysage)" type="button" onclick="planifMicroExportPDF()">📄 PDF</button>' +
         '<button class="pf-btn pf-micro-close" id="pf-micro-close" title="Fermer le microcycle" type="button">✕</button>' +
       '</div>' +
@@ -12122,10 +12122,11 @@ async function planifOpenMicroCopy() {
   try {
     const { data: cats } = await sb.from('microcycle').select('categorie')
       .eq('org', PLANIF_CTX.org).eq('saison', PLANIF_CTX.saison);
-    const uniq = Array.from(new Set((cats || []).map(r => r.categorie)
-      .filter(c => c && c !== PLANIF_CTX.categorie))).sort();
+    // Toutes les catégories dispo (y compris la courante = copie intra-catégorie S5→S8)
+    const uniq = Array.from(new Set((cats || []).map(r => r.categorie).filter(Boolean))).sort();
     microCopyState.srcCats = uniq;
-    microCopyState.srcCategorie = uniq[0] || '';
+    // Par défaut : même catégorie que la courante (usage principal = dupliquer une semaine type)
+    microCopyState.srcCategorie = uniq.includes(PLANIF_CTX.categorie) ? PLANIF_CTX.categorie : (uniq[0] || '');
     await _planifLoadMicroCopyWeeks();
   } catch (e) {
     toast('Erreur chargement : ' + (e.message || e), 'error');
@@ -12139,8 +12140,12 @@ async function _planifLoadMicroCopyWeeks() {
   const { data: weeks } = await sb.from('microcycle').select('*')
     .eq('org', PLANIF_CTX.org).eq('saison', PLANIF_CTX.saison).eq('categorie', microCopyState.srcCategorie)
     .order('ordre', { ascending: true });
-  microCopyState.srcRows = weeks || [];
-  // Par défaut : même semaine_cal que la courante si dispo, sinon la première
+  // Si copie intra-catégorie, on retire la semaine cible (on ne copie pas sur soi-même)
+  const all = weeks || [];
+  microCopyState.srcRows = (microCopyState.srcCategorie === PLANIF_CTX.categorie)
+    ? all.filter(w => w.semaine_cal !== microSelCal)
+    : all;
+  // Par défaut : même semaine_cal que la courante si dispo (inter-cat), sinon la première
   const same = microCopyState.srcRows.find(w => w.semaine_cal === microSelCal);
   microCopyState.srcSemaineCal = same ? same.semaine_cal : (microCopyState.srcRows[0] ? microCopyState.srcRows[0].semaine_cal : '');
 }
@@ -12169,16 +12174,25 @@ async function planifDoMicroCopyWeek() {
   if (!microSelCal) { toast('Aucune semaine cible', 'error'); return; }
   const src = microCopyState.srcRows.find(r => r.semaine_cal === microCopyState.srcSemaineCal);
   if (!src) { toast('Semaine source introuvable', 'error'); return; }
+  if (src.categorie === PLANIF_CTX.categorie && src.semaine_cal === microSelCal) {
+    toast('Source et cible identiques', 'error'); return;
+  }
   const msg = 'Copier le microcycle de ' + microCopyState.srcCategorie + ' — ' + microCopyState.srcSemaineCal +
     ' vers ' + PLANIF_CTX.categorie + ' — ' + microSelCal + ' ?\n\n' +
     'Le contenu actuel de la semaine cible sera écrasé (séances, espace/séquence, durées, thème, note).';
   if (!confirm(msg)) return;
   const patch = { jours: src.jours || [], theme: src.theme || null, note: src.note || null,
     updated_at: new Date().toISOString() };
-  const { error } = await sb.from('microcycle').update(patch)
+  // .select() renvoie les lignes touchées → si vide, RLS a bloqué silencieusement
+  const { data: updated, error } = await sb.from('microcycle').update(patch)
     .eq('org', PLANIF_CTX.org).eq('categorie', PLANIF_CTX.categorie).eq('saison', PLANIF_CTX.saison)
-    .eq('semaine_cal', microSelCal);
+    .eq('semaine_cal', microSelCal)
+    .select();
   if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+  if (!updated || updated.length === 0) {
+    toast('Copie bloquée (RLS) — vérifie que ton org active est ' + (PLANIF_CTX.org || '?') + '. Aucune ligne modifiée.', 'error');
+    return;
+  }
   const m = microRows.find(r => r.semaine_cal === microSelCal);
   if (m) { m.jours = patch.jours; m.theme = patch.theme; m.note = patch.note; }
   microCopyOpen = false;
