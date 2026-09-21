@@ -12332,19 +12332,22 @@ function planifAutoGrowMicro() {
   document.querySelectorAll('#pf-micro-body .pf-autogrow').forEach(pfAutoGrow);
 }
 
-// Courbe de périodisation : bandeau phases + histogramme Volume (dominant)
-// + ligne Intensité + nuage de points des 5 sous-thèmes athlé (rayon = niveau).
-// Tout est superposé sur un seul graphique pour une lecture d'un coup d'œil.
-// Rendu ratio-fixe (aspect-ratio 1000/300) pour ne pas déformer les textes.
+// Courbe de périodisation : bandeau phases (couleur seule) + histogramme Volume
+// dominant + ligne Intensité + nuage de points des 5 sous-thèmes athlé.
+// Rendu dans un conteneur scrollable horizontalement (drag latéral supporté) :
+// la largeur virtuelle du SVG s'adapte au nombre de semaines pour garder des
+// cellules lisibles même avec 45+ semaines de saison.
 function planifCurveSVG(rows) {
-  const W = 1000, H = 300;
-  const padL = 44, padR = 16;
-  const phaseTop = 2,   phaseH = 14;
-  const chargeTop = 22, chargeH = 240;
-  const xLabY = chargeTop + chargeH + 16;
+  const H = 460;
+  const perWeek = 44;                        // largeur cible d'une semaine (px)
+  const padL = 52, padR = 18;
+  const phaseTop = 2,   phaseH = 16;
+  const chargeTop = 24, chargeH = 400;
+  const xLabY = chargeTop + chargeH + 20;
   const athleBars = PLANIF_BARS.filter(b => b.sec === 'athle');
   const n = rows.length;
-  if (!n) return '<svg class="pf-curve" viewBox="0 0 ' + W + ' ' + H + '"></svg>';
+  const W = Math.max(1000, padL + padR + n * perWeek);
+  if (!n) return '<div class="pf-curve-wrap"><svg class="pf-curve" viewBox="0 0 ' + W + ' ' + H + '"></svg></div>';
   const iw = W - padL - padR;
   const cellW = iw / n;
   const x = i => padL + i * cellW + cellW / 2;
@@ -12358,8 +12361,8 @@ function planifCurveSVG(rows) {
     gy += '<text x="' + (padL - 8) + '" y="' + (yy + 3.5).toFixed(1) + '" text-anchor="end" font-size="11" font-weight="600" fill="var(--text-dim)">' + v + '</text>';
   }
 
-  // ---- Bandeau phases (agrège les semaines contiguës) ----
-  let phaseBg = '', phaseTx = '', phaseSep = '';
+  // ---- Bandeau phases (agrège les semaines contiguës) — couleur seule, pas de texte ----
+  let phaseBg = '', phaseSep = '';
   {
     let i = 0;
     while (i < n) {
@@ -12369,21 +12372,19 @@ function planifCurveSVG(rows) {
       while (j + 1 < n && planifPhaseColor(rows[j + 1]) === col && planifPhaseLabel(rows[j + 1]) === lab) j++;
       const xa = padL + i * cellW, xb = padL + (j + 1) * cellW;
       const wb = Math.max(1, xb - xa);
-      phaseBg += '<rect x="' + xa.toFixed(1) + '" y="' + chargeTop + '" width="' + wb.toFixed(1) + '" height="' + chargeH + '" fill="' + escapeHtml(col) + '" opacity="0.05"/>';
-      phaseBg += '<rect x="' + xa.toFixed(1) + '" y="' + phaseTop + '" width="' + wb.toFixed(1) + '" height="' + phaseH + '" fill="' + escapeHtml(col) + '" opacity="0.9" rx="3"/>';
-      if (lab && wb > 34) phaseTx += '<text x="' + (xa + wb / 2).toFixed(1) + '" y="' + (phaseTop + phaseH - 4) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#0b1220" letter-spacing=".2">' + escapeHtml(lab) + '</text>';
+      phaseBg += '<rect x="' + xa.toFixed(1) + '" y="' + chargeTop + '" width="' + wb.toFixed(1) + '" height="' + chargeH + '" fill="' + escapeHtml(col) + '" opacity="0.06"/>';
+      phaseBg += '<rect x="' + xa.toFixed(1) + '" y="' + phaseTop + '" width="' + wb.toFixed(1) + '" height="' + phaseH + '" fill="' + escapeHtml(col) + '" opacity="0.92" rx="3"><title>' + escapeHtml(lab || 'Phase') + '</title></rect>';
       if (i > 0) phaseSep += '<line x1="' + xa.toFixed(1) + '" y1="' + chargeTop + '" x2="' + xa.toFixed(1) + '" y2="' + (chargeTop + chargeH) + '" stroke="rgba(255,255,255,0.12)" stroke-width="0.5"/>';
       i = j + 1;
     }
   }
 
-  // ---- Marqueurs matchs : bandes rouges + ⚽ ----
-  let matchBands = '', matchIcons = '';
+  // ---- Marqueurs matchs : bandes rouges seulement (pas d'emoji) ----
+  let matchBands = '';
   rows.forEach((r, i) => {
     if (!planifIsMatch(r)) return;
     const xa = padL + i * cellW;
-    matchBands += '<rect x="' + xa.toFixed(1) + '" y="' + chargeTop + '" width="' + cellW.toFixed(1) + '" height="' + chargeH + '" fill="#ef4444" opacity="0.16"/>';
-    matchIcons += '<text x="' + x(i).toFixed(1) + '" y="' + (chargeTop - 4) + '" text-anchor="middle" font-size="12">⚽</text>';
+    matchBands += '<rect x="' + xa.toFixed(1) + '" y="' + chargeTop + '" width="' + cellW.toFixed(1) + '" height="' + chargeH + '" fill="#ef4444" opacity="0.16"><title>Semaine de match</title></rect>';
   });
 
   // ---- Histogramme Volume (dominant) — pleine opacité + halo ----
@@ -12439,7 +12440,8 @@ function planifCurveSVG(rows) {
     xlab += '<text x="' + x(i).toFixed(1) + '" y="' + xLabY + '" text-anchor="middle" font-size="10.5" fill="var(--text-dim)">' + escapeHtml(r.semaine_cal || '') + '</text>';
   });
 
-  return '<svg class="pf-curve" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Périodisation saison : charge et contenus athlétiques">' +
+  return '<div class="pf-curve-wrap" data-drag-scroll="1" tabindex="0" aria-label="Périodisation — glissez pour parcourir la saison">' +
+    '<svg class="pf-curve" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Périodisation saison : charge et contenus athlétiques">' +
     phaseBg +
     gy + phaseSep +
     matchBands +
@@ -12447,16 +12449,19 @@ function planifCurveSVG(rows) {
     '<path d="' + iLine + '" fill="none" stroke="#fb7185" stroke-width="2.6" stroke-linejoin="round" opacity="0.95"/>' +
     iDots +
     dots +
-    matchIcons + phaseTx + xlab +
-    '</svg>';
+    xlab +
+    '</svg>' +
+    '</div>';
 }
 
 function planifLegend() {
   let s = '<div class="pf-legend">';
+  s += '<span class="pf-lg" style="color:var(--text-dim);">👆 Glisse latéralement pour parcourir la saison · molette / touche Shift+scroll</span>';
+  s += '<span class="pf-lg-sep"></span>';
   s += '<span class="pf-lg"><i style="background:#38b6ff"></i>Volume (barres bleues)</span>';
   s += '<span class="pf-lg"><i style="background:#fb7185;border-radius:50%"></i>Intensité (courbe rose)</span>';
-  s += '<span class="pf-lg"><i style="background:#ef4444;opacity:.7"></i>Semaine de match ⚽</span>';
-  s += '<span class="pf-lg" title="Bandeau coloré en haut">Phases : bandeau du haut</span>';
+  s += '<span class="pf-lg"><i style="background:#ef4444;opacity:.7"></i>Semaine de match</span>';
+  s += '<span class="pf-lg" title="Bande colorée au-dessus du graphique">Phases : bande colorée du haut</span>';
   s += '<span class="pf-lg-sep"></span>';
   s += '<span class="pf-lg" style="font-weight:600;color:var(--text)">Contenus athlétiques (nuages de points) — position Y = niveau · rayon = importance :</span>';
   PLANIF_BARS.filter(b => b.sec === 'athle').forEach(b => {
@@ -12593,6 +12598,42 @@ function planifLogoCell(r) {
 }
 
 function planifWire(view) {
+  // Drag horizontal (grab / grabbing) sur le wrapper du graphique saisonnier
+  view.querySelectorAll('.pf-curve-wrap[data-drag-scroll="1"]').forEach(wrap => {
+    let sx = 0, sl = 0, dragging = false;
+    const down = (ev) => {
+      // Ne pas voler le drag sur la scrollbar native
+      if (ev.button && ev.button !== 0) return;
+      dragging = true;
+      wrap.classList.add('dragging');
+      sx = ev.pageX;
+      sl = wrap.scrollLeft;
+      try { wrap.setPointerCapture && wrap.setPointerCapture(ev.pointerId); } catch (_) {}
+    };
+    const move = (ev) => {
+      if (!dragging) return;
+      wrap.scrollLeft = sl - (ev.pageX - sx);
+      ev.preventDefault();
+    };
+    const up = (ev) => {
+      dragging = false;
+      wrap.classList.remove('dragging');
+      try { wrap.releasePointerCapture && wrap.releasePointerCapture(ev.pointerId); } catch (_) {}
+    };
+    wrap.addEventListener('pointerdown', down);
+    wrap.addEventListener('pointermove', move);
+    wrap.addEventListener('pointerup', up);
+    wrap.addEventListener('pointercancel', up);
+    wrap.addEventListener('pointerleave', up);
+    // Molette verticale → scroll horizontal si aucun défilement natif horizontal
+    wrap.addEventListener('wheel', (ev) => {
+      if (ev.shiftKey || Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) return;
+      if (wrap.scrollWidth > wrap.clientWidth) {
+        wrap.scrollLeft += ev.deltaY;
+        ev.preventDefault();
+      }
+    }, { passive: false });
+  });
   // Barres : clic segment
   view.querySelectorAll('.pf-seg').forEach(seg => {
     seg.addEventListener('click', () => {
@@ -13253,7 +13294,13 @@ function planifInjectStyle() {
   #view-planification .pf-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
   #view-planification .pf-btn{background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-size:13px;cursor:pointer;}
   #view-planification .pf-btn:hover{border-color:var(--accent);color:var(--accent-light);}
-  #view-planification .pf-curve{width:100%;height:auto;aspect-ratio:1000/300;max-height:460px;display:block;}
+  #view-planification .pf-curve-wrap{width:100%;overflow-x:auto;overflow-y:hidden;cursor:grab;user-select:none;-webkit-user-select:none;scrollbar-width:thin;border-radius:6px;}
+  #view-planification .pf-curve-wrap::-webkit-scrollbar{height:10px;}
+  #view-planification .pf-curve-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px;}
+  #view-planification .pf-curve-wrap::-webkit-scrollbar-thumb:hover{background:var(--accent);}
+  #view-planification .pf-curve-wrap.dragging{cursor:grabbing;scroll-behavior:auto;}
+  #view-planification .pf-curve-wrap.dragging *{pointer-events:none;}
+  #view-planification .pf-curve{display:block;max-width:none;height:auto;}
   #view-planification .pf-legend{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-top:10px;font-size:12px;color:var(--text-dim);}
   #view-planification .pf-lib{margin-top:14px;border-top:1px solid var(--border);padding-top:12px;}
   #view-planification .pf-lib summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--accent-light);}
