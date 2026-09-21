@@ -2045,6 +2045,7 @@
         <div>
           <label>🏃 Physique / Athlétique</label>
           <textarea id="entry-note-athletique" rows="3" maxlength="2000" style="width:100%; resize:vertical;" placeholder="Charge, intensité, préparation physique..."></textarea>
+          <div id="planif-athle-hint" style="display:none; margin:6px 0 4px; padding:7px 10px; border:1px dashed var(--border); border-radius:6px; background:rgba(56,182,255,0.06); font-size:11.5px;"></div>
           <div id="vign-chips-physique" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 4px;"></div>
           <select id="vign-select-physique" onchange="onVignSelect('physique')" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:13px;"><option value="">+ Ajouter une vignette…</option></select>
         </div>
@@ -24771,6 +24772,8 @@ function renderEntry() {
   clearSeanceRemarques();
   clearVignettes();
   refreshVignetteSelects();
+  // Rappel des contenus athlé prévus par la planif (bandeau au-dessus des vignettes physiques)
+  renderSeancePlanifAthleHint();
   renderAffectation();
 
   // Pré-remplir la date du récap "Séances du jour" avec aujourd'hui et le rendre
@@ -25313,6 +25316,96 @@ const VIGNETTE_ASPECTS = [
   { key: 'video',        label: 'Vidéo',        icon: '🎥' }
 ];
 
+// ── Rappel des contenus athlé prévus par la planification (macrocycle) ──────
+// Affiche au-dessus des vignettes physiques un bandeau reprenant les 5 sous-thèmes
+// athlé de la semaine (Explo, Submax, Vitesse, Chgt direction, VMA) issus de la
+// table planification, avec leur niveau 0-5 et des chips cliquables pour ajouter
+// d'un clic la ou les vignettes physiques correspondantes.
+const PLANIF_ATHLE_MAP = {
+  explo:   { label: 'Explo + Réactivité',            color: '#fbbf24', vign: ['REACTIVITY'] },
+  submax:  { label: 'Submax (HSR / RSA)',            color: '#fb923c', vign: ['RSA', 'REPEATED RUNNING'] },
+  vitesse: { label: 'Vitesse + Appui',               color: '#f87171', vign: ['SPEED', 'FOOTWORK'] },
+  chgt:    { label: 'Chgt direction / Coordination', color: '#a78bfa', vign: ['COORDINATION'] },
+  vma:     { label: 'VMA / Récup',                   color: '#34d399', vign: ['AEROBIC', 'RECOVERY'] }
+};
+// Extrait U15/U18/U17/... du texte de type_seance (ex: "PSG U15", "GYM U18")
+function _planifCategoryFromType(t) {
+  const m = String(t || '').toUpperCase().match(/U\s*(\d{1,2})/);
+  return m ? ('U' + m[1]) : '';
+}
+let _planifAthleCache = { key: '', row: null };
+async function renderSeancePlanifAthleHint() {
+  const box = document.getElementById('planif-athle-hint');
+  if (!box) return;
+  const dateEl = document.getElementById('entry-date');
+  const typeEl = document.getElementById('entry-seance');
+  const date = (dateEl && dateEl.value) || '';
+  const type = (typeEl && typeEl.value) || '';
+  const cat = _planifCategoryFromType(type);
+  if (!date || !cat) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const key = currentOrg + '|' + cat + '|' + date;
+  let row = null;
+  if (_planifAthleCache.key === key) {
+    row = _planifAthleCache.row;
+  } else {
+    try {
+      const { data } = await sb.from('planification')
+        .select('semaine_cal,date_debut,explo,submax,vitesse,chgt,vma,phase_label')
+        .eq('org', currentOrg).eq('categorie', cat)
+        .lte('date_debut', date).gte('date_debut', _addDaysISO(date, -6))
+        .order('date_debut', { ascending: false }).limit(1);
+      row = (data && data[0]) || null;
+    } catch (e) { row = null; }
+    _planifAthleCache = { key, row };
+  }
+  if (!row) {
+    box.style.display = '';
+    box.innerHTML = '<span style="color:var(--text-dim)">Aucune planification pour ' + escapeHtml(cat) + ' sur cette semaine.</span>';
+    return;
+  }
+  const active = Object.keys(PLANIF_ATHLE_MAP).filter(k => (row[k] || 0) > 0);
+  const phaseHtml = row.phase_label ? ' · <span style="color:var(--text-dim)">' + escapeHtml(row.phase_label) + '</span>' : '';
+  let html = '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+    '<span style="font-weight:700;color:var(--accent-light);">🎯 Planif ' + escapeHtml(row.semaine_cal || '') + ' · ' + escapeHtml(cat) + phaseHtml + ' :</span>';
+  if (active.length === 0) {
+    html += '<span style="color:var(--text-dim)">aucun sous-thème athlé prévu cette semaine.</span>';
+  } else {
+    active.forEach(k => {
+      const m = PLANIF_ATHLE_MAP[k];
+      const lvl = row[k];
+      const vignettes = m.vign.map(v => escapeHtml(v)).join(',');
+      html += '<span title="Niveau ' + lvl + '/5 — cliquer pour ajouter ' + vignettes + '" ' +
+        'style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:12px;background:' + m.color + '20;border:1px solid ' + m.color + ';color:var(--text);font-size:11.5px;font-weight:600;" ' +
+        'onclick="applyPlanifAthleSuggestion(\'' + k + '\')">' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:' + m.color + ';"></span>' +
+        escapeHtml(m.label) + ' <b>' + lvl + '/5</b>' +
+        '</span>';
+    });
+    html += '<button type="button" onclick="applyAllPlanifAthleSuggestions()" ' +
+      'style="background:transparent;border:1px solid var(--border);color:var(--accent-light);padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;">+ Tout ajouter</button>';
+  }
+  html += '</div>';
+  box.style.display = '';
+  box.innerHTML = html;
+}
+function _addDaysISO(iso, n) {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function applyPlanifAthleSuggestion(key) {
+  const m = PLANIF_ATHLE_MAP[key]; if (!m) return;
+  m.vign.forEach(v => addVignetteChip('physique', v));
+  toast('Vignettes ' + m.label + ' ajoutées', 'success');
+}
+function applyAllPlanifAthleSuggestions() {
+  const row = _planifAthleCache.row; if (!row) return;
+  Object.keys(PLANIF_ATHLE_MAP).forEach(k => {
+    if ((row[k] || 0) > 0) PLANIF_ATHLE_MAP[k].vign.forEach(v => addVignetteChip('physique', v));
+  });
+  toast('Vignettes planifiées ajoutées', 'success');
+}
+
 // Sélection d'une vignette depuis la bibliothèque (menu déroulant) → ajoute la pastille
 function onVignSelect(aspect) {
   const sel = document.getElementById('vign-select-' + aspect);
@@ -25798,6 +25891,8 @@ function loadExistingSeance() {
   fillSeanceNotes(info.notes);
   renderSeanceRemarquesFromMap(info.remarques_joueurs);
   fillVignettes(info.vignettes);
+  // Rappel des contenus athlé prévus par la planif (bandeau au-dessus des vignettes physiques)
+  renderSeancePlanifAthleHint();
 }
 
 function clearProcede(i) {
@@ -25814,6 +25909,10 @@ document.addEventListener('change', (e) => {
       renderAffectSeanceSelect();
       renderAffectation();
     }
+    renderSeancePlanifAthleHint();
+  }
+  if (e.target.id === 'entry-seance') {
+    renderSeancePlanifAthleHint();
   }
 });
 
