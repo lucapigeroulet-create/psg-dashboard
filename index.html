@@ -21798,6 +21798,31 @@ function renderMatchCoachNotes() {
   // Index des lignes existantes pour retrouver la visibilité par joueur
   const rowByJoueur = {};
   (state.bdd_match_coach_notes || []).filter(n => n.match_id === currentMatchId && n.coach_id === matchCoachSelected).forEach(n => { rowByJoueur[n.joueur] = n; });
+  // Compteurs pour le bouton global : nombre de remarques saisies + nombre déjà publiées
+  const remarquesRows = Object.values(rowByJoueur).filter(n => n.commentaire && String(n.commentaire).trim());
+  const nbRemarques = remarquesRows.length;
+  const nbVisibles  = remarquesRows.filter(n => n.commentaire_visible_joueur).length;
+  const allVisible = nbRemarques > 0 && nbVisibles === nbRemarques;
+  const noneVisible = nbVisibles === 0;
+  // Bouton global de bascule : toutes les remarques du coach courant → visibles / privées
+  const btnEnabled = canEdit && nbRemarques > 0;
+  const btnLabel = allVisible
+    ? '🔒 Tout rendre privé (' + nbRemarques + ')'
+    : ('👁 Tout publier au joueur (' + (nbRemarques - nbVisibles) + '/' + nbRemarques + ')');
+  const btnColor = allVisible ? 'var(--red)' : 'var(--green)';
+  const btnBg    = allVisible ? 'rgba(239,68,68,0.10)' : 'rgba(34,197,94,0.10)';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin:2px 0 8px;">' +
+    '<div style="font-size:12px;color:var(--text-dim);">' +
+      (nbRemarques === 0
+        ? 'Aucune remarque saisie pour ce coach.'
+        : (nbVisibles + ' remarque(s) visible(s) sur ' + nbRemarques + ' saisie(s).')) +
+    '</div>' +
+    '<button type="button" ' + (btnEnabled ? '' : 'disabled') + ' ' +
+      'onclick="setAllCoachRemarquesVisibility(\'' + currentMatchId + '\', \'' + matchCoachSelected + '\', ' + (allVisible ? 'false' : 'true') + ')" ' +
+      'style="background:' + btnBg + ';color:' + btnColor + ';border:1px solid ' + btnColor + ';padding:5px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:' + (btnEnabled ? 'pointer' : 'not-allowed') + ';opacity:' + (btnEnabled ? '1' : '0.5') + ';">' +
+      btnLabel +
+    '</button>' +
+  '</div>';
   html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Note /10</th><th style="text-align:left;">Remarque</th><th title="Rend la remarque visible pour le joueur dans sa vue match">👁 Visible joueur</th></tr></thead><tbody>';
   compo.forEach(c => {
     const jEsc = c.joueur.replace(/'/g, "\\'");
@@ -21892,6 +21917,32 @@ async function saveCoachRemarque(matchId, joueur, coachId, el) {
     }
     el.style.borderColor = commentaire ? 'var(--green)' : 'var(--border)';
     // Rerender pour rafraichir le bouton "Visible/Privee" et l activer si necessaire
+    if (typeof renderMatchCoachNotes === 'function') renderMatchCoachNotes();
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); }
+}
+
+// Bascule d un seul coup TOUTES les remarques du coach courant sur ce match :
+// utilise dans saisie match par le bouton global "Tout publier / Tout rendre prive"
+async function setAllCoachRemarquesVisibility(matchId, coachId, visible) {
+  if (!coachCanEditNotes(matchId, coachId)) return;
+  const targets = (state.bdd_match_coach_notes || [])
+    .filter(n => n.match_id === matchId && n.coach_id === coachId && n.commentaire && String(n.commentaire).trim());
+  if (!targets.length) { toast('Aucune remarque a publier / masquer', 'error'); return; }
+  const nowIso = new Date().toISOString();
+  const rows = targets.map(n => ({
+    match_id: n.match_id, joueur: n.joueur, coach_id: n.coach_id,
+    commentaire_visible_joueur: !!visible, updated_at: nowIso
+  }));
+  try {
+    const { data, error } = await sb.from('match_coach_notes')
+      .upsert(rows, { onConflict: 'match_id,joueur,coach_id' }).select();
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+    const arr = state.bdd_match_coach_notes || (state.bdd_match_coach_notes = []);
+    (data || rows).forEach(saved => {
+      const idx = arr.findIndex(n => n.match_id === saved.match_id && n.joueur === saved.joueur && n.coach_id === saved.coach_id);
+      if (idx >= 0) arr[idx] = Object.assign({}, arr[idx], saved); else arr.push(saved);
+    });
+    toast((visible ? 'Toutes les remarques publiees (' : 'Toutes les remarques masquees (') + targets.length + ')', 'success');
     if (typeof renderMatchCoachNotes === 'function') renderMatchCoachNotes();
   } catch (e) { toast('Erreur : ' + e.message, 'error'); }
 }
