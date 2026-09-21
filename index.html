@@ -12331,49 +12331,150 @@ function planifAutoGrowMicro() {
   document.querySelectorAll('#pf-micro-body .pf-autogrow').forEach(pfAutoGrow);
 }
 
-// Courbe de périodisation : Volume (aires) + Intensité (ligne) sur toute la saison.
+// Courbe de périodisation : bandeau phases + Volume (barres) + Intensité (ligne)
+// + heatmap des 5 sous-thèmes athlé (une rangée par thème, teintée selon 0-5).
+// Rendu ratio-fixe (aspect-ratio 1000/380 en CSS) pour éviter la déformation
+// des libellés et cases.
 function planifCurveSVG(rows) {
-  const W = 1000, H = 210, padL = 34, padR = 12, padT = 14, padB = 34;
+  const W = 1000, H = 380;
+  const padL = 138, padR = 14;
+  const phaseTop = 4,   phaseH = 14;     // bandeau phases (au-dessus)
+  const chargeTop = 24, chargeH = 148;   // zone charge (volume + intensité)
+  const xLabY  = chargeTop + chargeH + 14;
+  const heatTop = chargeTop + chargeH + 24;
+  const heatRowH = 30;
+  const heatGap = 3;
+  const athleBars = PLANIF_BARS.filter(b => b.sec === 'athle');
   const n = rows.length;
-  const iw = W - padL - padR, ih = H - padT - padB;
-  const x = i => padL + (n <= 1 ? iw / 2 : (i * iw) / (n - 1));
-  const y = v => padT + ih - (v / 5) * ih;
-  let bars = '', vLine = '', iLine = '', xlab = '', matchDots = '';
-  const bw = Math.max(3, (iw / n) * 0.6);
-  rows.forEach((r, i) => {
-    const cx = x(i);
-    // Volume en barres douces
-    const vh = ((r.volume || 0) / 5) * ih;
-    bars += '<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + (padT + ih - vh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + vh.toFixed(1) + '" rx="1.5" fill="#38b6ff" opacity="0.32"/>';
-    const p = (i === 0 ? 'M' : 'L') + cx.toFixed(1) + ',' + y(r.intensite || 0).toFixed(1) + ' ';
-    iLine += p;
-    vLine += (i === 0 ? 'M' : 'L') + cx.toFixed(1) + ',' + y(r.volume || 0).toFixed(1) + ' ';
-    if (planifIsMatch(r)) matchDots += '<circle cx="' + cx.toFixed(1) + '" cy="' + (H - padB + 10) + '" r="2.4" fill="var(--red)"/>';
-    if (i % 3 === 0 || i === n - 1) xlab += '<text x="' + cx.toFixed(1) + '" y="' + (H - padB + 24) + '" text-anchor="middle" font-size="9" fill="var(--text-dim)">' + escapeHtml(r.semaine_cal || '') + '</text>';
-  });
+  if (!n) return '<svg class="pf-curve" viewBox="0 0 ' + W + ' ' + H + '"></svg>';
+  const iw = W - padL - padR;
+  const cellW = iw / n;                    // largeur d'une case par semaine
+  const x = i => padL + i * cellW + cellW / 2;   // centre de la case i
+  const y = v => chargeTop + chargeH - (Math.max(0, Math.min(5, v)) / 5) * chargeH;
+
+  // ---- Fond charge : grille horizontale 0..5 ----
   let gy = '';
   for (let v = 0; v <= 5; v++) {
     const yy = y(v);
-    gy += '<line x1="' + padL + '" y1="' + yy.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + yy.toFixed(1) + '" stroke="var(--border)" stroke-width="0.6" opacity="0.6"/>';
-    gy += '<text x="' + (padL - 6) + '" y="' + (yy + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="var(--text-dim)">' + v + '</text>';
+    gy += '<line x1="' + padL + '" y1="' + yy.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + yy.toFixed(1) + '" stroke="var(--border)" stroke-width="0.6" opacity="0.55"/>';
+    gy += '<text x="' + (padL - 8) + '" y="' + (yy + 3).toFixed(1) + '" text-anchor="end" font-size="10" fill="var(--text-dim)">' + v + '</text>';
   }
-  return '<svg class="pf-curve" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Courbe volume et intensité sur la saison">' +
-    gy + bars +
-    '<path d="' + vLine + '" fill="none" stroke="#38b6ff" stroke-width="2" stroke-linejoin="round"/>' +
-    '<path d="' + iLine + '" fill="none" stroke="#fb7185" stroke-width="2" stroke-linejoin="round"/>' +
-    matchDots + xlab +
+
+  // ---- Bandeau phases : agrège les semaines contiguës partageant la même phase ----
+  let phaseBg = '', phaseTx = '', phaseSep = '';
+  {
+    let i = 0;
+    while (i < n) {
+      const col = planifPhaseColor(rows[i]);
+      const lab = planifPhaseLabel(rows[i]);
+      let j = i;
+      while (j + 1 < n && planifPhaseColor(rows[j + 1]) === col && planifPhaseLabel(rows[j + 1]) === lab) j++;
+      const xa = padL + i * cellW, xb = padL + (j + 1) * cellW;
+      const wb = Math.max(1, xb - xa);
+      // Fond léger sur toute la zone charge, plus opaque sur la bande phase du haut
+      phaseBg += '<rect x="' + xa.toFixed(1) + '" y="' + chargeTop + '" width="' + wb.toFixed(1) + '" height="' + chargeH + '" fill="' + escapeHtml(col) + '" opacity="0.06"/>';
+      phaseBg += '<rect x="' + xa.toFixed(1) + '" y="' + phaseTop + '" width="' + wb.toFixed(1) + '" height="' + phaseH + '" fill="' + escapeHtml(col) + '" opacity="0.85" rx="3"/>';
+      if (lab && wb > 34) phaseTx += '<text x="' + (xa + wb / 2).toFixed(1) + '" y="' + (phaseTop + phaseH - 4) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#0b1220" style="letter-spacing:.2px">' + escapeHtml(lab) + '</text>';
+      if (i > 0) phaseSep += '<line x1="' + xa.toFixed(1) + '" y1="' + chargeTop + '" x2="' + xa.toFixed(1) + '" y2="' + (chargeTop + chargeH) + '" stroke="rgba(255,255,255,0.14)" stroke-width="0.6"/>';
+      i = j + 1;
+    }
+  }
+
+  // ---- Marqueurs matchs : bandes verticales rouges légères + ⚽ au-dessus ----
+  let matchBands = '', matchIcons = '';
+  rows.forEach((r, i) => {
+    if (!planifIsMatch(r)) return;
+    const xa = padL + i * cellW;
+    matchBands += '<rect x="' + xa.toFixed(1) + '" y="' + chargeTop + '" width="' + cellW.toFixed(1) + '" height="' + chargeH + '" fill="#ef4444" opacity="0.14"/>';
+    matchIcons += '<text x="' + x(i).toFixed(1) + '" y="' + (chargeTop - 4) + '" text-anchor="middle" font-size="11">⚽</text>';
+  });
+
+  // ---- Barres Volume + Ligne Intensité ----
+  let bars = '', iLine = '', vLine = '', iDots = '', vDots = '';
+  const bw = Math.max(3, cellW * 0.55);
+  rows.forEach((r, i) => {
+    const cx = x(i);
+    const vv = r.volume || 0, ii = r.intensite || 0;
+    const vh = (vv / 5) * chargeH;
+    bars += '<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + (chargeTop + chargeH - vh).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + vh.toFixed(1) + '" rx="2" fill="#38b6ff" opacity="0.42"/>';
+    vLine += (i === 0 ? 'M' : 'L') + cx.toFixed(1) + ',' + y(vv).toFixed(1) + ' ';
+    iLine += (i === 0 ? 'M' : 'L') + cx.toFixed(1) + ',' + y(ii).toFixed(1) + ' ';
+    if (vv > 0) vDots += '<circle cx="' + cx.toFixed(1) + '" cy="' + y(vv).toFixed(1) + '" r="2.4" fill="#38b6ff"/>';
+    if (ii > 0) iDots += '<circle cx="' + cx.toFixed(1) + '" cy="' + y(ii).toFixed(1) + '" r="2.4" fill="#fb7185"/>';
+  });
+
+  // ---- Labels de semaines (une sur trois + première + dernière + toutes les semaines de match) ----
+  let xlab = '';
+  rows.forEach((r, i) => {
+    const show = (i === 0) || (i === n - 1) || (i % 3 === 0) || planifIsMatch(r);
+    if (!show) return;
+    xlab += '<text x="' + x(i).toFixed(1) + '" y="' + xLabY + '" text-anchor="middle" font-size="10" fill="var(--text-dim)">' + escapeHtml(r.semaine_cal || '') + '</text>';
+  });
+
+  // ---- Titres de sections (colonne gauche) ----
+  const chargeTitle = '<text x="' + (padL - 8) + '" y="' + (chargeTop - 8) + '" text-anchor="end" font-size="10" font-weight="700" fill="var(--text-dim)" letter-spacing="0.5">CHARGE</text>';
+  const themesTitle = '<text x="' + (padL - 8) + '" y="' + (heatTop - 6) + '" text-anchor="end" font-size="10" font-weight="700" fill="var(--text-dim)" letter-spacing="0.5">CONTENUS ATHLÉTIQUES</text>';
+
+  // ---- Heatmap des sous-thèmes ----
+  // Une rangée par sous-thème : cases colorées avec opacité = niveau/5 (0 très pâle).
+  let heat = '', heatLabels = '';
+  athleBars.forEach((b, r) => {
+    const yTop = heatTop + r * (heatRowH + heatGap);
+    // Fond de rangée
+    heat += '<rect x="' + padL + '" y="' + yTop + '" width="' + iw.toFixed(1) + '" height="' + heatRowH + '" fill="rgba(255,255,255,0.02)" rx="3"/>';
+    // Puce couleur + libellé à gauche
+    heatLabels += '<circle cx="' + (padL - 118) + '" cy="' + (yTop + heatRowH / 2) + '" r="4" fill="' + escapeHtml(b.color) + '"/>';
+    // Label sur 2 lignes si trop long
+    const parts = b.label.split(' / ');
+    if (parts.length === 2) {
+      heatLabels += '<text x="' + (padL - 108) + '" y="' + (yTop + heatRowH / 2 - 3) + '" font-size="10.5" font-weight="600" fill="var(--text)">' + escapeHtml(parts[0]) + '</text>';
+      heatLabels += '<text x="' + (padL - 108) + '" y="' + (yTop + heatRowH / 2 + 10) + '" font-size="9.5" fill="var(--text-dim)">/ ' + escapeHtml(parts[1]) + '</text>';
+    } else {
+      heatLabels += '<text x="' + (padL - 108) + '" y="' + (yTop + heatRowH / 2 + 4) + '" font-size="10.5" font-weight="600" fill="var(--text)">' + escapeHtml(b.label) + '</text>';
+    }
+    // Cases par semaine
+    rows.forEach((row, i) => {
+      const val = row[b.key] || 0;
+      const xa = padL + i * cellW + 1;
+      const cw = Math.max(1, cellW - 2);
+      const op = val > 0 ? (0.18 + (val / 5) * 0.82) : 0.05;
+      heat += '<rect x="' + xa.toFixed(1) + '" y="' + (yTop + 2) + '" width="' + cw.toFixed(1) + '" height="' + (heatRowH - 4) + '" rx="2" fill="' + escapeHtml(b.color) + '" opacity="' + op.toFixed(2) + '"/>';
+      // Chiffre au centre si case assez large et valeur > 0
+      if (val > 0 && cellW >= 14) {
+        heat += '<text x="' + x(i).toFixed(1) + '" y="' + (yTop + heatRowH / 2 + 3.5) + '" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0b1220">' + val + '</text>';
+      }
+    });
+  });
+
+  return '<svg class="pf-curve" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Périodisation saison : charge + contenus athlétiques">' +
+    phaseBg +
+    gy + phaseSep +
+    matchBands +
+    bars +
+    '<path d="' + vLine + '" fill="none" stroke="#38b6ff" stroke-width="2.2" stroke-linejoin="round" opacity="0.95"/>' +
+    '<path d="' + iLine + '" fill="none" stroke="#fb7185" stroke-width="2.2" stroke-linejoin="round" opacity="0.95"/>' +
+    vDots + iDots +
+    matchIcons + phaseTx + xlab +
+    chargeTitle + themesTitle +
+    heat + heatLabels +
     '</svg>';
 }
 
 function planifLegend() {
   let s = '<div class="pf-legend">';
-  s += '<span class="pf-lg"><i style="background:#38b6ff"></i>Volume</span>';
-  s += '<span class="pf-lg"><i style="background:#fb7185"></i>Intensité</span>';
-  s += '<span class="pf-lg"><i style="background:var(--red);border-radius:50%"></i>Match / compétition</span>';
+  s += '<span class="pf-lg"><i style="background:#38b6ff"></i>Volume (barres bleues)</span>';
+  s += '<span class="pf-lg"><i style="background:#fb7185"></i>Intensité (courbe rose)</span>';
+  s += '<span class="pf-lg"><i style="background:#ef4444;opacity:.7"></i>Semaine de match ⚽ (bande rouge)</span>';
+  s += '<span class="pf-lg" title="Bandeau coloré en haut">Phases : bandeau du haut (édite phase &amp; couleur dans le tableau)</span>';
   s += '<span class="pf-lg-sep"></span>';
-  PLANIF_BARS.filter(b => b.sec === 'athle').forEach(b => {
-    s += '<span class="pf-lg"><i style="background:' + b.color + '"></i>' + escapeHtml(b.label) + '</span>';
-  });
+  s += '<span class="pf-lg" style="font-weight:600;color:var(--text)">Contenus athlétiques (heatmap) — intensité 0→5 par semaine :</span>';
+  // Barème visuel 0 → 5 pour la heatmap
+  s += '<span class="pf-lg" style="gap:2px;">';
+  for (let v = 0; v <= 5; v++) {
+    const op = v > 0 ? (0.18 + (v / 5) * 0.82) : 0.05;
+    s += '<span title="Niveau ' + v + '" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:18px;border-radius:3px;background:rgba(167,139,250,' + op.toFixed(2) + ');color:#0b1220;font-size:10px;font-weight:700;">' + v + '</span>';
+  }
+  s += '</span>';
   return s + '</div>';
 }
 
@@ -13154,7 +13255,7 @@ function planifInjectStyle() {
   #view-planification .pf-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
   #view-planification .pf-btn{background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-size:13px;cursor:pointer;}
   #view-planification .pf-btn:hover{border-color:var(--accent);color:var(--accent-light);}
-  #view-planification .pf-curve{width:100%;height:210px;display:block;}
+  #view-planification .pf-curve{width:100%;height:auto;aspect-ratio:1000/380;max-height:520px;display:block;}
   #view-planification .pf-legend{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-top:10px;font-size:12px;color:var(--text-dim);}
   #view-planification .pf-lib{margin-top:14px;border-top:1px solid var(--border);padding-top:12px;}
   #view-planification .pf-lib summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--accent-light);}
