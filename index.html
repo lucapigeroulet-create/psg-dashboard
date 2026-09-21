@@ -21795,11 +21795,17 @@ function renderMatchCoachNotes() {
     if (n.commentaire) remarques[n.joueur] = n.commentaire;
   });
 
-  html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Note /10</th><th style="text-align:left;">Remarque</th></tr></thead><tbody>';
+  // Index des lignes existantes pour retrouver la visibilité par joueur
+  const rowByJoueur = {};
+  (state.bdd_match_coach_notes || []).filter(n => n.match_id === currentMatchId && n.coach_id === matchCoachSelected).forEach(n => { rowByJoueur[n.joueur] = n; });
+  html += '<div class="table-wrap"><table style="font-size:12px;"><thead><tr><th style="text-align:left;">Joueur</th><th>Note /10</th><th style="text-align:left;">Remarque</th><th title="Rend la remarque visible pour le joueur dans sa vue match">👁 Visible joueur</th></tr></thead><tbody>';
   compo.forEach(c => {
     const jEsc = c.joueur.replace(/'/g, "\\'");
     const v = notes[c.joueur];
     const rem = remarques[c.joueur] || '';
+    const rowExisting = rowByJoueur[c.joueur];
+    const visible = !!(rowExisting && rowExisting.commentaire_visible_joueur);
+    const canToggle = canEdit && !!rem;
     html += '<tr><td style="text-align:left;font-weight:600;">' + escapeHtml(c.joueur) + '</td>';
     html += '<td style="text-align:center;"><input type="number" min="0" max="10" step="0.5" value="' + (v != null ? v : '') + '" ' + (canEdit ? '' : 'disabled') +
       ' onchange="saveCoachNote(\'' + currentMatchId + '\', \'' + jEsc + '\', \'' + matchCoachSelected + '\', this.value)" ' +
@@ -21807,7 +21813,15 @@ function renderMatchCoachNotes() {
     html += '<td style="text-align:left;"><textarea rows="1" ' + (canEdit ? '' : 'disabled') +
       ' onblur="saveCoachRemarque(\'' + currentMatchId + '\', \'' + jEsc + '\', \'' + matchCoachSelected + '\', this)" ' +
       'placeholder="Optionnel — remarque sur ce joueur" ' +
-      'style="min-width:200px;max-width:340px;width:100%;background:var(--bg-elevated);color:var(--text);border:1px solid ' + (rem ? 'var(--green)' : 'var(--border)') + ';border-radius:4px;padding:4px 6px;font-size:12px;resize:vertical;font-family:inherit;">' + escapeHtml(rem) + '</textarea></td></tr>';
+      'style="min-width:200px;max-width:340px;width:100%;background:var(--bg-elevated);color:var(--text);border:1px solid ' + (rem ? 'var(--green)' : 'var(--border)') + ';border-radius:4px;padding:4px 6px;font-size:12px;resize:vertical;font-family:inherit;">' + escapeHtml(rem) + '</textarea></td>';
+    // Case à cocher "visible joueur" — grisée quand la remarque est vide (rien à publier)
+    html += '<td style="text-align:center;">' +
+      '<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:' + (visible ? 'var(--green)' : 'var(--text-dim)') + ';cursor:' + (canToggle ? 'pointer' : 'not-allowed') + ';" title="' + (canToggle ? 'Coche pour rendre cette remarque visible au joueur' : (rem ? 'Verrouillé' : 'Écris d\'abord une remarque')) + '">' +
+      '<input type="checkbox"' + (visible ? ' checked' : '') + (canToggle ? '' : ' disabled') +
+      ' onchange="saveCoachRemarqueVisibility(\'' + currentMatchId + '\', \'' + jEsc + '\', \'' + matchCoachSelected + '\', this.checked)"' +
+      ' style="cursor:' + (canToggle ? 'pointer' : 'not-allowed') + ';">' +
+      (visible ? 'Visible' : 'Privée') +
+      '</label></td></tr>';
   });
   html += '</tbody></table></div>';
   cont.innerHTML = html;
@@ -21865,7 +21879,10 @@ async function saveCoachRemarque(matchId, joueur, coachId, el) {
       if (error) { toast('Erreur : ' + error.message, 'error'); return; }
       state.bdd_match_coach_notes = (state.bdd_match_coach_notes || []).filter(n => !(n.match_id === matchId && n.joueur === joueur && n.coach_id === coachId));
     } else {
-      const row = { match_id: matchId, joueur: joueur, coach_id: coachId, commentaire: commentaire || null, org: currentOrg, updated_at: new Date().toISOString() };
+      // On preserve la visibilite deja definie ; si la remarque devient vide, on la remet a false
+      const prevVisible = !!(existing && existing.commentaire_visible_joueur);
+      const row = { match_id: matchId, joueur: joueur, coach_id: coachId, commentaire: commentaire || null, org: currentOrg,
+        commentaire_visible_joueur: commentaire ? prevVisible : false, updated_at: new Date().toISOString() };
       const { data, error } = await sb.from('match_coach_notes').upsert(row, { onConflict: 'match_id,joueur,coach_id' }).select();
       if (error) { toast('Erreur : ' + error.message, 'error'); return; }
       const saved = (data && data[0]) ? data[0] : row;
@@ -21874,6 +21891,29 @@ async function saveCoachRemarque(matchId, joueur, coachId, el) {
       if (idx >= 0) arr[idx] = saved; else arr.push(saved);
     }
     el.style.borderColor = commentaire ? 'var(--green)' : 'var(--border)';
+    // Rerender pour rafraichir le bouton "Visible/Privee" et l activer si necessaire
+    if (typeof renderMatchCoachNotes === 'function') renderMatchCoachNotes();
+  } catch (e) { toast('Erreur : ' + e.message, 'error'); }
+}
+
+// Bascule la visibilite d une remarque coach pour le joueur concerne
+async function saveCoachRemarqueVisibility(matchId, joueur, coachId, visible) {
+  if (!coachCanEditNotes(matchId, coachId)) return;
+  const existing = getCoachNoteRow(matchId, joueur, coachId);
+  if (!existing || !existing.commentaire || !String(existing.commentaire).trim()) {
+    toast('Ecris d abord une remarque', 'error'); return;
+  }
+  try {
+    const row = { match_id: matchId, joueur: joueur, coach_id: coachId,
+      commentaire_visible_joueur: !!visible, updated_at: new Date().toISOString() };
+    const { data, error } = await sb.from('match_coach_notes').upsert(row, { onConflict: 'match_id,joueur,coach_id' }).select();
+    if (error) { toast('Erreur : ' + error.message, 'error'); return; }
+    const saved = (data && data[0]) ? data[0] : Object.assign({}, existing, row);
+    const arr = state.bdd_match_coach_notes || (state.bdd_match_coach_notes = []);
+    const idx = arr.findIndex(n => n.match_id === matchId && n.joueur === joueur && n.coach_id === coachId);
+    if (idx >= 0) arr[idx] = saved; else arr.push(saved);
+    toast(visible ? 'Remarque publiee au joueur' : 'Remarque masquee au joueur', 'success');
+    if (typeof renderMatchCoachNotes === 'function') renderMatchCoachNotes();
   } catch (e) { toast('Erreur : ' + e.message, 'error'); }
 }
 
@@ -29620,6 +29660,22 @@ function renderPlayerMatchNotation(date, joueur, m) {
   }
   html += '</div>';
   html += '</div>';
+
+  // ==== Remarques des coachs rendues visibles par le staff (par joueur) ====
+  const visibleCoachRemarques = (state.bdd_match_coach_notes || [])
+    .filter(n => n.match_id === m.id && n.joueur === joueur && n.commentaire_visible_joueur && n.commentaire && String(n.commentaire).trim());
+  if (visibleCoachRemarques.length > 0) {
+    html += '<div style="margin-top:14px;padding:12px;border-radius:8px;background:var(--bg-elevated);border:1px solid var(--border);">';
+    html += '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">💬 ' + tr('Coaches feedback', 'Retour des coachs') + '</div>';
+    visibleCoachRemarques.forEach(n => {
+      const cName = (typeof coachName === 'function') ? coachName(n.coach_id) : 'Coach';
+      html += '<div style="margin-bottom:8px;padding:8px 10px;background:var(--bg-card);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;font-size:13px;">' +
+        '<div style="font-size:11px;color:var(--accent-light);font-weight:700;margin-bottom:2px;">' + escapeHtml(cName) + '</div>' +
+        '<div style="white-space:pre-wrap;">' + escapeHtml(String(n.commentaire).trim()) + '</div>' +
+        '</div>';
+    });
+    html += '</div>';
+  }
 
   html += '</div>';
   return html;
