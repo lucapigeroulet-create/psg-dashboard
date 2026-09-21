@@ -11543,11 +11543,15 @@ function getPlayersMissingRPE(date) {
     });
   }
 
-  // 3) Matchs : joueurs ayant joué (temps > 0) sans note RPE match
+  // 3) Matchs : joueurs ayant joué (temps > 0) sans note RPE match.
+  //    On ignore les matchs dont le staff n'a pas encore publié la RPE au joueur
+  //    (bouton "Envoyer RPE+perf") — sinon le compteur affiche des manquants
+  //    fantômes pour des matchs invisibles côté joueur.
   (state.bdd_matchs || []).filter(m => m.date === date).forEach(m => {
     const seanceNom = matchSeanceNom(m);
     (m.composition || []).forEach(c => {
       if (!c.joueur || (c.total_min || 0) <= 0) return;
+      if (!isMatchRPEPublishedForPlayer(m, c.joueur)) return;
       const rpe = getRPEJoueurSeance(date, c.joueur, seanceNom);
       if (rpe === null) missing.add(c.joueur);
     });
