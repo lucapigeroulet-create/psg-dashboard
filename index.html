@@ -24625,8 +24625,9 @@ function renderCompetitionPlayer(filters, content, matchs) {
   const myNotes = {};
   (state.bdd_match_notes || []).filter(n => n.joueur === me).forEach(n => myNotes[n.match_id] = n.note);
   const agg = competitionAggregate(mine)[me];
-  // Les joueurs de PSG U18 ne doivent pas voir la note attribuée par les coachs.
-  const hideCoachNote = (getJoueurInfo(me).groupe === 'PSG U18');
+  // Les joueurs de PSG U18 et PSG U15 ne doivent pas voir la note attribuée par les coachs.
+  const myGroupe = getJoueurInfo(me).groupe;
+  const hideCoachNote = (myGroupe === 'PSG U18' || myGroupe === 'PSG U15');
 
   let html = '';
   if (agg) {
