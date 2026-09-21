@@ -12396,18 +12396,27 @@ function planifCurveSVG(rows) {
     const cx = x(i);
     const vh = (vv / 5) * chargeH;
     const yTop = chargeTop + chargeH - vh;
-    // Barre principale + touche de brillance en haut
-    bars += '<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + yTop.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + vh.toFixed(1) + '" rx="2" fill="#38b6ff" opacity="0.62"/>';
-    bars += '<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + yTop.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="2" rx="1" fill="#38b6ff" opacity="1"/>';
+    const tip = 'Volume — ' + vv + '/5 · ' + (r.semaine_cal || '');
+    // Barre principale + touche de brillance en haut (title englobe les 2)
+    bars += '<g style="cursor:help;"><title>' + escapeHtml(tip) + '</title>' +
+      '<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + yTop.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + vh.toFixed(1) + '" rx="2" fill="#38b6ff" opacity="0.62"/>' +
+      '<rect x="' + (cx - bw / 2).toFixed(1) + '" y="' + yTop.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="2" rx="1" fill="#38b6ff" opacity="1"/>' +
+      '</g>';
   });
 
   // ---- Ligne Intensité par-dessus ----
+  // Rayon des points intensité : même formule que les sous-thèmes pour que
+  // deux points à la même hauteur aient la même taille (cohérence visuelle).
   let iLine = '', iDots = '';
   rows.forEach((r, i) => {
     const cx = x(i);
     const ii = r.intensite || 0;
     iLine += (i === 0 ? 'M' : 'L') + cx.toFixed(1) + ',' + y(ii).toFixed(1) + ' ';
-    if (ii > 0) iDots += '<circle cx="' + cx.toFixed(1) + '" cy="' + y(ii).toFixed(1) + '" r="3" fill="#fb7185" stroke="#0b1220" stroke-width="0.8"/>';
+    if (ii > 0) {
+      const rr = 2.5 + (ii / 5) * 5.5;
+      const tip = 'Intensité — ' + ii + '/5 · ' + (r.semaine_cal || '');
+      iDots += '<circle cx="' + cx.toFixed(1) + '" cy="' + y(ii).toFixed(1) + '" r="' + rr.toFixed(1) + '" fill="#fb7185" stroke="#0b1220" stroke-width="0.8" style="cursor:help;"><title>' + escapeHtml(tip) + '</title></circle>';
+    }
   });
 
   // ---- Nuage de points sous-thèmes : rayon = niveau, jitter horizontal ----
@@ -12428,7 +12437,9 @@ function planifCurveSVG(rows) {
       const cyT = y(val);
       // Rayon 3→8 selon niveau 1→5 (dominance visuelle des pics)
       const rr = 2.5 + (val / 5) * 5.5;
-      dots += '<circle cx="' + cxT.toFixed(1) + '" cy="' + cyT.toFixed(1) + '" r="' + rr.toFixed(1) + '" fill="' + escapeHtml(b.color) + '" opacity="0.82" stroke="#0b1220" stroke-width="0.7"/>';
+      // <title> = tooltip natif SVG au survol → nom du sous-thème + niveau + semaine
+      const tip = b.label + ' — ' + val + '/5 · ' + (r.semaine_cal || '');
+      dots += '<circle cx="' + cxT.toFixed(1) + '" cy="' + cyT.toFixed(1) + '" r="' + rr.toFixed(1) + '" fill="' + escapeHtml(b.color) + '" opacity="0.82" stroke="#0b1220" stroke-width="0.7" style="cursor:help;"><title>' + escapeHtml(tip) + '</title></circle>';
     });
   });
 
