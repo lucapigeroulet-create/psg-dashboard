@@ -8725,8 +8725,8 @@ function applyRoleRestrictions() {
   } else {
     // Staff/admin : cacher les onglets joueur, réafficher le menu Gestion + Compétition
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
-    // Exception PSG : le staff a droit à sa propre vue "Mes amendes"
-    if (currentOrg === 'PSG') {
+    // Exception PSG + TEGG : le staff a droit à sa propre vue "Mes amendes"
+    if (['PSG', 'TEGG'].includes(currentOrg)) {
       const staffAmBtn = document.querySelector('.nav-btn.player-only[data-view="player-amendes"]');
       if (staffAmBtn) staffAmBtn.style.display = '';
     }
@@ -33693,23 +33693,24 @@ async function renderAmendes() {
   const gsel = document.getElementById('am-groupe');
   if (gsel) gsel.innerHTML = getAllGroups().map(g => '<option>' + escapeHtml(g) + '</option>').join('');
   const d = document.getElementById('am-date'); if (d && !d.value) d.value = toLocalISO(new Date());
-  // Cible "Staff" : uniquement pour PSG. Charge la liste depuis profiles.
+  // Cible "Staff" : disponible pour les orgs qui gèrent les amendes staff (PSG + TEGG/N2).
   const staffOpt = document.getElementById('am-cible-opt-staff');
   const staffSel = document.getElementById('am-staff');
-  if (currentOrg === 'PSG') {
+  const STAFF_AMENDES_ORGS = ['PSG', 'TEGG'];
+  if (STAFF_AMENDES_ORGS.includes(currentOrg)) {
     if (staffOpt) staffOpt.style.display = '';
     if (staffSel) {
       try {
         // Appel RPC (SECURITY DEFINER) : bypass la RLS profiles qui limitait
-        // chaque user à son propre profil. Autorise staff/admin/médical PSG.
-        const { data: staff, error } = await sb.rpc('list_org_staff', { target_org: 'PSG' });
+        // chaque user à son propre profil. Autorise staff/admin/médical de l'org.
+        const { data: staff, error } = await sb.rpc('list_org_staff', { target_org: currentOrg });
         if (error) throw error;
         staffSel.innerHTML = (staff || []).map(s => '<option value="' + escapeHtml(s.email) + '">' + escapeHtml(s.email) + '</option>').join('');
-      } catch (e) { staffSel.innerHTML = ''; toast('Erreur chargement staff PSG : ' + (e.message || e), 'error'); }
+      } catch (e) { staffSel.innerHTML = ''; toast('Erreur chargement staff ' + currentOrg + ' : ' + (e.message || e), 'error'); }
     }
   } else {
     if (staffOpt) staffOpt.style.display = 'none';
-    // Reset au cas où on venait de PSG et qu'on change d'org
+    // Reset au cas où on venait d'une org staff-enabled et qu'on change
     const cs = document.getElementById('am-cible'); if (cs && cs.value === 'staff') cs.value = 'joueur';
   }
   onAmendeCibleChange();
@@ -33779,7 +33780,7 @@ async function saveAmende() {
     joueurs = amMembersOfGroup(g);
     if (!joueurs.length) { toast('Aucun joueur dans ce groupe.', 'error'); return; }
   } else if (cible === 'staff') {
-    if (currentOrg !== 'PSG') { toast('Les amendes staff sont réservées à PSG.', 'error'); return; }
+    if (!['PSG','TEGG'].includes(currentOrg)) { toast('Les amendes staff sont réservées à PSG et TEGG.', 'error'); return; }
     const s = document.getElementById('am-staff').value;
     if (!s) { toast('Choisis un membre du staff.', 'error'); return; }
     joueurs = [s];
@@ -33955,11 +33956,11 @@ async function renderPlayerAmendes() {
   const statsGrid = view ? view.querySelector('.stats-grid') : null;
   const setStat = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
 
-  // ── PSG : le staff (rôles admin/staff/médical) voit ses vraies amendes,
-  //    filtrées sur son email (les amendes staff sont enregistrées avec
-  //    joueur = email). Les joueurs (rôle lecteur) gardent la page "Croix".
-  const isStaffPSG = (currentOrg === 'PSG') && ['admin', 'staff', 'médical'].includes(currentRole);
-  if (currentOrg === 'PSG' && !isStaffPSG) {
+  // ── PSG et TEGG : le staff (rôles admin/staff/médical) voit ses vraies
+  //    amendes, filtrées sur son email (les amendes staff sont enregistrées
+  //    avec joueur = email). Les joueurs PSG (lecteur) gardent la page "Croix".
+  const isStaffAmendes = ['PSG', 'TEGG'].includes(currentOrg) && ['admin', 'staff', 'médical'].includes(currentRole);
+  if (currentOrg === 'PSG' && !isStaffAmendes) {
     if (headerCard) headerCard.style.display = 'none';
     if (statsGrid)  statsGrid.style.display  = 'none';
     if (alertEl)    { alertEl.style.display = 'none'; alertEl.innerHTML = ''; }
@@ -33985,11 +33986,11 @@ async function renderPlayerAmendes() {
   if (headerCard) headerCard.style.display = '';
   if (statsGrid)  statsGrid.style.display  = '';
 
-  // Pour le staff PSG, la clé est l'email (les amendes staff sont enregistrées
-  // avec joueur = email). Pour un joueur classique, c'est currentJoueurNom.
-  const amendesKey = isStaffPSG ? ((currentUser && currentUser.email) || null) : currentJoueurNom;
+  // Pour le staff (PSG/TEGG), la clé est l'email (les amendes staff sont
+  // enregistrées avec joueur = email). Pour un joueur, c'est currentJoueurNom.
+  const amendesKey = isStaffAmendes ? ((currentUser && currentUser.email) || null) : currentJoueurNom;
   if (!amendesKey) {
-    if (content) content.innerHTML = '<div class="card"><div class="empty-state">' + (isStaffPSG ? 'Compte staff non identifié.' : 'Joueur non identifié.') + '</div></div>';
+    if (content) content.innerHTML = '<div class="card"><div class="empty-state">' + (isStaffAmendes ? 'Compte staff non identifié.' : 'Joueur non identifié.') + '</div></div>';
     if (alertEl) { alertEl.style.display = 'none'; alertEl.innerHTML = ''; }
     setStat('pa-stat-du', '—'); setStat('pa-stat-current', '—'); setStat('pa-stat-deadline', '—'); setStat('pa-stat-overdue', '—');
     return;
