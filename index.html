@@ -33687,6 +33687,20 @@ function amCurrentPeriodKey() {
   return amPeriodKey(toLocalISO(new Date()));
 }
 
+// Pour les amendes staff, le champ `joueur` contient l'email. On dérive un nom
+// lisible à partir de la partie locale : "alexandre.c@psg.fr" -> "Alexandre C",
+// "achille@psg.fr" -> "Achille", "luca.pigeroulet@gmail.com" -> "Luca Pigeroulet".
+// Si la chaîne ne contient pas de @ (nom de joueur classique), retourne tel quel.
+function amDisplayJoueur(j) {
+  if (!j) return '';
+  if (!j.includes('@')) return j;
+  const local = j.split('@')[0];
+  return local.split(/[._\-]/).map(part => {
+    const clean = part.replace(/\d+/g, '');
+    return clean ? clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase() : '';
+  }).filter(Boolean).join(' ') || j;
+}
+
 async function renderAmendes() {
   const jsel = document.getElementById('am-joueur');
   if (jsel) jsel.innerHTML = getAllPlayers().map(p => '<option>' + escapeHtml(p) + '</option>').join('');
@@ -33705,7 +33719,7 @@ async function renderAmendes() {
         // chaque user à son propre profil. Autorise staff/admin/médical de l'org.
         const { data: staff, error } = await sb.rpc('list_org_staff', { target_org: currentOrg });
         if (error) throw error;
-        staffSel.innerHTML = (staff || []).map(s => '<option value="' + escapeHtml(s.email) + '">' + escapeHtml(s.email) + '</option>').join('');
+        staffSel.innerHTML = (staff || []).map(s => '<option value="' + escapeHtml(s.email) + '">' + escapeHtml(amDisplayJoueur(s.email)) + '</option>').join('');
       } catch (e) { staffSel.innerHTML = ''; toast('Erreur chargement staff ' + currentOrg + ' : ' + (e.message || e), 'error'); }
     }
   } else {
@@ -33738,7 +33752,7 @@ function renderAmendesParJoueur() {
   html += '<div class="table-wrap" style="max-height:360px;"><table style="width:100%; font-size:13px;"><thead><tr>' +
     '<th style="text-align:left;">Joueur</th><th>Nb</th><th>Total</th><th>À récupérer</th></tr></thead><tbody>';
   html += rows.map(r => '<tr>' +
-    '<td style="text-align:left; font-weight:600;">' + escapeHtml(r.joueur) + '</td>' +
+    '<td style="text-align:left; font-weight:600;">' + escapeHtml(amDisplayJoueur(r.joueur)) + '</td>' +
     '<td style="text-align:center;">' + r.nb + '</td>' +
     '<td style="text-align:center; font-weight:700;">' + amFmtEuro(r.total) + '</td>' +
     '<td style="text-align:center; font-weight:700; color:' + (r.du > 0 ? '#f87171' : 'var(--text-dim)') + ';">' + amFmtEuro(r.du) + '</td>' +
@@ -33826,7 +33840,7 @@ async function restoreAmendeOriginal(id) {
   const a = amendesData.find(x => x.id === id);
   if (!a) return;
   if (a.montant_original == null) { toast('Aucun montant initial enregistré.', 'error'); return; }
-  const msg = 'Excuse recevable : rétablir la somme initiale (' + amFmtEuro(a.montant_original) + ') pour ' + a.joueur + ' ?';
+  const msg = 'Excuse recevable : rétablir la somme initiale (' + amFmtEuro(a.montant_original) + ') pour ' + amDisplayJoueur(a.joueur) + ' ?';
   if (!confirm(msg)) return;
   try {
     const { error } = await sb.from('amendes')
@@ -33891,7 +33905,7 @@ function renderAmendesRecap() {
         : '';
       return '<tr' + (a.paye ? ' style="opacity:0.55;"' : '') + '>' +
         '<td>' + (a.date ? formatDateFR(a.date) : '—') + '</td>' +
-        '<td style="text-align:left; font-weight:600;">' + escapeHtml(a.joueur) + '</td>' +
+        '<td style="text-align:left; font-weight:600;">' + escapeHtml(amDisplayJoueur(a.joueur)) + '</td>' +
         '<td style="text-align:left;">' + escapeHtml(a.motif || '—') + '</td>' +
         '<td style="text-align:center;">' + montantCell + '</td>' +
         '<td style="text-align:center;"><input type="checkbox" ' + (a.paye ? 'checked' : '') + ' onchange="toggleAmendePaye(' + a.id + ', this.checked)" style="width:18px; height:18px; cursor:pointer;"></td>' +
