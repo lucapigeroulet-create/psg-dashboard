@@ -839,6 +839,7 @@
     <div class="nav-dropdown-menu" id="nav-params-menu">
       <button class="nav-btn" data-view="best-match">🏆 Meilleur Match</button>
       <button class="nav-btn" data-view="amendes">💰 Amendes</button>
+      <button class="nav-btn staff-mes-amendes-btn" data-view="player-amendes" style="display:none;">🧾 Mes amendes</button>
       <button class="nav-btn" data-view="minijeux">🎮 Mini-jeux</button>
       <button class="nav-btn" data-view="history">📋 Historique séances</button>
       <button class="nav-btn" data-view="messages">📣 Messages</button>
@@ -8725,10 +8726,12 @@ function applyRoleRestrictions() {
   } else {
     // Staff/admin : cacher les onglets joueur, réafficher le menu Gestion + Compétition
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
-    // Exception PSG + TEGG : le staff a droit à sa propre vue "Mes amendes"
+    // Exception PSG + TEGG : le staff a droit à sa propre vue "Mes amendes",
+    // affichée dans le menu Paramètres juste sous "Amendes" (émoji 🧾 pour
+    // marquer la différence avec la vue de gestion 💰).
     if (['PSG', 'TEGG'].includes(currentOrg)) {
-      const staffAmBtn = document.querySelector('.nav-btn.player-only[data-view="player-amendes"]');
-      if (staffAmBtn) staffAmBtn.style.display = '';
+      const staffMesAmBtn = document.querySelector('.staff-mes-amendes-btn');
+      if (staffMesAmBtn) staffMesAmBtn.style.display = '';
     }
     if (gestionDropdown) gestionDropdown.style.display = '';
     if (paramsDropdown) paramsDropdown.style.display = '';
@@ -10628,7 +10631,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
       else gestionToggle.classList.remove('has-active');
     }
     // Gérer l'état visuel du menu déroulant Paramètres
-    const paramsViews = ['best-match', 'amendes', 'messages', 'minijeux', 'history', 'settings'];
+    const paramsViews = ['best-match', 'amendes', 'player-amendes', 'messages', 'minijeux', 'history', 'settings'];
     const paramsToggle = document.getElementById('nav-params-toggle');
     if (paramsToggle) {
       if (paramsViews.includes(view)) paramsToggle.classList.add('has-active');
