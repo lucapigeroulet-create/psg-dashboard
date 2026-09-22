@@ -33703,6 +33703,14 @@ function amDisplayJoueur(j) {
     return clean ? clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase() : '';
   }).filter(Boolean).join(' ') || j;
 }
+// Une entrée dont la clé `joueur` contient @ est une amende ciblant un staff.
+function amIsStaffRow(j) { return !!j && j.includes('@'); }
+// HTML : nom lisible + badge STAFF si applicable. À utiliser dans les tableaux.
+function amRenderNomJoueur(j) {
+  const nom = escapeHtml(amDisplayJoueur(j));
+  if (!amIsStaffRow(j)) return nom;
+  return nom + ' <span style="display:inline-block; margin-left:6px; padding:1px 7px; font-size:9.5px; font-weight:800; letter-spacing:0.6px; background:rgba(0,163,255,0.15); color:var(--accent-light); border:1px solid rgba(0,163,255,0.45); border-radius:10px; vertical-align:middle;">👔 STAFF</span>';
+}
 
 async function renderAmendes() {
   const jsel = document.getElementById('am-joueur');
@@ -33755,7 +33763,7 @@ function renderAmendesParJoueur() {
   html += '<div class="table-wrap" style="max-height:360px;"><table style="width:100%; font-size:13px;"><thead><tr>' +
     '<th style="text-align:left;">Joueur</th><th>Nb</th><th>Total</th><th>À récupérer</th></tr></thead><tbody>';
   html += rows.map(r => '<tr>' +
-    '<td style="text-align:left; font-weight:600;">' + escapeHtml(amDisplayJoueur(r.joueur)) + '</td>' +
+    '<td style="text-align:left; font-weight:600;">' + amRenderNomJoueur(r.joueur) + '</td>' +
     '<td style="text-align:center;">' + r.nb + '</td>' +
     '<td style="text-align:center; font-weight:700;">' + amFmtEuro(r.total) + '</td>' +
     '<td style="text-align:center; font-weight:700; color:' + (r.du > 0 ? '#f87171' : 'var(--text-dim)') + ';">' + amFmtEuro(r.du) + '</td>' +
@@ -33908,7 +33916,7 @@ function renderAmendesRecap() {
         : '';
       return '<tr' + (a.paye ? ' style="opacity:0.55;"' : '') + '>' +
         '<td>' + (a.date ? formatDateFR(a.date) : '—') + '</td>' +
-        '<td style="text-align:left; font-weight:600;">' + escapeHtml(amDisplayJoueur(a.joueur)) + '</td>' +
+        '<td style="text-align:left; font-weight:600;">' + amRenderNomJoueur(a.joueur) + '</td>' +
         '<td style="text-align:left;">' + escapeHtml(a.motif || '—') + '</td>' +
         '<td style="text-align:center;">' + montantCell + '</td>' +
         '<td style="text-align:center;"><input type="checkbox" ' + (a.paye ? 'checked' : '') + ' onchange="toggleAmendePaye(' + a.id + ', this.checked)" style="width:18px; height:18px; cursor:pointer;"></td>' +
