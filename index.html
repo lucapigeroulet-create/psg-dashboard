@@ -3037,6 +3037,7 @@
           <select id="am-cible" onchange="onAmendeCibleChange()" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px;">
             <option value="joueur">Joueur</option>
             <option value="groupe">Groupe</option>
+            <option value="staff" id="am-cible-opt-staff" style="display:none;">Membre du staff</option>
           </select>
         </div>
         <div class="filter-group" id="am-joueur-wrap">
@@ -3046,6 +3047,10 @@
         <div class="filter-group" id="am-groupe-wrap" style="display:none;">
           <label>Groupe</label>
           <select id="am-groupe" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:160px;"></select>
+        </div>
+        <div class="filter-group" id="am-staff-wrap" style="display:none;">
+          <label>Membre du staff</label>
+          <select id="am-staff" style="background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:13px; min-width:220px;"></select>
         </div>
         <div class="filter-group">
           <label>Motif</label>
@@ -8720,6 +8725,11 @@ function applyRoleRestrictions() {
   } else {
     // Staff/admin : cacher les onglets joueur, réafficher le menu Gestion + Compétition
     document.querySelectorAll('.player-only').forEach(b => b.style.display = 'none');
+    // Exception PSG : le staff a droit à sa propre vue "Mes amendes"
+    if (currentOrg === 'PSG') {
+      const staffAmBtn = document.querySelector('.nav-btn.player-only[data-view="player-amendes"]');
+      if (staffAmBtn) staffAmBtn.style.display = '';
+    }
     if (gestionDropdown) gestionDropdown.style.display = '';
     if (paramsDropdown) paramsDropdown.style.display = '';
     if (competitionDropdown) competitionDropdown.style.display = '';
@@ -33683,6 +33693,27 @@ async function renderAmendes() {
   const gsel = document.getElementById('am-groupe');
   if (gsel) gsel.innerHTML = getAllGroups().map(g => '<option>' + escapeHtml(g) + '</option>').join('');
   const d = document.getElementById('am-date'); if (d && !d.value) d.value = toLocalISO(new Date());
+  // Cible "Staff" : uniquement pour PSG. Charge la liste depuis profiles.
+  const staffOpt = document.getElementById('am-cible-opt-staff');
+  const staffSel = document.getElementById('am-staff');
+  if (currentOrg === 'PSG') {
+    if (staffOpt) staffOpt.style.display = '';
+    if (staffSel) {
+      try {
+        const { data: staff } = await sb.from('profiles')
+          .select('email,role,org,orgs')
+          .in('role', ['admin', 'staff', 'médical'])
+          .order('email', { ascending: true });
+        // ne garde que ceux rattachés à PSG (org principal OU dans orgs[])
+        const psgStaff = (staff || []).filter(s => s.org === 'PSG' || (Array.isArray(s.orgs) && s.orgs.includes('PSG')));
+        staffSel.innerHTML = psgStaff.map(s => '<option value="' + escapeHtml(s.email) + '">' + escapeHtml(s.email) + '</option>').join('');
+      } catch (e) { staffSel.innerHTML = ''; }
+    }
+  } else {
+    if (staffOpt) staffOpt.style.display = 'none';
+    // Reset au cas où on venait de PSG et qu'on change d'org
+    const cs = document.getElementById('am-cible'); if (cs && cs.value === 'staff') cs.value = 'joueur';
+  }
   onAmendeCibleChange();
   await loadAmendes();
   renderAmendesSummary();
@@ -33729,9 +33760,11 @@ function onAmendeCibleChange() {
   const c = (document.getElementById('am-cible') || {}).value || 'joueur';
   const jw = document.getElementById('am-joueur-wrap');
   const gw = document.getElementById('am-groupe-wrap');
+  const sw = document.getElementById('am-staff-wrap');
   const hint = document.getElementById('am-groupe-hint');
   if (jw) jw.style.display = (c === 'joueur') ? '' : 'none';
   if (gw) gw.style.display = (c === 'groupe') ? '' : 'none';
+  if (sw) sw.style.display = (c === 'staff')  ? '' : 'none';
   if (hint) hint.style.display = (c === 'groupe') ? '' : 'none';
 }
 
@@ -33747,6 +33780,11 @@ async function saveAmende() {
     const g = document.getElementById('am-groupe').value;
     joueurs = amMembersOfGroup(g);
     if (!joueurs.length) { toast('Aucun joueur dans ce groupe.', 'error'); return; }
+  } else if (cible === 'staff') {
+    if (currentOrg !== 'PSG') { toast('Les amendes staff sont réservées à PSG.', 'error'); return; }
+    const s = document.getElementById('am-staff').value;
+    if (!s) { toast('Choisis un membre du staff.', 'error'); return; }
+    joueurs = [s];
   } else {
     const j = document.getElementById('am-joueur').value;
     if (!j) { toast('Choisis un joueur.', 'error'); return; }
@@ -33919,9 +33957,11 @@ async function renderPlayerAmendes() {
   const statsGrid = view ? view.querySelector('.stats-grid') : null;
   const setStat = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
 
-  // ── Override PSG : l'onglet "Amendes" devient "Croix". Contenu = annonce "à venir"
-  //    tant que le module croix n'est pas encore développé. Rien à charger depuis la DB.
-  if (currentOrg === 'PSG') {
+  // ── PSG : le staff (rôles admin/staff/médical) voit ses vraies amendes,
+  //    filtrées sur son email (les amendes staff sont enregistrées avec
+  //    joueur = email). Les joueurs (rôle lecteur) gardent la page "Croix".
+  const isStaffPSG = (currentOrg === 'PSG') && ['admin', 'staff', 'médical'].includes(currentRole);
+  if (currentOrg === 'PSG' && !isStaffPSG) {
     if (headerCard) headerCard.style.display = 'none';
     if (statsGrid)  statsGrid.style.display  = 'none';
     if (alertEl)    { alertEl.style.display = 'none'; alertEl.innerHTML = ''; }
@@ -33947,8 +33987,11 @@ async function renderPlayerAmendes() {
   if (headerCard) headerCard.style.display = '';
   if (statsGrid)  statsGrid.style.display  = '';
 
-  if (!currentJoueurNom) {
-    if (content) content.innerHTML = '<div class="card"><div class="empty-state">Joueur non identifié.</div></div>';
+  // Pour le staff PSG, la clé est l'email (les amendes staff sont enregistrées
+  // avec joueur = email). Pour un joueur classique, c'est currentJoueurNom.
+  const amendesKey = isStaffPSG ? ((currentUser && currentUser.email) || null) : currentJoueurNom;
+  if (!amendesKey) {
+    if (content) content.innerHTML = '<div class="card"><div class="empty-state">' + (isStaffPSG ? 'Compte staff non identifié.' : 'Joueur non identifié.') + '</div></div>';
     if (alertEl) { alertEl.style.display = 'none'; alertEl.innerHTML = ''; }
     setStat('pa-stat-du', '—'); setStat('pa-stat-current', '—'); setStat('pa-stat-deadline', '—'); setStat('pa-stat-overdue', '—');
     return;
@@ -33957,7 +34000,7 @@ async function renderPlayerAmendes() {
   let mine = [];
   try {
     const { data, error } = await sb.from('amendes')
-      .select('*').eq('org', currentOrg).eq('joueur', currentJoueurNom)
+      .select('*').eq('org', currentOrg).eq('joueur', amendesKey)
       .order('date', { ascending: false });
     if (error) throw error;
     mine = data || [];
