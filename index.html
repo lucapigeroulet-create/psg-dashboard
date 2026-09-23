@@ -14526,16 +14526,17 @@ function renderRPE() {
 }
 
 // Compte le nombre de jours en oubli RPE pour un joueur sur une plage de dates.
-// Règle (3 critères) : un jour est un oubli dès qu'il reste, ce jour-là, AU MOINS
-// une évaluation (séance OU match) telle que :
+// Règle : un jour est un oubli tant qu'il reste, ce jour-là, AU MOINS une évaluation
+// (séance OU match) telle que :
 //   1) son chronomètre de 4 h est TERMINÉ (fenêtre écoulée),
 //   2) elle est PUBLIÉE (RPE envoyée au joueur), et
-//   3) elle n'est PAS notée à temps (jamais remplie, ou — pour une séance — saisie
-//      après la fenêtre : joueur ou staff/admin a posteriori).
-// Séances : via seance_affectations (chronomètre = rpe_published_at). Timing par
-// séance sur le champ `at` (posé par rpe_merge) ; lignes anciennes : repli created_at
-// + heuristique jour. Matchs : pas de ligne d'affectation → traités séparément
-// (chronomètre = publication au joueur, sinon création du match).
+//   3) elle est TOUJOURS non renseignée À CET INSTANT.
+// Autrement dit : c'est l'état courant qui compte. Dès que le joueur (ou le staff)
+// finit par saisir la RPE — même après les 4 h — la date sort de la liste. On ne
+// garde que ce qui reste réellement à remplir.
+// Séances : via seance_affectations (chronomètre = rpe_published_at). Matchs : pas
+// de ligne d'affectation → traités séparément (chronomètre = publication au joueur,
+// sinon création du match).
 const RPE_WINDOW_HOURS = 4;
 // Renvoie la LISTE triée des jours (ISO) en oubli pour un joueur sur la plage.
 function getRPEOubliDaysForPlayer(joueur, dates) {
@@ -14544,7 +14545,8 @@ function getRPEOubliDaysForPlayer(joueur, dates) {
   const dateSet = new Set(dates);
   const daysWithOubli = new Set();
 
-  // (A) SÉANCES : affectation publiée + fenêtre 4 h fermée + séance non notée à temps.
+  // (A) SÉANCES : affectation publiée + fenêtre 4 h fermée + séance TOUJOURS non notée.
+  //     Si le joueur a fini par la remplir (même en retard), la date sort de la liste.
   const affs = (state.bdd_affectations || []).filter(a =>
     a.joueur === joueur && dateSet.has(a.date) && a.rpe_published_at
   );
@@ -14553,33 +14555,8 @@ function getRPEOubliDaysForPlayer(joueur, dates) {
     const pubMs = new Date(a.rpe_published_at).getTime();
     if (!isFinite(pubMs)) continue;
     if (pubMs + windowMs > now) continue; // chronomètre 4 h pas encore terminé
-    const rpeRow = (state.bdd_rpe || []).find(r => r.date === a.date && r.joueur === joueur);
-    let submittedInTime = false;
-    if (rpeRow) {
-      const items = Array.isArray(rpeRow.rpe) ? rpeRow.rpe : [];
-      const item = items.find(it => it && it.seance === a.seance);
-      if (item) {
-        if (item.at) {
-          // Ligne récente : horodatage exact de la 1ʳᵉ saisie de CETTE séance.
-          const t = new Date(item.at).getTime();
-          if (isFinite(t) && t <= pubMs + windowMs) submittedInTime = true;
-        } else {
-          // Ligne ancienne (sans `at`) : repli sur created_at de la ligne du jour,
-          // + heuristique jour pour rattraper l'historique : sur un jour multi-séances
-          // dont la ligne a été MODIFIÉE après la fenêtre de cette séance, on considère
-          // la saisie comme tardive (oubli). Léger risque de sur-comptage assumé.
-          const createdMs = rpeRow.created_at ? new Date(rpeRow.created_at).getTime() : NaN;
-          if (isFinite(createdMs) && createdMs <= pubMs + windowMs) {
-            submittedInTime = true;
-            const updatedMs = rpeRow.updated_at ? new Date(rpeRow.updated_at).getTime() : NaN;
-            if (items.length >= 2 && isFinite(updatedMs) && updatedMs > pubMs + windowMs) {
-              submittedInTime = false;
-            }
-          }
-        }
-      }
-    }
-    if (!submittedInTime) daysWithOubli.add(a.date);
+    // État courant : rempli maintenant (peu importe quand) => plus un oubli.
+    if (getRPEJoueurSeance(a.date, joueur, a.seance) === null) daysWithOubli.add(a.date);
   }
 
   // (B) MATCHS : joueur ayant joué (temps > 0) + RPE match publiée + fenêtre 4 h fermée
@@ -14688,7 +14665,7 @@ function renderRPEOublisChart(players, defaultDates) {
     data: {
       labels: rows.map(r => r.joueur),
       datasets: [{
-        label: 'Oublis RPE (fenêtre 4 h dépassée)',
+        label: 'Oublis RPE (encore non remplie après 4 h)',
         data: rows.map(r => r.nb),
         backgroundColor: rows.map(r => colorFor(r.nb)),
         borderRadius: 4
@@ -14707,7 +14684,7 @@ function renderRPEOublisChart(players, defaultDates) {
         }
       } } },
       scales: {
-        x: { beginAtZero: true, ticks: { color: '#8ba3c1', precision: 0, stepSize: 1 }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'Nombre de jours avec au moins une RPE non notée à temps', color: '#8ba3c1' } },
+        x: { beginAtZero: true, ticks: { color: '#8ba3c1', precision: 0, stepSize: 1 }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'Nombre de jours avec au moins une RPE encore non remplie', color: '#8ba3c1' } },
         y: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } }
       }
     }
