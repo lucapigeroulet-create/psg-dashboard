@@ -14453,29 +14453,42 @@ function renderRPE() {
   renderRPEProcedeJour();
 }
 
-// Compte le nombre d'oublis RPE (fenêtre 4 h dépassée sans saisie DANS LES TEMPS)
-// pour un joueur sur une plage de dates. Une séance publiée compte comme oubli si,
-// une fois sa fenêtre de 4 h expirée, elle n'a PAS été renseignée pendant cette fenêtre.
-// Chaque séance est jugée sur SON PROPRE horodatage de première saisie (champ `at`,
-// posé par la RPC serveur rpe_merge) : une saisie tardive — y compris quand le staff/
-// admin la renseigne a posteriori — porte un `at` hors fenêtre et compte donc comme
-// oubli, même si une AUTRE séance du même jour a bien été notée dans les temps.
-// Lignes anciennes (avant l'ajout de `at`) : repli sur created_at + heuristique jour
-// (jour multi-séances modifié après la fenêtre => saisie tardive probable = oubli).
+// Compte le nombre de jours en oubli RPE pour un joueur sur une plage de dates.
+// Un jour est un oubli s'il y a AU MOINS une séance/un match dans l'un de ces cas :
+//   (1) NON REMPLI : séance/match publié mais jamais noté. On réutilise EXACTEMENT la
+//       définition de la liste "RPE manquantes" (getPlayersMissingRPE) — matchs et
+//       séances sans ligne d'affectation inclus — pour que l'onglet ne puisse plus
+//       diverger de la liste. Comptabilisé même si la fenêtre 4 h n'est pas écoulée.
+//   (2) SAISI EN RETARD : séance renseignée APRÈS sa fenêtre de 4 h (joueur ou staff/
+//       admin a posteriori). Chaque séance est jugée sur son propre horodatage `at`
+//       (posé par la RPC serveur rpe_merge) ; lignes anciennes sans `at` : repli sur
+//       created_at + heuristique jour (jour multi-séances modifié après la fenêtre).
+// `missingByDate` : { date -> tableau des joueurs manquants ce jour } (getPlayersMissingRPE),
+// pré-calculé une fois par l'appelant. Absent => on retombe sur le seul cas (2).
 const RPE_WINDOW_HOURS = 4;
-function countRPEOublisForPlayer(joueur, dates) {
+function countRPEOublisForPlayer(joueur, dates, missingByDate) {
   const now = Date.now();
   const windowMs = RPE_WINDOW_HOURS * 3600000;
+  const daysWithOubli = new Set();
+
+  // (1) Non remplies — parité stricte avec la liste "RPE manquantes".
+  if (missingByDate) {
+    for (const d of dates) {
+      const miss = missingByDate[d];
+      if (Array.isArray(miss) && miss.indexOf(joueur) !== -1) daysWithOubli.add(d);
+    }
+  }
+
+  // (2) Saisies tardives (et non-remplies non captées par (1), ex. affectation sans planning).
   const dateSet = new Set(dates);
   const affs = (state.bdd_affectations || []).filter(a =>
     a.joueur === joueur && dateSet.has(a.date) && a.rpe_published_at
   );
-  // Compte 1 jour dès qu'au moins une séance de ce jour est en oubli (fenêtre 4h dépassée sans saisie à l'heure).
-  const daysWithOubli = new Set();
   for (const a of affs) {
+    if (daysWithOubli.has(a.date)) continue; // jour déjà marqué
     const pubMs = new Date(a.rpe_published_at).getTime();
     if (!isFinite(pubMs)) continue;
-    if (pubMs + windowMs > now) continue; // fenêtre encore ouverte : pas encore un oubli
+    if (pubMs + windowMs > now) continue; // fenêtre encore ouverte : le retard n'est pas encore acté
     const rpeRow = (state.bdd_rpe || []).find(r => r.date === a.date && r.joueur === joueur);
     let submittedInTime = false;
     if (rpeRow) {
@@ -14570,13 +14583,18 @@ function renderRPEOublisChart(players, defaultDates) {
     if (summaryEl) summaryEl.textContent = 'Aucun joueur à afficher.';
     return;
   }
-  const rows = players.map(joueur => ({ joueur, nb: countRPEOublisForPlayer(joueur, dates) }))
+  // Non-remplies : même définition que la liste "RPE manquantes" (matchs + séances
+  // sans affectation inclus), pré-calculée une fois par date pour éviter de rescanner
+  // l'état à chaque joueur.
+  const missingByDate = {};
+  dates.forEach(d => { try { missingByDate[d] = getPlayersMissingRPE(d); } catch (e) { missingByDate[d] = []; } });
+  const rows = players.map(joueur => ({ joueur, nb: countRPEOublisForPlayer(joueur, dates, missingByDate) }))
     .filter(r => r.nb > 0)
     .sort((a, b) => b.nb - a.nb);
   const totalOublis = rows.reduce((s, r) => s + r.nb, 0);
   if (summaryEl) {
     summaryEl.textContent = rows.length === 0
-      ? '✅ Aucun oubli RPE ' + label + ' — tous les joueurs ont noté dans les 4 h.'
+      ? '✅ Aucun oubli RPE ' + label + ' — aucune RPE manquante ni notée en retard.'
       : (totalOublis + ' jour(s) manqué(s) sur ' + rows.length + ' joueur(s) — période : ' + label + '.');
   }
   if (rows.length === 0) return;
