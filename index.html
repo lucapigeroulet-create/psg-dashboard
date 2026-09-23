@@ -11402,6 +11402,12 @@ function toggleOverviewRPEShowAll() {
   renderOverviewMissing();
 }
 
+let overviewOublisShowAll = false; // déplier la liste "Oublis RPE par joueur" (3 par défaut)
+function toggleOverviewOublisShowAll() {
+  overviewOublisShowAll = !overviewOublisShowAll;
+  renderOverviewOublis();
+}
+
 function renderOverviewMissing() {
   const today = toLocalISO(new Date());
   const dates = getDatesUpToToday();
@@ -11530,9 +11536,14 @@ function renderOverviewOublis() {
     return;
   }
   const totalDays = rows.reduce((s, r) => s + r.days.length, 0);
+  // Par défaut : seulement les 3 premiers joueurs, le reste derrière "Voir tout".
+  const LIMIT = 3;
+  const showAll = overviewOublisShowAll;
+  const visible = showAll ? rows : rows.slice(0, LIMIT);
+  const remaining = rows.length - visible.length;
   let html = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">' +
     rows.length + ' joueur(s) — ' + totalDays + ' jour(s) manqué(s) au total</div>';
-  html += rows.map((r, i) => {
+  html += visible.map((r, i) => {
     const info = getJoueurInfo(r.joueur);
     const jesc = r.joueur.replace(/'/g, "\\'");
     const detailId = 'oubli-days-' + i;
@@ -11550,6 +11561,15 @@ function renderOverviewOublis() {
       '<div id="' + detailId + '" style="display:none;background:var(--bg-elevated);">' + daysHtml + '</div>' +
     '</div>';
   }).join('');
+  if (remaining > 0) {
+    html += '<div style="text-align:center;margin-top:8px;">' +
+      '<button class="btn btn-secondary" style="padding:4px 14px;font-size:12px;" onclick="toggleOverviewOublisShowAll()">Voir tout (' + remaining + ' de plus)</button>' +
+      '</div>';
+  } else if (showAll && rows.length > LIMIT) {
+    html += '<div style="text-align:center;margin-top:8px;">' +
+      '<button class="btn btn-secondary" style="padding:4px 14px;font-size:12px;" onclick="toggleOverviewOublisShowAll()">Réduire</button>' +
+      '</div>';
+  }
   container.innerHTML = html;
 }
 function toggleOverviewOubliDays(id) {
