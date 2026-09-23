@@ -14453,13 +14453,15 @@ function renderRPE() {
   renderRPEProcedeJour();
 }
 
-// Compte le nombre d'oublis RPE (fenêtre 4 h dépassée sans note du joueur)
-// pour un joueur sur une plage de dates. On considère chaque affectation où :
-//   - rpe_published_at est renseigné (le staff a "envoyé" la RPE)
-//   - la fenêtre de 4 h est expirée
-//   - AUCUNE ligne rpe_declarations pour ce joueur/jour n'a été créée dans la fenêtre
-// La comparaison utilise created_at de la ligne RPE ; toute saisie tardive (staff
-// remplaçant a posteriori) laisse le compteur inchangé — la valeur reste figée.
+// Compte le nombre d'oublis RPE (fenêtre 4 h dépassée sans saisie DANS LES TEMPS)
+// pour un joueur sur une plage de dates. Une séance publiée compte comme oubli si,
+// une fois sa fenêtre de 4 h expirée, elle n'a PAS été renseignée pendant cette fenêtre.
+// Chaque séance est jugée sur SON PROPRE horodatage de première saisie (champ `at`,
+// posé par la RPC serveur rpe_merge) : une saisie tardive — y compris quand le staff/
+// admin la renseigne a posteriori — porte un `at` hors fenêtre et compte donc comme
+// oubli, même si une AUTRE séance du même jour a bien été notée dans les temps.
+// Lignes anciennes (avant l'ajout de `at`) : repli sur created_at + heuristique jour
+// (jour multi-séances modifié après la fenêtre => saisie tardive probable = oubli).
 const RPE_WINDOW_HOURS = 4;
 function countRPEOublisForPlayer(joueur, dates) {
   const now = Date.now();
@@ -14468,7 +14470,7 @@ function countRPEOublisForPlayer(joueur, dates) {
   const affs = (state.bdd_affectations || []).filter(a =>
     a.joueur === joueur && dateSet.has(a.date) && a.rpe_published_at
   );
-  // Compte 1 jour dès qu'au moins une séance de ce jour est en oubli (fenêtre 4h dépassée sans note joueur).
+  // Compte 1 jour dès qu'au moins une séance de ce jour est en oubli (fenêtre 4h dépassée sans saisie à l'heure).
   const daysWithOubli = new Set();
   for (const a of affs) {
     const pubMs = new Date(a.rpe_published_at).getTime();
@@ -14476,11 +14478,28 @@ function countRPEOublisForPlayer(joueur, dates) {
     if (pubMs + windowMs > now) continue; // fenêtre encore ouverte : pas encore un oubli
     const rpeRow = (state.bdd_rpe || []).find(r => r.date === a.date && r.joueur === joueur);
     let submittedInTime = false;
-    if (rpeRow && rpeRow.created_at) {
-      const createdMs = new Date(rpeRow.created_at).getTime();
-      if (isFinite(createdMs) && createdMs <= pubMs + windowMs) {
-        const items = Array.isArray(rpeRow.rpe) ? rpeRow.rpe : [];
-        if (items.some(it => it && it.seance === a.seance)) submittedInTime = true;
+    if (rpeRow) {
+      const items = Array.isArray(rpeRow.rpe) ? rpeRow.rpe : [];
+      const item = items.find(it => it && it.seance === a.seance);
+      if (item) {
+        if (item.at) {
+          // Ligne récente : horodatage exact de la 1ʳᵉ saisie de CETTE séance.
+          const t = new Date(item.at).getTime();
+          if (isFinite(t) && t <= pubMs + windowMs) submittedInTime = true;
+        } else {
+          // Ligne ancienne (sans `at`) : repli sur created_at de la ligne du jour,
+          // + heuristique jour pour rattraper l'historique : sur un jour multi-séances
+          // dont la ligne a été MODIFIÉE après la fenêtre de cette séance, on considère
+          // la saisie comme tardive (oubli). Léger risque de sur-comptage assumé.
+          const createdMs = rpeRow.created_at ? new Date(rpeRow.created_at).getTime() : NaN;
+          if (isFinite(createdMs) && createdMs <= pubMs + windowMs) {
+            submittedInTime = true;
+            const updatedMs = rpeRow.updated_at ? new Date(rpeRow.updated_at).getTime() : NaN;
+            if (items.length >= 2 && isFinite(updatedMs) && updatedMs > pubMs + windowMs) {
+              submittedInTime = false;
+            }
+          }
+        }
       }
     }
     if (!submittedInTime) daysWithOubli.add(a.date);
