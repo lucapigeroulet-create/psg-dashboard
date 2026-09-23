@@ -14478,7 +14478,8 @@ function renderRPE() {
 // + heuristique jour. Matchs : pas de ligne d'affectation → traités séparément
 // (chronomètre = publication au joueur, sinon création du match).
 const RPE_WINDOW_HOURS = 4;
-function countRPEOublisForPlayer(joueur, dates) {
+// Renvoie la LISTE triée des jours (ISO) en oubli pour un joueur sur la plage.
+function getRPEOubliDaysForPlayer(joueur, dates) {
   const now = Date.now();
   const windowMs = RPE_WINDOW_HOURS * 3600000;
   const dateSet = new Set(dates);
@@ -14537,7 +14538,11 @@ function countRPEOublisForPlayer(joueur, dates) {
     if (getRPEJoueurSeance(m.date, joueur, matchSeanceNom(m)) === null) daysWithOubli.add(m.date);
   });
 
-  return daysWithOubli.size;
+  return Array.from(daysWithOubli).sort();
+}
+// Compat : nombre de jours en oubli (utilise la liste ci-dessus).
+function countRPEOublisForPlayer(joueur, dates) {
+  return getRPEOubliDaysForPlayer(joueur, dates).length;
 }
 
 // Bascule des champs selon la période choisie pour les oublis RPE
@@ -14603,7 +14608,10 @@ function renderRPEOublisChart(players, defaultDates) {
     if (summaryEl) summaryEl.textContent = 'Aucun joueur à afficher.';
     return;
   }
-  const rows = players.map(joueur => ({ joueur, nb: countRPEOublisForPlayer(joueur, dates) }))
+  const rows = players.map(joueur => {
+    const days = getRPEOubliDaysForPlayer(joueur, dates);
+    return { joueur, nb: days.length, days };
+  })
     .filter(r => r.nb > 0)
     .sort((a, b) => b.nb - a.nb);
   const totalOublis = rows.reduce((s, r) => s + r.nb, 0);
@@ -14629,7 +14637,16 @@ function renderRPEOublisChart(players, defaultDates) {
     },
     options: {
       responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.x + ' jour(s) manqué(s)' } } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: {
+        label: ctx => ctx.parsed.x + ' jour(s) manqué(s)',
+        afterBody: (items) => {
+          const r = items && items[0] ? rows[items[0].dataIndex] : null;
+          if (!r || !r.days || !r.days.length) return '';
+          // Liste des jours en oubli, format JJ/MM, plus récents en premier.
+          return r.days.slice().sort((a, b) => b.localeCompare(a))
+            .map(d => '• ' + d.slice(8, 10) + '/' + d.slice(5, 7));
+        }
+      } } },
       scales: {
         x: { beginAtZero: true, ticks: { color: '#8ba3c1', precision: 0, stepSize: 1 }, grid: { color: '#1f3a5f' }, title: { display: true, text: 'Nombre de jours avec au moins une RPE non notée à temps', color: '#8ba3c1' } },
         y: { ticks: { color: '#8ba3c1', font: { size: 10 } }, grid: { display: false } }
