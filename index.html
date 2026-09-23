@@ -976,8 +976,14 @@
 
     <!-- 4b) Oublis RPE par joueur (chronomètre 4 h dépassé) — clic = jours concernés -->
     <div class="card">
-      <h2>⏰ Oublis RPE par joueur</h2>
-      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Joueurs avec au moins une RPE (séance ou match) non notée une fois le chronomètre de 4 h écoulé, sur les 21 derniers jours. Clique sur un joueur pour voir les jours où il lui manque des évaluations.</p>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <h2 style="margin:0;">⏰ Oublis RPE par joueur</h2>
+        <div class="filter-group">
+          <label>Équipe</label>
+          <select id="overview-oublis-group" onchange="renderOverviewOublis()" style="font-size:12px;"></select>
+        </div>
+      </div>
+      <p style="color:var(--text-dim); font-size:12px; margin:8px 0 10px;">Joueurs avec au moins une RPE (séance ou match) non notée une fois le chronomètre de 4 h écoulé, sur les 21 derniers jours. Clique sur un joueur pour voir les jours où il lui manque des évaluations.</p>
       <div id="overview-oublis-rpe"></div>
     </div>
 
@@ -11520,6 +11526,16 @@ function renderOverviewMissing() {
 function renderOverviewOublis() {
   const container = document.getElementById('overview-oublis-rpe');
   if (!container) return;
+  // Filtre équipe : (re)construit la liste des groupes au 1er rendu / changement d'org.
+  const groupSel = document.getElementById('overview-oublis-group');
+  if (groupSel && (groupSel.options.length === 0 || groupSel.dataset.org !== currentOrg)) {
+    ensureGroupsList();
+    const prev = groupSel.value;
+    groupSel.innerHTML = '<option value="">Toutes</option>' + state.groupes.map(g => '<option value="' + escapeHtml(g) + '">' + escapeHtml(g) + '</option>').join('');
+    groupSel.value = (prev && state.groupes.includes(prev)) ? prev : '';
+    groupSel.dataset.org = currentOrg;
+  }
+  const groupFilter = groupSel ? groupSel.value : '';
   // Fenêtre = 21 derniers jours (aligne sur la plage des affectations chargées).
   const dates = [];
   const base = new Date();
@@ -11527,7 +11543,9 @@ function renderOverviewOublis() {
     const d = new Date(base); d.setDate(d.getDate() - i);
     dates.push(toLocalISO(d));
   }
-  const rows = getAllPlayers().map(joueur => ({ joueur, days: getRPEOubliDaysForPlayer(joueur, dates) }))
+  let joueurs = getAllPlayers();
+  if (groupFilter) joueurs = joueurs.filter(p => getJoueurInfo(p).groupe === groupFilter);
+  const rows = joueurs.map(joueur => ({ joueur, days: getRPEOubliDaysForPlayer(joueur, dates) }))
     .filter(r => r.days.length > 0)
     .sort((a, b) => (b.days.length - a.days.length) || a.joueur.localeCompare(b.joueur));
 
