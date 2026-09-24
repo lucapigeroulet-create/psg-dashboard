@@ -5661,6 +5661,42 @@ function kineTipHide() {
   if (tip) tip.style.display = 'none';
 }
 
+// Bulle flottante au survol du nombre de créneaux de récupération (colonne Récup).
+// Liste, sur la fenêtre [startIso, endIso], chaque créneau : type (bottes / bain froid),
+// date et heure. Réutilise la même bulle + le positionnement que la colonne Kiné.
+function _recupTipHtml(player, startIso, endIso) {
+  const slots = (state.bdd_creneaux_recuperation || [])
+    .filter(s => s.org === currentOrg && Array.isArray(s.joueurs) && s.joueurs.includes(player)
+                 && s.date >= startIso && s.date <= endIso)
+    .sort((a, b) => (b.date + (b.heure || '')).localeCompare(a.date + (a.heure || '')));
+  let h = '<div style="font-weight:700; margin-bottom:6px;">🧊 ' + escapeHtml(player) + '</div>';
+  h += '<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">' + slots.length + ' créneau' + (slots.length > 1 ? 'x' : '') + ' de récupération</div>';
+  if (!slots.length) return h + '<div style="color:var(--text-dim);">Aucun créneau.</div>';
+  slots.forEach(s => {
+    const dfmt = s.date ? String(s.date).split('-').reverse().join('/') : '';
+    const emoji = (RECOVERY_TYPES[s.type] || {}).emoji || '•';
+    h += '<div style="border-top:1px solid var(--border); padding-top:6px; margin-top:6px; color:var(--text-dim);">' +
+      '📅 <b style="color:var(--text);">' + escapeHtml(dfmt) + '</b>' +
+      (s.heure ? ' · 🕒 ' + escapeHtml(s.heure) : '') +
+      ' · ' + emoji + ' ' + escapeHtml(_rcLabel(s.type)) +
+      '</div>';
+  });
+  return h;
+}
+
+function recupTipShow(ev, player, startIso, endIso) {
+  let tip = document.getElementById('kine-hover-tip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'kine-hover-tip';
+    tip.style.cssText = 'position:fixed; z-index:9999; max-width:360px; background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:10px 12px; box-shadow:0 12px 40px rgba(0,0,0,0.5); font-size:12px; color:var(--text); pointer-events:none; display:none;';
+    document.body.appendChild(tip);
+  }
+  tip.innerHTML = _recupTipHtml(player, startIso, endIso);
+  tip.style.display = 'block';
+  kineTipMove(ev);
+}
+
 function toggleCompteRendu(id) {
   const el = document.getElementById('cr-panel-' + id);
   if (el) el.style.display = (el.style.display === 'none') ? '' : 'none';
@@ -20919,16 +20955,23 @@ function renderInjury() {
   const cell = (v, color) => v > 0
     ? '<td style="text-align:center;color:' + color + ';font-weight:600;">' + v + '</td>'
     : '<td style="text-align:center;color:var(--text-dim);">—</td>';
+  // Bornes pour le tooltip récup (mêmes que le comptage : période filtrée, sinon large).
+  const recStart = f.start || '0000-01-01';
+  const recEnd = f.end || '9999-12-31';
   tbody.innerHTML = players.length === 0
     ? '<tr><td colspan="' + (selStatuts.length + 6) + '" style="text-align:center;color:var(--text-dim);padding:20px;">Aucune indisponibilité pour ces filtres.</td></tr>'
-    : players.map(p =>
-        '<tr><td><b>' + p.joueur + '</b></td><td>' + p.groupe + '</td>' +
-        selStatuts.map(t => cell(p.counts[t], STATUT_COLORS[t])).join('') +
-        '<td style="text-align:center;"><b>' + p.total + '</b></td>' +
-        '<td style="text-align:center;color:var(--text-dim);">' + (p.adapted > 0 ? p.adapted : '—') + '</td>' +
-        '<td style="text-align:center;">' + (p.recup > 0 ? '<b style="color:#38bdf8;">' + p.recup + '</b>' : '<span style="color:var(--text-dim);">—</span>') + '</td>' +
-        '<td style="text-align:center;">' + (p.fiches > 0 ? '<b>' + p.fiches + '</b>' : '<span style="color:var(--text-dim);">—</span>') + '</td></tr>'
-      ).join('');
+    : players.map(p => {
+        const jAttr = String(p.joueur).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const recupCell = p.recup > 0
+          ? '<span onmouseenter="recupTipShow(event, \'' + jAttr + '\', \'' + recStart + '\', \'' + recEnd + '\')" onmousemove="kineTipMove(event)" onmouseleave="kineTipHide()" style="cursor:default; font-weight:700; color:#38bdf8; text-decoration:underline dotted;">' + p.recup + '</span>'
+          : '<span style="color:var(--text-dim);">—</span>';
+        return '<tr><td><b>' + p.joueur + '</b></td><td>' + p.groupe + '</td>' +
+          selStatuts.map(t => cell(p.counts[t], STATUT_COLORS[t])).join('') +
+          '<td style="text-align:center;"><b>' + p.total + '</b></td>' +
+          '<td style="text-align:center;color:var(--text-dim);">' + (p.adapted > 0 ? p.adapted : '—') + '</td>' +
+          '<td style="text-align:center;">' + recupCell + '</td>' +
+          '<td style="text-align:center;">' + (p.fiches > 0 ? '<b>' + p.fiches + '</b>' : '<span style="color:var(--text-dim);">—</span>') + '</td></tr>';
+      }).join('');
 
   // ---- Évolution quotidienne (graphe historique, filtré groupe + période, borné à aujourd'hui) ----
   const dates = capDatesToToday(getAllDates().filter(inRange));
@@ -31755,7 +31798,7 @@ function renderMedicalAvailability() {
     // Créneaux de récupération (bain froid + bottes) effectués sur la même fenêtre.
     const recupCount = countRecupForPlayer(p, kineStart, kineToday);
     const recupCell = recupCount
-      ? '<b style="color:#38bdf8;">' + recupCount + '</b>'
+      ? '<span onmouseenter="recupTipShow(event, \'' + pAttr + '\', \'' + kineStart + '\', \'' + kineToday + '\')" onmousemove="kineTipMove(event)" onmouseleave="kineTipHide()" style="cursor:default; font-weight:700; color:#38bdf8; text-decoration:underline dotted;">' + recupCount + '</span>'
       : '<span style="color:var(--text-dim);">0</span>';
     return '<tr><td><b>' + escapeHtml(p) + '</b></td><td>' + escapeHtml(info.groupe || '—') + '</td>' +
       '<td style="color:' + statutColor + '; font-weight:600;">' + statutLabel + '</td>' +
