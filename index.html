@@ -5666,7 +5666,8 @@ function kineTipHide() {
 // date et heure. Réutilise la même bulle + le positionnement que la colonne Kiné.
 function _recupTipHtml(player, startIso, endIso) {
   const slots = (state.bdd_creneaux_recuperation || [])
-    .filter(s => s.org === currentOrg && Array.isArray(s.joueurs) && s.joueurs.includes(player)
+    .filter(s => s.org === currentOrg
+                 && ((Array.isArray(s.joueurs) && s.joueurs.includes(player)) || s.joueur === player)
                  && s.date >= startIso && s.date <= endIso)
     .sort((a, b) => (b.date + (b.heure || '')).localeCompare(a.date + (a.heure || '')));
   let h = '<div style="font-weight:700; margin-bottom:6px;">🧊 ' + escapeHtml(player) + '</div>';
@@ -31700,7 +31701,9 @@ function countRecupForPlayer(joueur, startIso, endIso) {
   return (state.bdd_creneaux_recuperation || []).filter(s =>
     s.org === currentOrg &&
     s.date >= startIso && s.date <= endIso &&
-    Array.isArray(s.joueurs) && s.joueurs.includes(joueur)
+    // Le joueur peut être stocké dans le tableau `joueurs` (cas courant) OU dans le
+    // champ scalaire `joueur` : on couvre les deux pour ne manquer aucun créneau.
+    ((Array.isArray(s.joueurs) && s.joueurs.includes(joueur)) || s.joueur === joueur)
   ).length;
 }
 
