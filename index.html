@@ -5744,6 +5744,14 @@ function mfLatestTest(joueur, typeName) {
   return { valeur: rows[0].valeur, date: rows[0].date, type };
 }
 
+// Taille officielle affichée partout : priorité à la DERNIÈRE mesure de l'onglet Testing
+// (type de test « TAILLE »), sinon la taille saisie dans la fiche joueur (joueurs.taille_cm).
+function getTailleCm(joueur, fallbackTailleCm) {
+  const t = mfLatestTest(joueur, 'TAILLE');
+  if (t && t.valeur != null && t.valeur !== '') return Math.round(Number(t.valeur));
+  return (fallbackTailleCm != null && fallbackTailleCm !== '') ? Math.round(Number(fallbackTailleCm)) : null;
+}
+
 function mfComputeAge(ddn) {
   if (!ddn) return null;
   const d = new Date(ddn + 'T00:00:00');
@@ -17858,7 +17866,7 @@ async function renderFicheGlobale(joueur) {
   const poidsDate = lastPoidsTest ? String(lastPoidsTest.date).split('-').reverse().join('/') : '';
   const poids = poidsValeur != null ? (poidsValeur + ' kg') : '—';
   const poidsForme = (info.poids_forme != null && info.poids_forme !== '') ? Number(info.poids_forme) : null;
-  const tailleSrc = (info.taille_cm != null) ? info.taille_cm : (fiche.taille != null ? Math.round(fiche.taille) : null);
+  const tailleSrc = getTailleCm(joueur, (info.taille_cm != null ? info.taille_cm : (fiche.taille != null ? fiche.taille : null)));
   const taille = tailleSrc != null ? tailleSrc + ' cm' : '—';
   const piedFort = info.pied_fort || row.pied_fort || '';
 
@@ -31034,7 +31042,7 @@ function renderPlayersSettings() {
       '<td>' + (j.numero || '') + '</td>' +
       '<td>' + fmtDDN(j.date_naissance) + '</td>' +
       '<td>' + (j.pied_fort ? escapeHtml(j.pied_fort) : dim) + '</td>' +
-      '<td>' + (j.taille_cm != null ? j.taille_cm + ' cm' : dim) + '</td>' +
+      '<td>' + ((getTailleCm(j.nom, j.taille_cm) != null) ? getTailleCm(j.nom, j.taille_cm) + ' cm' : dim) + '</td>' +
       '<td>' + (j.poids_forme != null ? j.poids_forme + ' kg' : dim) + '</td>' +
       '<td>' + nbSeances + ' jour(s)</td>' +
       '<td style="white-space:nowrap;" onclick="event.stopPropagation()">' +
@@ -34656,7 +34664,7 @@ function renderTestingIndividual(player, t, unite, timeTest, rows) {
         chips.push('<span>🎂 ' + yrs + ' ans</span>');
       }
     }
-    if (info.taille_cm != null) chips.push('<span>📏 ' + info.taille_cm + ' cm</span>');
+    { const tc = getTailleCm(player, info.taille_cm); if (tc != null) chips.push('<span>📏 ' + tc + ' cm</span>'); }
     if (info.poids_forme != null && info.poids_forme !== '') chips.push('<span>⚖️ ' + Number(info.poids_forme) + ' kg (forme)</span>');
     if (info.pied_fort) chips.push('<span>👟 ' + escapeHtml(info.pied_fort) + '</span>');
     if (info.nationalite) chips.push('<span>' + (nationaliteFlag(info.nationalite) || '🌍') + ' ' + escapeHtml(info.nationalite) + '</span>');
