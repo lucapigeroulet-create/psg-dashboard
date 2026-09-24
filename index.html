@@ -14666,6 +14666,18 @@ function renderRPE() {
 // de ligne d'affectation → traités séparément (chronomètre = publication au joueur,
 // sinon création du match).
 const RPE_WINDOW_HOURS = 4;
+// Heure de PREMIÈRE saisie (ms) d'une note RPE de séance/match. Priorité au champ 'at'
+// (posé par rpe_merge à la 1ère saisie), sinon created_at de la ligne du jour (proxy pour
+// les anciennes entrées sans 'at'). Renvoie null si la séance n'est pas notée, ou si aucun
+// horodatage n'est disponible (cas indéterminable → non compté comme retard).
+function rpeSeanceFirstMs(date, joueur, seance) {
+  if (getRPEJoueurSeance(date, joueur, seance) === null) return null; // pas (encore) notée
+  const row = (state.bdd_rpe || []).find(x => x.date === date && x.joueur === joueur);
+  const e = (row && Array.isArray(row.rpe)) ? row.rpe.find(x => x && x.seance === seance) : null;
+  const iso = (e && e.at) ? e.at : (row ? row.created_at : null);
+  const ms = iso ? new Date(iso).getTime() : NaN;
+  return isFinite(ms) ? ms : null;
+}
 // Renvoie la LISTE triée des jours (ISO) en oubli pour un joueur sur la plage.
 function getRPEOubliDaysForPlayer(joueur, dates) {
   const now = Date.now();
@@ -14673,8 +14685,8 @@ function getRPEOubliDaysForPlayer(joueur, dates) {
   const dateSet = new Set(dates);
   const daysWithOubli = new Set();
 
-  // (A) SÉANCES : affectation publiée + fenêtre 4 h fermée + séance TOUJOURS non notée.
-  //     Si le joueur a fini par la remplir (même en retard), la date sort de la liste.
+  // (A) SÉANCES : affectation publiée + fenêtre 4 h fermée. Oubli = note JAMAIS saisie,
+  //     OU 1ère saisie APRÈS la fenêtre de 4 h. Une note rentrée en retard reste comptée.
   const affs = (state.bdd_affectations || []).filter(a =>
     a.joueur === joueur && dateSet.has(a.date) && a.rpe_published_at
   );
@@ -14683,8 +14695,9 @@ function getRPEOubliDaysForPlayer(joueur, dates) {
     const pubMs = new Date(a.rpe_published_at).getTime();
     if (!isFinite(pubMs)) continue;
     if (pubMs + windowMs > now) continue; // chronomètre 4 h pas encore terminé
-    // État courant : rempli maintenant (peu importe quand) => plus un oubli.
-    if (getRPEJoueurSeance(a.date, joueur, a.seance) === null) daysWithOubli.add(a.date);
+    if (getRPEJoueurSeance(a.date, joueur, a.seance) === null) { daysWithOubli.add(a.date); continue; } // jamais notée
+    const firstMs = rpeSeanceFirstMs(a.date, joueur, a.seance);
+    if (firstMs !== null && firstMs > pubMs + windowMs) daysWithOubli.add(a.date); // notée en retard
   }
 
   // (B) MATCHS : joueur ayant joué (temps > 0) + RPE match publiée + fenêtre 4 h fermée
@@ -14699,7 +14712,10 @@ function getRPEOubliDaysForPlayer(joueur, dates) {
     const pubMs = refIso ? new Date(refIso).getTime() : NaN;
     if (!isFinite(pubMs)) return;
     if (pubMs + windowMs > now) return;                     // chronomètre 4 h pas encore terminé
-    if (getRPEJoueurSeance(m.date, joueur, matchSeanceNom(m)) === null) daysWithOubli.add(m.date);
+    const sname = matchSeanceNom(m);
+    if (getRPEJoueurSeance(m.date, joueur, sname) === null) { daysWithOubli.add(m.date); return; } // jamais notée
+    const firstMs = rpeSeanceFirstMs(m.date, joueur, sname);
+    if (firstMs !== null && firstMs > pubMs + windowMs) daysWithOubli.add(m.date); // notée en retard
   });
 
   return Array.from(daysWithOubli).sort();
