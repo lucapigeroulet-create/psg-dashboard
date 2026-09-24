@@ -4393,7 +4393,7 @@
         <div class="table-wrap">
           <table id="med-avail-table" style="font-size:13px;">
             <thead><tr>
-              <th>Joueur</th><th>Groupe</th><th>Statut actuel</th><th>Depuis</th><th>Retour estimé</th><th id="med-avail-kine-th">🩺 Kiné (7 j)</th><th>Fiches blessure</th>
+              <th>Joueur</th><th>Groupe</th><th>Statut actuel</th><th>Depuis</th><th>Retour estimé</th><th id="med-avail-kine-th">🩺 Kiné (7 j)</th><th id="med-avail-recup-th">🧊 Récup (7 j)</th><th>Fiches blessure</th>
             </tr></thead>
             <tbody id="med-avail-tbody"></tbody>
           </table>
@@ -9022,6 +9022,7 @@ async function loadState() {
     bdd_medical_notes: [],
     bdd_medical_questionnaires: [],
     bdd_creneaux_medicaux: [],
+    bdd_creneaux_recuperation: [],
     bdd_fiches: [],
     bdd_test_types: [],
     bdd_test_results: [],
@@ -9242,6 +9243,14 @@ async function loadState() {
       const { data: crn } = await cq.order('date').order('heure');
       state.bdd_creneaux_medicaux = crn || [];
     } catch(e) { state.bdd_creneaux_medicaux = []; }
+
+    // Créneaux de récupération (bain froid / bottes) : sert au comptage "Récup"
+    // dans les tableaux de disponibilité. Org active uniquement.
+    try {
+      const { data: crec } = await sb.from('creneaux_recuperation').select('*')
+        .eq('org', currentOrg).order('date').order('heure');
+      state.bdd_creneaux_recuperation = crec || [];
+    } catch(e) { state.bdd_creneaux_recuperation = []; }
 
     // Fiches médicales joueur (org active)
     try {
@@ -9646,9 +9655,18 @@ function handleRealtimeChange(table, payload) {
   if (table === 'creneaux_recuperation') {
     const rowOrg = (newRow && newRow.org) || (oldRow && oldRow.org);
     if (rowOrg && rowOrg !== currentOrg) return;
+    // Garde le cache local à jour (comptage "Récup" des tableaux de disponibilité).
+    state.bdd_creneaux_recuperation = state.bdd_creneaux_recuperation || [];
+    const rid = (newRow && newRow.id) || (oldRow && oldRow.id);
+    if (rid != null) {
+      state.bdd_creneaux_recuperation = state.bdd_creneaux_recuperation.filter(s => s.id !== rid);
+      if (eventType !== 'DELETE' && newRow) state.bdd_creneaux_recuperation.push(newRow);
+    }
     const v = getCurrentView();
     if (v === 'recovery-planning') renderRecoveryPlanning();
     if (v === 'player-recovery')   renderPlayerRecovery();
+    if (v === 'injury' && typeof renderInjury === 'function') renderInjury();
+    if (v === 'medical' && typeof renderMedicalAvailability === 'function') renderMedicalAvailability();
     return;
   }
 
@@ -20854,7 +20872,9 @@ function renderInjury() {
     const union = new Set(); selStatuts.forEach(t => p.byType[t].forEach(d => union.add(d)));
     let adapted = 0; union.forEach(d => { if (p.adapted.has(d)) adapted++; });
     const fiches = (state.bdd_blessures || []).filter(b => b.joueur === j).length;
-    return { joueur: j, groupe: getJoueurInfo(j).groupe, counts, total: union.size, adapted, fiches };
+    // Créneaux de récupération (bain froid + bottes) sur la période filtrée.
+    const recup = countRecupForPlayer(j, f.start || '0000-01-01', f.end || '9999-12-31');
+    return { joueur: j, groupe: getJoueurInfo(j).groupe, counts, total: union.size, adapted, fiches, recup };
   })
     .filter(p => p.total > 0)
     .filter(p => !search || p.joueur.toLowerCase().indexOf(search) !== -1)
@@ -20893,19 +20913,20 @@ function renderInjury() {
   if (thead) {
     thead.innerHTML = '<tr><th>Joueur</th><th>Groupe</th>' +
       selStatuts.map(t => '<th style="text-align:center;">' + getStatutLabel(t) + '</th>').join('') +
-      '<th style="text-align:center;">Total jours</th><th style="text-align:center;">dont adaptés</th><th style="text-align:center;">Fiches 🩹</th></tr>';
+      '<th style="text-align:center;">Total jours</th><th style="text-align:center;">dont adaptés</th><th style="text-align:center;">🧊 Récup</th><th style="text-align:center;">Fiches 🩹</th></tr>';
   }
   const tbody = document.querySelector('#injury-table tbody');
   const cell = (v, color) => v > 0
     ? '<td style="text-align:center;color:' + color + ';font-weight:600;">' + v + '</td>'
     : '<td style="text-align:center;color:var(--text-dim);">—</td>';
   tbody.innerHTML = players.length === 0
-    ? '<tr><td colspan="' + (selStatuts.length + 5) + '" style="text-align:center;color:var(--text-dim);padding:20px;">Aucune indisponibilité pour ces filtres.</td></tr>'
+    ? '<tr><td colspan="' + (selStatuts.length + 6) + '" style="text-align:center;color:var(--text-dim);padding:20px;">Aucune indisponibilité pour ces filtres.</td></tr>'
     : players.map(p =>
         '<tr><td><b>' + p.joueur + '</b></td><td>' + p.groupe + '</td>' +
         selStatuts.map(t => cell(p.counts[t], STATUT_COLORS[t])).join('') +
         '<td style="text-align:center;"><b>' + p.total + '</b></td>' +
         '<td style="text-align:center;color:var(--text-dim);">' + (p.adapted > 0 ? p.adapted : '—') + '</td>' +
+        '<td style="text-align:center;">' + (p.recup > 0 ? '<b style="color:#38bdf8;">' + p.recup + '</b>' : '<span style="color:var(--text-dim);">—</span>') + '</td>' +
         '<td style="text-align:center;">' + (p.fiches > 0 ? '<b>' + p.fiches + '</b>' : '<span style="color:var(--text-dim);">—</span>') + '</td></tr>'
       ).join('');
 
@@ -31629,6 +31650,17 @@ function resetMedAvailFilters() {
   renderMedicalAvailability();
 }
 
+// Nombre de créneaux de récupération (bain froid + bottes) effectués par un joueur
+// sur la fenêtre [startIso, endIso] (dates ISO incluses), org active. Un créneau est
+// compté dès que le joueur figure dans sa liste `joueurs`.
+function countRecupForPlayer(joueur, startIso, endIso) {
+  return (state.bdd_creneaux_recuperation || []).filter(s =>
+    s.org === currentOrg &&
+    s.date >= startIso && s.date <= endIso &&
+    Array.isArray(s.joueurs) && s.joueurs.includes(joueur)
+  ).length;
+}
+
 function renderMedicalAvailability() {
   const group = (document.getElementById('med-avail-group') || {}).value || '';
   const start = (document.getElementById('med-avail-start') || {}).value || '';
@@ -31642,6 +31674,8 @@ function renderMedicalAvailability() {
   const kineStart = toLocalISO(kineStartDt);
   const kineTh = document.getElementById('med-avail-kine-th');
   if (kineTh) kineTh.textContent = '🩺 Kiné (' + (kineDays >= 365 ? 'saison' : kineDays + ' j') + ')';
+  const recupTh = document.getElementById('med-avail-recup-th');
+  if (recupTh) recupTh.textContent = '🧊 Récup (' + (kineDays >= 365 ? 'saison' : kineDays + ' j') + ')';
   // Notes déjà rattachées à un créneau (compte-rendu) : ne pas les compter en double,
   // le créneau représente déjà ce passage.
   const kineLinkedNoteIds = new Set((state.bdd_creneaux_medicaux || []).map(s => s.note_id).filter(Boolean));
@@ -31718,13 +31752,19 @@ function renderMedicalAvailability() {
     const kineCell = kineCount
       ? '<span onmouseenter="kineTipShow(event, \'' + pAttr + '\')" onmousemove="kineTipMove(event)" onmouseleave="kineTipHide()" style="cursor:default; font-weight:700; color:#22d3ee; text-decoration:underline dotted;">' + kineCount + '</span>'
       : '<span style="color:var(--text-dim);">0</span>';
+    // Créneaux de récupération (bain froid + bottes) effectués sur la même fenêtre.
+    const recupCount = countRecupForPlayer(p, kineStart, kineToday);
+    const recupCell = recupCount
+      ? '<b style="color:#38bdf8;">' + recupCount + '</b>'
+      : '<span style="color:var(--text-dim);">0</span>';
     return '<tr><td><b>' + escapeHtml(p) + '</b></td><td>' + escapeHtml(info.groupe || '—') + '</td>' +
       '<td style="color:' + statutColor + '; font-weight:600;">' + statutLabel + '</td>' +
       '<td>' + formatDateJMA(since) + '</td><td>' + retour + '</td>' +
       '<td style="text-align:center;">' + kineCell + '</td>' +
+      '<td style="text-align:center;">' + recupCell + '</td>' +
       '<td>' + ficheBtn + '</td></tr>';
   });
-  tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="7" style="text-align:center; color:var(--text-dim); padding:20px;">Aucun joueur</td></tr>';
+  tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="8" style="text-align:center; color:var(--text-dim); padding:20px;">Aucun joueur</td></tr>';
 
   renderMedicalInjurySummary(group);
 
