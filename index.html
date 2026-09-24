@@ -983,7 +983,7 @@
           <select id="overview-oublis-group" onchange="renderOverviewOublis()" style="font-size:12px;"></select>
         </div>
       </div>
-      <p style="color:var(--text-dim); font-size:12px; margin:8px 0 10px;">Joueurs avec au moins une RPE (séance ou match) non notée une fois le chronomètre de 4 h écoulé, sur les 21 derniers jours. Clique sur un joueur pour voir les jours où il lui manque des évaluations.</p>
+      <p style="color:var(--text-dim); font-size:12px; margin:8px 0 10px;">Joueurs dont une RPE (séance ou match) est <b>encore à remplir</b> (fenêtre de 4 h passée), sur les 21 derniers jours — pour les relancer. Une note saisie, même en retard, disparaît d'ici. (Le décompte figé des retards est dans l'onglet <b>Charge RPE</b>.) Clique sur un joueur pour voir les jours à saisir.</p>
       <div id="overview-oublis-rpe"></div>
     </div>
 
@@ -11635,12 +11635,12 @@ function renderOverviewOublis() {
   }
   let joueurs = getAllPlayers();
   if (groupFilter) joueurs = joueurs.filter(p => getJoueurInfo(p).groupe === groupFilter);
-  const rows = joueurs.map(joueur => ({ joueur, days: getRPEOubliDaysForPlayer(joueur, dates) }))
+  const rows = joueurs.map(joueur => ({ joueur, days: getRPEMissingDaysForPlayer(joueur, dates) }))
     .filter(r => r.days.length > 0)
     .sort((a, b) => (b.days.length - a.days.length) || a.joueur.localeCompare(b.joueur));
 
   if (rows.length === 0) {
-    container.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px;">✅ Aucun oubli RPE sur les 21 derniers jours.</div>';
+    container.innerHTML = '<div style="color:var(--green);font-size:13px;padding:8px;">✅ Aucune RPE manquante sur les 21 derniers jours.</div>';
     return;
   }
   const totalDays = rows.reduce((s, r) => s + r.days.length, 0);
@@ -11650,7 +11650,7 @@ function renderOverviewOublis() {
   const visible = showAll ? rows : rows.slice(0, LIMIT);
   const remaining = rows.length - visible.length;
   let html = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">' +
-    rows.length + ' joueur(s) — ' + totalDays + ' jour(s) manqué(s) au total</div>';
+    rows.length + ' joueur(s) — ' + totalDays + ' jour(s) avec RPE à remplir</div>';
   html += visible.map((r, i) => {
     const info = getJoueurInfo(r.joueur);
     const jesc = r.joueur.replace(/'/g, "\\'");
@@ -14723,6 +14723,38 @@ function getRPEOubliDaysForPlayer(joueur, dates) {
 // Compat : nombre de jours en oubli (utilise la liste ci-dessus).
 function countRPEOublisForPlayer(joueur, dates) {
   return getRPEOubliDaysForPlayer(joueur, dates).length;
+}
+
+// Jours où il MANQUE ENCORE au moins une saisie RPE (séance/match publié, fenêtre 4 h passée,
+// note TOUJOURS non saisie à cet instant). Sert UNIQUEMENT à relancer les joueurs (vue
+// d'ensemble « Oublis RPE par jour ») : dès qu'une note est remplie, même en retard, le jour
+// disparaît. NE PAS confondre avec getRPEOubliDaysForPlayer (compteur figé de l'onglet Charge
+// RPE, qui garde les retards).
+function getRPEMissingDaysForPlayer(joueur, dates) {
+  const now = Date.now();
+  const windowMs = RPE_WINDOW_HOURS * 3600000;
+  const dateSet = new Set(dates);
+  const days = new Set();
+  const affs = (state.bdd_affectations || []).filter(a =>
+    a.joueur === joueur && dateSet.has(a.date) && a.rpe_published_at
+  );
+  for (const a of affs) {
+    if (days.has(a.date)) continue;
+    const pubMs = new Date(a.rpe_published_at).getTime();
+    if (!isFinite(pubMs) || pubMs + windowMs > now) continue; // fenêtre 4 h pas encore fermée
+    if (getRPEJoueurSeance(a.date, joueur, a.seance) === null) days.add(a.date); // toujours vide
+  }
+  (state.bdd_matchs || []).forEach(m => {
+    if (!m || !dateSet.has(m.date) || days.has(m.date)) return;
+    const entry = Array.isArray(m.composition) ? m.composition.find(c => c && c.joueur === joueur) : null;
+    if (!entry || (entry.total_min || 0) <= 0) return;
+    if (!isMatchRPEPublishedForPlayer(m, joueur)) return;
+    const refIso = entry.rpe_published_at || m.created_at;
+    const pubMs = refIso ? new Date(refIso).getTime() : NaN;
+    if (!isFinite(pubMs) || pubMs + windowMs > now) return;
+    if (getRPEJoueurSeance(m.date, joueur, matchSeanceNom(m)) === null) days.add(m.date);
+  });
+  return Array.from(days).sort();
 }
 
 // Bascule des champs selon la période choisie pour les oublis RPE
