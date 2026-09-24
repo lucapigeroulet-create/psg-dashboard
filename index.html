@@ -9372,10 +9372,10 @@ async function savePlanningToSupabase(date, joueur, seances) {
   // Filtrer les badges de match (préfixe ⚽) — ils ne sont pas stockés dans plannings
   seances = (seances || []).filter(s => !(typeof s === 'string' && s.indexOf('⚽') === 0));
   if (!seances || seances.length === 0) {
-    const { error } = await sb.from('plannings').delete().match({ date, joueur });
+    const { error } = await sb.from('plannings').delete().match({ date, joueur, org: currentOrg });
     if (error) { toast('Erreur planning : ' + error.message, 'error'); return false; }
   } else {
-    const { error } = await sb.from('plannings').upsert({ date, joueur, seances, org: currentOrg }, { onConflict: 'date,joueur' });
+    const { error } = await sb.from('plannings').upsert({ date, joueur, seances, org: currentOrg }, { onConflict: 'date,joueur,org' });
     if (error) { toast('Erreur planning : ' + error.message, 'error'); return false; }
   }
   return true;
@@ -9389,10 +9389,10 @@ async function saveRPEToSupabase(date, joueur, rpeArray) {
   // Fenêtre unique de 4h (par séance) : vérifiée en amont dans setRPECardValue/setRPEProcedeValue.
   // Pendant ces 4h la saisie ET la modification sont libres — plus de sous-verrou de 2h.
   if (!rpeArray || rpeArray.length === 0) {
-    const { error } = await sb.from('rpe_declarations').delete().match({ date, joueur });
+    const { error } = await sb.from('rpe_declarations').delete().match({ date, joueur, org: currentOrg });
     if (error) { toast('Erreur RPE : ' + error.message, 'error'); return false; }
   } else {
-    const { error } = await sb.from('rpe_declarations').upsert({ date, joueur, rpe: rpeArray, org: currentOrg }, { onConflict: 'date,joueur' });
+    const { error } = await sb.from('rpe_declarations').upsert({ date, joueur, rpe: rpeArray, org: currentOrg }, { onConflict: 'date,joueur,org' });
     if (error) { toast('Erreur RPE : ' + error.message, 'error'); return false; }
   }
   return true;
@@ -9437,12 +9437,39 @@ async function saveRPEMerge(date, joueur, seances, opts) {
   };
   const { data, error } = await sb.rpc('rpe_merge', params);
   if (error) {
-    // Filet de sécurité : si la RPC est indisponible, on retombe sur l'écriture pleine.
-    console.warn('rpe_merge indisponible, fallback upsert :', error.message);
-    return await saveRPEToSupabase(date, joueur, r ? r.rpe : []);
+    // On ne retombe sur l'écriture pleine QUE si la RPC est réellement absente
+    // (fonction non déployée). Toute autre erreur est une erreur métier — typiquement
+    // le verrou « Séance verrouillée » (saisie hors de la fenêtre de 4 h, ou RPE pas
+    // encore envoyée). Avant, cette erreur était avalée en silence : le joueur voyait
+    // sa note à l'écran alors que rien n'était enregistré.
+    const missing = error.code === 'PGRST202'
+      || /could not find the function|does not exist|not find/i.test(error.message || '');
+    if (missing) {
+      console.warn('rpe_merge indisponible, fallback upsert :', error.message);
+      return await saveRPEToSupabase(date, joueur, r ? r.rpe : []);
+    }
+    // Erreur métier : on prévient l'utilisateur et on resynchronise l'état local sur
+    // le serveur, pour que l'écran reflète ce qui est réellement enregistré.
+    toast(error.message || tr('RPE could not be saved', 'RPE non enregistré'), 'error');
+    await reloadRpeRow(date, joueur);
+    return false;
   }
   syncRpeRowLocal(date, joueur, Array.isArray(data) ? (data[0] || null) : (data || null));
   return true;
+}
+
+// Recharge la ligne RPE du serveur (vérité) et réaligne l'état local. Sert à annuler
+// une saisie optimiste que le serveur a refusée (ex. séance verrouillée).
+async function reloadRpeRow(date, joueur) {
+  if (!sb) return;
+  try {
+    const { data, error } = await sb.from('rpe_declarations')
+      .select('rpe,plaisir,created_at,updated_at')
+      .match({ date, joueur, org: currentOrg })
+      .maybeSingle();
+    if (error) return;
+    syncRpeRowLocal(date, joueur, data || null);
+  } catch (_) {}
 }
 
 // ---- Note de plaisir (-5 à +5), une par joueur et par jour — SECONDE LIGUE uniquement ----
@@ -22222,7 +22249,7 @@ async function migrateRPESeanceKey(oldDate, oldNom, newDate, newNom) {
     if (!item) continue;
     if (oldDate === newDate) {
       item.seance = newNom; // simple renommage de clé, valeur intacte
-      try { await sb.from('rpe_declarations').upsert({ date: r.date, joueur: r.joueur, rpe: r.rpe, org: currentOrg }, { onConflict: 'date,joueur' }); } catch (e) {}
+      try { await sb.from('rpe_declarations').upsert({ date: r.date, joueur: r.joueur, rpe: r.rpe, org: currentOrg }, { onConflict: 'date,joueur,org' }); } catch (e) {}
     } else {
       // La date a changé : on déplace l'entrée vers la nouvelle date (fusion, sans doublon)
       r.rpe = r.rpe.filter(it => it.seance !== oldNom);
@@ -22232,8 +22259,8 @@ async function migrateRPESeanceKey(oldDate, oldNom, newDate, newNom) {
       dest.rpe = dest.rpe.filter(it => it.seance !== newNom);
       dest.rpe.push({ seance: newNom, rpe: item.rpe });
       try {
-        await sb.from('rpe_declarations').upsert({ date: r.date, joueur: r.joueur, rpe: r.rpe, org: currentOrg }, { onConflict: 'date,joueur' });
-        await sb.from('rpe_declarations').upsert({ date: dest.date, joueur: dest.joueur, rpe: dest.rpe, org: currentOrg }, { onConflict: 'date,joueur' });
+        await sb.from('rpe_declarations').upsert({ date: r.date, joueur: r.joueur, rpe: r.rpe, org: currentOrg }, { onConflict: 'date,joueur,org' });
+        await sb.from('rpe_declarations').upsert({ date: dest.date, joueur: dest.joueur, rpe: dest.rpe, org: currentOrg }, { onConflict: 'date,joueur,org' });
       } catch (e) {}
     }
   }
@@ -26342,7 +26369,7 @@ async function saveSeance() {
         for (const e of state.bdd_ent) {
           if (e.date === date && Array.isArray(e.seances) && e.seances.includes(editingOriginal)) {
             e.seances = e.seances.map(s => s === editingOriginal ? nom : s);
-            try { await sb.from('plannings').upsert({ date: e.date, joueur: e.joueur, seances: e.seances, org: currentOrg }, { onConflict: 'date,joueur' }); } catch (err) {}
+            try { await sb.from('plannings').upsert({ date: e.date, joueur: e.joueur, seances: e.seances, org: currentOrg }, { onConflict: 'date,joueur,org' }); } catch (err) {}
           }
         }
         // Migration de la clé RPE (valeurs intactes) + persistance
@@ -27750,7 +27777,7 @@ async function saveHooperToSupabase(date, joueur, fields) {
     toast(msg, 'error'); return false;
   }
   const row = { date, joueur, ...fields, org: currentOrg };
-  const { error } = await sb.from('hooper_tests').upsert(row, { onConflict: 'date,joueur' });
+  const { error } = await sb.from('hooper_tests').upsert(row, { onConflict: 'date,joueur,org' });
   if (error) {
     toast('Error: ' + error.message, 'error');
     return false;
@@ -31218,17 +31245,30 @@ async function saveEditPlayer() {
     const oldName = document.getElementById('pe-old-name').value;
     const j = state.joueurs.find(x => x.nom === oldName);
     if (!j) { toast('Joueur introuvable', 'error'); return; }
-    const trimmed = (document.getElementById('pe-name').value || '').trim();
+    let trimmed = (document.getElementById('pe-name').value || '').trim();
     if (!trimmed) { toast('Nom vide', 'error'); return; }
     if (trimmed !== oldName && state.joueurs.some(x => x.nom === trimmed)) {
       toast('Un joueur "' + trimmed + '" existe déjà', 'error');
       return;
     }
+    // Le changement de NOM est réservé au compte administrateur. Pour tout autre compte,
+    // on annule le changement de nom (les autres champs restent modifiables).
+    const isSuperAdmin = (((typeof currentUser !== 'undefined' && currentUser && currentUser.email) || '')).toLowerCase() === 'luca.pigeroulet@gmail.com';
+    if (trimmed !== oldName && !isSuperAdmin) {
+      toast(tr('Renaming a player is reserved to the administrator — other changes were saved.', '🔒 Le changement de nom est réservé à l\'administrateur. Les autres modifications sont enregistrées.'), 'error');
+      trimmed = oldName;
+      document.getElementById('pe-name').value = oldName;
+      document.getElementById('pe-title-name').textContent = oldName;
+    }
+    // Vrai uniquement quand l'admin change réellement le nom
+    const renameName = (trimmed !== oldName);
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Enregistrement…'; }
     const taille = document.getElementById('pe-taille').value;
     const poids = document.getElementById('pe-poids').value;
     const updated = {
-      nom: trimmed,
+      // On enregistre toujours les attributs sous le nom ACTUEL ; le renommage éventuel
+      // (admin) est fait juste après par la fonction serveur rename_joueur (atomique, complète).
+      nom: oldName,
       groupe: (document.getElementById('pe-groupe').value || '').trim() || null,
       poste: (document.getElementById('pe-poste').value || '').trim() || null,
       numero: document.getElementById('pe-num').value ? parseInt(document.getElementById('pe-num').value, 10) : null,
@@ -31244,29 +31284,25 @@ async function saveEditPlayer() {
     const ok = await saveJoueurToSupabase(updated, oldName);
     if (!ok) { if (btn) { btn.disabled = false; btn.textContent = '💾 Enregistrer'; } return; }
 
-  if (trimmed !== oldName) {
-    const planningsAffectes = state.bdd_ent.filter(e => e.joueur === oldName);
-    for (const e of planningsAffectes) {
-      await sb.from('plannings').delete().match({ date: e.date, joueur: oldName });
-      if (e.seances && e.seances.length > 0) {
-        await sb.from('plannings').upsert({ date: e.date, joueur: trimmed, seances: e.seances, org: currentOrg }, { onConflict: 'date,joueur' });
-      }
-      e.joueur = trimmed;
+  if (renameName) {
+    // Renommage COMPLET et atomique côté serveur (~30 tables : RPE, affectations, plannings,
+    // Hooper, GPS, amendes, médical, muscu, réathlé, notes, listes, comptes…). Zéro orphelin.
+    const { error: renErr } = await sb.rpc('rename_joueur', { p_org: currentOrg, p_old: oldName, p_new: trimmed });
+    if (renErr) {
+      toast('Erreur renommage : ' + renErr.message, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '💾 Enregistrer'; }
+      return;
     }
-    const rpesAffectes = state.bdd_rpe.filter(r => r.joueur === oldName);
-    for (const r of rpesAffectes) {
-      await sb.from('rpe_declarations').delete().match({ date: r.date, joueur: oldName });
-      if (r.rpe && r.rpe.length > 0) {
-        await sb.from('rpe_declarations').upsert({ date: r.date, joueur: trimmed, rpe: r.rpe, org: currentOrg }, { onConflict: 'date,joueur' });
-      }
-      r.joueur = trimmed;
-    }
-    state.bdd_gps.forEach(g => { if (g.joueur === oldName) g.joueur = trimmed; });
-    await sb.from('gps_data').update({ joueur: trimmed }).eq('joueur', oldName);
+    // Refléter le nouveau nom dans l'état local (le serveur a déjà tout migré côté base)
+    (state.bdd_ent || []).forEach(e => { if (e.joueur === oldName) e.joueur = trimmed; });
+    (state.bdd_rpe || []).forEach(r => { if (r.joueur === oldName) r.joueur = trimmed; });
+    (state.bdd_gps || []).forEach(g => { if (g.joueur === oldName) g.joueur = trimmed; });
     _writeCache('gps_data', currentOrg, state.bdd_gps);
+    (state.bdd_player_aliases || []).forEach(a => { if (a.joueur === oldName) a.joueur = trimmed; });
   }
 
   Object.assign(j, updated);
+  if (renameName) j.nom = trimmed;
   if (updated.groupe) {
     ensureGroupsList();
     if (!state.groupes.includes(updated.groupe)) {
@@ -31328,10 +31364,12 @@ async function deletePlayer(nom) {
   if (nbSeances > 0) msg += '\n\n⚠️ ' + nbSeances + ' jour(s) de planning et les RPE/GPS associés seront supprimés.';
   if (!confirm(msg)) return;
 
-  // Supprimer côté Supabase (cascade implicite via les deletes)
-  await sb.from('plannings').delete().eq('joueur', nom);
-  await sb.from('rpe_declarations').delete().eq('joueur', nom);
-  await sb.from('gps_data').delete().eq('joueur', nom);
+  // Supprimer côté Supabase (cascade implicite via les deletes).
+  // IMPORTANT : on scope à l'org courante, sinon un homonyme dans un autre club
+  // (ex. deux joueurs « Mohamed » en PSG et TEGG) verrait ses données supprimées aussi.
+  await sb.from('plannings').delete().eq('joueur', nom).eq('org', currentOrg);
+  await sb.from('rpe_declarations').delete().eq('joueur', nom).eq('org', currentOrg);
+  await sb.from('gps_data').delete().eq('joueur', nom).eq('org', currentOrg);
   await deleteJoueurFromSupabase(nom);
 
   state.joueurs = state.joueurs.filter(j => j.nom !== nom);
