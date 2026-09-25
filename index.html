@@ -839,6 +839,7 @@
     <div class="nav-dropdown-menu" id="nav-params-menu">
       <button class="nav-btn" data-view="best-match">🏆 Meilleur Match</button>
       <button class="nav-btn" data-view="amendes">💰 Amendes</button>
+      <button class="nav-btn" id="nav-redcross-btn" data-view="red-cross" style="display:none;">❌ Red cross</button>
       <button class="nav-btn staff-mes-amendes-btn" data-view="player-amendes" style="display:none;">🧾 Mes amendes</button>
       <button class="nav-btn" data-view="minijeux">🎮 Mini-jeux</button>
       <button class="nav-btn" data-view="history">📋 Historique séances</button>
@@ -2522,6 +2523,16 @@
     </div>
   </div>
 
+  <!-- ========== RED CROSS (staff/admin PSG) — miroir du Google Sheet ========== -->
+  <div class="view" id="view-red-cross">
+    <div class="card">
+      <h2 style="margin-top:0;">❌ Red cross — suivi (PSG)</h2>
+      <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Miroir du tableau Google Sheet « CROSS TABLE », synchronisé automatiquement (8h, 13h, 19h). Lecture seule : les croix se saisissent dans le Google Sheet. Une sanction tous les 4 croix.</p>
+      <div id="redcross-view-summary" style="color:var(--text-dim); font-size:12px; margin-bottom:8px;"></div>
+      <div id="redcross-view-content"></div>
+    </div>
+  </div>
+
   <!-- ========== PARAMÈTRES ========== -->
   <div class="view" id="view-settings">
     <div class="card">
@@ -2555,17 +2566,6 @@
         <button class="settings-tab" data-tab="ratios" onclick="switchSettingsTab('ratios')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">📐 Ratios de travail</button>
         <button class="settings-tab" data-tab="logos" onclick="switchSettingsTab('logos')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">🖼️ Logos</button>
         <button class="settings-tab" data-tab="fiches" onclick="switchSettingsTab('fiches')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">📋 Fiches joueurs</button>
-        <button class="settings-tab" id="settings-tab-redcross" data-tab="redcross" onclick="switchSettingsTab('redcross')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px; display:none;">❌ Red cross</button>
-      </div>
-    </div>
-
-    <!-- Onglet RED CROSS : miroir (lecture seule) du Google Sheet, synchro auto 3x/j -->
-    <div id="settings-redcross" class="settings-pane" style="display:none;">
-      <div class="card">
-        <h2 style="margin-top:0;">❌ Red cross — suivi (PSG)</h2>
-        <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Miroir du tableau Google Sheet « CROSS TABLE », synchronisé automatiquement (8h, 13h, 19h). Lecture seule : les croix se saisissent dans le Google Sheet. Une sanction tous les 4 croix.</p>
-        <div id="redcross-settings-summary" style="color:var(--text-dim); font-size:12px; margin-bottom:8px;"></div>
-        <div id="redcross-settings-content"></div>
       </div>
     </div>
 
@@ -8836,6 +8836,9 @@ function applyRoleRestrictions() {
     // PSG staff standard : accès Paramètres restreint à Vignettes (contrôlé dans renderSettings).
     // Staff PSG débloqué (elise/israel) : accès complet dans toutes leurs entités.
     const psgStaffVignettesOnly = staffLimited && currentOrg === 'PSG' && !isFullSettingsStaff;
+    // Red cross : réservé à l'entité PSG, pour l'admin (ou staff PSG débloqué elise/israel).
+    const redcrossBtn = document.getElementById('nav-redcross-btn');
+    if (redcrossBtn) redcrossBtn.style.display = (currentOrg === 'PSG' && (currentRole === 'admin' || isFullSettingsStaff)) ? '' : 'none';
     const hideSettings = window.isDirectionPlus || (staffLimited && !psgStaffVignettesOnly && !isFullSettingsStaff);
     if (settingsBtn) settingsBtn.style.display = hideSettings ? 'none' : '';
   }
@@ -10821,6 +10824,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     else if (view === 'video-entry') renderVideoEntry();
     else if (view === 'history') renderHistory();
     else if (view === 'settings') renderSettings();
+    else if (view === 'red-cross') renderRedCrossView();
     else if (view === 'best-match') renderBestMatch();
     else if (view === 'amendes') renderAmendes();
     else if (view === 'prepa-seance') renderPrepaSeance();
@@ -30371,9 +30375,6 @@ function renderSettings() {
     const tab = btn.dataset.tab;
     btn.style.display = (psgStaffVignettesOnly && tab !== 'vignettes') ? 'none' : '';
   });
-  // Red cross : onglet réservé à l'entité PSG (masqué aux staff PSG restreints Vignettes)
-  const rcTab = document.getElementById('settings-tab-redcross');
-  if (rcTab) rcTab.style.display = (currentOrg === 'PSG' && !psgStaffVignettesOnly) ? '' : 'none';
   if (psgStaffVignettesOnly && currentSettingsTab !== 'vignettes') {
     // Force la vignettes-only view : bascule d'onglet + panes
     document.querySelectorAll('.settings-pane').forEach(p => p.style.display = 'none');
@@ -30815,7 +30816,6 @@ function switchSettingsTab(tab) {
   document.getElementById('settings-' + tab).style.display = 'block';
   renderSettings();
   if (tab === 'fiches') renderSettingsFiches();
-  if (tab === 'redcross') renderRedCrossSettings();
 }
 
 // ---- Suivi d'avancement des fiches globales (Paramètres → Fiches joueurs) ----
@@ -34360,9 +34360,9 @@ async function renderPlayerRedCross(container){
   container.innerHTML = html;
 }
 
-async function renderRedCrossSettings(){
-  const summary = document.getElementById('redcross-settings-summary');
-  const cont = document.getElementById('redcross-settings-content');
+async function renderRedCrossView(){
+  const summary = document.getElementById('redcross-view-summary');
+  const cont = document.getElementById('redcross-view-content');
   if (!cont) return;
   cont.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:8px;">Chargement…</div>';
   let rows = [];
