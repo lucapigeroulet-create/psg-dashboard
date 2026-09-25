@@ -2555,6 +2555,17 @@
         <button class="settings-tab" data-tab="ratios" onclick="switchSettingsTab('ratios')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">📐 Ratios de travail</button>
         <button class="settings-tab" data-tab="logos" onclick="switchSettingsTab('logos')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">🖼️ Logos</button>
         <button class="settings-tab" data-tab="fiches" onclick="switchSettingsTab('fiches')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px;">📋 Fiches joueurs</button>
+        <button class="settings-tab" id="settings-tab-redcross" data-tab="redcross" onclick="switchSettingsTab('redcross')" style="flex:1; background:var(--bg-elevated); color:var(--text-dim); border:none; padding:14px; cursor:pointer; font-weight:600; font-size:14px; display:none;">❌ Red cross</button>
+      </div>
+    </div>
+
+    <!-- Onglet RED CROSS : miroir (lecture seule) du Google Sheet, synchro auto 3x/j -->
+    <div id="settings-redcross" class="settings-pane" style="display:none;">
+      <div class="card">
+        <h2 style="margin-top:0;">❌ Red cross — suivi (PSG)</h2>
+        <p style="color:var(--text-dim); font-size:12px; margin-bottom:10px;">Miroir du tableau Google Sheet « CROSS TABLE », synchronisé automatiquement (8h, 13h, 19h). Lecture seule : les croix se saisissent dans le Google Sheet. Une sanction tous les 4 croix.</p>
+        <div id="redcross-settings-summary" style="color:var(--text-dim); font-size:12px; margin-bottom:8px;"></div>
+        <div id="redcross-settings-content"></div>
       </div>
     </div>
 
@@ -4311,6 +4322,7 @@
 
   <!-- ========== VUE JOUEUR : MES AMENDES ========== -->
   <div class="view" id="view-player-amendes">
+   <div id="pa-amendes-wrap">
     <div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">
       <h2 style="color:var(--accent-light); font-size:18px;" data-en="💰 My fines" data-fr="💰 Mes amendes" data-es="💰 Mis multas">💰 Mes amendes</h2>
       <p style="color:var(--text); font-size:13px; margin-top:4px;" data-en="Track your fines and payment deadlines." data-fr="Suivi de tes amendes et de tes échéances de paiement." data-es="Seguimiento de tus multas y de tus plazos de pago.">Suivi de tes amendes et de tes échéances de paiement.</p>
@@ -4326,6 +4338,8 @@
 
     <div id="pa-alert" style="display:none;"></div>
     <div id="pa-content"></div>
+   </div>
+   <div id="pa-redcross-wrap" style="display:none;"></div>
   </div>
   <!-- ===== FIN VUE MES AMENDES ===== -->
 
@@ -30357,6 +30371,9 @@ function renderSettings() {
     const tab = btn.dataset.tab;
     btn.style.display = (psgStaffVignettesOnly && tab !== 'vignettes') ? 'none' : '';
   });
+  // Red cross : onglet réservé à l'entité PSG (masqué aux staff PSG restreints Vignettes)
+  const rcTab = document.getElementById('settings-tab-redcross');
+  if (rcTab) rcTab.style.display = (currentOrg === 'PSG' && !psgStaffVignettesOnly) ? '' : 'none';
   if (psgStaffVignettesOnly && currentSettingsTab !== 'vignettes') {
     // Force la vignettes-only view : bascule d'onglet + panes
     document.querySelectorAll('.settings-pane').forEach(p => p.style.display = 'none');
@@ -30798,6 +30815,7 @@ function switchSettingsTab(tab) {
   document.getElementById('settings-' + tab).style.display = 'block';
   renderSettings();
   if (tab === 'fiches') renderSettingsFiches();
+  if (tab === 'redcross') renderRedCrossSettings();
 }
 
 // ---- Suivi d'avancement des fiches globales (Paramètres → Fiches joueurs) ----
@@ -34296,6 +34314,87 @@ function amPaymentWindowLabel(ym) {
   return 'du ' + amShortDayDateFR(w.open) + ' au ' + amShortDayDateFR(w.close);
 }
 
+// ===== RED CROSS (PSG) — source : Google Sheet synchronisé dans la table red_cross =====
+function redCrossColor(n){ if(n>=8) return '#dc2626'; if(n>=4) return '#f97316'; if(n>=1) return '#eab308'; return 'var(--green)'; }
+
+async function renderPlayerRedCross(container){
+  container.innerHTML = '<div class="card"><div style="color:var(--text-dim);font-size:13px;padding:8px;">'+tr('Loading…','Chargement…','Cargando…')+'</div></div>';
+  let row = null;
+  try { const { data } = await sb.from('red_cross').select('*').eq('org','PSG').eq('joueur', currentJoueurNom).maybeSingle(); row = data || null; } catch(e){ row = null; }
+  const nb = row ? (row.nb_cross||0) : 0;
+  const crosses = (row && Array.isArray(row.crosses)) ? row.crosses : [];
+  const sanctions = (row && Array.isArray(row.sanctions)) ? row.sanctions : [];
+  const merits = (row && Array.isArray(row.merits)) ? row.merits : [];
+  const reward = row ? row.reward : null;
+  const toNext = Math.max(0, (Math.floor(nb/4)+1)*4 - nb);
+  const col = redCrossColor(nb);
+  let html = '';
+  html += '<div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">'
+    + '<h2 style="color:var(--accent-light); margin:0 0 10px; font-size:18px;">❌ '+tr('Red cross','Croix','Cruces')+'</h2>'
+    + '<div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">'
+    +   '<div style="font-size:44px; font-weight:800; line-height:1; color:'+col+';">'+nb+'</div>'
+    +   '<div style="font-size:14px; color:var(--text);">'+tr('crosses this season','croix cette saison','cruces esta temporada')
+    +     '<div style="color:var(--text-dim); font-size:12px; margin-top:4px;">'+ (toNext===0 ? tr('Sanction threshold reached','Palier de sanction atteint','Umbral de sanción alcanzado') : (toNext+' '+tr('cross(es) before the next sanction','croix avant la prochaine sanction','cruz(ces) antes de la próxima sanción'))) +'</div>'
+    +   '</div>'
+    + '</div>'
+    + '<p style="color:var(--text-dim); font-size:12px; margin:12px 0 0;">'+tr('A sanction is applied every 4 crosses.','Une sanction est appliquée tous les 4 croix.','Se aplica una sanción cada 4 cruces.')+'</p>'
+    + '</div>';
+  if (sanctions.length){
+    html += '<div class="card"><h3 style="margin:0 0 8px;">⚖️ '+tr('Sanctions','Sanctions','Sanciones')+'</h3>'
+      + sanctions.map(s=>'<div style="display:flex; gap:10px; padding:6px 0; border-bottom:1px solid var(--border);"><span style="color:#f87171; font-weight:700; min-width:64px;">'+escapeHtml(String(s.palier||''))+' ❌</span><span style="font-size:13px;">'+escapeHtml(s.text||'')+'</span></div>').join('')
+      + '</div>';
+  }
+  html += '<div class="card"><h3 style="margin:0 0 8px;">❌ '+tr('Detail of crosses','Détail des croix','Detalle de las cruces')+'</h3>';
+  if (crosses.length){
+    html += crosses.map(c=>'<div style="display:flex; gap:10px; padding:6px 0; border-bottom:1px solid var(--border);"><span style="color:var(--text-dim); min-width:28px; font-weight:700;">'+escapeHtml(String(c.n||''))+'.</span><span style="font-size:13px;">'+escapeHtml(c.text||'')+'</span></div>').join('');
+  } else {
+    html += '<div style="color:var(--green); font-size:13px; padding:6px;">✅ '+tr('No cross — well done!','Aucune croix — bravo !','¡Ninguna cruz — bien hecho!')+'</div>';
+  }
+  html += '</div>';
+  if (merits.length || reward){
+    html += '<div class="card"><h3 style="margin:0 0 8px;">⭐ '+tr('Merits','Mérites','Méritos')+'</h3>';
+    if (merits.length) html += merits.map(m=>'<div style="display:flex; gap:10px; padding:6px 0; border-bottom:1px solid var(--border);"><span style="color:#22c55e;">✔</span><span style="font-size:13px;">'+escapeHtml(m)+'</span></div>').join('');
+    if (reward) html += '<div style="margin-top:8px; color:var(--accent-light); font-weight:600; font-size:13px;">🎁 '+tr('Reward','Récompense','Recompensa')+' : '+escapeHtml(reward)+'</div>';
+    html += '</div>';
+  }
+  container.innerHTML = html;
+}
+
+async function renderRedCrossSettings(){
+  const summary = document.getElementById('redcross-settings-summary');
+  const cont = document.getElementById('redcross-settings-content');
+  if (!cont) return;
+  cont.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:8px;">Chargement…</div>';
+  let rows = [];
+  try {
+    const { data, error } = await sb.from('red_cross').select('*').eq('org','PSG').order('nb_cross',{ascending:false});
+    if (error) throw error;
+    rows = data || [];
+  } catch(e){ cont.innerHTML = '<div style="color:#f87171;font-size:13px;padding:8px;">Erreur de chargement : '+escapeHtml(e.message||String(e))+'</div>'; return; }
+  if (!rows.length){ cont.innerHTML = '<div class="empty-state" style="padding:12px;">Aucune donnée synchronisée pour le moment. La synchro tourne à 8h, 13h et 19h une fois le compte de service Google configuré (secret GOOGLE_SA_JSON).</div>'; if(summary) summary.textContent=''; return; }
+  const lastSync = rows.reduce((mx,r)=> (r.synced_at && r.synced_at>mx)?r.synced_at:mx, '');
+  const totalCross = rows.reduce((s,r)=>s+(r.nb_cross||0),0);
+  const unmatched = rows.filter(r=>r.matched===false).length;
+  if (summary) summary.textContent = rows.length+' joueur(s) · '+totalCross+' croix au total'+(lastSync?(' · dernière synchro '+new Date(lastSync).toLocaleString('fr-FR')):'')+(unmatched?(' · ⚠️ '+unmatched+' nom(s) non reliés à un joueur'):'');
+  let html = '<div class="table-wrap"><table style="width:100%; border-collapse:collapse; font-size:13px;">';
+  html += '<thead><tr style="text-align:left; color:var(--text-dim);"><th style="padding:8px;">Joueur</th><th style="padding:8px; text-align:center;">Croix</th><th style="padding:8px;">Sanctions</th><th style="padding:8px; text-align:center;">Mérites</th><th style="padding:8px;">Détail croix</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    const col = redCrossColor(r.nb_cross||0);
+    const crossList = (Array.isArray(r.crosses)?r.crosses:[]).map(c=>escapeHtml(c.text||'')).join(' • ');
+    const sanc = (Array.isArray(r.sanctions)?r.sanctions:[]).map(s=>escapeHtml(String(s.palier||'')+' : '+(s.text||''))).join(' | ');
+    const nameCell = escapeHtml(r.joueur) + (r.matched===false ? ' <span style="color:#f87171;" title="Nom du Sheet non relié à un joueur StatField">⚠️</span>' : '');
+    html += '<tr style="border-top:1px solid var(--border);">'
+      + '<td style="padding:8px; font-weight:600;">'+nameCell+'</td>'
+      + '<td style="padding:8px; text-align:center;"><span style="font-weight:800; color:'+col+';">'+(r.nb_cross||0)+'</span></td>'
+      + '<td style="padding:8px; color:#f87171;">'+ (sanc||'—') +'</td>'
+      + '<td style="padding:8px; text-align:center;">'+ ((r.nb_merits||0)? ('⭐ '+(r.nb_merits||0)):'—') +'</td>'
+      + '<td style="padding:8px; color:var(--text-dim); font-size:12px;">'+ (crossList||'—') +'</td>'
+      + '</tr>';
+  });
+  html += '</tbody></table></div>';
+  cont.innerHTML = html;
+}
+
 async function renderPlayerAmendes() {
   const alertEl = document.getElementById('pa-alert');
   const content = document.getElementById('pa-content');
@@ -34312,21 +34411,7 @@ async function renderPlayerAmendes() {
     if (headerCard) headerCard.style.display = 'none';
     if (statsGrid)  statsGrid.style.display  = 'none';
     if (alertEl)    { alertEl.style.display = 'none'; alertEl.innerHTML = ''; }
-    if (content) {
-      content.innerHTML = '<div class="card" style="background:linear-gradient(135deg, var(--bg-card), var(--primary)); border:none;">' +
-        '<h2 style="color:var(--accent-light); margin:0 0 8px; font-size:18px;">❌ ' + tr('Red cross', 'Croix', 'Cruces') + '</h2>' +
-        '<p style="color:var(--text); font-size:14px; line-height:1.5; margin:0;">' +
-          tr('You will soon be able to see the recap of the red cards you received throughout the season.',
-             'Tu auras bientôt accès au récapitulatif des croix que tu as reçues au cours de la saison.',
-             'Pronto podrás ver el resumen de las cruces que recibiste a lo largo de la temporada.') +
-        '</p>' +
-        '<p style="color:var(--text-dim); font-size:12px; margin:12px 0 0;">' +
-          tr('This feature is coming soon.',
-             'Cette fonctionnalité arrive bientôt.',
-             'Esta funcionalidad llegará pronto.') +
-        '</p>' +
-      '</div>';
-    }
+    if (content) await renderPlayerRedCross(content);
     return;
   }
 
