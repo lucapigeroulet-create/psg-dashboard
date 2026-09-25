@@ -34380,15 +34380,18 @@ async function renderRedCrossView(){
   html += '<thead><tr style="text-align:left; color:var(--text-dim);"><th style="padding:8px;">Joueur</th><th style="padding:8px; text-align:center;">Croix</th><th style="padding:8px;">Sanctions</th><th style="padding:8px; text-align:center;">Mérites</th><th style="padding:8px;">Détail croix</th></tr></thead><tbody>';
   rows.forEach(r=>{
     const col = redCrossColor(r.nb_cross||0);
-    const crossList = (Array.isArray(r.crosses)?r.crosses:[]).map(c=>escapeHtml(c.text||'')).join(' • ');
+    const crossArr = (Array.isArray(r.crosses)?r.crosses:[]);
+    const crossHtml = crossArr.length
+      ? '<div style="display:flex; flex-wrap:wrap; gap:4px;">' + crossArr.map(c=>'<span style="display:inline-block; background:var(--bg-elevated); border:1px solid var(--border); border-radius:6px; padding:3px 7px; font-size:11px; color:var(--text); white-space:normal;"><b style="color:#f87171;">'+escapeHtml(String(c.n||''))+'.</b> '+escapeHtml(c.text||'')+'</span>').join('') + '</div>'
+      : '—';
     const sanc = (Array.isArray(r.sanctions)?r.sanctions:[]).map(s=>escapeHtml(String(s.palier||'')+' : '+(s.text||''))).join(' | ');
     const nameCell = escapeHtml(r.joueur) + (r.matched===false ? ' <span style="color:#f87171;" title="Nom du Sheet non relié à un joueur StatField">⚠️</span>' : '');
     html += '<tr style="border-top:1px solid var(--border);">'
-      + '<td style="padding:8px; font-weight:600;">'+nameCell+'</td>'
-      + '<td style="padding:8px; text-align:center;"><span style="font-weight:800; color:'+col+';">'+(r.nb_cross||0)+'</span></td>'
-      + '<td style="padding:8px; color:#f87171;">'+ (sanc||'—') +'</td>'
-      + '<td style="padding:8px; text-align:center;">'+ ((r.nb_merits||0)? ('⭐ '+(r.nb_merits||0)):'—') +'</td>'
-      + '<td style="padding:8px; color:var(--text-dim); font-size:12px;">'+ (crossList||'—') +'</td>'
+      + '<td style="padding:8px; font-weight:600; vertical-align:top;">'+nameCell+'</td>'
+      + '<td style="padding:8px; text-align:center; vertical-align:top;"><span style="font-weight:800; color:'+col+';">'+(r.nb_cross||0)+'</span></td>'
+      + '<td style="padding:8px; color:#f87171; vertical-align:top;">'+ (sanc||'—') +'</td>'
+      + '<td style="padding:8px; text-align:center; vertical-align:top;">'+ ((r.nb_merits||0)? ('⭐ '+(r.nb_merits||0)):'—') +'</td>'
+      + '<td style="padding:8px; vertical-align:top; min-width:280px;">'+ crossHtml +'</td>'
       + '</tr>';
   });
   html += '</tbody></table></div>';
