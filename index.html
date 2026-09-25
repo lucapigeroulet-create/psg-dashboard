@@ -30084,12 +30084,15 @@ function renderPlayerSeanceNotation(date, joueur, seance) {
   if (locked) {
     const alertBtn = ' <button onclick="contactCoachExpiredRPE(1, this)" style="margin-left:8px;background:var(--red);color:white;border:none;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">🧑‍🏫 ' + tr('Alert the coach', 'Alerter le coach', 'Alertar al entrenador') + '</button>';
     const bannerStyle = 'margin-top:8px;padding:8px 12px;background:rgba(248,113,113,0.12);border-left:3px solid var(--red);border-radius:4px;font-size:12px;color:#fca5a5;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;';
-    if (!hasEntry) {
-      // Aucune note saisie dans la fenêtre → message doux, sans bouton d'alerte
+    if (!sessionClosed) {
+      // RPE pas encore envoyée par le staff → message doux, sans bouton d'alerte
       const infoStyle = 'margin-top:8px;padding:8px 12px;background:rgba(0,163,255,0.10);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--accent-light);';
-      html += '<div style="' + infoStyle + '">⏳ ' + tr('The evaluation will be available soon.', 'L\'évaluation sera bientôt disponible.') + '</div>';
+      html += '<div style="' + infoStyle + '">⏳ ' + tr('The evaluation will be available soon.', 'L\'évaluation sera bientôt disponible.', 'La evaluación estará disponible pronto.') + '</div>';
+    } else if (!hasEntry) {
+      // Fenêtre de 4 h dépassée sans aucune note saisie → le joueur doit contacter le coach
+      html += '<div style="' + bannerStyle + '"><span>🔒 ' + tr('The 4h window to fill your RPE has passed. Contact coach Lucas P. to fill it in.', 'Le délai de 4 h pour remplir ta RPE est dépassé. Contacte le coach Lucas P. pour la remplir.', 'El plazo de 4 h para rellenar tu RPE ha pasado. Contacta al entrenador Lucas P. para rellenarla.') + '</span>' + alertBtn + '</div>';
     } else {
-      html += '<div style="' + bannerStyle + '"><span>🔒 ' + tr('The 4h window has closed. Your rating can no longer be edited — contact Lucas P.', 'Le délai de 4 h est dépassé. Ta note ne peut plus être modifiée — contacte Lucas P.') + '</span>' + alertBtn + '</div>';
+      html += '<div style="' + bannerStyle + '"><span>🔒 ' + tr('The 4h window has closed. Your rating can no longer be edited — contact Lucas P.', 'Le délai de 4 h est dépassé. Ta note ne peut plus être modifiée — contacte Lucas P.', 'El plazo de 4 h ha terminado. Tu nota ya no se puede modificar — contacta a Lucas P.') + '</span>' + alertBtn + '</div>';
     }
   } else if (lockInfo !== null) {
     const hrs = Math.floor(lockInfo.minutes / 60);
