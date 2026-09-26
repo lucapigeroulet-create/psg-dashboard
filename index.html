@@ -12058,6 +12058,92 @@ function planifIsMatch(r) {
   return /(^|\s)J\d/.test(e) || e.includes('CDF');
 }
 
+// ---- Charge estimée (plan) vs réelle (déclarée) par semaine -----------------
+// Même modèle que le rapport de charges (edge charge-report-cron) : pour chaque
+// séance planifiée d'un joueur, on croise sa fiche (procédés temps + RPE théorique)
+// avec la RPE déclarée. sRPE estimé = Σ(temps × RPE théorique), réel = Σ(temps × RPE déclaré).
+// Agrégé par semaine du macrocycle → moyenne par joueur (UA), pour comparer plan vs réalisé.
+let planifLoadByWeek = {}; // mondayISO -> { estime, reel, pct, nPlan, nReel }
+
+function _isoAddDays(iso, n) { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function _isoMondayOf(iso) { const d = new Date(iso + 'T00:00:00Z'); const day = d.getUTCDay() || 7; return _isoAddDays(iso, -(day - 1)); }
+// Normalise la RPE déclarée d'une séance (array / nombre unique / chaîne "6,7") en tableau aligné sur les procédés.
+function _declValues(decl, nb) {
+  if (decl === null || decl === undefined) return null;
+  if (Array.isArray(decl)) return decl.map(v => (v === '' || v === null || v === undefined) ? null : parseFloat(v));
+  if (typeof decl === 'number') return Array(nb).fill(decl);
+  if (typeof decl === 'string') { const p = decl.split(/[,;]/).map(s => s.trim() === '' ? null : parseFloat(s)); return p.length === 1 ? Array(nb).fill(p[0]) : p; }
+  return null;
+}
+function planifPctColor(p) {
+  if (p === null || isNaN(p)) return 'var(--text-dim)';
+  if (p > 115) return '#dc2626';   // surcharge
+  if (p >= 85) return '#16a34a';   // conforme au plan
+  if (p >= 65) return '#f59e0b';   // sous la cible
+  return '#2563eb';                // très en dessous
+}
+
+async function planifComputeLoads() {
+  planifLoadByWeek = {};
+  const rows = planifRows || [];
+  const debuts = rows.map(r => r.date_debut).filter(Boolean).sort();
+  if (!debuts.length) return;
+  const org = PLANIF_CTX.org;
+  const planifMon = new Set(rows.map(r => r.date_debut));
+
+  // _fullFetch pagine (PostgREST plafonne à 1000 lignes/réponse) : indispensable
+  // sur une saison entière. On récupère tout l'org puis on filtre côté client
+  // sur les semaines réellement présentes dans le macrocycle (planifMon).
+  const [plannings, seances, rpes] = await Promise.all([
+    _fullFetch('plannings', org, 'date'),
+    _fullFetch('seances', org, 'date'),
+    _fullFetch('rpe_declarations', org, 'date'),
+  ]);
+
+  const seanceMap = new Map();
+  seances.forEach(s => seanceMap.set(s.date + '|' + s.nom, Array.isArray(s.procedes) ? s.procedes : []));
+  const rpeMap = new Map();
+  rpes.forEach(r => rpeMap.set(r.date + '|' + r.joueur, Array.isArray(r.rpe) ? r.rpe : []));
+
+  const acc = {}; // mondayISO -> Map(joueur -> {att, reel})
+  plannings.forEach(pl => {
+    const mon = _isoMondayOf(pl.date);
+    if (!planifMon.has(mon)) return;
+    const list = Array.isArray(pl.seances) ? pl.seances : [];
+    list.forEach(nom => {
+      if (!nom || STATUTS_NON_ENT.includes(nom)) return;
+      const procAll = seanceMap.get(pl.date + '|' + nom);
+      if (!procAll) return;
+      const procs = procAll.filter(p => p && (p.temps || p.type || p.zone || p.rpe));
+      if (!procs.length) return;
+      const declEntry = (rpeMap.get(pl.date + '|' + pl.joueur) || []).find(x => x.seance === nom);
+      const vals = _declValues(declEntry ? declEntry.rpe : null, procs.length);
+      let att = 0, reel = 0;
+      procs.forEach((p, i) => {
+        const t = parseFloat(p.temps); if (isNaN(t)) return;
+        const theo = parseFloat(p.rpe); if (!isNaN(theo)) att += t * theo;
+        const rv = vals ? vals[i] : null; if (rv !== null && rv !== undefined && !isNaN(rv)) reel += t * rv;
+      });
+      if (!acc[mon]) acc[mon] = new Map();
+      const cur = acc[mon].get(pl.joueur) || { att: 0, reel: 0 };
+      cur.att += att; cur.reel += reel;
+      acc[mon].set(pl.joueur, cur);
+    });
+  });
+
+  Object.keys(acc).forEach(mon => {
+    let sAtt = 0, nAtt = 0, sReel = 0, nReel = 0;
+    acc[mon].forEach(v => {
+      if (v.att > 0) { sAtt += v.att; nAtt++; }
+      if (v.reel > 0) { sReel += v.reel; nReel++; }
+    });
+    const estime = nAtt ? sAtt / nAtt : null;
+    const reel = nReel ? sReel / nReel : null;
+    const pct = (estime && estime > 0 && reel !== null) ? (reel / estime) * 100 : null;
+    planifLoadByWeek[mon] = { estime, reel, pct, nPlan: nAtt, nReel };
+  });
+}
+
 async function renderPlanification() {
   const view = document.getElementById('view-planification');
   if (!view) return;
@@ -12108,6 +12194,8 @@ async function renderPlanification() {
       microSelCal = microRows[0].semaine_cal;
     }
   }
+  // Charge estimée (plan) vs réelle (déclarée) par semaine — ne doit pas bloquer l'affichage.
+  try { await planifComputeLoads(); } catch (e) { console.warn('planifComputeLoads', e); planifLoadByWeek = {}; }
   drawPlanification();
 }
 
@@ -12779,6 +12867,27 @@ function planifTable(rows) {
   body += '<tr>' + lbl('<b>Charge (V+I)</b>') + rows.map(r => {
     const c = planifCharge(r);
     return '<td class="pf-charge" id="pf-charge-' + r.id + '"><span style="color:' + planifChargeColor(c) + '">' + c + '</span></td>';
+  }).join('') + '</tr>';
+
+  // Charge estimée (plan) vs réelle (déclarée), en UA (sRPE moyen / joueur), + % réel/estimé.
+  const loadFor = (r) => planifLoadByWeek[r.date_debut] || null;
+  body += '<tr>' + lbl('Charge estimée', 'pf-lbl-wrap') + rows.map(r => {
+    const L = loadFor(r);
+    const v = (L && L.estime != null) ? Math.round(L.estime) : null;
+    const tip = v != null ? 'sRPE moyen planifié / joueur — Σ(temps × RPE théorique), ' + (L.nPlan || 0) + ' joueur(s)' : 'Aucune séance planifiée avec RPE';
+    return '<td class="pf-charge2" title="' + tip + '">' + (v != null ? '<span style="color:var(--text-dim);">' + v + '</span>' : '<span style="color:var(--text-dim);">·</span>') + '</td>';
+  }).join('') + '</tr>';
+  body += '<tr>' + lbl('Charge réelle', 'pf-lbl-wrap') + rows.map(r => {
+    const L = loadFor(r);
+    const v = (L && L.reel != null) ? Math.round(L.reel) : null;
+    const tip = v != null ? 'sRPE moyen déclaré / joueur — Σ(temps × RPE déclaré), ' + (L.nReel || 0) + ' joueur(s)' : 'Aucune RPE déclarée';
+    return '<td class="pf-charge2" title="' + tip + '">' + (v != null ? '<b>' + v + '</b>' : '<span style="color:var(--text-dim);">·</span>') + '</td>';
+  }).join('') + '</tr>';
+  body += '<tr>' + lbl('% réel / estimé', 'pf-lbl-wrap') + rows.map(r => {
+    const L = loadFor(r);
+    if (!L || L.pct == null) return '<td class="pf-charge2"><span style="color:var(--text-dim);">·</span></td>';
+    const col = planifPctColor(L.pct);
+    return '<td class="pf-charge2" title="Réel vs plan (>115% surcharge · 85-115% conforme · <85% sous la cible)"><span style="color:' + col + ';font-weight:700;">' + Math.round(L.pct) + '%</span></td>';
   }).join('') + '</tr>';
 
   // Contenus athlétiques
@@ -13583,6 +13692,7 @@ function planifInjectStyle() {
   #view-planification .pf-seg{height:9px;border-radius:2px;background:var(--bg-elevated);border:1px solid var(--border);transition:background .12s;}
   #view-planification .pf-seg:hover{outline:1px solid var(--accent-light);}
   #view-planification .pf-charge{font-weight:700;font-size:13px;}
+  #view-planification .pf-charge2{font-size:12px;white-space:nowrap;}
   #view-planification .pf-num{width:40px;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;text-align:center;padding:3px 2px;font-size:12px;}
   #view-planification .pf-txt{width:100%;box-sizing:border-box;background:var(--bg-elevated);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 5px;font-size:11px;font-family:inherit;resize:none;}
   #view-planification .pf-ev{min-width:120px;}
