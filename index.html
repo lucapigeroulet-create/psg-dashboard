@@ -18158,6 +18158,11 @@ async function renderFicheGlobale(joueur) {
   // Pied fort = même select FR que Paramètres → Joueurs (source unique = table joueurs).
   const piedSelect = (v) => '<select id="fg-pied_fort" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;">' +
     ['', 'Droit', 'Gauche', 'Ambidextre'].map(o => '<option value="' + o + '"' + (o === v ? ' selected' : '') + '>' + (o || '—') + '</option>').join('') + '</select>';
+  // Poste / Numéro / Date de naissance : source unique = table joueurs (partagée avec Paramètres → Joueurs).
+  const posteSelect = (v) => '<select id="fg-poste" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;">' +
+    ['', 'Gardien', 'Défenseur', 'Milieu', 'Attaquant'].map(o => '<option value="' + o + '"' + (o === (v || '') ? ' selected' : '') + '>' + (o || '—') + '</option>').join('') + '</select>';
+  const numInput = (v) => '<input type="number" id="fg-numero" min="1" max="99" value="' + (v != null ? escapeHtml(String(v)) : '') + '" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;" />';
+  const dateInput = (v) => '<input type="date" id="fg-date_naissance" value="' + escapeHtml(v || '') + '" style="width:100%; background:var(--bg-elevated); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;" />';
   const photoPreview = info.photo
     ? '<img id="fg-photo-preview" src="' + info.photo + '" style="width:88px; height:88px; border-radius:12px; object-fit:cover; border:2px solid var(--accent);" />'
     : '<div id="fg-photo-preview" style="width:88px; height:88px; border-radius:12px; background:var(--bg-elevated); border:2px dashed var(--border); display:flex; align-items:center; justify-content:center; font-size:32px; color:var(--text-dim);">👤</div>';
@@ -18180,11 +18185,14 @@ async function renderFicheGlobale(joueur) {
       '</div>' +
     '</div>' +
     '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Poste <span style="color:var(--text-dim); font-weight:400;">(↔ Paramètres)</span></label>' + posteSelect(info.poste) + '</div>' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Numéro <span style="color:var(--text-dim); font-weight:400;">(↔ Paramètres)</span></label>' + numInput(info.numero) + '</div>' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Date de naissance <span style="color:var(--text-dim); font-weight:400;">(↔ Paramètres)</span></label>' + dateInput(info.date_naissance) + '</div>' +
+      '<div><label style="font-size:11px; color:var(--text-dim);">Pied fort <span style="color:var(--text-dim); font-weight:400;">(↔ Paramètres)</span></label>' + piedSelect(_normPied(info.pied_fort || row.pied_fort)) + '</div>' +
       '<div><label style="font-size:11px; color:var(--text-dim);">Groupe compétition</label>' + inp('groupe_competition', row.groupe_competition) + '</div>' +
       '<div><label style="font-size:11px; color:var(--text-dim);">Contrat</label>' + inp('contrat', row.contrat) + '</div>' +
       '<div><label style="font-size:11px; color:var(--text-dim);">Ancienneté</label>' + inp('anciennete', row.anciennete) + '</div>' +
       '<div><label style="font-size:11px; color:var(--text-dim);">Sélection</label>' + inp('selection', row.selection) + '</div>' +
-      '<div><label style="font-size:11px; color:var(--text-dim);">Pied fort <span style="color:var(--text-dim); font-weight:400;">(↔ Paramètres)</span></label>' + piedSelect(_normPied(info.pied_fort || row.pied_fort)) + '</div>' +
       '<div><label style="font-size:11px; color:var(--text-dim);">Saison</label>' + inp('saison', row.saison || _fgSaison()) + '</div>' +
     '</div>' +
     '<div style="margin-top:10px;"><label style="font-size:11px; color:var(--text-dim);">Qualités (texte libre)</label>' + txt('qualites', row.qualites, 'Ex: Technique - Tactique - Motivateur - Compétiteur') + '</div>' +
@@ -18280,12 +18288,19 @@ async function saveFicheGlobale(joueur) {
   if (!canWrite()) { toast('Lecture seule', 'error'); return; }
   const val = id => (document.getElementById('fg-' + id) || {}).value || null;
   const cleanArr = ids => ids.map(id => val(id)).filter(v => v && v.trim()).map(v => v.trim());
-  // Pied fort : source unique = table joueurs (partagée avec Paramètres → Joueurs).
-  // On l'écrit dans joueurs (et pas dans fiches_globales) pour éviter toute divergence.
+  // Identité (pied fort, poste, numéro, date de naissance) : source unique = table joueurs,
+  // partagée avec Paramètres → Joueurs. On l'écrit dans joueurs (et pas dans fiches_globales)
+  // pour que les deux vues restent toujours identiques.
   const piedVal = _normPied(val('pied_fort')) || null;
-  const { error: jErr } = await sb.from('joueurs').update({ pied_fort: piedVal }).eq('org', currentOrg).eq('nom', joueur);
-  if (jErr) { toast('Erreur pied fort : ' + jErr.message, 'error'); return; }
-  const jj = (state.joueurs || []).find(x => x.nom === joueur); if (jj) jj.pied_fort = piedVal;
+  const posteVal = val('poste') || null;
+  const numRaw = val('numero');
+  const numParsed = (numRaw != null && String(numRaw).trim() !== '') ? parseInt(numRaw, 10) : NaN;
+  const numVal = Number.isInteger(numParsed) ? numParsed : null;
+  const ddnVal = val('date_naissance') || null;
+  const identite = { pied_fort: piedVal, poste: posteVal, numero: numVal, date_naissance: ddnVal };
+  const { error: jErr } = await sb.from('joueurs').update(identite).eq('org', currentOrg).eq('nom', joueur);
+  if (jErr) { toast('Erreur identité : ' + jErr.message, 'error'); return; }
+  const jj = (state.joueurs || []).find(x => x.nom === joueur); if (jj) Object.assign(jj, identite);
   const row = {
     org: currentOrg, joueur: joueur,
     saison: val('saison'),
